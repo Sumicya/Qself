@@ -203,11 +203,12 @@ flowchart LR
 
 | 层级 | 对象 | 运行环境 | 可行性依据 |
 |---|---|---|---|
-| **A. 纯 JVM 单测** | `DexMethodDescriptor` 解析、`QQVersion` 比较、`SyncUtils` 进程位图、KSP 生成物结构、未来 feature 层纯逻辑 | GitHub Actions（ubuntu 自带 JDK；建议另建 **纯 kotlin("jvm") 子模块**承载，绕开 AGP/Android SDK 依赖） | 无 Android 类型引用即跑 |
-| **B. 适配器契约测试** | 每个 adapter 的"符号可解析性 + 行为" | JVM + fake classloader：把 `qq-stub` 子模块 jar 作为假宿主 classloader 注入 `Initiator`（需先加 `@VisibleForTesting` 重置钩子——这是 Phase 1 唯一允许的"为测试改生产代码"） | stub 本身就是稳定版 QQ 类集 |
+| **A. 纯 JVM 单测**（Phase 0 已落地：`app/src/test`） | `DexMethodDescriptor` 解析、`QQVersion` 常量表、`SyncUtils` 进程位图、`Initiator` 名字解析语义，及未来被抽出的纯逻辑 | `./gradlew :app:testDebugUnitTest`（GitHub Actions `test.yml`） | 无 Android 类型引用即跑；`returnDefaultValues=true` 兜底 |
+| **A+. 纯 JVM 模块**（Phase 1+ 演进） | 随 hostapi 重构从 app 模块抽出的 feature/端口逻辑 | 独立 `kotlin("jvm")`/`java` 模块 | 原理修正：AGP 产物无法被纯 JVM 模块消费，故 P0 先用 `app/src/test`；逻辑一旦抽出即可升格为独立模块 |
+| **B. 适配器契约测试** | 每个 adapter 的"符号可解析性 + 行为" | JVM + fake classloader：把 `qq-stub` 子模块 jar 作为假宿主 classloader 注入 `Initiator`（钩子 `initForTest` 已落地） | stub 本身就是稳定版 QQ 类集 |
 | **C. 模块自诊断** | 真机运行后收集全部 hook 的 `isInitializationSuccessful/runtimeErrors` 生成报告（现有 `RuntimeErrorTracer` 已有数据，缺聚合出口） | 设备/用户 | 可观测性作为测试策略的一部分 |
 
-**约束披露**：本沙箱无 JDK 与 Android SDK，但网络可用（已验证 git ls-remote）。因此 Phase 0 的测试骨架将以"Layer A 纯 JVM 模块 + CI  workflow"为主，沙箱内可 `apt install openjdk-17-jdk` 后直接运行该子模块的测试做本地验证；AGP 相关构建一律交给仓库现有 CI。
+**环境事实（2026-09 实测）**：开发沙箱网络为"仅 github.com 白名单"——Gradle 发行版、Maven Central、dl.google.com、JITPack 均不可达（探测矩阵见 `dev-env.md`），apt 亦不可用。因此**CI 是唯一测试执行环境**，本地（含沙箱）只做静态验证；全网络环境可用 `./gradlew :app:testDebugUnitTest` 本地复跑。
 
 ---
 
@@ -223,13 +224,23 @@ flowchart LR
 
 ---
 
-## 6. 待拍板的开放问题
+## 6. 决策记录（ADR，已拍板）
 
-1. **端口粒度**：按域（`ChatApi`）还是按能力（`SendMsgApi`/`ReadMsgApi`）？提案默认**按域**，域内方法按能力拆 interface（Kotlin 多接口实现无成本）。
-2. **decorator 注册化后是否保留显式数组**作为确定性 fallback？提案：**全 KSP 发现 + 显式优先级注解**，删除手写数组。
-3. **契约测试是否引入 Robolectric**？提案：**不引入**（依赖重、与"纯 JVM"目标冲突），fake classloader 足够。
-4. **P4 目标命名空间**：`io.github.qauxv.feature.<domain>` / `io.github.qauxv.adapter.<kernel>` —— 若你有偏好（如保留 Qself 品牌 `dev.qself.*`），现在定。
-5. **P0 是否先在沙箱装 JDK 17** 验证 JVM 子模块测试可跑？（建议：是，5 分钟成本，提前暴露 Gradle 配置问题。）
+| # | 决策 | 理由 |
+|---|---|---|
+| D1 | 端口**按域**组织（`ChatApi`/`MessageApi`/…），域内按能力拆 interface | 域数量稳定（≈聊天/消息/联系人/媒体/UI），能力会增长；Kotlin 多接口实现无成本 |
+| D2 | decorator 注册**全 KSP 编译期发现**，删除手写数组，用优先级注解控制顺序 | 消除注册双轨制（P3）；保留确定性（KSP 生成有序数组） |
+| D3 | 契约测试**不引入 Robolectric**，用 fake classloader（`qq-stub` 注入） | 依赖重、与纯 JVM 目标冲突；stub 即稳定宿主快照 |
+| D4 | Phase 4 目标命名空间 **`sumicya.qself.*`**（`sumicya.qself.feature.<域>` / `sumicya.qself.hostapi` / `sumicya.qself.adapter.<内核>`） | fork 品牌独立，避免与上游 `io.github.qauxv` 混淆；一次性迁移（允许 breaking） |
+| D5 | 测试执行环境 = **CI-first**（`test.yml`）；沙箱只做静态验证 | 沙箱网络仅 github.com 白名单（见 §4）；CI 为权威执行器 |
+| D6 | `sumicya.qself` 迁移放在 P4（最后），先解耦后搬家 | 先改依赖方向再改名字，避免 168 处反向 import 引发的雪崩与解耦工作互相干扰 |
+
+## 7. P0 执行记录（2026-09-05）
+
+1. **测试骨架落地**：`app/src/test` + `:app:testDebugUnitTest` CI job（`.github/workflows/test.yml`）。
+2. **首批安全网（4 个测试类，~30 断言）**：`QQVersionTest`（常量表唯一性/严格递增/锚点）、`SyncUtilsProcessMapTest`（进程位图单比特不变式）、`InitiatorTest`（名字归一化/缺类语义，配套生产钩子 `Initiator.initForTest`，为 P0 唯一生产改动）、`DexMethodDescriptorTest`（描述符文法全量钉死）。
+3. **安全网首轮即捕获存量 bug**：`DexMethodDescriptor.splitParameterTypes` 存在 off-by-one——`L`/`[` 分支推进游标后循环尾再 `i++`，**吞掉对象/数组类型参数的后一个参数**；唯一生产调用点 `LibXposedNewApiByteCodeGenerator.referenceMethod` 据此生成 `ImmutableMethodReference`，参数被吞 = 代理字节码签名错配。修复与暴露测试分两个 commit（git 历史保留红→绿证据链）。
+4. **环境结论**：沙箱网络矩阵（github.com 通 / Gradle·Maven·Google·JITPack·Adoptium 全断）→ 本地构建物理不可能，`dev-env.md` 记录复现方法。
 
 ---
 
