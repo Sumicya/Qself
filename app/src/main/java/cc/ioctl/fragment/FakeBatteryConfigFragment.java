@@ -49,7 +49,7 @@ import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
 import cc.ioctl.hook.experimental.FakeBatteryHook;
 import io.github.qauxv.util.HostInfo;
-import cc.ioctl.util.ui.drawable.HighContrastBorder;
+import io.github.qauxv.util.ui.drawable.HighContrastBorder;
 import com.tencent.mobileqq.widget.BounceScrollView;
 import io.github.qauxv.R;
 import io.github.qauxv.config.ConfigManager;

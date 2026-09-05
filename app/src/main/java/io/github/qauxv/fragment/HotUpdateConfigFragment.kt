@@ -30,7 +30,7 @@ import android.view.ViewGroup
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.content.res.ResourcesCompat
-import cc.ioctl.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 import io.github.qauxv.databinding.FragmentHotUpdateConfigBinding
 import io.github.qauxv.util.hotupdate.HotUpdateManager

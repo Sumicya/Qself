@@ -36,7 +36,7 @@ import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
 import io.github.qauxv.util.LayoutHelper.WRAP_CONTENT
 import io.github.qauxv.util.LayoutHelperViewScope
-import cc.ioctl.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 
 class TitleValueCell(

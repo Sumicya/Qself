@@ -35,7 +35,7 @@ import android.widget.LinearLayout
 import androidx.appcompat.app.AlertDialog
 import cc.hicore.QApp.QAppUtils
 import io.github.qauxv.util.LayoutHelper
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.FaultyDialog
 import io.github.qauxv.base.IEntityAgent
 import io.github.qauxv.base.ISwitchCellAgent
 import io.github.qauxv.base.IUiItemAgent

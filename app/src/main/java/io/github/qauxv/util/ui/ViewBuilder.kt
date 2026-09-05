@@ -22,7 +22,7 @@
 
 @file:JvmName("ViewBuilder")
 
-package cc.ioctl.util.ui
+package io.github.qauxv.util.ui
 
 import android.content.Context
 import android.widget.CompoundButton

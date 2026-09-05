@@ -29,7 +29,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.lifecycle.lifecycleScope
 import io.github.qauxv.util.LayoutHelper
-import cc.ioctl.util.ui.dsl.RecyclerListViewController
+import io.github.qauxv.util.ui.dsl.RecyclerListViewController
 import io.github.qauxv.R
 import io.github.qauxv.dsl.item.DslTMsgListItemInflatable
 

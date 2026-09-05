@@ -41,7 +41,7 @@ import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.content.res.ResourcesCompat
 import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.LayoutHelperViewScope
-import cc.ioctl.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 
 class TextBannerCell @JvmOverloads constructor(

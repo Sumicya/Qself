@@ -20,7 +20,7 @@
  * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
  */
 
-package cc.ioctl.util.ui.fling;
+package io.github.qauxv.util.ui.fling;
 
 import android.content.Context;
 import android.util.AttributeSet;

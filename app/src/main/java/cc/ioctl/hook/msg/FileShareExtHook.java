@@ -36,7 +36,7 @@ import androidx.core.content.FileProvider;
 import cc.ioctl.util.HookUtils;
 import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Reflex;
-import cc.ioctl.util.ui.FaultyDialog;
+import io.github.qauxv.util.ui.FaultyDialog;
 import io.github.qauxv.R;
 import io.github.qauxv.activity.ShadowShareFileAgentActivity;
 import io.github.qauxv.base.annotation.FunctionHookEntry;

@@ -20,7 +20,7 @@
  * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
  */
 
-package cc.ioctl.util.ui.dsl
+package io.github.qauxv.util.ui.dsl
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -29,7 +29,7 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.lifecycle.LifecycleCoroutineScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import cc.ioctl.util.ui.drawable.BackgroundDrawableUtils
+import io.github.qauxv.util.ui.drawable.BackgroundDrawableUtils
 import io.github.qauxv.R
 import io.github.qauxv.util.SyncUtils
 import io.github.qauxv.dsl.item.DslTMsgListItemInflatable

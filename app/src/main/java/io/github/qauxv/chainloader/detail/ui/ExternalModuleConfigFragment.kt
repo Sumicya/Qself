@@ -35,8 +35,8 @@ import androidx.annotation.UiThread
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
-import cc.ioctl.util.ui.doWithFaultyDialogWithoutErrorHandling
-import cc.ioctl.util.ui.dsl.RecyclerListViewController
+import io.github.qauxv.util.ui.doWithFaultyDialogWithoutErrorHandling
+import io.github.qauxv.util.ui.dsl.RecyclerListViewController
 import io.github.qauxv.R
 import io.github.qauxv.base.IEntityAgent
 import io.github.qauxv.base.ISwitchCellAgent

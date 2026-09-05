@@ -36,7 +36,7 @@ import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.util.HookUtils;
 import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Reflex;
-import cc.ioctl.util.ui.FaultyDialog;
+import io.github.qauxv.util.ui.FaultyDialog;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedBridge;
 import io.github.qauxv.R;

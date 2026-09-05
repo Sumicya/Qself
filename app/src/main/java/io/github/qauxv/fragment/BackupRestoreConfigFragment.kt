@@ -32,7 +32,7 @@ import android.widget.EditText
 import androidx.annotation.AnyThread
 import androidx.appcompat.app.AlertDialog
 import io.github.qauxv.util.Reflex
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.FaultyDialog
 import io.github.duzhaokun123.util.FilePicker
 import io.github.qauxv.R
 import io.github.qauxv.config.BackupConfigSession

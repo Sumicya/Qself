@@ -19,45 +19,60 @@
  * <https://www.gnu.org/licenses/>
  * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
  */
-package cc.ioctl.util.ui.drawable;
+package io.github.qauxv.util.ui.drawable;
 
+import android.annotation.SuppressLint;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
+import android.view.Gravity;
 
-public class SimpleBgDrawable extends Drawable {
+public class ProportionDrawable extends Drawable {
 
-    private final int iColor;
-    private final int iEdgeColor;
-    private final int iEdgeWidth;
-    private final Paint mPaint;
+    private final int iGravity;
+    private final int iDoneColor;
+    private final int iUndoneColor;
+    private final Paint p;
+    private float fProportion;
 
-    public SimpleBgDrawable(int color, int edgeColor, int edgeWidth) {
-        iColor = color;
-        iEdgeColor = edgeColor;
-        iEdgeWidth = edgeWidth;
-        mPaint = new Paint();
+    public ProportionDrawable(int doneColor, int undoneColor, int gravity, float prop) {
+        iGravity = gravity;
+        iDoneColor = doneColor;
+        iUndoneColor = undoneColor;
+        fProportion = prop;
+        p = new Paint();
     }
 
-    public Paint getPaint() {
-        return mPaint;
-    }
-
+    @SuppressLint("RtlHardcoded")
     @Override
     public void draw(Canvas canvas) {
-        int i = iEdgeWidth;
-        int w = getBounds().width();
         int h = getBounds().height();
-        if (iEdgeWidth > 0) {
-            mPaint.setColor(iEdgeColor);
-            canvas.drawRect(0, 0, w, i, mPaint);
-            canvas.drawRect(0, h - i, w, h, mPaint);
-            canvas.drawRect(0, i, i, h - i, mPaint);
-            canvas.drawRect(w - i, i, w, h - i, mPaint);
+        int w = getBounds().width();
+        if (Gravity.LEFT == iGravity) {
+            int x = (int) (0.5f + fProportion * w);
+            p.setColor(iDoneColor);
+            canvas.drawRect(0, 0, x, h, p);
+            p.setColor(iUndoneColor);
+            canvas.drawRect(x, 0, w, h, p);
+        } else {
+            throw new UnsupportedOperationException("Only Gravity.LEFT is supported!");
         }
-        mPaint.setColor(iColor);
-        canvas.drawRect(i, i, w - i, h - i, mPaint);
+    }
+
+    public float getProportion() {
+        return fProportion;
+    }
+
+    public void setProportion(float p) {
+        if (p < 0f) {
+            p = 0f;
+        }
+        if (p > 1.0f) {
+            p = 1.0f;
+        }
+        fProportion = p;
+        invalidateSelf();
     }
 
     @Override
@@ -72,5 +87,6 @@ public class SimpleBgDrawable extends Drawable {
     public int getOpacity() {
         return android.graphics.PixelFormat.TRANSLUCENT;
     }
+
 
 }

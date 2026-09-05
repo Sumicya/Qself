@@ -40,7 +40,7 @@ import androidx.annotation.UiThread
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.res.ResourcesCompat
 import io.github.qauxv.util.LayoutHelper
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.FaultyDialog
 import com.tencent.mobileqq.widget.BounceScrollView
 import io.github.qauxv.R
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity

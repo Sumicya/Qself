@@ -33,7 +33,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.Reflex
-import cc.ioctl.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity
 import io.github.qauxv.base.IDynamicHook

@@ -20,7 +20,7 @@
  * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
  */
 
-package cc.ioctl.util.ui.drawable;
+package io.github.qauxv.util.ui.drawable;
 
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;

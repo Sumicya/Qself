@@ -51,7 +51,7 @@ import cc.ioctl.util.ExfriendManager;
 import cc.ioctl.util.HostStyledViewBuilder;
 import io.github.qauxv.util.LayoutHelper;
 import cc.ioctl.util.data.FriendRecord;
-import cc.ioctl.util.ui.FaultyDialog;
+import io.github.qauxv.util.ui.FaultyDialog;
 import com.tencent.mobileqq.widget.BounceScrollView;
 import io.github.qauxv.R;
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity;

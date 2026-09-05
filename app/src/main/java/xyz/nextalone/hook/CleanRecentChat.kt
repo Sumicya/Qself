@@ -27,7 +27,7 @@ import android.content.Context
 import android.widget.ImageView
 import android.widget.RelativeLayout
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.FaultyDialog
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.checkbox.checkBoxPrompt
 import com.afollestad.materialdialogs.list.listItems

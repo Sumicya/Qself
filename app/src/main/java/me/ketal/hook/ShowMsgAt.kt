@@ -38,7 +38,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.view.forEach
 import cc.hicore.QApp.QAppUtils
 import cc.ioctl.hook.profile.OpenProfileCard
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.FaultyDialog
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord
 import com.tencent.qqnt.kernel.nativeinterface.TextElement
 import io.github.qauxv.util.xpcompat.XC_MethodHook

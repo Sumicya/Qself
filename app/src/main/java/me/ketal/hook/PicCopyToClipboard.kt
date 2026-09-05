@@ -28,7 +28,7 @@ import android.view.View
 import cc.hicore.QApp.QAppUtils
 import cc.hicore.QQDecodeUtils.DecodeForEncPic
 import io.github.qauxv.util.Reflex
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.FaultyDialog
 import com.github.kyuubiran.ezxhelper.utils.Log
 import com.github.kyuubiran.ezxhelper.utils.findMethod
 import com.github.kyuubiran.ezxhelper.utils.findMethodOrNull

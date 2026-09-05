@@ -39,7 +39,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import cc.ioctl.dialog.WsaWarningDialog
 import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
-import cc.ioctl.util.ui.drawable.BackgroundDrawableUtils
+import io.github.qauxv.util.ui.drawable.BackgroundDrawableUtils
 import io.github.qauxv.R
 import io.github.qauxv.bridge.AppRuntimeHelper
 import io.github.qauxv.bridge.ContactUtils

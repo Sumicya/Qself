@@ -19,7 +19,7 @@
  * <https://www.gnu.org/licenses/>
  * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
  */
-package cc.ioctl.util.ui.drawable;
+package io.github.qauxv.util.ui.drawable;
 
 import android.content.Context;
 import android.graphics.Canvas;

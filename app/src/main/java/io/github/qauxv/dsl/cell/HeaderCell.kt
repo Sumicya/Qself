@@ -29,7 +29,7 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.LayoutHelperViewScope
-import cc.ioctl.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 
 class HeaderCell(context: Context) : FrameLayout(context), LayoutHelperViewScope {

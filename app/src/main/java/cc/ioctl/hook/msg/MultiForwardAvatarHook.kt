@@ -42,7 +42,7 @@ import cc.ioctl.util.HostStyledViewBuilder
 import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.Reflex
 import cc.ioctl.util.hookBeforeIfEnabled
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.FaultyDialog
 import com.github.kyuubiran.ezxhelper.utils.hookBefore
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord
 import io.github.qauxv.R

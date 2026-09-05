@@ -20,7 +20,7 @@
  * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
  */
 
-package cc.ioctl.util.ui
+package io.github.qauxv.util.ui
 
 import android.content.Context
 

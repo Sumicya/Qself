@@ -58,9 +58,9 @@ import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.Reflex
 import cc.ioctl.util.data.EventRecord
 import cc.ioctl.util.data.FriendRecord
-import cc.ioctl.util.ui.FaultyDialog
-import cc.ioctl.util.ui.ThemeAttrUtils
-import cc.ioctl.util.ui.dsl.RecyclerListViewController
+import io.github.qauxv.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.ui.dsl.RecyclerListViewController
 import com.github.kyuubiran.ezxhelper.utils.invokeAs
 import com.github.kyuubiran.ezxhelper.utils.isPublic
 import com.github.kyuubiran.ezxhelper.utils.isStatic
