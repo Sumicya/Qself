@@ -50,9 +50,9 @@ public class QZoneMsgNotifyAdapterTest {
         Method expected = MsgNotification.class.getDeclaredMethod("showNotification",
                 android.content.Context.class, String.class, String.class, int.class,
                 java.util.HashMap.class);
-        assertEquals(expected, handle.method);
+        assertEquals(expected, handle.getMethod());
         assertEquals("desc must be the SECOND String parameter",
-                2, handle.descArgIndex);
+                2, handle.getDescArgIndex());
     }
 
     @Test
