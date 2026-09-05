@@ -32,7 +32,7 @@ import android.content.Context;
 import android.os.Parcelable;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.annotation.DexDeobfs;
 import io.github.qauxv.util.Initiator;
@@ -260,7 +260,7 @@ public class ChatActivityFacade {
             case "MessageForLongTextMsg":
                 msgText = (String) Reflex.getInstanceObjectOrNull(msg, "msg");
                 if (msgText.length() > 3000) {
-                    Toasts.error(HostInfo.getApplication(), "暂不支持发送长消息");
+                    Toasts.error(HostInfo.getHostInfo().getApplication(), "暂不支持发送长消息");
                     return;
                 }
                 ArrayList<?> atInfo = null;
@@ -271,16 +271,16 @@ public class ChatActivityFacade {
                     // ignore
                 }
                 if (atInfo == null) {
-                    sendMessage(app, HostInfo.getApplication(), session, msgText);
+                    sendMessage(app, HostInfo.getHostInfo().getApplication(), session, msgText);
                 } else {
-                    sendMessage(app, HostInfo.getApplication(), session, msgText, atInfo, null);
+                    sendMessage(app, HostInfo.getHostInfo().getApplication(), session, msgText, atInfo, null);
                 }
                 break;
             case "MessageForPic":
                 try {
                     for (Method mi : DexKit.requireClassFromCache(CFaceDe.INSTANCE).getMethods()) {
                         if (!mi.getName().equals("a") && !mi.getName().equals("b")
-                                && (!mi.getName().equals("o0") && !HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_93))) {
+                                && (!mi.getName().equals("o0") && !HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_93))) {
                             continue;
                         }
                         argt = mi.getParameterTypes();
@@ -299,7 +299,7 @@ public class ChatActivityFacade {
                         m.invoke(null, app, session, msg, 0);
                     }
                 } catch (Exception e) {
-                    Toasts.error(HostInfo.getApplication(), e.toString().replace("java.lang.", ""));
+                    Toasts.error(HostInfo.getHostInfo().getApplication(), e.toString().replace("java.lang.", ""));
                     Log.e(e);
                 }
                 break;
@@ -308,12 +308,12 @@ public class ChatActivityFacade {
                     String url = (String) Reflex.invokeVirtual(msg, "getLocalFilePath");
                     File file = new File(url);
                     if (!file.exists()) {
-                        Toasts.error(HostInfo.getApplication(), "未找到语音文件");
+                        Toasts.error(HostInfo.getHostInfo().getApplication(), "未找到语音文件");
                         return;
                     }
                     sendPttMessage(getQQAppInterface(), session, url);
                 } catch (Exception e) {
-                    Toasts.error(HostInfo.getApplication(), e.toString().replace("java.lang.", ""));
+                    Toasts.error(HostInfo.getHostInfo().getApplication(), e.toString().replace("java.lang.", ""));
                     Log.e(e);
                 }
                 break;
@@ -324,7 +324,7 @@ public class ChatActivityFacade {
                 sendMixedMsg(app,session,msg);
                 break;
             default:
-                Toasts.error(HostInfo.getApplication(), "Unsupported msg type: " + getShortClassName(msg));
+                Toasts.error(HostInfo.getHostInfo().getApplication(), "Unsupported msg type: " + getShortClassName(msg));
         }
     }
 }

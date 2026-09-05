@@ -21,6 +21,8 @@
 
 package io.github.nakixii.hook
 
+import io.github.qauxv.util.isInModuleProcess
+import io.github.qauxv.util.isInModuleProcess
 import android.app.Activity
 import android.content.Context
 import android.graphics.BitmapFactory
@@ -39,7 +41,6 @@ import androidx.appcompat.widget.AppCompatEditText
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.appcompat.widget.SwitchCompat
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.util.HostInfo
 import io.github.qauxv.util.LayoutHelper
 import cc.ioctl.util.hookAfterIfEnabled
 import cc.ioctl.util.hookBeforeIfEnabled
@@ -89,7 +90,7 @@ object BlockPicByMd5 : CommonConfigFunctionHook(
 
     override val valueState = MutableStateFlow<String?>(null)
     override val onUiItemClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, activity, _ ->
-        if (HostInfo.isInModuleProcess()) {
+        if (isInModuleProcess()) {
             showHostOnlyDialog(activity)
         } else {
             reloadConfig()
@@ -251,7 +252,7 @@ object BlockPicByMd5 : CommonConfigFunctionHook(
     private fun updateValueState() {
         val ruleCount = ruleConfig.rules.size
         valueState.value = when {
-            HostInfo.isInModuleProcess() -> "请在 QQ 内管理"
+            isInModuleProcess() -> "请在 QQ 内管理"
             !isEnabled -> "未启用"
             ruleCount == 0 -> "未添加规则"
             else -> "$ruleCount 条规则"

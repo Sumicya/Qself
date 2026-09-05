@@ -4,7 +4,7 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
 import io.github.qauxv.dsl.FunctionEntryRouter;
@@ -60,7 +60,7 @@ public class HiddenApolloView extends CommonSwitchFunctionHook {
 
     @Override
     public boolean isAvailable() {
-        return HostInfo.isQQ() && HostInfo.getVersionCode() <= QQVersion.QQ_8_4_10;
+        return HostInfo.isAnyQQSpecies() && HostInfo.getHostInfo().getVersionCode32() <= QQVersion.QQ_8_4_10;
     }
 
 }

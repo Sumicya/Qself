@@ -22,7 +22,7 @@
 package com.xiaoniu.hook
 
 import android.content.Context
-import cc.ioctl.util.HostInfo.isQQ
+import io.github.qauxv.util.isAnyQQSpecies
 import cc.ioctl.util.afterHookIfEnabled
 import io.github.qauxv.util.xpcompat.XposedHelpers
 import io.github.qauxv.base.annotation.FunctionHookEntry
@@ -41,7 +41,7 @@ object FullTroopMemberJoinTime : CommonSwitchFunctionHook() {
 
     override val uiItemLocation: Array<String> = Auxiliary.PROFILE_CATEGORY
 
-    override val isAvailable: Boolean get() = isQQ()    //新版资料卡是什么时候出现的？
+    override val isAvailable: Boolean get() = isAnyQQSpecies()    //新版资料卡是什么时候出现的？
 
     override fun initOnce(): Boolean {
         XposedHelpers.findAndHookMethod(

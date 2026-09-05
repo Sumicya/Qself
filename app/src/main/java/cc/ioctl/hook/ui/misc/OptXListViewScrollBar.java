@@ -34,7 +34,7 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.LayoutHelper;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedBridge;
@@ -105,7 +105,7 @@ public class OptXListViewScrollBar extends CommonConfigFunctionHook {
                 .setSingleChoiceItems(SWITCH_ITEMS_DETAIL, current, (dialog, which) -> {
                     setCurrentValue(which);
                     if (current != which) {
-                        Toasts.info(ctx, "重启" + HostInfo.getAppName() + "生效");
+                        Toasts.info(ctx, "重启" + HostInfo.getHostInfo().getHostName() + "生效");
                     }
                     dialog.dismiss();
                     if (!isInitialized() && which != 0) {

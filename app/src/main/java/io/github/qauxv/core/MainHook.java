@@ -44,7 +44,7 @@ import cc.ioctl.hook.msg.RevokeMsgHook;
 import cc.ioctl.hook.notification.MuteQZoneThumbsUp;
 import cc.ioctl.hook.ui.misc.OptXListViewScrollBar;
 import cc.ioctl.hook.ui.title.RemoveCameraButton;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Reflex;
 import io.github.qauxv.chainloader.detail.ExternalModuleChainLoader;
 import io.github.qauxv.chainloader.detail.ui.ExternalModuleConfigHook;
@@ -230,7 +230,7 @@ public class MainHook {
                         String className = null;
                         if (intent != null) {
                             ComponentName component = intent.getComponent();
-                            if (component != null && HostInfo.getPackageName().equals(component.getPackageName())) {
+                            if (component != null && HostInfo.getHostInfo().getPackageName().equals(component.getPackageName())) {
                                 className = component.getClassName();
                             }
                         }

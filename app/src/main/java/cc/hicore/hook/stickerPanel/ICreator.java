@@ -20,7 +20,7 @@ import cc.hicore.hook.stickerPanel.MainItemImpl.InputFromLocalImpl;
 import cc.hicore.hook.stickerPanel.MainItemImpl.LocalStickerImpl;
 import cc.hicore.hook.stickerPanel.MainItemImpl.PanelSetImpl;
 import cc.hicore.hook.stickerPanel.MainItemImpl.RecentStickerImpl;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.LayoutHelper;
 import com.bumptech.glide.Glide;
 import com.lxj.xpopup.XPopup;
@@ -170,7 +170,7 @@ public class ICreator extends BottomPopupView{
         panel.addView(titleView);
 
 
-        Glide.with(HostInfo.getApplication()).load(Env.app_save_path + "本地表情包/" + path.storePath + "/" + imgPath).into(img);
+        Glide.with(HostInfo.getHostInfo().getApplication()).load(Env.app_save_path + "本地表情包/" + path.storePath + "/" + imgPath).into(img);
 
 
         LinearLayout.LayoutParams panel_param = new LinearLayout.LayoutParams(LayoutHelper.dip2px(getContext(), 50), ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -218,7 +218,7 @@ public class ICreator extends BottomPopupView{
         titleView.setSingleLine();
         panel.addView(titleView);
 
-        Glide.with(HostInfo.getApplication()).load(resID).into(img);
+        Glide.with(HostInfo.getHostInfo().getApplication()).load(resID).into(img);
 
         LinearLayout.LayoutParams panel_param = new LinearLayout.LayoutParams(LayoutHelper.dip2px(getContext(), 50), ViewGroup.LayoutParams.WRAP_CONTENT);
         panel_param.leftMargin = LayoutHelper.dip2px(getContext(), 5);
@@ -310,7 +310,7 @@ public class ICreator extends BottomPopupView{
             iMainPanelItem.onViewDestroy();
         }
 
-        Glide.get(HostInfo.getApplication()).clearMemory();
+        Glide.get(HostInfo.getHostInfo().getApplication()).clearMemory();
     }
 
     @Override

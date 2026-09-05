@@ -26,7 +26,7 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.hook.SettingEntryHook;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.BuildConfig;
 import io.github.qauxv.base.IDynamicHook;
 import io.github.qauxv.base.RuntimeErrorTracer;
@@ -177,7 +177,7 @@ public class HookInstaller {
     }
 
     public static void restartToTakeEffect(@Nullable Context context) {
-        Toasts.info(context, "重启 " + HostInfo.getAppName() + " 生效");
+        Toasts.info(context, "重启 " + HostInfo.getHostInfo().getHostName() + " 生效");
     }
 
     public static Step[] stepsOf(@Nullable Step[] a, @Nullable Step[] b) {

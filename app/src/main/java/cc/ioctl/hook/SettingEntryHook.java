@@ -23,7 +23,7 @@ package cc.ioctl.hook;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
-import static cc.ioctl.util.HostInfo.requireMinQQVersion;
+import io.github.qauxv.util.HostInfo;
 import static io.github.qauxv.util.Initiator.load;
 
 import android.annotation.SuppressLint;
@@ -39,7 +39,7 @@ import android.widget.LinearLayout;
 import androidx.annotation.NonNull;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.LayoutHelper;
 import io.github.qauxv.util.Reflex;
 import io.github.qauxv.BuildConfig;
@@ -129,7 +129,7 @@ public class SettingEntryHook extends BasePersistBackgroundHook {
 
     private boolean isNeedFind() {
         return QAppUtils.isQQnt()
-                && requireMinQQVersion(QQVersion.QQ_9_2_10)
+                && HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_2_10)
                 && DexKit.getMethodDescFromCacheImpl(SimpleItemProcessor_Method.INSTANCE) == null;
     }
 
@@ -230,7 +230,7 @@ public class SettingEntryHook extends BasePersistBackgroundHook {
                 }
             }
             // use 'SimpleItemProcessor' keyword to search (9.2.10 ~ 9.3.10)
-            if (requireMinQQVersion(QQVersion.QQ_9_2_10)) {
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_2_10)) {
                 Method m = DexKit.loadMethodFromCache(SimpleItemProcessor_Method.INSTANCE);
                 if (m != null) {
                     Class<?> klass = m.getDeclaringClass();

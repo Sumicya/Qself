@@ -21,6 +21,10 @@
 
 package moe.zapic.hook
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.requireMinVersionAnyQQ
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.requireMinVersionAnyQQ
 import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
@@ -43,7 +47,6 @@ import androidx.core.graphics.drawable.toBitmap
 import cc.chenhe.qqnotifyevo.utils.NotifyChannel
 import cc.chenhe.qqnotifyevo.utils.getChannelId
 import cc.chenhe.qqnotifyevo.utils.getNotificationChannels
-import cc.ioctl.util.HostInfo
 import io.github.qauxv.util.Reflex
 import cc.ioctl.util.hookAfterIfEnabled
 import cc.ioctl.util.hookBeforeIfEnabled
@@ -132,7 +135,7 @@ object MessagingStyleNotification : CommonConfigFunctionHook(targetProc = SyncUt
         }
         createNotificationChannels()
 
-        if (!HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_63_BETA_11345)) {
+        if (!requireMinVersionAnyQQ(QQVersion.QQ_8_9_63_BETA_11345)) {
             return NonNTMessageStyleNotification(this).hook()
         }
         val cNotificationFacade = "com.tencent.qqnt.notification.NotificationFacade".clazz!!

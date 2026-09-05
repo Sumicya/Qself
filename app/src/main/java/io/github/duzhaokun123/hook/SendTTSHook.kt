@@ -22,12 +22,13 @@
 
 package io.github.duzhaokun123.hook
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.hostInfo
 import android.content.Context
 import android.os.Parcelable
 import android.speech.tts.TextToSpeech
 import android.view.View
 import android.widget.EditText
-import cc.ioctl.util.HostInfo
 import io.github.duzhaokun123.util.TTS
 import io.github.qauxv.base.IDynamicHook
 import io.github.qauxv.base.annotation.FunctionHookEntry
@@ -74,11 +75,11 @@ object SendTTSHook :
         super.initOnce()
         TTS.addInitCallback {
             if (it == TextToSpeech.ERROR) {
-                Toasts.error(HostInfo.getApplication(), "TTS 初始化失败")
+                Toasts.error(hostInfo.application, "TTS 初始化失败")
                 traceError(RuntimeException("TTS init failed"))
             }
         }
-        TTS.init(HostInfo.getApplication())
+        TTS.init(hostInfo.application)
         return true
     }
 

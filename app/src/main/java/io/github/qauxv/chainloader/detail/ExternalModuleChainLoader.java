@@ -28,7 +28,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import androidx.annotation.NonNull;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import dalvik.system.BaseDexClassLoader;
 import dalvik.system.PathClassLoader;
 import io.github.qauxv.chainloader.detail.ui.ExternalModuleConfigHook;
@@ -103,7 +103,7 @@ public class ExternalModuleChainLoader {
         //                        @Nullable Map<String, Method> xblService);
         try {
             Runnable obj = entryRunnableClass.getConstructor(String.class, String.class, Map.class)
-                    .newInstance(ai.sourceDir, HostInfo.getApplication().getDataDir().getAbsolutePath(), null);
+                    .newInstance(ai.sourceDir, HostInfo.getHostInfo().getApplication().getDataDir().getAbsolutePath(), null);
             obj.run();
         } catch (InvocationTargetException e) {
             throw IoUtils.unsafeThrowForIteCause(e);
@@ -111,7 +111,7 @@ public class ExternalModuleChainLoader {
     }
 
     public static synchronized void loadExternalModules(@NonNull ExternalModuleManager.ExternalModuleInfo[] modules) {
-        Context ctx = HostInfo.getApplication();
+        Context ctx = HostInfo.getHostInfo().getApplication();
         PackageManager pms = ctx.getPackageManager();
         for (ExternalModuleManager.ExternalModuleInfo module : modules) {
             if (!module.getEnable()) {

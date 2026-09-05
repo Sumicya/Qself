@@ -44,7 +44,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.view.ViewCompat;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.LayoutHelper;
 import cc.ioctl.util.ui.FaultyDialog;
 import cc.ioctl.util.ui.drawable.DebugDrawable;
@@ -140,7 +140,7 @@ public class RepeaterPlusIconSettingDialog implements View.OnClickListener,
         check_showInMenu.setChecked(cfg.getBooleanOrFalse(qn_repeat_show_in_menu));
 
         // temporary
-        if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_63_BETA_11345)) {
+        if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_63_BETA_11345)) {
             check_showUpper.setEnabled(false);
         }
 
@@ -311,7 +311,7 @@ public class RepeaterPlusIconSettingDialog implements View.OnClickListener,
                 dialog.dismiss();
                 sCachedRepeaterIcon = null;
             }
-            Toasts.info(ctx, "重启" + HostInfo.getAppName() + "生效");
+            Toasts.info(ctx, "重启" + HostInfo.getHostInfo().getHostName() + "生效");
         } else if (v == browseBtn) {
             SafUtils.requestOpenFile(ctx).setMimeType("image/*").onResult(uri -> {
                         try (InputStream is = SafUtils.openInputStream(ctx, uri)) {

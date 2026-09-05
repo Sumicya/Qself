@@ -22,6 +22,8 @@
 
 package io.github.nakixii.hook
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.hostInfo
 import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -34,7 +36,6 @@ import android.widget.FrameLayout
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
-import cc.ioctl.util.HostInfo
 import com.github.kyuubiran.ezxhelper.utils.getFieldByType
 import com.github.kyuubiran.ezxhelper.utils.hookAfter
 import com.github.kyuubiran.ezxhelper.utils.hookBefore
@@ -198,6 +199,6 @@ object SendFavoriteVoice : PluginDelayableHook("send_favorite_voice") {
         intent.putExtra("uin", uin)
         intent.putExtra("uinType", uinType)
         intent.setPackage("com.tencent.mobileqq")
-        HostInfo.getApplication().sendBroadcast(intent)
+        hostInfo.application.sendBroadcast(intent)
     }
 }

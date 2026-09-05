@@ -21,6 +21,9 @@
  */
 package me.singleneuron.hook
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.PACKAGE_NAME_QQ
+import io.github.qauxv.util.hostInfo
 import android.app.Activity
 import android.content.Context
 import android.content.DialogInterface
@@ -29,7 +32,7 @@ import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.View
 import android.view.WindowManager
-import cc.ioctl.util.HostInfo.PACKAGE_NAME_QQ
+import PACKAGE_NAME_QQ
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import io.github.qauxv.util.xpcompat.XC_MethodHook

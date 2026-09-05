@@ -25,7 +25,7 @@ package cc.ioctl.hook;
 import android.app.Application;
 import android.os.Handler;
 import androidx.annotation.NonNull;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import com.microsoft.appcenter.AppCenter;
 import com.microsoft.appcenter.analytics.Analytics;
 import com.microsoft.appcenter.channel.AbstractChannelListener;
@@ -55,9 +55,9 @@ public class AppCenterFix {
         patchDevice();
         // set wrapper app info
         WrapperSdk hostSdk = new WrapperSdk();
-        hostSdk.setWrapperSdkName(HostInfo.getPackageName());
-        hostSdk.setWrapperSdkVersion(HostInfo.getVersionName());
-        hostSdk.setWrapperRuntimeVersion(String.valueOf(HostInfo.getVersionCode32()));
+        hostSdk.setWrapperSdkName(HostInfo.getHostInfo().getPackageName());
+        hostSdk.setWrapperSdkVersion(HostInfo.getHostInfo().getVersionName());
+        hostSdk.setWrapperRuntimeVersion(String.valueOf(HostInfo.getHostInfo().getVersionCode32()));
         AppCenter.setWrapperSdk(hostSdk);
         sIsInitialized = true;
     }

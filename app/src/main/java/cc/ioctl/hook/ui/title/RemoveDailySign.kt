@@ -21,9 +21,13 @@
  */
 package cc.ioctl.hook.ui.title
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
+import io.github.qauxv.util.PACKAGE_NAME_QQ
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
 import android.widget.LinearLayout
 import cc.ioctl.util.HookUtils
-import cc.ioctl.util.HostInfo
 import com.github.kyuubiran.ezxhelper.utils.findField
 import com.github.kyuubiran.ezxhelper.utils.findMethod
 import com.github.kyuubiran.ezxhelper.utils.getObjectAs
@@ -52,7 +56,7 @@ object RemoveDailySign : CommonSwitchFunctionHook("kr_remove_daily_sign") {
     override val isAvailable: Boolean get() = !isTim()
 
     override fun initOnce(): Boolean {
-        if (hostInfo.packageName != HostInfo.PACKAGE_NAME_QQ) return false
+        if (hostInfo.packageName != PACKAGE_NAME_QQ) return false
         val callback = HookUtils.afterIfEnabled(this) { param ->
             // em_drawer_sign_up
             val dailySignName = when {

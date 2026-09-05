@@ -21,6 +21,8 @@
  */
 package xyz.nextalone.hook
 
+import io.github.qauxv.util.requireMinVersionAnyQQ
+import io.github.qauxv.util.requireMinVersionAnyQQ
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
@@ -40,7 +42,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.view.children
 import cc.hicore.QApp.QAppUtils
 import cc.hicore.ReflectUtil.MField
-import cc.ioctl.util.HostInfo
 import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.LayoutHelper.newLinearLayoutParams
 import io.github.qauxv.base.IUiItemAgent
@@ -164,7 +165,7 @@ object ChatWordsCount : CommonConfigFunctionHook("na_chat_words_count_kt", array
 
     private fun updateChatWordView(viewGroup: ViewGroup) {
         val relativeLayout: RelativeLayout =
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_80) && !QAppUtils.isQQnt()) {
+            if (requireMinVersionAnyQQ(QQVersion.QQ_8_8_80) && !QAppUtils.isQQnt()) {
                 val getId = MField.GetStaticField<Int>("com.tencent.mobileqq.R\$id".clazz, "drawer_top_sig_layout")
                 viewGroup.findViewById(getId)
             } else {
@@ -185,7 +186,7 @@ object ChatWordsCount : CommonConfigFunctionHook("na_chat_words_count_kt", array
 
     private fun injectChatWordView(context: Context, viewGroup: ViewGroup) {
         val relativeLayout: RelativeLayout =
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_80) && !QAppUtils.isQQnt()) {
+            if (requireMinVersionAnyQQ(QQVersion.QQ_8_8_80) && !QAppUtils.isQQnt()) {
                 val getId = MField.GetStaticField<Int>("com.tencent.mobileqq.R\$id".clazz, "drawer_top_sig_layout")
                 viewGroup.findViewById(getId)
             } else {

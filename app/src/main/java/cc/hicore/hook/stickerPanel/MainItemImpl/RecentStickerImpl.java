@@ -13,7 +13,7 @@ import cc.hicore.hook.stickerPanel.LocalDataHelper;
 import cc.hicore.hook.stickerPanel.RecentStickerHelper;
 import cc.hicore.message.chat.SessionUtils;
 import cc.hicore.message.common.MsgSender;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.LayoutHelper;
 import com.bumptech.glide.Glide;
 import com.lxj.xpopup.XPopup;
@@ -81,9 +81,9 @@ public class RecentStickerImpl implements ICreator.IMainPanelItem {
         for (ImageView img : cacheImageView) {
             String coverView = (String) img.getTag();
             if (new File(coverView+"_thumb").exists()){
-                Glide.with(HostInfo.getApplication()).load(coverView+"_thumb").into(img);
+                Glide.with(HostInfo.getHostInfo().getApplication()).load(coverView+"_thumb").into(img);
             }else {
-                Glide.with(HostInfo.getApplication()).load(coverView).into(img);
+                Glide.with(HostInfo.getHostInfo().getApplication()).load(coverView).into(img);
             }
         }
     }
@@ -117,7 +117,7 @@ public class RecentStickerImpl implements ICreator.IMainPanelItem {
     public void onViewDestroy() {
         for (ImageView img : cacheImageView) {
             img.setImageBitmap(null);
-            Glide.with(HostInfo.getApplication()).clear(img);
+            Glide.with(HostInfo.getHostInfo().getApplication()).clear(img);
         }
     }
 

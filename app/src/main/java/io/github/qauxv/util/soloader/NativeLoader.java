@@ -32,7 +32,7 @@ import android.system.StructUtsname;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import dalvik.system.BaseDexClassLoader;
 import io.github.qauxv.BuildConfig;
 import io.github.qauxv.core.NativeCoreBridge;
@@ -391,10 +391,10 @@ public class NativeLoader {
             return;
         }
         int initMode = NATIVE_LIBRARY_INIT_MODE_SECONDARY_ONLY;
-        String packageName = HostInfo.getPackageName();
+        String packageName = HostInfo.getHostInfo().getPackageName();
         int currentSdkLevel = Build.VERSION.SDK_INT;
-        String versionName = HostInfo.getVersionName();
-        long longVersionCode = HostInfo.getLongVersionCode();
+        String versionName = HostInfo.getHostInfo().getVersionName();
+        long longVersionCode = HostInfo.getHostInfo().getVersionCode();
         String dataDir = context.getDataDir().getAbsolutePath();
         boolean isDebugBuild = BuildConfig.DEBUG;
         nativeSecondaryNativeLibraryFullInit(initMode, dataDir, packageName, currentSdkLevel, versionName, longVersionCode, isDebugBuild);
@@ -665,10 +665,10 @@ public class NativeLoader {
         if (!sPrimaryNativeLibraryPreInitialized) {
             throw new IllegalStateException("Primary native library must be pre-initialized before full initialization");
         }
-        String packageName = HostInfo.getPackageName();
+        String packageName = HostInfo.getHostInfo().getPackageName();
         int currentSdkLevel = Build.VERSION.SDK_INT;
-        String versionName = HostInfo.getVersionName();
-        long longVersionCode = HostInfo.getLongVersionCode();
+        String versionName = HostInfo.getHostInfo().getVersionName();
+        long longVersionCode = HostInfo.getHostInfo().getVersionCode();
         String dataDir = context.getDataDir().getAbsolutePath();
         int initMode;
         boolean isSecondaryNeeded;

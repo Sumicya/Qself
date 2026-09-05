@@ -20,7 +20,10 @@
  */
 package cc.ioctl.hook.ui.main
 
-import cc.ioctl.util.HostInfo
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
 import com.github.kyuubiran.ezxhelper.utils.findMethod
 import com.github.kyuubiran.ezxhelper.utils.hookAfter
 import com.github.kyuubiran.ezxhelper.utils.hookAllConstructorAfter
@@ -51,11 +54,11 @@ object HideMiniAppPullEntry : CommonSwitchFunctionHook(ConfigItems.qn_hide_msg_l
     override val name = "隐藏下拉小程序"
     override val description = "生成屏蔽下拉小程序解决方案"
     override val isApplicationRestartRequired = true
-    override val isAvailable: Boolean get() = !HostInfo.isTim()
+    override val isAvailable: Boolean get() = !isTim()
     override val uiItemLocation = Simplify.MAIN_UI_TITLE
 
     override fun initOnce(): Boolean {
-        if (HostInfo.isTim()) {
+        if (isTim()) {
             return false
         }
         val methodName = initMiniAppObfsName
@@ -146,7 +149,7 @@ object HideMiniAppPullEntry : CommonSwitchFunctionHook(ConfigItems.qn_hide_msg_l
             val cache = ConfigManager.getCache()
             val lastVersion = cache.getIntOrDefault("qn_hide_miniapp_v2_version_code", 0)
             val methodName = cache.getString("qn_hide_miniapp_v2_method_name")
-            return if (HostInfo.getVersionCode() == lastVersion) {
+            return if (hostInfo.versionCode32 == lastVersion) {
                 methodName
             } else null
         }
@@ -199,7 +202,7 @@ object HideMiniAppPullEntry : CommonSwitchFunctionHook(ConfigItems.qn_hide_msg_l
                 if (methodData.className == conversationClassName && "()V" == methodData.methodSign) {
                     // save and return
                     val cache = ConfigManager.getCache()
-                    cache.putInt("qn_hide_miniapp_v2_version_code", HostInfo.getVersionCode())
+                    cache.putInt("qn_hide_miniapp_v2_version_code", hostInfo.versionCode32)
                     cache.putString("qn_hide_miniapp_v2_method_name", methodData.name)
                     cache.save()
                     true

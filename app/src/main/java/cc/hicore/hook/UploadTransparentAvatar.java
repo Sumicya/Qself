@@ -24,7 +24,7 @@ package cc.hicore.hook;
 import android.graphics.Bitmap;
 import androidx.annotation.NonNull;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
@@ -87,13 +87,13 @@ public class UploadTransparentAvatar extends CommonSwitchFunctionHook {
 
         String clazzName;
         String methodName;
-        if (HostInfo.requireMinQQVersion(QQVersion.QQ_9_2_10)) {
+        if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_2_10)) {
             clazzName = "com.tencent.mobileqq.pic.compress.f";
             methodName = "f";
-        } else if (HostInfo.requireMinQQVersion(QQVersion.QQ_9_1_50)) {
+        } else if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_1_50)) {
             clazzName = "com.tencent.mobileqq.pic.compress.g";
             methodName = "i";
-        } else if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_93)) {
+        } else if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_93)) {
             clazzName = "com.tencent.mobileqq.pic.compress.e";
             methodName = "i";
         } else {

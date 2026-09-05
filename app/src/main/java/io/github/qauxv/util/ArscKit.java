@@ -23,7 +23,7 @@ package io.github.qauxv.util;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Reflex;
 import io.github.qauxv.config.ConfigManager;
 import java.io.ByteArrayOutputStream;
@@ -140,7 +140,7 @@ public class ArscKit {
         } catch (NumberFormatException ignored) {
         }
         if (ctx == null) {
-            ctx = HostInfo.getApplication();
+            ctx = HostInfo.getHostInfo().getApplication();
         }
         String pkg = ctx.getPackageName();
         int ret = ctx.getResources().getIdentifier(name, type, pkg);
@@ -151,7 +151,7 @@ public class ArscKit {
         ConfigManager cache = ConfigManager.getCache();
         ret = cache.getIntOrDefault(CACHED_RES_ID_NAME_PREFIX + type + "/" + name, 0);
         int oldcode = cache.getIntOrDefault(CACHED_RES_ID_CODE_PREFIX + type + "/" + name, -1);
-        int currcode = HostInfo.getVersionCode32();
+        int currcode = HostInfo.getHostInfo().getVersionCode32();
         if (ret != 0 && (oldcode == currcode)) {
             return ret;
         }

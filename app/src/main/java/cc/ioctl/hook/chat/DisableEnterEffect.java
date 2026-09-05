@@ -23,7 +23,7 @@ package cc.ioctl.hook.chat;
 
 import androidx.annotation.NonNull;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
 import io.github.qauxv.dsl.FunctionEntryRouter.Locations.Simplify;
@@ -66,7 +66,7 @@ public class DisableEnterEffect extends CommonSwitchFunctionHook {
 
     @Override
     public boolean initOnce() {
-        if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_63_BETA_11345)) {
+        if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_63_BETA_11345)) {
             Method m = DexKit.requireMethodFromCache(TroopEnterEffect_QQNT.INSTANCE);
             HookUtils.hookBeforeIfEnabled(this, m, param -> param.setResult(null));
             return true;

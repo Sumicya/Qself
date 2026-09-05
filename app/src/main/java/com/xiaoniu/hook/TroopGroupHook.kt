@@ -22,6 +22,8 @@
 
 package com.xiaoniu.hook
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.hostInfo
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.view.View
@@ -35,7 +37,6 @@ import androidx.core.view.setPadding
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.util.HostInfo
 import com.github.kyuubiran.ezxhelper.utils.ArgTypes
 import com.github.kyuubiran.ezxhelper.utils.Args
 import com.github.kyuubiran.ezxhelper.utils.hookBefore
@@ -289,7 +290,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
     data class TroopInfo(val name: String, val uin: String)
 
     private fun getGroupItems(): List<GroupItemData> {
-        val file = File(HostInfo.getApplication().filesDir, "qa_misc" + File.separator + "group.json")
+        val file = File(hostInfo.application.filesDir, "qa_misc" + File.separator + "group.json")
         if (file.exists()) {
             file.readText().let {
                 return try {
@@ -307,7 +308,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
 
     private fun writeGroupItems(list: List<GroupItemData>) {
         val json = Json.encodeToString(list)
-        File(IoUtils.mkdirsOrThrow(File(HostInfo.getApplication().filesDir, "qa_misc")), "group.json")
+        File(IoUtils.mkdirsOrThrow(File(hostInfo.application.filesDir, "qa_misc")), "group.json")
             .writeText(json)
     }
 

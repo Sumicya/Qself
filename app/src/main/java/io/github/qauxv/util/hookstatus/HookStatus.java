@@ -31,7 +31,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.libxposed.service.XposedService;
 import io.github.libxposed.service.XposedServiceHelper;
 import io.github.qauxv.BuildConfig;
@@ -240,7 +240,7 @@ public class HookStatus {
     }
 
     public static HashMap<String, String> getHostABI() {
-        CharSequence[] scope = HostInfo.getApplication().getResources().getTextArray(R.array.xposedscope);
+        CharSequence[] scope = HostInfo.getHostInfo().getApplication().getResources().getTextArray(R.array.xposedscope);
         HashMap<String, String> result = new HashMap<>(4);
         for (CharSequence s : scope) {
             String abi = AbiUtils.getApplicationActiveAbi(s.toString());

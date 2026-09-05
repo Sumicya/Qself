@@ -21,10 +21,13 @@
  */
 package cc.ioctl.hook.ui.profile
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
 import android.app.Activity
 import android.content.Intent
 import cc.ioctl.util.HookUtils
-import cc.ioctl.util.HostInfo
 import io.github.qauxv.util.Reflex
 import com.github.kyuubiran.ezxhelper.utils.field
 import com.github.kyuubiran.ezxhelper.utils.hookAfter
@@ -79,7 +82,7 @@ object RemoveDiyCard : CommonSwitchFunctionHook(
             }
         for (m in Initiator._FriendProfileCardActivity().declaredMethods) {
             val argt = m.parameterTypes
-            if (HostInfo.getVersionCode32() <= QQVersion.QQ_8_3_6) {
+            if (hostInfo.versionCode32 <= QQVersion.QQ_8_3_6) {
                 if (m.name == "a" && !Modifier.isStatic(m.modifiers) && m.returnType == Void.TYPE) {
                     if (argt.size != 2) {
                         continue

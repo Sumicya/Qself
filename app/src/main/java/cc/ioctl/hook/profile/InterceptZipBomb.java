@@ -24,7 +24,7 @@ package cc.ioctl.hook.profile;
 import androidx.annotation.NonNull;
 import cc.ioctl.util.BugUtils;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
 import io.github.qauxv.dsl.FunctionEntryRouter.Locations.Auxiliary;
@@ -70,7 +70,7 @@ public class InterceptZipBomb extends CommonSwitchFunctionHook {
             zipFile.close();
             if (sizeSum >= 104550400 && sizeSum > file.length() * 10) {
                 param.setResult(null);
-                Toasts.show(HostInfo.getApplication(),
+                Toasts.show(HostInfo.getHostInfo().getApplication(),
                         String.format(Locale.ROOT, "已拦截 %s ,解压后大小异常: %s",
                                 file.getPath(), BugUtils.getSizeString(sizeSum)));
             }

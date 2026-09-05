@@ -26,7 +26,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
@@ -94,7 +94,7 @@ public class SendGiftHook extends CommonSwitchFunctionHook {
                 // 8.9.0/3060 com/tencent/mobileqq/activity/aio/rebuild/input/b/e
                 kQWalletTextChangeCallback = Initiator.load("com/tencent/mobileqq/activity/aio/rebuild/input/b/e");
             }
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_6_5)) {
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_6_5)) {
                 Objects.requireNonNull(kQWalletTextChangeCallback, "kQWalletTextChangeCallback");
             }
             if (kQWalletTextChangeCallback != null) {

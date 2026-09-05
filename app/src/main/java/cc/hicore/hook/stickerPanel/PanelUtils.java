@@ -13,7 +13,7 @@ import android.widget.RadioGroup;
 import cc.hicore.Env;
 import cc.hicore.Utils.FileUtils;
 import cc.hicore.Utils.RandomUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import com.bumptech.glide.Glide;
 import io.github.qauxv.R;
 import io.github.qauxv.util.Toasts;
@@ -40,14 +40,14 @@ public class PanelUtils {
 
         if (URL.startsWith("http")) {
             EmoOnlineLoader.submit(NewInfo, () -> {
-                Glide.with(HostInfo.getApplication())
+                Glide.with(HostInfo.getHostInfo().getApplication())
                         .load(new File(NewInfo.Path))
                         .fitCenter()
                         .into(preView);
             });
         } else {
             NewInfo.Path = URL;
-            Glide.with(HostInfo.getApplication())
+            Glide.with(HostInfo.getHostInfo().getApplication())
                     .load(new File(NewInfo.Path))
                     .fitCenter()
                     .into(preView);
@@ -126,7 +126,7 @@ public class PanelUtils {
                         Toasts.show("已保存到:" + Env.app_save_path + "本地表情包/" + choicePath.storePath + "/" + MD5);
                     }
                 }).setOnDismissListener(dialog -> {
-                    Glide.with(HostInfo.getApplication()).clear(preView);
+                    Glide.with(HostInfo.getHostInfo().getApplication()).clear(preView);
                 }).show();
     }
 

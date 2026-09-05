@@ -19,7 +19,7 @@ import cc.hicore.hook.stickerPanel.RecentStickerHelper;
 import cc.hicore.message.chat.SessionUtils;
 import cc.hicore.message.common.MsgSender;
 import cc.hicore.ui.SimpleDragSortView;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.LayoutHelper;
 import com.bumptech.glide.Glide;
 import com.lxj.xpopup.XPopup;
@@ -184,13 +184,13 @@ public class LocalStickerImpl implements ICreator.IMainPanelItem {
         img.setOnLongClickListener(v -> {
             ImageView preView = new ImageView(context);
             preView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            preView.setLayoutParams(new ViewGroup.LayoutParams(LayoutHelper.getScreenWidth(HostInfo.getApplication()) / 2, LayoutHelper.getScreenWidth(HostInfo.getApplication()) / 2));
-            Glide.with(HostInfo.getApplication()).load(coverView).fitCenter().into(preView);
+            preView.setLayoutParams(new ViewGroup.LayoutParams(LayoutHelper.getScreenWidth(HostInfo.getHostInfo().getApplication()) / 2, LayoutHelper.getScreenWidth(HostInfo.getHostInfo().getApplication()) / 2));
+            Glide.with(HostInfo.getHostInfo().getApplication()).load(coverView).fitCenter().into(preView);
             new AlertDialog.Builder(mContext)
                     .setTitle("选择你对该表情的操作")
                     .setView(preView)
                     .setOnDismissListener(dialog -> {
-                        Glide.with(HostInfo.getApplication()).clear(preView);
+                        Glide.with(HostInfo.getHostInfo().getApplication()).clear(preView);
                     }).setNegativeButton("删除该表情", (dialog, which) -> {
                         LocalDataHelper.deletePicItem(mPackInfo, item);
 
@@ -220,7 +220,7 @@ public class LocalStickerImpl implements ICreator.IMainPanelItem {
         for (ViewInfo img : cacheImageView) {
             img.view.setImageBitmap(null);
             img.status = 0;
-            Glide.with(HostInfo.getApplication()).clear(img.view);
+            Glide.with(HostInfo.getHostInfo().getApplication()).clear(img.view);
         }
 
     }
@@ -241,35 +241,35 @@ public class LocalStickerImpl implements ICreator.IMainPanelItem {
                     String coverView = (String) v.view.getTag();
                     if(new File(coverView + "_thumb").exists()){
                         if (showControlType == 0){
-                            Glide.with(HostInfo.getApplication()).load(coverView + "_thumb").skipMemoryCache(true).fitCenter().into(v.view);
+                            Glide.with(HostInfo.getHostInfo().getApplication()).load(coverView + "_thumb").skipMemoryCache(true).fitCenter().into(v.view);
                         }else if (showControlType == 1){
                             if (new File(coverView + "_thumb").length() > 2 * 1024 * 1024){
-                                Glide.with(HostInfo.getApplication()).load(coverView + "_thumb").dontAnimate().skipMemoryCache(true).fitCenter().into(v.view);
+                                Glide.with(HostInfo.getHostInfo().getApplication()).load(coverView + "_thumb").dontAnimate().skipMemoryCache(true).fitCenter().into(v.view);
                             }else {
-                                Glide.with(HostInfo.getApplication()).load(coverView + "_thumb").skipMemoryCache(true).fitCenter().into(v.view);
+                                Glide.with(HostInfo.getHostInfo().getApplication()).load(coverView + "_thumb").skipMemoryCache(true).fitCenter().into(v.view);
                             }
                         }else if (showControlType == 2){
-                            Glide.with(HostInfo.getApplication()).load(coverView + "_thumb").dontAnimate().skipMemoryCache(true).fitCenter().into(v.view);
+                            Glide.with(HostInfo.getHostInfo().getApplication()).load(coverView + "_thumb").dontAnimate().skipMemoryCache(true).fitCenter().into(v.view);
                         }
 
                     }else {
                         if (showControlType == 0){
-                            Glide.with(HostInfo.getApplication()).load(coverView).skipMemoryCache(true).fitCenter().into(v.view);
+                            Glide.with(HostInfo.getHostInfo().getApplication()).load(coverView).skipMemoryCache(true).fitCenter().into(v.view);
                         }else if (showControlType == 1){
                             if (new File(coverView).length() > 2 * 1024 * 1024){
-                                Glide.with(HostInfo.getApplication()).load(coverView).dontAnimate().skipMemoryCache(true).fitCenter().into(v.view);
+                                Glide.with(HostInfo.getHostInfo().getApplication()).load(coverView).dontAnimate().skipMemoryCache(true).fitCenter().into(v.view);
                             }else {
-                                Glide.with(HostInfo.getApplication()).load(coverView).skipMemoryCache(true).fitCenter().into(v.view);
+                                Glide.with(HostInfo.getHostInfo().getApplication()).load(coverView).skipMemoryCache(true).fitCenter().into(v.view);
                             }
                         }else if (showControlType == 2){
-                            Glide.with(HostInfo.getApplication()).load(coverView).dontAnimate().skipMemoryCache(true).fitCenter().into(v.view);
+                            Glide.with(HostInfo.getHostInfo().getApplication()).load(coverView).dontAnimate().skipMemoryCache(true).fitCenter().into(v.view);
                         }
                     }
                 }
 
             } else {
                 if (v.status != 0) {
-                    Glide.with(HostInfo.getApplication()).clear(v.view);
+                    Glide.with(HostInfo.getHostInfo().getApplication()).clear(v.view);
                     v.status = 0;
                 }
             }

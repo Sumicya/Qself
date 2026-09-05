@@ -27,7 +27,7 @@ import static io.github.qauxv.util.QQVersion.QQ_8_2_0;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedHelpers;
@@ -120,7 +120,7 @@ public class FavMoreEmo extends CommonSwitchFunctionHook {
 
     @Override
     public boolean isAvailable() {
-        return !HostInfo.isTim() && HostInfo.getVersionCode() < QQ_8_2_0;
+        return !HostInfo.isTim() && HostInfo.getHostInfo().getVersionCode32() < QQ_8_2_0;
     }
 
     @NonNull

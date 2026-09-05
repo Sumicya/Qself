@@ -22,6 +22,8 @@
 
 package io.github.duzhaokun123.util
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.hostInfo
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
@@ -29,7 +31,6 @@ import android.graphics.Typeface
 import android.view.View
 import android.widget.TextView
 import androidx.core.util.TypedValueCompat
-import cc.ioctl.util.HostInfo
 import io.github.qauxv.base.IUiItemAgent
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry
@@ -47,7 +48,7 @@ object CacheManager : CommonConfigFunctionHook(defaultEnabled = true) {
     override val uiItemLocation = FunctionEntryRouter.Locations.ConfigCategory.CONFIG_CATEGORY
     override val valueState = MutableStateFlow("")
 
-    val cacheDir = File(HostInfo.getApplication().cacheDir, "qauxv_cache")
+    val cacheDir = File(hostInfo.application.cacheDir, "qauxv_cache")
 
     override fun initOnce(): Boolean {
         return true

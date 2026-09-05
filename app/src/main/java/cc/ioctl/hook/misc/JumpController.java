@@ -32,7 +32,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.fragment.JefsRuleConfigFragment;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.SyncUtils;
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity;
 import io.github.qauxv.base.IUiItemAgent;
@@ -239,7 +239,7 @@ public class JumpController extends CommonConfigFunctionHook {
                                         try {
                                             JefsClass_runV.invoke(that, runnable);
                                         } catch (Exception e) {
-                                            Toasts.info(HostInfo.getApplication(), e.toString());
+                                            Toasts.info(HostInfo.getHostInfo().getApplication(), e.toString());
                                         }
                                     }).setNegativeButton(android.R.string.cancel, null)
                             .setCancelable(true).show());

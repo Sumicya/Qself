@@ -20,6 +20,8 @@
  */
 package cc.ioctl.hook.msg
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.hostInfo
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.DialogInterface
@@ -36,7 +38,6 @@ import androidx.core.text.buildSpannedString
 import androidx.core.text.method.LinkMovementMethodCompat
 import cc.hicore.QApp.QAppUtils
 import cc.ioctl.hook.profile.OpenProfileCard
-import cc.ioctl.util.HostInfo
 import cc.ioctl.util.HostStyledViewBuilder
 import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.Reflex
@@ -227,8 +228,8 @@ object MultiForwardAvatarHook : CommonSwitchFunctionHook(arrayOf(CAIOUtils, Mult
                 FaultyDialog.show(ctx, e)
             }
         }
-        mChatItemHeadIconViewId = HostInfo.getApplication().resources
-            .getIdentifier("chat_item_head_icon", "id", HostInfo.getPackageName())
+        mChatItemHeadIconViewId = hostInfo.application.resources
+            .getIdentifier("chat_item_head_icon", "id", hostInfo.packageName)
         check(mChatItemHeadIconViewId != 0) { "R.id.chat_item_head_icon not found" }
         return true
     }

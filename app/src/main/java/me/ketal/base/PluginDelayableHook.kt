@@ -22,7 +22,10 @@
 
 package me.ketal.base
 
-import cc.ioctl.util.HostInfo
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isAnyQQSpecies
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isAnyQQSpecies
 import io.github.qauxv.base.IUiItemAgent
 import io.github.qauxv.base.RuntimeErrorTracer
 import io.github.qauxv.config.ConfigManager
@@ -99,7 +102,7 @@ abstract class PluginDelayableHook(keyName: String) : BaseFunctionHook(hookKey =
         private const val KEY_DISABLE_PLUGIN_DELAYABLE_HOOK = "disable_plugin_delayable_hook"
 
         private fun getDefValForDisablePluginDelayableHook(): Boolean {
-            return HostInfo.isQQ() && hostInfo.versionCode == 4056L
+            return isAnyQQSpecies() && hostInfo.versionCode == 4056L
         }
 
         var disablePluginDelayableHook: Boolean

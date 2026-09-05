@@ -24,7 +24,7 @@ package cc.hicore.message.bridge;
 import android.content.Context;
 import android.os.Environment;
 import cc.hicore.ReflectUtil.XMethod;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import cc.hicore.QApp.QAppUtils;
 import cc.hicore.Utils.FileUtils;
 import cc.hicore.message.common.MsgBuilder;
@@ -45,7 +45,7 @@ public class Chat_facade_bridge {
                     Initiator.loadClass("com.tencent.mobileqq.activity.aio.SessionInfo"),
                     String.class,
                     ArrayList.class
-            ).invoke(QAppUtils.getAppRuntime(), HostInfo.getApplication(), _Session, text, atList);
+            ).invoke(QAppUtils.getAppRuntime(), HostInfo.getHostInfo().getApplication(), _Session, text, atList);
         } catch (Exception e) {
             Log.e(e);
         }
@@ -99,8 +99,8 @@ public class Chat_facade_bridge {
 
     public static void sendVoice(Object _Session, String path) {
         try {
-            if (!path.contains(HostInfo.getPackageName() + "/Tencent/MobileQQ/" + QAppUtils.getCurrentUin())) {
-                String newPath = Environment.getExternalStorageDirectory() + "/Android/data/" + HostInfo.getPackageName() + "/Tencent/MobileQQ/" + QAppUtils.getCurrentUin()
+            if (!path.contains(HostInfo.getHostInfo().getPackageName() + "/Tencent/MobileQQ/" + QAppUtils.getCurrentUin())) {
+                String newPath = Environment.getExternalStorageDirectory() + "/Android/data/" + HostInfo.getHostInfo().getPackageName() + "/Tencent/MobileQQ/" + QAppUtils.getCurrentUin()
                         + "/ptt/" + new File(path).getName();
                 FileUtils.copy(path, newPath);
                 path = newPath;
@@ -121,7 +121,7 @@ public class Chat_facade_bridge {
     public static void sendMix(Object _Session, Object mixRecord) {
         try {
             Object replyMsgSender;
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_0)){
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_0)){
                 replyMsgSender = XMethod.clz("com.tencent.mobileqq.replymsg.d").param(Initiator.loadClass("com.tencent.mobileqq.replymsg.d")).invoke();
             }else {
                 replyMsgSender = XMethod.clz("com.tencent.mobileqq.replymsg.ReplyMsgSender").param(Initiator.loadClass("com.tencent.mobileqq.replymsg.ReplyMsgSender")).invoke();
@@ -142,7 +142,7 @@ public class Chat_facade_bridge {
     public static void sendReply(Object _Session, Object replyRecord) {
         try {
             Object replyMsgSender;
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_0)){
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_0)){
                 replyMsgSender = XMethod.clz("com.tencent.mobileqq.replymsg.d").param(Initiator.loadClass("com.tencent.mobileqq.replymsg.d")).invoke();
             }else {
                 replyMsgSender = XMethod.clz("com.tencent.mobileqq.replymsg.ReplyMsgSender").param(Initiator.loadClass("com.tencent.mobileqq.replymsg.ReplyMsgSender")).invoke();
@@ -164,7 +164,7 @@ public class Chat_facade_bridge {
     public static void sendAnimation(Object Session, int sevrID) {
         try {
 
-            if (!HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_20)) {
+            if (!HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_20)) {
                 XMethod.clz("com.tencent.mobileqq.emoticonview.AniStickerSendMessageCallBack").name("sendAniSticker")
                         .ret(boolean.class).param(int.class, Initiator.loadClass("com.tencent.mobileqq.activity.aio.BaseSessionInfo")).invoke( sevrID, Session);
             } else {

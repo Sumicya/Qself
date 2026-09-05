@@ -22,12 +22,13 @@
 
 package io.github.duzhaokun123.hook
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.hostInfo
 import android.app.Activity
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.view.View
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.util.HostInfo
 import io.github.qauxv.util.Reflex
 import cc.ioctl.util.afterHookIfEnabled
 import com.xiaoniu.dispatcher.OnMenuBuilder
@@ -83,11 +84,11 @@ object MessageTTSHook : CommonSwitchFunctionHook(targets = arrayOf(AIOMsgItem_in
         }
         TTS.addInitCallback {
             if (it == TextToSpeech.ERROR) {
-                Toasts.error(HostInfo.getApplication(), "TTS 初始化失败")
+                Toasts.error(hostInfo.application, "TTS 初始化失败")
                 traceError(RuntimeException("TTS init failed"))
             }
         }
-        TTS.init(HostInfo.getApplication())
+        TTS.init(hostInfo.application)
         return true
     }
 

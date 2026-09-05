@@ -35,7 +35,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.hook.file.BaseApk;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.BuildConfig;
 import io.github.qauxv.R;
 import io.github.qauxv.config.ConfigManager;

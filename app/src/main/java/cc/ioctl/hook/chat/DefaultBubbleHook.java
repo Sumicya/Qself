@@ -27,7 +27,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Reflex;
 import com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
@@ -91,7 +91,7 @@ public class DefaultBubbleHook extends CommonSwitchFunctionHook {
 
     private static void updateChmod(boolean enabled) {
         for (String path : paths) {
-            File dir = new File(HostInfo.getApplication().getFilesDir().getAbsolutePath() + path);
+            File dir = new File(HostInfo.getHostInfo().getApplication().getFilesDir().getAbsolutePath() + path);
             boolean curr = !dir.exists() || !dir.canRead();
             if (dir.exists()) {
                 if (enabled && !curr) {

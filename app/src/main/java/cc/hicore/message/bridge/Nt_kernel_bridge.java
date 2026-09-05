@@ -21,7 +21,7 @@
 
 package cc.hicore.message.bridge;
 
-import static cc.ioctl.util.HostInfo.requireMinQQVersion;
+import io.github.qauxv.util.HostInfo;
 
 import cc.hicore.QApp.QAppUtils;
 import cc.hicore.Utils.XLog;
@@ -57,7 +57,7 @@ public class Nt_kernel_bridge {
             try {
                 KernelMsgServiceCompat service = MsgServiceHelper.getKernelMsgService(AppRuntimeHelper.getAppRuntime());
                 long msgUniqueId;
-                if (requireMinQQVersion(QQVersion.QQ_9_0_30)) {
+                if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_0_30)) {
                     msgUniqueId = service.generateMsgUniqueId(contact.getChatType(), QAppUtils.getServiceTime());
                 } else {
                     msgUniqueId = service.getMsgUniqueId(QAppUtils.getServiceTime());
@@ -72,7 +72,7 @@ public class Nt_kernel_bridge {
 
     public static MsgAttributeInfo getDefaultAttributeInfo() {
         VASMsgNamePlate plate;
-        if (requireMinQQVersion(QQVersion.QQ_9_1_70)) {
+        if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_1_70)) {
             plate = new VASMsgNamePlate(258, 64, 0, 0, 0, 0, 258, 0, new ArrayList<>(), 0, 0, 0);
         } else {
             plate = new VASMsgNamePlate(258, 64, 0, 0, 0, 0, 258, 0, new ArrayList<>(), 0, 0);

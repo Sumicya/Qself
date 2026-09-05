@@ -27,7 +27,7 @@ import android.view.View;
 import android.widget.ImageView;
 import androidx.annotation.NonNull;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.xpcompat.XposedBridge;
 import io.github.qauxv.base.annotation.FunctionHookEntry;

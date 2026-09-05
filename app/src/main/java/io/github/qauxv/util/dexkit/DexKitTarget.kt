@@ -25,7 +25,6 @@ package io.github.qauxv.util.dexkit
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
-import cc.ioctl.util.HostInfo
 import com.github.kyuubiran.ezxhelper.utils.isAbstract
 import com.github.kyuubiran.ezxhelper.utils.isFinal
 import com.github.kyuubiran.ezxhelper.utils.isStatic
@@ -53,7 +52,7 @@ import java.util.concurrent.ConcurrentHashMap
 typealias DexKitBridgeFinder = (bridge: DexKitBridge) -> MethodData
 
 sealed class DexKitTarget {
-    val version = HostInfo.getVersionCode32()
+    val version = hostInfo.versionCode32
 
     sealed class UsingStr : DexKitTarget() {
         // with 'OR' relationship

@@ -34,7 +34,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.dialog.RikkaBaseApkFormatDialog;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.IUiItemAgent;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
@@ -96,7 +96,7 @@ public class BaseApk extends CommonConfigFunctionHook {
 
     @Override
     public boolean initOnce() throws Exception {
-        if (HostInfo.requireMinQQVersion(QQ_8_9_63_BETA_11345)) {
+        if (HostInfo.requireMinVersionAnyQQ(QQ_8_9_63_BETA_11345)) {
             HookUtils.hookBeforeIfEnabled(this, DexKit.requireMethodFromCache(TroopSendFile_QQNT.INSTANCE), param -> {
                 Field[] fs = param.thisObject.getClass().getDeclaredFields();
                 Field f = null;
@@ -123,7 +123,7 @@ public class BaseApk extends CommonConfigFunctionHook {
                     }
                 }
             });
-        } else if (HostInfo.requireMinQQVersion(QQ_8_6_0)) {
+        } else if (HostInfo.requireMinVersionAnyQQ(QQ_8_6_0)) {
             Class c = Initiator.load("com.tencent.mobileqq.utils.FileUtils");
             XposedHelpers.findAndHookMethod(c, "getFileName", String.class, new XC_MethodHook() {
                 @Override
@@ -189,7 +189,7 @@ public class BaseApk extends CommonConfigFunctionHook {
     }
 
     private String getFormattedFileNameByPath(String path) {
-        PackageManager packageManager = HostInfo.getApplication().getPackageManager();
+        PackageManager packageManager = HostInfo.getHostInfo().getApplication().getPackageManager();
         PackageInfo packageArchiveInfo = packageManager
                 .getPackageArchiveInfo(path, PackageManager.GET_ACTIVITIES);
         ApplicationInfo applicationInfo = packageArchiveInfo.applicationInfo;

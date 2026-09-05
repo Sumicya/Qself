@@ -27,7 +27,7 @@ import cc.hicore.ReflectUtil.XClass;
 import cc.hicore.ReflectUtil.XField;
 import cc.hicore.ReflectUtil.XMethod;
 import cc.hicore.Utils.DataUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import cc.hicore.Utils.XLog;
 import com.tencent.qqnt.kernel.nativeinterface.MsgElement;
 import com.tencent.qqnt.kernel.nativeinterface.PttElement;
@@ -108,7 +108,7 @@ public class MsgBuilder {
     public static Object copy_new_flash_chat(Object source){
         try {
             Method ArkChatObj;
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_90)){
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_90)){
                 ArkChatObj = XMethod.clz("com.tencent.mobileqq.service.h.r")
                         .ret(Initiator.loadClass("com.tencent.mobileqq.data.MessageForArkFlashChat"))
                         .param(
@@ -171,7 +171,7 @@ public class MsgBuilder {
             String friendInfo = XField.obj(source).name("frienduin").type(String.class).get();
             int istroop = XField.obj(source).name("istroop").type(int.class).get();
 
-            XMethod.clz(HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_0) ? Initiator.loadClass("com.tencent.mobileqq.service.h.r"):
+            XMethod.clz(HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_0) ? Initiator.loadClass("com.tencent.mobileqq.service.h.r"):
                     Initiator.loadClass("com.tencent.mobileqq.service.message.MessageRecordFactory"))
                     .ret(void.class)
                     .param(
@@ -189,7 +189,7 @@ public class MsgBuilder {
     }
     public static Object rebuild_message(Object record){
         try{
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_0)){
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_0)){
                 return XMethod.clz("com.tencent.mobileqq.service.h.r").ret(Initiator.loadClass("com.tencent.mobileqq.data.MessageRecord")).invoke(record);
             }else {
                 return XMethod.clz("com.tencent.mobileqq.service.message.MessageRecordFactory").ret(Initiator.loadClass("com.tencent.mobileqq.data.MessageRecord")).invoke(record);
@@ -202,12 +202,12 @@ public class MsgBuilder {
     public static Object build_common_message_record(int type){
         try{
             Method CallMethod = null;
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_0)){
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_0)){
                 CallMethod = XMethod.clz("com.tencent.mobileqq.service.h.r")
                                 .name("d")
                                 .ret(Initiator.loadClass("com.tencent.mobileqq.data.MessageRecord"))
                                 .param(int.class).get();
-            } else if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_93)){
+            } else if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_93)){
 
                 CallMethod = XMethod.clz("com.tencent.mobileqq.service.message.MessageRecordFactory")
                         .name("d")

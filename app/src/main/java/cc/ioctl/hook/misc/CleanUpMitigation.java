@@ -27,7 +27,7 @@ import android.content.Context;
 import android.system.Os;
 import androidx.annotation.Nullable;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.hook.BasePersistBackgroundHook;
 import io.github.qauxv.util.IoUtils;
@@ -54,7 +54,7 @@ public class CleanUpMitigation extends BasePersistBackgroundHook {
     @SuppressLint("SdCardPath")
     @Override
     protected boolean initOnce() {
-        Context ctx = HostInfo.getApplication();
+        Context ctx = HostInfo.getHostInfo().getApplication();
         String packageName = ctx.getPackageName();
         // UserHandle.PER_USER_RANGE
         int userHandleIndex = Os.geteuid() / 100000;

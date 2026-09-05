@@ -27,7 +27,7 @@ import android.text.TextUtils;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
 import io.github.qauxv.dsl.FunctionEntryRouter.Locations.Auxiliary;
@@ -84,7 +84,7 @@ public class BrowserRestrictMitigation extends CommonSwitchFunctionHook {
                     bundle.putString("jumpUrl", "");
                     String msg = "阻止跳转, jumpResult: " + jumpResult + ", level: " + level
                             + ", operationBit: " + operationBit + ", jumpUrl: " + jumpUrl;
-                    Toasts.show(HostInfo.getApplication(), msg);
+                    Toasts.show(HostInfo.getHostInfo().getApplication(), msg);
                 }
             }
         });

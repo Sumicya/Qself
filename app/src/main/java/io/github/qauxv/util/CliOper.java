@@ -23,7 +23,7 @@ package io.github.qauxv.util;
 
 import android.app.Application;
 import cc.ioctl.hook.AppCenterFix;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import com.microsoft.appcenter.analytics.Analytics;
 import com.microsoft.appcenter.crashes.AbstractCrashesListener;
 import com.microsoft.appcenter.crashes.Crashes;
@@ -100,7 +100,7 @@ public class CliOper {
         if (!isAppCenterAllowed()) {
             return;
         }
-        CliOper.__init__(HostInfo.getApplication());
+        CliOper.__init__(HostInfo.getHostInfo().getApplication());
         final String LAST_TRACE_HASHCODE_CONFIG = "lastTraceHashcode";
         ConfigManager configManager = ConfigManager.getDefaultConfig();
         Integer oldHashCode = null;
@@ -126,7 +126,7 @@ public class CliOper {
         } catch (Exception e) {
             //ignored
         }
-        __init__(HostInfo.getApplication());
+        __init__(HostInfo.getHostInfo().getApplication());
         Analytics.trackEvent("onLoad", properties);
         Log.d("start App Center Trace OnLoad:" + properties);
     }
@@ -136,7 +136,7 @@ public class CliOper {
             return;
         }
         try {
-            __init__(HostInfo.getApplication());
+            __init__(HostInfo.getHostInfo().getApplication());
             Map<String, String> prop = new HashMap<>();
             prop.put("name", shortName);
             Analytics.trackEvent("enterModuleActivity", prop);

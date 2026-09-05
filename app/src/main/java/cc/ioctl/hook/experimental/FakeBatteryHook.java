@@ -35,7 +35,7 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.fragment.FakeBatteryConfigFragment;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.IEntityAgent;
 import io.github.qauxv.base.RuntimeErrorTracer;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
@@ -186,7 +186,7 @@ public class FakeBatteryHook extends BaseFunctionHook implements InvocationHandl
         // @MainProcess
         // 接下去是UI stuff, 给自己看的
         // 本来还想用反射魔改Binder/ActivityThread$ApplicationThread实现Xposed-less拦截广播onReceive的,太肝了,就不搞了
-        BatteryManager batmgr = (BatteryManager) HostInfo.getApplication().getSystemService(Context.BATTERY_SERVICE);
+        BatteryManager batmgr = (BatteryManager) HostInfo.getHostInfo().getApplication().getSystemService(Context.BATTERY_SERVICE);
         if (batmgr == null) {
             Log.e("Wtf, init FakeBatteryHook but BatteryManager is null!");
             return false;
@@ -247,7 +247,7 @@ public class FakeBatteryHook extends BaseFunctionHook implements InvocationHandl
             intent.putExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_DISCHARGING);
             intent.putExtra(BatteryManager.EXTRA_PLUGGED, 0);
         }
-        doPostReceiveEvent(recv, HostInfo.getApplication(), intent);
+        doPostReceiveEvent(recv, HostInfo.getHostInfo().getApplication(), intent);
     }
 
     private void scheduleReceiveBatteryStatus() {
@@ -271,7 +271,7 @@ public class FakeBatteryHook extends BaseFunctionHook implements InvocationHandl
             intent.putExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_DISCHARGING);
             intent.putExtra(BatteryManager.EXTRA_PLUGGED, 0);
         }
-        doPostReceiveEvent(recv, HostInfo.getApplication(), intent);
+        doPostReceiveEvent(recv, HostInfo.getHostInfo().getApplication(), intent);
     }
 
     @Override

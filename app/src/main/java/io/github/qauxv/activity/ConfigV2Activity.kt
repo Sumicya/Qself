@@ -21,6 +21,12 @@
  */
 package io.github.qauxv.activity
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isInHostProcess
+import io.github.qauxv.util.isInModuleProcess
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isInHostProcess
+import io.github.qauxv.util.isInModuleProcess
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.DialogInterface
@@ -42,7 +48,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import cc.ioctl.fragment.DebugTestFragment
 import cc.ioctl.fragment.JunkCodeFragment
 import cc.ioctl.fragment.Pcm2SilkTestFragment
-import cc.ioctl.util.HostInfo
 import io.github.libxposed.service.XposedService
 import io.github.qauxv.BuildConfig
 import io.github.qauxv.R
@@ -84,7 +89,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (HostInfo.isInHostProcess()) {
+        if (isInHostProcess()) {
             // we have to set the theme before super.onCreate()
             setTheme(if (currentV2Theme == 3) R.style.Theme_MaiTungTMDesign_Light_Blue else R.style.Theme_MaiTungTMDesign_DayNight)
         } else {
@@ -139,7 +144,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
     }
 
     fun updateActivationStatus() {
-        val isHookEnabledByLegacyApi = HookStatus.isModuleEnabled() || HostInfo.isInHostProcess()
+        val isHookEnabledByLegacyApi = HookStatus.isModuleEnabled() || isInHostProcess()
         val xposedService: XposedService? = HookStatus.getXposedService().value
         val isHookEnabledByLibXposedApi = if (xposedService != null) {
             val scope = xposedService.scope.toSet()
@@ -148,7 +153,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
         } else false
         val isHookEnabled = isHookEnabledByLegacyApi || isHookEnabledByLibXposedApi
         var isAbiMatch = CheckAbiVariantModel.collectAbiInfo(this).isAbiMatch
-        if ((isHookEnabled && HostInfo.isInModuleProcess() && !HookStatus.isZygoteHookMode()
+        if ((isHookEnabled && isInModuleProcess() && !HookStatus.isZygoteHookMode()
                 && HookStatus.isTaiChiInstalled(this)) && HookStatus.getHookType() == HookStatus.HookType.APP_PATCH && "armAll" != AbiUtils.getModuleFlavorName()
         ) {
             isAbiMatch = false
@@ -171,8 +176,8 @@ class ConfigV2Activity : AppCompatTransferActivity() {
                 )
             )
             statusTitle.text = if (isHookEnabled) "已激活" else "未激活"
-            if (HostInfo.isInHostProcess()) {
-                tvStatus.text = HostInfo.getPackageName()
+            if (isInHostProcess()) {
+                tvStatus.text = hostInfo.packageName
             } else {
                 tvStatus.text = if (isHookEnabledByLibXposedApi) {
                     val xp = xposedService!!
@@ -283,7 +288,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         super.onCreateOptionsMenu(menu)
-        if (HostInfo.isInModuleProcess()) {
+        if (isInModuleProcess()) {
             menuInflater.inflate(R.menu.main_v2_toolbar, menu)
             updateMenuItems()
         } else {
@@ -411,7 +416,7 @@ $e"""
     }
 
     fun updateMenuItems() {
-        if (HostInfo.isInHostProcess()) {
+        if (isInHostProcess()) {
             return
         }
         val menu = mainV2Binding!!.topAppBar.menu

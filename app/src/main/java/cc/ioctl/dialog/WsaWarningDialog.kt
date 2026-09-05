@@ -21,9 +21,10 @@
 
 package cc.ioctl.dialog
 
+import io.github.qauxv.util.isInHostProcess
+import io.github.qauxv.util.isInHostProcess
 import android.content.Context
 import androidx.appcompat.app.AlertDialog
-import cc.ioctl.util.HostInfo
 import io.github.qauxv.R
 import io.github.qauxv.config.ConfigManager
 import io.github.qauxv.core.MainHook
@@ -46,7 +47,7 @@ object WsaWarningDialog {
         }
 
     private fun isNeedShow(): Boolean {
-        return HostInfo.isInHostProcess()
+        return isInHostProcess()
             && MainHook.isWindowsSubsystemForAndroid()
             && currentWsaWarningVersion < LATEST_WSA_WARNING_VERSION
             && !mHasShownThisTime
