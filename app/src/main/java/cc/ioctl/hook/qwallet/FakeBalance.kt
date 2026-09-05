@@ -41,7 +41,7 @@ import io.github.qauxv.dsl.uiClickableItem
 import io.github.qauxv.util.SyncUtils
 import io.github.qauxv.util.hostInfo
 import me.ketal.base.PluginDelayableHook
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 import me.ketal.ui.view.ConfigView
 import me.ketal.util.findClass
 import me.ketal.util.getMethod

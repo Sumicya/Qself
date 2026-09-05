@@ -20,7 +20,7 @@
  * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
  */
 
-package me.ketal.data;
+package io.github.qauxv.config;
 
 import android.os.Looper;
 import io.github.qauxv.util.HostInfo;

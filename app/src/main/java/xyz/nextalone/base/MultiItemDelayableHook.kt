@@ -40,7 +40,7 @@ import io.github.qauxv.util.Toasts
 import io.github.qauxv.util.dexkit.DexKitTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 
 abstract class MultiItemDelayableHook(keyName: String,targets: Array<DexKitTarget>? = null) :
     CommonConfigFunctionHook(keyName,targets) {

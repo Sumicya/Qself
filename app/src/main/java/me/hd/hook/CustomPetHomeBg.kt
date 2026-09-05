@@ -38,7 +38,7 @@ import me.hd.util.parameters
 import me.hd.util.returnType
 import me.hd.util.singleMethod
 import me.hd.util.toClass
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 
 @FunctionHookEntry
 @UiItemAgentEntry

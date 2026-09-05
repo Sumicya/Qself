@@ -43,7 +43,7 @@ import io.github.qauxv.util.dexkit.NBaseChatPie_chooseMsg
 import io.github.qauxv.util.dexkit.NLeftSwipeReplyHelper_reply
 import io.github.qauxv.util.requireMinVersion
 import kotlinx.coroutines.flow.MutableStateFlow
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 import me.ketal.ui.activity.ModifyLeftSwipeReplyFragment
 import xyz.nextalone.util.hookBefore
 import xyz.nextalone.util.throwOrTrue

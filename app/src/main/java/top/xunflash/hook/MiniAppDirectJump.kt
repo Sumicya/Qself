@@ -67,7 +67,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 import xyz.nextalone.util.throwOrTrue
 import java.io.Serializable
 import java.lang.reflect.Array

@@ -44,7 +44,7 @@ import io.github.qauxv.util.Initiator.load
 import io.github.qauxv.util.Log
 import io.github.qauxv.util.QQVersion
 import io.github.qauxv.util.requireMinQQVersion
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 import mqq.app.AppRuntime
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.result.MethodData
