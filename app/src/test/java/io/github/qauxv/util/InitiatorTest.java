@@ -102,8 +102,11 @@ public class InitiatorTest {
         try {
             Initiator.requireClass("com.tencent.no.Such");
             fail("expected ClassNotFoundException to be sneaky-thrown");
-        } catch (ClassNotFoundException expected) {
-            // expected: requireClass rethrows via IoUtils.unsafeThrow
+        } catch (Throwable t) {
+            // requireClass rethrows via IoUtils.unsafeThrow without declaring
+            // the checked exception, hence the widened catch here
+            assertTrue("expected ClassNotFoundException, got: " + t,
+                    t instanceof ClassNotFoundException);
         }
     }
 }

@@ -44,13 +44,16 @@ public class DexMethodDescriptorTest {
 
     @SuppressWarnings("unused")
     static class Fixture {
+        Fixture() {
+        }
+
+        Fixture(int ignored) {
+        }
+
         static void staticMethod(int a, long b, String[] c) {
         }
 
         void instanceMethod() {
-        }
-
-        Fixture(int ignored) {
         }
     }
 
