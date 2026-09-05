@@ -277,3 +277,9 @@ grep -cF 'public static Class<?> _' app/src/main/java/io/github/qauxv/util/Initi
 1. **依赖方向度量**：核心包反向依赖作者包 import 数 **168 → 121**（-47）：Reflex（99 文件消费）+ LayoutHelper 家族（60 文件，含唯一的 `cc.hicore.Utils.ContextUtils` 连带迁移，其全仓唯一消费者就是 LayoutHelper）迁入 `io.github.qauxv.util`，两次提交均 CI 绿。
 2. **D2（decorator 注册 KSP 化）延期至 P2**：实测仅 3 个分发器、2 处手写数组、decorator 经 `Base*Decorator` 基类间接实现接口——现在造第三台 KSP 处理器是为 3 个调用点造机器（过度工程）。待 P2 试点使 decorator 数量增长后再做，收益/成本比才成立。
 3. **HostInfo 统一立项**：RFC-02（docs/refactoring/02-hostinfo-rfc.md）完成——语义对照表取证出门面与真身三处分歧（含门面 `isPlayQQ()` 对真身取反的疑似上游笔误）；迁移原则定为"行为保持优先、语义收紧独立提案"，分 A–E 五阶段执行。
+
+## 10. P1 收口（2026-09-05，run 33972288994 绿）
+
+1. **HostInfo 统一完成**（RFC-02 B/C/D）：93+ 文件迁移至真身 API，门面 `cc.ioctl.util/HostInfo.java` 删除；外部不可达的取反 `isPlayQQ` 门面路径随之消亡；58 个宽语义调用点走 `isAnyQQSpecies`/`requireMinVersionAnyQQ` 桥接（行为保持，§E 收紧为后续独立提案）。
+2. **依赖方向指标**：核心包反向 import 作者包 **168 → 95**（-43.5%）。残量头名：`cc.ioctl.util.ui.ThemeAttrUtils`(8)、`RecyclerListViewController`(5)、`FaultyDialog`(3)——P1 后续批次；以及 `SettingEntryHook`/`ReplyNoAtHook` 等功能类引用（属 P4 包重组范畴）。
+3. **五连红的排障复盘**（062af65→fa30266）：① Kotlinc 未解析引用不产生 check-run 注解（与 javac 不同），催生了 test.yml 的“构建日志尾部切块转注解”升级（待中转落地）；② 迁移脚本三处边角翻车：同包误豁免（startswith 前缀匹配）、val 属性带括号调用、Kotlin 成员 import 常量被打断成裸 import——全部由“CI 红→本地推演/审计→修”闭环解决；③ 教训固化：**大规模机械迁移的验收审计必须用脚本化的全量符号审计**（本次终审 python 审计一次通过），肉眼与单行 shell 都不可靠。
