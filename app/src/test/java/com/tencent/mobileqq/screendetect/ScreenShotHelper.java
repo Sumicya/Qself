@@ -37,8 +37,8 @@ public class ScreenShotHelper {
 
     // ---- decoys: each violates exactly one trait ----
 
-    /** not static */
-    public void a(Context context, String path, Handler handler) {
+    /** not static (parameters shuffled so it stays a distinct signature) */
+    public void a(Handler handler, String path, Context context) {
     }
 
     /** wrong arity */
