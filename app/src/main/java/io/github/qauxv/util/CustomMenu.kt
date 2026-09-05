@@ -21,7 +21,7 @@
  */
 package io.github.qauxv.util
 
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import com.github.kyuubiran.ezxhelper.utils.findAllMethods
 import com.github.kyuubiran.ezxhelper.utils.findMethod
 import io.github.qauxv.util.dexkit.AbstractQQCustomMenuItem

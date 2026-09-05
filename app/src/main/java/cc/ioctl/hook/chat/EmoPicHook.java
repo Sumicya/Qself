@@ -21,7 +21,7 @@
  */
 package cc.ioctl.hook.chat;
 
-import static cc.ioctl.util.Reflex.findField;
+import static io.github.qauxv.util.Reflex.findField;
 import static io.github.qauxv.util.Initiator._PicItemBuilder;
 
 import android.view.View;

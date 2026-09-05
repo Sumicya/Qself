@@ -39,7 +39,7 @@ import androidx.core.app.RemoteInput
 import androidx.core.graphics.drawable.IconCompat
 import cc.chenhe.qqnotifyevo.utils.NotifyChannel
 import cc.chenhe.qqnotifyevo.utils.getChannelId
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.hookAfterIfEnabled
 import io.github.qauxv.util.xpcompat.XC_MethodHook
 import io.github.qauxv.util.xpcompat.XC_MethodReplacement

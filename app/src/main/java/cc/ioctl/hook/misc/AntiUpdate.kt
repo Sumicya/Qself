@@ -23,7 +23,7 @@
 package cc.ioctl.hook.misc
 
 import android.os.Message
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.hookBeforeIfEnabled
 import com.github.kyuubiran.ezxhelper.utils.emptyParam
 import com.github.kyuubiran.ezxhelper.utils.findAllMethods

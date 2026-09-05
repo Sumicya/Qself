@@ -28,7 +28,7 @@ import android.speech.tts.TextToSpeech
 import android.view.View
 import cc.hicore.QApp.QAppUtils
 import cc.ioctl.util.HostInfo
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.afterHookIfEnabled
 import com.xiaoniu.dispatcher.OnMenuBuilder
 import com.xiaoniu.util.ContextUtils

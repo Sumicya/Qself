@@ -21,7 +21,7 @@
  */
 package me.singleneuron.data
 
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import com.github.kyuubiran.ezxhelper.utils.getObjectAs
 import com.github.kyuubiran.ezxhelper.utils.getObjectOrNull
 import com.github.kyuubiran.ezxhelper.utils.putObject

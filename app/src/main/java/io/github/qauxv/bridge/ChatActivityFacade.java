@@ -21,7 +21,7 @@
  */
 package io.github.qauxv.bridge;
 
-import static cc.ioctl.util.Reflex.getShortClassName;
+import static io.github.qauxv.util.Reflex.getShortClassName;
 import static io.github.qauxv.bridge.AppRuntimeHelper.getQQAppInterface;
 import static io.github.qauxv.util.Initiator._BaseSessionInfo;
 import static io.github.qauxv.util.Initiator._ChatMessage;
@@ -33,7 +33,7 @@ import android.os.Parcelable;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.annotation.DexDeobfs;
 import io.github.qauxv.util.Initiator;
 import io.github.qauxv.util.Log;

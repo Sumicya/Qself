@@ -21,14 +21,14 @@
  */
 package cc.ioctl.hook.profile;
 
-import static cc.ioctl.util.Reflex.getFirstByType;
+import static io.github.qauxv.util.Reflex.getFirstByType;
 
 import android.view.View;
 import android.widget.ImageView;
 import androidx.annotation.NonNull;
 import cc.ioctl.util.HookUtils;
 import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.xpcompat.XposedBridge;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;

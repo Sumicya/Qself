@@ -38,7 +38,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import androidx.appcompat.widget.SwitchCompat
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.afterHookIfEnabled
 import com.tencent.qqnt.kernel.nativeinterface.MsgElement
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord

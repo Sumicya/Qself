@@ -38,7 +38,7 @@ import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.fragment.RevokeMsgConfigFragment;
 import cc.ioctl.util.HookUtils;
 import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord;

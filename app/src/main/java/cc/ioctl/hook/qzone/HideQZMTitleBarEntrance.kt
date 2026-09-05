@@ -26,7 +26,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import cc.ioctl.util.HookUtils.hookBeforeIfEnabled
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.hookAfterIfEnabled
 import cc.ioctl.util.hookBeforeIfEnabled
 import com.github.kyuubiran.ezxhelper.utils.hookBefore

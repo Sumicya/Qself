@@ -22,8 +22,8 @@
 package cc.ioctl.hook.ui.chat;
 
 import static cc.ioctl.util.LayoutHelper.dip2px;
-import static cc.ioctl.util.Reflex.getFirstNSFByType;
-import static cc.ioctl.util.Reflex.setInstanceObject;
+import static io.github.qauxv.util.Reflex.getFirstNSFByType;
+import static io.github.qauxv.util.Reflex.setInstanceObject;
 import static io.github.qauxv.util.Initiator._MixedMsgItemBuilder;
 import static io.github.qauxv.util.Initiator._PicItemBuilder;
 import static io.github.qauxv.util.Initiator._PttItemBuilder;
@@ -51,7 +51,7 @@ import cc.ioctl.util.HookUtils;
 import cc.ioctl.util.HookUtils.BeforeAndAfterHookedMethod;
 import cc.ioctl.util.HostInfo;
 import cc.ioctl.util.LayoutHelper;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.IEntityAgent;
 import io.github.qauxv.base.RuntimeErrorTracer;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;

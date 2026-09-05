@@ -24,7 +24,7 @@ package io.github.qauxv.bridge;
 import android.text.TextUtils;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import com.tencent.common.app.AppInterface;
 import io.github.qauxv.util.xpcompat.XposedHelpers;
 import io.github.qauxv.base.annotation.DexDeobfs;

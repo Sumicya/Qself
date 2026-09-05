@@ -26,7 +26,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.view.View
 import android.widget.ImageView
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity
 import io.github.qauxv.base.IUiItemAgent
 import io.github.qauxv.base.annotation.FunctionHookEntry

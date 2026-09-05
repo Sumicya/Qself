@@ -25,7 +25,7 @@ import static io.github.qauxv.bridge.AppRuntimeHelper.getQQAppInterface;
 
 import androidx.annotation.NonNull;
 import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.annotation.DexDeobfs;
 import io.github.qauxv.tlb.ConfigTable;
 import io.github.qauxv.util.Initiator;

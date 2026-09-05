@@ -22,7 +22,7 @@
 package me.ketal.hook
 
 import cc.hicore.Utils.XLog
-import cc.ioctl.util.Reflex.getFirstByType
+import io.github.qauxv.util.Reflex.getFirstByType
 import com.github.kyuubiran.ezxhelper.utils.getObjectByTypeAs
 import com.github.kyuubiran.ezxhelper.utils.hookAfter
 import com.github.kyuubiran.ezxhelper.utils.paramCount

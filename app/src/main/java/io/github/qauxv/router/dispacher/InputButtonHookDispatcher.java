@@ -21,7 +21,7 @@
  */
 package io.github.qauxv.router.dispacher;
 
-import static cc.ioctl.util.Reflex.getFirstNSFByType;
+import static io.github.qauxv.util.Reflex.getFirstNSFByType;
 import static io.github.qauxv.util.Initiator._SessionInfo;
 
 import android.content.Context;

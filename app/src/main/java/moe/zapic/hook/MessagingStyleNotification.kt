@@ -44,7 +44,7 @@ import cc.chenhe.qqnotifyevo.utils.NotifyChannel
 import cc.chenhe.qqnotifyevo.utils.getChannelId
 import cc.chenhe.qqnotifyevo.utils.getNotificationChannels
 import cc.ioctl.util.HostInfo
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.hookAfterIfEnabled
 import cc.ioctl.util.hookBeforeIfEnabled
 import com.github.kyuubiran.ezxhelper.utils.paramCount

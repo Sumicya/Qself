@@ -159,7 +159,7 @@ public class Natives {
     /**
      * Allocate a object instance of the specified class without calling the constructor.
      * <p>
-     * Do not use this directly, use {@link cc.ioctl.util.Reflex#allocateInstance(Class)} instead.
+     * Do not use this directly, use {@link io.github.qauxv.util.Reflex#allocateInstance(Class)} instead.
      *
      * @param clazz the class to allocate
      * @return the allocated object
@@ -169,7 +169,7 @@ public class Natives {
     /**
      * Invoke an instance method non-virtually (i.e. without calling the overridden method).
      * <p>
-     * Do not use this directly, use {@link cc.ioctl.util.Reflex#invokeNonVirtual(Object, Method, Object[])} instead.
+     * Do not use this directly, use {@link io.github.qauxv.util.Reflex#invokeNonVirtual(Object, Method, Object[])} instead.
      *
      * @param declaringClass the class of the method, e.g. "Ljava/lang/String;"
      * @param methodName     the method name

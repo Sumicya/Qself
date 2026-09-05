@@ -24,7 +24,7 @@ package cc.hicore.hook;
 
 import static cc.ioctl.util.HostInfo.requireMinQQVersion;
 import static cc.ioctl.util.HostInfo.requireMinTimVersion;
-import static cc.ioctl.util.Reflex.getFirstNSFByType;
+import static io.github.qauxv.util.Reflex.getFirstNSFByType;
 import static io.github.qauxv.util.Initiator._SessionInfo;
 import static io.github.qauxv.util.Initiator.load;
 
@@ -46,7 +46,7 @@ import cc.hicore.dialog.RepeaterPlusIconSettingDialog;
 import cc.hicore.message.chat.SessionHooker;
 import cc.hicore.message.chat.SessionUtils;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import com.tencent.qqnt.kernel.nativeinterface.MsgAttributeInfo;
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord;
 import com.xiaoniu.dispatcher.ComponentType;

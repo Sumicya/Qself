@@ -36,7 +36,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.FileProvider;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.SyncUtils;
 import io.github.qauxv.lifecycle.ShadowFileProvider;
 import io.github.qauxv.ui.WindowIsTranslucent;

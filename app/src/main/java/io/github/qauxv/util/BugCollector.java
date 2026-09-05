@@ -22,7 +22,7 @@
 package io.github.qauxv.util;
 
 import android.app.Application;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import com.microsoft.appcenter.crashes.Crashes;
 import cc.ioctl.util.HostInfo;
 

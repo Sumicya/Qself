@@ -54,7 +54,7 @@ import cc.ioctl.hook.misc.DisableHotPatch
 import cc.ioctl.util.ExfriendManager
 import cc.ioctl.util.HostInfo
 import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.data.EventRecord
 import cc.ioctl.util.data.FriendRecord
 import cc.ioctl.util.ui.FaultyDialog

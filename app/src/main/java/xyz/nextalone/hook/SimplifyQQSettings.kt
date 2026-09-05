@@ -26,7 +26,7 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import cc.hicore.ReflectUtil.MField
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import com.github.kyuubiran.ezxhelper.utils.getFieldByType
 import com.github.kyuubiran.ezxhelper.utils.hookAfter
 import com.github.kyuubiran.ezxhelper.utils.paramCount

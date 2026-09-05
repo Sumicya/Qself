@@ -27,7 +27,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import io.github.qauxv.R
 import io.github.qauxv.util.Log
 import io.github.qauxv.util.hostInfo

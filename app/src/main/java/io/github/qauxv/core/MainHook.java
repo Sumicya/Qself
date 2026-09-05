@@ -45,7 +45,7 @@ import cc.ioctl.hook.notification.MuteQZoneThumbsUp;
 import cc.ioctl.hook.ui.misc.OptXListViewScrollBar;
 import cc.ioctl.hook.ui.title.RemoveCameraButton;
 import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.chainloader.detail.ExternalModuleChainLoader;
 import io.github.qauxv.chainloader.detail.ui.ExternalModuleConfigHook;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;

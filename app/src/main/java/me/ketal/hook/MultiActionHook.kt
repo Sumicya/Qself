@@ -32,7 +32,7 @@ import android.widget.TextView
 import cc.hicore.QApp.QAppUtils
 import cc.hicore.message.chat.SessionHooker
 import cc.hicore.message.chat.SessionUtils
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.ui.FaultyDialog
 import com.github.kyuubiran.ezxhelper.utils.argTypes
 import com.github.kyuubiran.ezxhelper.utils.args

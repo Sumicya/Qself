@@ -29,7 +29,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.core.widget.doAfterTextChanged
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
 import com.afollestad.materialdialogs.customview.getCustomView

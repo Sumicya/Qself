@@ -49,7 +49,7 @@ import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.view.children
 import cc.ioctl.hook.msg.FlashPicHook
 import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.ui.FaultyDialog
 import com.github.kyuubiran.ezxhelper.utils.argTypes
 import com.github.kyuubiran.ezxhelper.utils.args

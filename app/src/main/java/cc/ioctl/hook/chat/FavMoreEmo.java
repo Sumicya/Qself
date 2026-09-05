@@ -28,7 +28,7 @@ import static io.github.qauxv.util.QQVersion.QQ_8_2_0;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedHelpers;
 import io.github.qauxv.base.annotation.FunctionHookEntry;

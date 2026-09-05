@@ -24,7 +24,7 @@ package io.github.moonleeeaf.hook
 
 import cc.ioctl.util.HookUtils
 import cc.ioctl.util.HostInfo.isTim
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry
 import io.github.qauxv.dsl.FunctionEntryRouter

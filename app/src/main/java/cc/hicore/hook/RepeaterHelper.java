@@ -21,7 +21,7 @@
 
 package cc.hicore.hook;
 
-import static cc.ioctl.util.Reflex.getFirstNSFByType;
+import static io.github.qauxv.util.Reflex.getFirstNSFByType;
 import static cc.hicore.hook.RepeaterPlus.INSTANCE;
 import static io.github.qauxv.util.Initiator._SessionInfo;
 

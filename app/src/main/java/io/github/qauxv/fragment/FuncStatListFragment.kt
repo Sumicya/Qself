@@ -32,7 +32,7 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity

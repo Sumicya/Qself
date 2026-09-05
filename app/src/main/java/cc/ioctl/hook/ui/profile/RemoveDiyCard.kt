@@ -25,7 +25,7 @@ import android.app.Activity
 import android.content.Intent
 import cc.ioctl.util.HookUtils
 import cc.ioctl.util.HostInfo
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import com.github.kyuubiran.ezxhelper.utils.field
 import com.github.kyuubiran.ezxhelper.utils.hookAfter
 import io.github.qauxv.base.annotation.FunctionHookEntry

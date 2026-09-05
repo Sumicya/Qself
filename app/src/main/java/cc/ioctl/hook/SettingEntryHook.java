@@ -41,7 +41,7 @@ import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.util.HookUtils;
 import cc.ioctl.util.HostInfo;
 import cc.ioctl.util.LayoutHelper;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.BuildConfig;
 import io.github.qauxv.R;
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity;

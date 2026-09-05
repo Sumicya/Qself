@@ -27,7 +27,7 @@ import static io.github.qauxv.util.Initiator.load;
 
 import cc.ioctl.util.ExfriendManager;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedHelpers;
 import io.github.qauxv.util.SyncUtils;

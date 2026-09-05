@@ -24,7 +24,7 @@ package io.github.qauxv.util;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.config.ConfigManager;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

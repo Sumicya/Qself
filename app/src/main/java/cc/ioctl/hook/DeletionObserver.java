@@ -41,7 +41,7 @@ import cc.ioctl.fragment.ExfriendListFragment;
 import cc.ioctl.hook.friend.ShowDeletedFriendListEntry;
 import cc.ioctl.util.ExfriendManager;
 import cc.ioctl.util.LayoutHelper;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedHelpers;
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity;
