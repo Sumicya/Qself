@@ -22,6 +22,7 @@
 
 package me.hd.hook
 
+import io.github.qauxv.util.hostInfo
 import androidx.appcompat.app.AlertDialog
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry

@@ -21,6 +21,7 @@
  */
 package xyz.nextalone.hook
 
+import io.github.qauxv.util.hostInfo
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry
 import io.github.qauxv.dsl.FunctionEntryRouter

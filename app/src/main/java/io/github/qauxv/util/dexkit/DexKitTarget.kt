@@ -22,6 +22,7 @@
 
 package io.github.qauxv.util.dexkit
 
+import io.github.qauxv.util.hostInfo
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
