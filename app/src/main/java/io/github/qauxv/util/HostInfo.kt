@@ -84,6 +84,10 @@ fun isPlayQQ(): Boolean {
     return hostInfo.hostSpecies == HostSpecies.QQ_Play
 }
 
+fun isQQHD(): Boolean {
+    return hostInfo.hostSpecies == HostSpecies.QQ_HD
+}
+
 fun requireMinQQVersion(versionCode: Long) = requireMinVersion(versionCode, HostSpecies.QQ)
 fun requireMaxQQVersion(versionCode: Long) = requireMaxVersion(versionCode, HostSpecies.QQ)
 fun requireRangeQQVersion(versionMinCode: Long, versionMaxCode: Long) = requireRangeVersion(versionMinCode, versionMaxCode, HostSpecies.QQ)
@@ -122,6 +126,24 @@ fun requireMinVersion(
 ): Boolean {
     return requireMinQQVersion(QQVersionCode) || requireMinTimVersion(TimVersionCode) || requireMinPlayQQVersion(PlayQQVersionCode)
 }
+
+/**
+ * Migration bridge preserving the semantics of the removed-in-future
+ * cc.ioctl.util.HostInfo facade, whose isQQ() was `!isTim()` and therefore
+ * also fired on QQ_Play/QQ_Lite/QQ_HD/QQ_International (and, literally,
+ * in the module process). Do NOT use in new code; existing call sites are
+ * to be tightened per docs/refactoring/02-hostinfo-rfc.md §E.
+ */
+@Deprecated("RFC-02 §E: audit and tighten to a strict hostSpecies check", level = DeprecationLevel.WARNING)
+fun isAnyQQSpecies(): Boolean = hostInfo.hostSpecies != HostSpecies.TIM
+
+/**
+ * Migration bridge preserving the facade's requireMinQQVersion(v)
+ * (`!isTim() && versionCode >= v`). See [isAnyQQSpecies].
+ */
+@Deprecated("RFC-02 §E: audit and tighten to requireMinQQVersion where strict", level = DeprecationLevel.WARNING)
+fun requireMinVersionAnyQQ(versionCode: Long): Boolean =
+    hostInfo.hostSpecies != HostSpecies.TIM && hostInfo.versionCode >= versionCode
 
 val isInModuleProcess: Boolean
     get() = hostInfo.hostSpecies == HostSpecies.QAuxiliary

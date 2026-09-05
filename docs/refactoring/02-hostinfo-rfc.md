@@ -49,9 +49,26 @@ fun requireMinVersionAnyQQ(v: Long)    // 分歧②的门面语义: isAnyQQSpeci
 | D | 删除门面 `cc/ioctl/util/HostInfo.java`；核心包反向依赖预计再降 ≥26（含间接更多） | `grep cc\.ioctl\.util\.HostInfo` = 0；CI 绿 |
 | E（P2+，独立提案） | 语义收紧：逐功能审查 `isAnyQQSpecies` 调用点是否应改为严格 species；删除桥接 API | 行为变更逐点有据 |
 
-## 5. 调用点审计（阶段 A 产出，占位）
+## 5. 调用点审计（阶段 A 产出，2026-09-05 实测）
 
-> 执行阶段 A 时填充：方法 × 调用文件清单 + 意图标注（严格/宽松/存疑）。
+门面 import 者 88 文件；方法调用分布（已排除真身 FQN 干扰）：
+
+| 门面方法 | 调用点数 | 迁移映射 |
+|---|---|---|
+| `getApplication()` | 90 | `HostInfo.getHostInfo().getApplication()`（Java）/ `hostInfo.application`（Kotlin） |
+| `requireMinQQVersion(v)` | **55** | `HostInfo.requireMinVersionAnyQQ(v)`（桥接，行为保持） |
+| `getPackageName()` | 17 | `getHostInfo().getPackageName()` |
+| `isTim()` | 15 | `HostInfo.isTim()` |
+| `getVersionCode()/getVersionCode32()/getAppName()/getVersionName()/getLongVersionCode()` | 9/4/9/3/2 | `getHostInfo().getXxx()` |
+| `isInHostProcess()/isInModuleProcess()` | 6/4 | `HostInfo.isInHostProcess()/isInModuleProcess()` |
+| `isQQHD()` | 3 | `getHostInfo().getHostSpecies() == HostSpecies.QQ_HD`（或补真身 `isQQHD()`） |
+| `isQQ()` | 3 | `HostInfo.isAnyQQSpecies()`（桥接） |
+| `isQQLite()` | 0 | 无调用点，免迁移 |
+| `requireMinTimVersion(v)` | 1 | `HostInfo.requireMinTimVersion(v)`（等价） |
+| `isPlayQQ()` / `requireMinPlayQQVersion(v)` | **0 / 0** | **分歧③判死：取反路径外部不可达**（仅门面内部自用），直接按真身语义消失，无行为面 |
+| `requireRangePlayQQVersion(...)` | 0（门面未声明该方法；唯一命中是真身 FQN） | 无需处理 |
+
+**结论**：语义分歧的实际暴露面 = `requireMinQQVersion`×55 + `isQQ`×3 + `isQQHD`×3；其中前两者走桥接 API 行为保持，P2+ §E 再逐点收紧；`isQQHD` 为严格等价改写。
 
 ## 6. 风险
 
