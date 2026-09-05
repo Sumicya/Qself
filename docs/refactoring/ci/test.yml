@@ -55,13 +55,18 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Run JVM unit tests
-        run: ./gradlew :app:testDebugUnitTest --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDebugUnitTest --stacktrace 2>&1 | tee gradle-test-output.log
 
       - name: Surface test failures as annotations
         if: failure()
         run: |
           # gradle test failures live in XML reports; mirror them into the
-          # check-run annotations so they are visible via the REST API
+          # check-run annotations so they are visible via the REST API.
+          # when gradle failed without test results, chunk the build log
+          # tail into annotations as well (location-less errors have no
+          # native annotations).
           python3 - <<'PY'
           import glob
           import xml.etree.ElementTree as ET
@@ -83,6 +88,14 @@ jobs:
                       print('::error title=Detail::{}'.format(msg))
           if not found:
               print('::error title=No test XML found::gradle failed before/without test results')
+              try:
+                  lines = open('gradle-test-output.log', errors='replace').read().splitlines()
+              except OSError:
+                  lines = []
+              tail = [l for l in lines[-400:] if l.strip()][-40:]
+              for i in range(0, len(tail), 4):
+                  chunk = ' | '.join(l[:160] for l in tail[i:i + 4])[:700]
+                  print('::error title=Build log tail {}::{}'.format(i // 4 + 1, chunk))
           PY
           echo '---- raw failure snippets ----'
           grep -rA6 -E '<failure|<error' app/build/test-results/testDebugUnitTest 2>/dev/null | head -80 || true
