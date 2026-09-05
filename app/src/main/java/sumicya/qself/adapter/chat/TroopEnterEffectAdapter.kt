@@ -23,7 +23,6 @@ package sumicya.qself.adapter.chat
 
 import io.github.qauxv.util.Initiator
 import io.github.qauxv.util.QQVersion
-import io.github.qauxv.util.getHostInfo
 import io.github.qauxv.util.requireMinVersionAnyQQ
 import io.github.qauxv.util.xpcompat.XC_MethodHook
 import io.github.qauxv.util.xpcompat.XposedBridge
