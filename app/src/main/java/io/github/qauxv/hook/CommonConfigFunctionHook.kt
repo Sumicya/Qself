@@ -32,14 +32,17 @@ import io.github.qauxv.util.dexkit.DexKitTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
- * A function that has a custom configuration UI. They usually do NOT have a switch.
+ * A function hook with custom configuration UI.
+ * Typically does NOT have a simple on/off switch.
+ * Refactored to use FunctionHook base class for better separation of concerns.
  */
 abstract class CommonConfigFunctionHook(
     hookKey: String? = null,
     defaultEnabled: Boolean = false,
     targets: Array<DexKitTarget>? = null,
     private val targetProc: Int = SyncUtils.PROC_MAIN
-) : BaseFunctionHook(hookKey, defaultEnabled, targets) {
+) : UiEnabledFunctionHook(hookKey, defaultEnabled, targets) {
+    
     constructor() : this(null, false)
     constructor(defaultEnabled: Boolean) : this(null, defaultEnabled)
     constructor(key: String) : this(key, false)
@@ -70,7 +73,7 @@ abstract class CommonConfigFunctionHook(
      */
     open val description: CharSequence? = null
 
-    override val targetProcesses = targetProc
+    override val targetProcesses: Int get() = targetProc
 
     open val extraSearchKeywords: Array<String>? = null
 
@@ -87,4 +90,6 @@ abstract class CommonConfigFunctionHook(
                 get() = extraSearchKeywords?.let { { _, _ -> it } }
         }
     }
+    
+    override val uiItemLocation: Array<String> get() = emptyArray()
 }

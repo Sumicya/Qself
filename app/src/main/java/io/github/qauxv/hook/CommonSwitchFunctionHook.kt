@@ -32,14 +32,15 @@ import io.github.qauxv.util.dexkit.DexKitTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
- * A function that only has a enable/disable switch function.
+ * A function hook with only an enable/disable switch.
+ * Refactored to use FunctionHook base class for better separation of concerns.
  */
 abstract class CommonSwitchFunctionHook(
     hookKey: String? = null,
     defaultEnabled: Boolean = false,
     targets: Array<DexKitTarget>? = null,
     private val targetProc: Int = SyncUtils.PROC_MAIN
-) : BaseFunctionHook(hookKey, defaultEnabled, targets = targets) {
+) : UiEnabledFunctionHook(hookKey, defaultEnabled, targets) {
 
     constructor() : this(null, false)
     constructor(defaultEnabled: Boolean) : this(null, defaultEnabled)
@@ -60,7 +61,7 @@ abstract class CommonSwitchFunctionHook(
      */
     open val description: CharSequence? = null
 
-    override val targetProcesses = targetProc
+    override val targetProcesses: Int get() = targetProc
 
     open val extraSearchKeywords: Array<String>? = null
 
@@ -87,4 +88,6 @@ abstract class CommonSwitchFunctionHook(
                 get() = extraSearchKeywords?.let { { _, _ -> it } }
         }
     }
+    
+    override val uiItemLocation: Array<String> get() = emptyArray()
 }
