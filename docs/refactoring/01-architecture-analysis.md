@@ -290,3 +290,7 @@ grep -cF 'public static Class<?> _' app/src/main/java/io/github/qauxv/util/Initi
 2. **残量定性（74 的构成）**：约 50 为 hook 入口/fragment/decorator 类引用（`MainHook` 白名单、分发器数组、设置页路由）——本质是"核心引用功能"，属 P4 包重组用 `sumicya.qself.feature.*` 解决；约 24 为长尾工具（`QAppUtils`×3 牵 `hicore XMethod/XClass` 闭包、`SessionUtils/SessionHooker` 为 hicore 消息桥内部件、`customiuizer` 为内嵌第三方模块）——单件收益低闭包重，与 P4 一并处理。**P1 的膝点已过，继续磨指标边际收益为负。**
 3. **迁移方法论沉淀（本阶段 8 次迁移全部一次或数轮内绿）**：① 迁移前查目标包 Kotlin 对应物；② 整树优先于拆挑（内部关系原样保持+单条前缀规则）；③ 迁移后验收一律 python 全量符号审计（裸名无 import / Kotlin 缺符号 import / 单标识符非法 import 三查）；④ 同包裸用与静态 import 是两大暗礁，侦察阶段显式排查。
 4. **P2 试点选型原则（下阶段 RFC-03 素材）**：不用 decorator（如 FxxkQQBrowser 纯 Intent 逻辑，无宿主查找，展示不了 adapter 价值）；选"有真实 Initiator/DexKit 查找 + 行为单一"的小 hook，完整走 feature → hostapi 端口 → adapter（Initiator/DexKit 藏后）→ CapabilityRegistry 降级 → 契约测试（qq-stub 假 classloader）五件套，作为目标架构的活样张。
+
+## 12. P2 试点完成（2026-09-05）
+
+RFC-03 五件套落地并 CI 绿：`DisableScreenshotShare`(feature) → `ScreenshotHelperApi`(port, 框架中立+classloader 可测缝) → `ScreenshotHelperAdapter`(DexKit→FQN 降级策略链) → `CapabilityRegistry`(ABSENT 自禁用) → 契约测试×3（含宿主同名夹具与空 classloader 负例）。旧类删除，用户开关经 hookKey 显式保持。**目标架构自此有了可照抄的活样张**；后续功能按此模式逐批迁移（下一批候选：MuteQZoneThumbsUp——回调内状态机需要把"参数位置解析"也收进 adapter）。

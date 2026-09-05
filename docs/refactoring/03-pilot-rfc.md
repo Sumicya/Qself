@@ -1,6 +1,6 @@
 # RFC-03：P2 试点——DisableScreenshotHelper 五件套改造
 
-> 状态：执行中（2026-09-05）
+> 状态：已完成（2026-09-05，CI run 绿；夹具两轮返工记录见 §4）
 > 目标：为 §3 目标架构产出第一张"活样张"：feature → hostapi 端口 → adapter → CapabilityRegistry 降级 → 契约测试。
 
 ## 1. 选型（§11.4 原则的应用）
@@ -74,3 +74,9 @@ interface ScreenshotHelperApi {
 - 不动 `HookUtils`（cc.ioctl.util，另有 1 处核心引用，属后续批次）；
 - 不给 feature 的 initOnce 写 JVM 测试（牵 ConfigManager/Android，属 Layer C 设备验证域）；
 - 不拆 legacy/nt 双 adapter（等第二个真实 NT 能力出现再按内核分型）。
+
+## 4. 执行记录（2026-09-05）
+
+1. 全套落地：端口（`hostapi.chat.ScreenshotHelperApi`）、适配器（策略链 + 防御边界）、特性（降级编排 + 旧 hookKey 显式保持）、宿主同名夹具、契约测试 ×3（特征命中/缺失返回 null/解析无副作用）；旧类删除。
+2. **夹具两轮返工的教训**：Java 方法区分只看"名字+参数序列"——static 与返回类型都不参与。单一 trait 的完全正交诱饵在语言层面不可达，采用"参数序列互异 + 组合覆盖"方案（每个 trait 至少被一个诱饵违反），已在夹具注释中说明。两轮都由 CI 注解秒级定位。
+3. 契约测试已进 CI 常规运行（Layer B 从设计变为现实）。
