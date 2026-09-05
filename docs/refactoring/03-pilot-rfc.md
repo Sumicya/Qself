@@ -80,3 +80,15 @@ interface ScreenshotHelperApi {
 1. 全套落地：端口（`hostapi.chat.ScreenshotHelperApi`）、适配器（策略链 + 防御边界）、特性（降级编排 + 旧 hookKey 显式保持）、宿主同名夹具、契约测试 ×3（特征命中/缺失返回 null/解析无副作用）；旧类删除。
 2. **夹具两轮返工的教训**：Java 方法区分只看"名字+参数序列"——static 与返回类型都不参与。单一 trait 的完全正交诱饵在语言层面不可达，采用"参数序列互异 + 组合覆盖"方案（每个 trait 至少被一个诱饵违反），已在夹具注释中说明。两轮都由 CI 注解秒级定位。
 3. 契约测试已进 CI 常规运行（Layer B 从设计变为现实）。
+
+## 5. 第二批试点：MuteQZoneThumbsUp（进阶形态，2026-09-05）
+
+与首批的差异——端口返回**领域句柄**而非裸 `Method`：
+
+- `QZoneMsgNotifyApi.NotifierHandle(method, descArgIndex)`：旧实现回调里的 `MSG_INFO_OFFSET` 状态机（运行时找"第二个 String 参数"）被收进 adapter 的 `resolveNotifier`，一次性解析为句柄字段；feature 只拿"描述文本在第几个参数"这一领域事实。
+- 契约测试钉死两个启发式：最宽 void 方法选择器（夹具含更窄 void 诱饵与更宽非 void 诱饵）+ 第二 String 参数索引（uin 在前 desc 在后 → 2）。
+- `MainHook` 早初始化白名单的 import 已随迁（`allowEarlyInit(MuteQZoneThumbsUp.INSTANCE)`，KSP 注册与三阶段时序不受影响）。
+
+## 6. RFC-02 §E 审计结论（同步完成）
+
+58 个桥接调用点（26 文件）逐点归类：**A 类**（约 2/3）为 `requireMinVersionAnyQQ(X) || requireMinTimVersion(Y)` 复合——宽语义即作者本意（"QQ 家族或 TIM"），收紧反而改变行为；**B 类**（阈值 ≥ 8.9.0 的独立调用）在 Play(止于 8.2.11)/Lite/HD 的真实版本号空间上与严格语义**不可区分**；**C 类**（< 8.9.0 独立调用）恰属 Lite/HD/Play 并存年代，宽语义同样是当时的有意支持。**结论：不收紧。桥接 API 升格为一等公民（去掉 @Deprecated），语义正名为 "QQ-family (non-TIM)"，§E 关闭。**

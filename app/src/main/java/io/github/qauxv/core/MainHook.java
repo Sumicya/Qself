@@ -41,7 +41,7 @@ import cc.ioctl.hook.misc.CustomSplash;
 import cc.ioctl.hook.misc.DisableHotPatch;
 import cc.ioctl.hook.misc.DisableQQCrashReportManager;
 import cc.ioctl.hook.msg.RevokeMsgHook;
-import cc.ioctl.hook.notification.MuteQZoneThumbsUp;
+import sumicya.qself.feature.notification.MuteQZoneThumbsUp;
 import cc.ioctl.hook.ui.misc.OptXListViewScrollBar;
 import cc.ioctl.hook.ui.title.RemoveCameraButton;
 import io.github.qauxv.util.HostInfo;
