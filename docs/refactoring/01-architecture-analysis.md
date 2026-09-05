@@ -271,3 +271,9 @@ grep -cF 'public static Class<?> _' app/src/main/java/io/github/qauxv/util/Initi
 2. **CapabilityRegistry 骨架落地**（`sumicya.qself.hostapi`）：纯 JVM、线程安全的能力降级状态机——UNKNOWN→AVAILABLE/DEGRADED/ABSENT；ABSENT 进程内终态（宿主类集启动后不可变，禁止抖动）；AVAILABLE↔DEGRADED 可恢复；首次缺席原因保留、恢复清除原因。8 个策略测试钉死语义。P2 试点时接入 `BaseFunctionHook.isAvailable`。
 3. **HostInfo 迁移的教训（重要）**：首次尝试被 CI 打回。根因——**上游自己已半途迁移**：`io.github.qauxv.util/HostInfo.kt`（`@file:JvmName("HostInfo")` 真身）与 `cc.ioctl.util/HostInfo.java`（委托门面）并存。把门面机械移过去会制造同类名冲突，且 Kotlin 消费者无法以 `HostInfo.method()` 风格调用 `@JvmName` 文件类（那是 Java 二进制视图）。结论：HostInfo 统一需要"调用风格迁移"级别的专门设计（候选：真身包一层 `object` + `@JvmStatic`，或全量改写 Kotlin 调用点），列为独立步骤。**流程教训：迁移前必须先查目标包是否已有 Kotlin 对应物**——本仓库正处在上游自身的演进中途。
 4. **排障基建再度生效**：本轮 10 个 `cannot find symbol` 全部经由 check-run 注解通道定位（沙箱内闭环，未需要人工取日志）。
+
+## 9. P1 中期度量与调整（2026-09-05）
+
+1. **依赖方向度量**：核心包反向依赖作者包 import 数 **168 → 121**（-47）：Reflex（99 文件消费）+ LayoutHelper 家族（60 文件，含唯一的 `cc.hicore.Utils.ContextUtils` 连带迁移，其全仓唯一消费者就是 LayoutHelper）迁入 `io.github.qauxv.util`，两次提交均 CI 绿。
+2. **D2（decorator 注册 KSP 化）延期至 P2**：实测仅 3 个分发器、2 处手写数组、decorator 经 `Base*Decorator` 基类间接实现接口——现在造第三台 KSP 处理器是为 3 个调用点造机器（过度工程）。待 P2 试点使 decorator 数量增长后再做，收益/成本比才成立。
+3. **HostInfo 统一立项**：RFC-02（docs/refactoring/02-hostinfo-rfc.md）完成——语义对照表取证出门面与真身三处分歧（含门面 `isPlayQQ()` 对真身取反的疑似上游笔误）；迁移原则定为"行为保持优先、语义收紧独立提案"，分 A–E 五阶段执行。
