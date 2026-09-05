@@ -53,7 +53,7 @@ import cc.ioctl.fragment.ExfriendListFragment
 import cc.ioctl.hook.misc.DisableHotPatch
 import cc.ioctl.util.ExfriendManager
 import cc.ioctl.util.HostInfo
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.Reflex
 import cc.ioctl.util.data.EventRecord
 import cc.ioctl.util.data.FriendRecord

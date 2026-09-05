@@ -39,7 +39,7 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import cc.ioctl.util.LayoutHelper.MATCH_PARENT
+import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
 import cc.ioctl.util.ui.dsl.RecyclerListViewController
 import io.github.qauxv.util.Log
 import io.github.qauxv.BuildConfig

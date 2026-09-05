@@ -27,7 +27,7 @@ import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 
 public class DebugDrawable extends Drawable {
 

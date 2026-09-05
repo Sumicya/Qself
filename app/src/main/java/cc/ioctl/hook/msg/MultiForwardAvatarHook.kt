@@ -38,7 +38,7 @@ import cc.hicore.QApp.QAppUtils
 import cc.ioctl.hook.profile.OpenProfileCard
 import cc.ioctl.util.HostInfo
 import cc.ioctl.util.HostStyledViewBuilder
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.Reflex
 import cc.ioctl.util.hookBeforeIfEnabled
 import cc.ioctl.util.ui.FaultyDialog

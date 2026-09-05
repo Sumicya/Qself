@@ -24,7 +24,7 @@ package cc.ioctl.hook.profile;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
-import static cc.ioctl.util.LayoutHelper.newLinearLayoutParams;
+import static io.github.qauxv.util.LayoutHelper.newLinearLayoutParams;
 
 import android.app.Activity;
 import android.content.ComponentName;

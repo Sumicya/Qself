@@ -34,7 +34,7 @@ import android.widget.LinearLayout;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import io.github.qauxv.base.IEntityAgent;
 import io.github.qauxv.base.IUiItemAgent;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;

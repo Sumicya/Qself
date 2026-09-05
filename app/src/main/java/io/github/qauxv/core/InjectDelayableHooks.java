@@ -33,7 +33,7 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
 import cc.ioctl.hook.SettingEntryHook;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import io.github.qauxv.util.Reflex;
 import cc.ioctl.util.ui.drawable.ProportionDrawable;
 import cc.ioctl.util.ui.drawable.SimpleBgDrawable;

@@ -28,7 +28,7 @@ import android.view.MotionEvent;
 import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 
 public class SimpleFlingInterceptLayout extends FrameLayout {
 

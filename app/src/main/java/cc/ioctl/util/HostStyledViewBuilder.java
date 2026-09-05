@@ -24,8 +24,8 @@ package cc.ioctl.util;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
-import static cc.ioctl.util.LayoutHelper.dip2px;
-import static cc.ioctl.util.LayoutHelper.dip2sp;
+import static io.github.qauxv.util.LayoutHelper.dip2px;
+import static io.github.qauxv.util.LayoutHelper.dip2sp;
 
 import android.content.Context;
 import android.graphics.drawable.Drawable;

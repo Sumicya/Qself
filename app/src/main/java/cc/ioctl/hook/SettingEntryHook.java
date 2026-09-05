@@ -40,7 +40,7 @@ import androidx.annotation.NonNull;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.util.HookUtils;
 import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import io.github.qauxv.util.Reflex;
 import io.github.qauxv.BuildConfig;
 import io.github.qauxv.R;

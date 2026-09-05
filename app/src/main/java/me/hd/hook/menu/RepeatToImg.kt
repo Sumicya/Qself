@@ -31,7 +31,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import cc.hicore.message.common.MsgSender
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import cc.ioctl.util.hookAfterIfEnabled
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord
 import com.xiaoniu.dispatcher.ComponentType

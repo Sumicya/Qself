@@ -39,10 +39,10 @@ import android.widget.Toast
 import androidx.core.content.res.ResourcesCompat
 import cc.ioctl.dialog.WsaWarningDialog
 import cc.ioctl.hook.experimental.FakeBatteryHook
-import cc.ioctl.util.LayoutHelper.MATCH_PARENT
-import cc.ioctl.util.LayoutHelper.WRAP_CONTENT
-import cc.ioctl.util.LayoutHelper.dip2px
-import cc.ioctl.util.LayoutHelper.newLinearLayoutParams
+import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
+import io.github.qauxv.util.LayoutHelper.WRAP_CONTENT
+import io.github.qauxv.util.LayoutHelper.dip2px
+import io.github.qauxv.util.LayoutHelper.newLinearLayoutParams
 import io.github.qauxv.BuildConfig
 import io.github.qauxv.R
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity

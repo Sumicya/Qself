@@ -27,7 +27,7 @@ import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 import static cc.ioctl.util.DebugUtils.csvenc;
 import static cc.ioctl.util.DebugUtils.en;
 import static cc.ioctl.util.HostStyledViewBuilder.subtitle;
-import static cc.ioctl.util.LayoutHelper.dip2px;
+import static io.github.qauxv.util.LayoutHelper.dip2px;
 
 import android.app.Activity;
 import android.content.Context;
@@ -49,7 +49,7 @@ import androidx.annotation.Nullable;
 import androidx.core.content.res.ResourcesCompat;
 import cc.ioctl.util.ExfriendManager;
 import cc.ioctl.util.HostStyledViewBuilder;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import cc.ioctl.util.data.FriendRecord;
 import cc.ioctl.util.ui.FaultyDialog;
 import com.tencent.mobileqq.widget.BounceScrollView;

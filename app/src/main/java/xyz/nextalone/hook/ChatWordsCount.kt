@@ -41,8 +41,8 @@ import androidx.core.view.children
 import cc.hicore.QApp.QAppUtils
 import cc.hicore.ReflectUtil.MField
 import cc.ioctl.util.HostInfo
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.LayoutHelper.newLinearLayoutParams
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper.newLinearLayoutParams
 import io.github.qauxv.base.IUiItemAgent
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry

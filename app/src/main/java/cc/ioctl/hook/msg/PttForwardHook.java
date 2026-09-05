@@ -23,9 +23,9 @@ package cc.ioctl.hook.msg;
 
 import static android.widget.LinearLayout.LayoutParams.MATCH_PARENT;
 import static android.widget.LinearLayout.LayoutParams.WRAP_CONTENT;
-import static cc.ioctl.util.LayoutHelper.dip2px;
-import static cc.ioctl.util.LayoutHelper.dip2sp;
-import static cc.ioctl.util.LayoutHelper.newLinearLayoutParams;
+import static io.github.qauxv.util.LayoutHelper.dip2px;
+import static io.github.qauxv.util.LayoutHelper.dip2sp;
+import static io.github.qauxv.util.LayoutHelper.newLinearLayoutParams;
 import static io.github.qauxv.util.Reflex.findField;
 import static io.github.qauxv.util.Reflex.getFirstByType;
 import static io.github.qauxv.bridge.AppRuntimeHelper.getQQAppInterface;

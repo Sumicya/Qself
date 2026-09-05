@@ -29,7 +29,7 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
 import cc.ioctl.util.HostStyledViewBuilder
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.qauxv.R
 import io.github.qauxv.base.IUiItemAgent

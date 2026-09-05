@@ -21,7 +21,7 @@ import cc.hicore.hook.stickerPanel.MainItemImpl.LocalStickerImpl;
 import cc.hicore.hook.stickerPanel.MainItemImpl.PanelSetImpl;
 import cc.hicore.hook.stickerPanel.MainItemImpl.RecentStickerImpl;
 import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import com.bumptech.glide.Glide;
 import com.lxj.xpopup.XPopup;
 import com.lxj.xpopup.core.BasePopupView;

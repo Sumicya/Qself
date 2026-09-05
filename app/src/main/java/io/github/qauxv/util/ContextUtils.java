@@ -1,4 +1,4 @@
-package cc.hicore.Utils;
+package io.github.qauxv.util;
 
 import android.content.Context;
 import android.content.ContextWrapper;

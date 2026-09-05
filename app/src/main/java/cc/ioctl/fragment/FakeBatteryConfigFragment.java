@@ -25,9 +25,9 @@ import static android.text.InputType.TYPE_CLASS_NUMBER;
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 import static cc.ioctl.util.HostStyledViewBuilder.subtitle;
-import static cc.ioctl.util.LayoutHelper.dip2px;
-import static cc.ioctl.util.LayoutHelper.dip2sp;
-import static cc.ioctl.util.LayoutHelper.newLinearLayoutParams;
+import static io.github.qauxv.util.LayoutHelper.dip2px;
+import static io.github.qauxv.util.LayoutHelper.dip2sp;
+import static io.github.qauxv.util.LayoutHelper.newLinearLayoutParams;
 
 import android.app.Activity;
 import android.app.Dialog;

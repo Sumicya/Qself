@@ -24,7 +24,7 @@ package cc.ioctl.hook;
 
 import static android.widget.LinearLayout.LayoutParams.MATCH_PARENT;
 import static android.widget.LinearLayout.LayoutParams.WRAP_CONTENT;
-import static cc.ioctl.util.LayoutHelper.dip2px;
+import static io.github.qauxv.util.LayoutHelper.dip2px;
 import static io.github.qauxv.util.xpcompat.XposedHelpers.findAndHookMethod;
 import static io.github.qauxv.util.Initiator.load;
 
@@ -40,7 +40,7 @@ import android.widget.TextView;
 import cc.ioctl.fragment.ExfriendListFragment;
 import cc.ioctl.hook.friend.ShowDeletedFriendListEntry;
 import cc.ioctl.util.ExfriendManager;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedHelpers;

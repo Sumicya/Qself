@@ -38,7 +38,7 @@ import cc.hicore.ReflectUtil.MField;
 import cc.hicore.ReflectUtil.XField;
 import cc.hicore.ReflectUtil.XMethod;
 import cc.hicore.dialog.RepeaterPlusIconSettingDialog;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.R;
 import io.github.qauxv.util.CustomMenu;

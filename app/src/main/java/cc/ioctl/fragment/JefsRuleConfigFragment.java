@@ -23,7 +23,7 @@ package cc.ioctl.fragment;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
-import static cc.ioctl.util.LayoutHelper.dip2px;
+import static io.github.qauxv.util.LayoutHelper.dip2px;
 
 import android.content.Context;
 import android.graphics.Typeface;
@@ -43,7 +43,7 @@ import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
 import cc.ioctl.hook.misc.JumpController;
 import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import cc.ioctl.util.ui.ViewBuilder;
 import cc.ioctl.util.ui.drawable.HighContrastBorder;
 import com.tencent.mobileqq.widget.BounceScrollView;

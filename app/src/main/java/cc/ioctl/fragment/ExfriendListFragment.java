@@ -54,7 +54,7 @@ import cc.ioctl.hook.friend.OpenFriendChatHistory;
 import cc.ioctl.hook.profile.OpenProfileCard;
 import cc.ioctl.util.ExfriendManager;
 import cc.ioctl.util.HostStyledViewBuilder;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import cc.ioctl.util.data.EventRecord;
 import cc.ioctl.util.data.FriendRecord;
 import cc.ioctl.util.ui.FaultyDialog;

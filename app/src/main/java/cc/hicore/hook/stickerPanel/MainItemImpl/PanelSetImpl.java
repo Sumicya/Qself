@@ -17,7 +17,7 @@ import cc.hicore.Utils.ImageUtils;
 import cc.hicore.hook.stickerPanel.ICreator;
 import cc.hicore.hook.stickerPanel.LocalDataHelper;
 import cc.hicore.ui.SimpleDragSortView;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import io.github.qauxv.R;
 import java.util.ArrayList;
 import java.util.List;

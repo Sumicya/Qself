@@ -29,8 +29,8 @@ import androidx.core.view.marginBottom
 import androidx.core.view.marginLeft
 import androidx.core.view.marginRight
 import androidx.core.view.marginTop
-import cc.ioctl.util.LayoutHelper.dip2px
-import cc.ioctl.util.LayoutHelper.dip2sp
+import io.github.qauxv.util.LayoutHelper.dip2px
+import io.github.qauxv.util.LayoutHelper.dip2sp
 
 abstract class BViewGroup(context: Context) : ViewGroup(context) {
     protected fun View.defaultWidthMeasureSpec(parentView: ViewGroup): Int {

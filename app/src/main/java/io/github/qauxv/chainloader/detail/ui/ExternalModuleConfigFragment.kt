@@ -34,7 +34,7 @@ import android.widget.FrameLayout
 import androidx.annotation.UiThread
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
-import cc.ioctl.util.LayoutHelper.MATCH_PARENT
+import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
 import cc.ioctl.util.ui.doWithFaultyDialogWithoutErrorHandling
 import cc.ioctl.util.ui.dsl.RecyclerListViewController
 import io.github.qauxv.R

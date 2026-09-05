@@ -32,7 +32,7 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
 import androidx.appcompat.app.AlertDialog
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import cc.ioctl.util.ui.FaultyDialog
 import io.github.qauxv.base.IEntityAgent
 import io.github.qauxv.base.ISwitchCellAgent

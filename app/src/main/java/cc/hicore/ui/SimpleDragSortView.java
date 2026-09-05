@@ -10,7 +10,7 @@ import android.widget.BaseAdapter;
 import android.widget.TextView;
 import cc.hicore.ui.handygridview.HandyGridView;
 import cc.hicore.ui.handygridview.scrollrunner.OnItemMovedListener;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import java.util.List;
 
 @SuppressLint("ResourceType")

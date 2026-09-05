@@ -39,8 +39,8 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.content.res.ResourcesCompat
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.LayoutHelperViewScope
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelperViewScope
 import cc.ioctl.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 

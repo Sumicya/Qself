@@ -20,7 +20,7 @@
  * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
  */
 
-package cc.ioctl.util;
+package io.github.qauxv.util;
 
 import android.app.Activity;
 import android.content.Context;
@@ -34,7 +34,6 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import androidx.annotation.NonNull;
-import cc.hicore.Utils.ContextUtils;
 import io.github.qauxv.util.Log;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;

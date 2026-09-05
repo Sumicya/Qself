@@ -39,7 +39,7 @@ import android.widget.TextView
 import androidx.annotation.UiThread
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.res.ResourcesCompat
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import cc.ioctl.util.ui.FaultyDialog
 import com.tencent.mobileqq.widget.BounceScrollView
 import io.github.qauxv.R

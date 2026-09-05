@@ -45,7 +45,7 @@ import androidx.annotation.UiThread;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.view.ViewCompat;
 import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import cc.ioctl.util.ui.FaultyDialog;
 import cc.ioctl.util.ui.drawable.DebugDrawable;
 import io.github.duzhaokun123.util.FilePicker;

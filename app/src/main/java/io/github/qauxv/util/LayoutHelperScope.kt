@@ -20,7 +20,7 @@
  * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
  */
 
-package cc.ioctl.util
+package io.github.qauxv.util
 
 import android.content.Context
 import android.content.res.Resources

@@ -21,7 +21,7 @@
  */
 package cc.ioctl.hook.ui.chat;
 
-import static cc.ioctl.util.LayoutHelper.dip2px;
+import static io.github.qauxv.util.LayoutHelper.dip2px;
 import static io.github.qauxv.util.Reflex.getFirstNSFByType;
 import static io.github.qauxv.util.Reflex.setInstanceObject;
 import static io.github.qauxv.util.Initiator._MixedMsgItemBuilder;
@@ -50,7 +50,7 @@ import cc.ioctl.dialog.RepeaterIconSettingDialog;
 import cc.ioctl.util.HookUtils;
 import cc.ioctl.util.HookUtils.BeforeAndAfterHookedMethod;
 import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.IEntityAgent;
 import io.github.qauxv.base.RuntimeErrorTracer;

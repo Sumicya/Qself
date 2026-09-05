@@ -14,7 +14,7 @@ import cc.hicore.hook.stickerPanel.RecentStickerHelper;
 import cc.hicore.message.chat.SessionUtils;
 import cc.hicore.message.common.MsgSender;
 import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import com.bumptech.glide.Glide;
 import com.lxj.xpopup.XPopup;
 import io.github.qauxv.R;
