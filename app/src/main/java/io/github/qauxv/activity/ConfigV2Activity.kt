@@ -89,7 +89,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (isInHostProcess()) {
+        if (isInHostProcess) {
             // we have to set the theme before super.onCreate()
             setTheme(if (currentV2Theme == 3) R.style.Theme_MaiTungTMDesign_Light_Blue else R.style.Theme_MaiTungTMDesign_DayNight)
         } else {
@@ -144,7 +144,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
     }
 
     fun updateActivationStatus() {
-        val isHookEnabledByLegacyApi = HookStatus.isModuleEnabled() || isInHostProcess()
+        val isHookEnabledByLegacyApi = HookStatus.isModuleEnabled() || isInHostProcess
         val xposedService: XposedService? = HookStatus.getXposedService().value
         val isHookEnabledByLibXposedApi = if (xposedService != null) {
             val scope = xposedService.scope.toSet()
@@ -153,7 +153,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
         } else false
         val isHookEnabled = isHookEnabledByLegacyApi || isHookEnabledByLibXposedApi
         var isAbiMatch = CheckAbiVariantModel.collectAbiInfo(this).isAbiMatch
-        if ((isHookEnabled && isInModuleProcess() && !HookStatus.isZygoteHookMode()
+        if ((isHookEnabled && isInModuleProcess && !HookStatus.isZygoteHookMode()
                 && HookStatus.isTaiChiInstalled(this)) && HookStatus.getHookType() == HookStatus.HookType.APP_PATCH && "armAll" != AbiUtils.getModuleFlavorName()
         ) {
             isAbiMatch = false
@@ -176,7 +176,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
                 )
             )
             statusTitle.text = if (isHookEnabled) "已激活" else "未激活"
-            if (isInHostProcess()) {
+            if (isInHostProcess) {
                 tvStatus.text = hostInfo.packageName
             } else {
                 tvStatus.text = if (isHookEnabledByLibXposedApi) {
@@ -288,7 +288,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         super.onCreateOptionsMenu(menu)
-        if (isInModuleProcess()) {
+        if (isInModuleProcess) {
             menuInflater.inflate(R.menu.main_v2_toolbar, menu)
             updateMenuItems()
         } else {
@@ -416,7 +416,7 @@ $e"""
     }
 
     fun updateMenuItems() {
-        if (isInHostProcess()) {
+        if (isInHostProcess) {
             return
         }
         val menu = mainV2Binding!!.topAppBar.menu

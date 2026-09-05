@@ -47,7 +47,7 @@ object WsaWarningDialog {
         }
 
     private fun isNeedShow(): Boolean {
-        return isInHostProcess()
+        return isInHostProcess
             && MainHook.isWindowsSubsystemForAndroid()
             && currentWsaWarningVersion < LATEST_WSA_WARNING_VERSION
             && !mHasShownThisTime
