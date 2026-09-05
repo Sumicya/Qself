@@ -35,9 +35,14 @@ import android.os.Handler;
 @SuppressWarnings("unused")
 public class ScreenShotHelper {
 
-    // ---- decoys: each violates exactly one trait ----
+    // Java distinguishes overloads by name + parameter sequence only —
+    // neither static-ness nor return type participate — so each decoy must
+    // use a parameter sequence distinct from the target and from each other.
+    // Trait coverage is therefore combinatorial rather than fully orthogonal:
+    // every trait (static, void, arity, order) is violated by at least one
+    // decoy, some decoys violate two traits at once.
 
-    /** not static (parameters shuffled so it stays a distinct signature) */
+    /** not static */
     public void a(Handler handler, String path, Context context) {
     }
 
@@ -49,12 +54,12 @@ public class ScreenShotHelper {
     public static void b(Context context, String path, Handler handler) {
     }
 
-    /** wrong return type */
-    public static int a(Context context, String path, Handler handler) {
+    /** wrong return type and wrong order */
+    public static int a(String path, Handler handler, Context context) {
         return 0;
     }
 
-    /** wrong parameter types */
+    /** wrong parameter order (all the right types) */
     public static void a(String path, Context context, Handler handler) {
     }
 
