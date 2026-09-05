@@ -128,20 +128,24 @@ fun requireMinVersion(
 }
 
 /**
- * Migration bridge preserving the semantics of the removed-in-future
- * cc.ioctl.util.HostInfo facade, whose isQQ() was `!isTim()` and therefore
- * also fired on QQ_Play/QQ_Lite/QQ_HD/QQ_International (and, literally,
- * in the module process). Do NOT use in new code; existing call sites are
- * to be tightened per docs/refactoring/02-hostinfo-rfc.md §E.
+ * True when running inside any QQ-family host (QQ, QQ Play, QQ Lite,
+ * QQ HD, QQ International) — everything except TIM and the module process
+ * is deliberately excluded by callers that pair this with an isTim check.
+ *
+ * First-class API since RFC-02 §E audit (2026-09-05): of the 58 migrated
+ * call sites, roughly two thirds are `requireMinVersionAnyQQ(x) ||
+ * requireMinTimVersion(y)` compounds where family-wide semantics is the
+ * stated intent, and the rest sit at thresholds where the remaining
+ * QQ-family hosts' real version codes cannot collide. The old facade's
+ * `!isTim()` semantics is therefore intentional, not a defect.
  */
-@Deprecated("RFC-02 §E: audit and tighten to a strict hostSpecies check", level = DeprecationLevel.WARNING)
 fun isAnyQQSpecies(): Boolean = hostInfo.hostSpecies != HostSpecies.TIM
 
 /**
- * Migration bridge preserving the facade's requireMinQQVersion(v)
- * (`!isTim() && versionCode >= v`). See [isAnyQQSpecies].
+ * `isAnyQQSpecies() && versionCode >= versionCode` — the QQ-family form of
+ * [requireMinQQVersion]. See [isAnyQQSpecies] for why this is a first-class
+ * API rather than a to-be-tightened bridge.
  */
-@Deprecated("RFC-02 §E: audit and tighten to requireMinQQVersion where strict", level = DeprecationLevel.WARNING)
 fun requireMinVersionAnyQQ(versionCode: Long): Boolean =
     hostInfo.hostSpecies != HostSpecies.TIM && hostInfo.versionCode >= versionCode
 

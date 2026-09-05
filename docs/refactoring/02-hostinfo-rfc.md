@@ -75,3 +75,12 @@ fun requireMinVersionAnyQQ(v: Long)    // 分歧②的门面语义: isAnyQQSpeci
 1. Kotlin 对 `@JvmName` 文件类的调用风格限制（§1.4 教训）→ 阶段 C 的重写模式必须先在一个文件上验证编译；
 2. `hostInfo` 是 lateinit 全局，JVM 单测不可达（Android 类型）→ 版本判断逻辑的可测化依赖 P2 hostapi 的 `HostEnvironment` 端口抽象，本 RFC 不扩scope；
 3. 阶段 B 的 sed 脚本可能撞上字符串内出现 FQN 的假阳性 → 脚本只处理 `import` 行与方法调用前缀，逐 diff 人工复核。
+
+## 7. §E 审计结论与关闭（2026-09-05）
+
+58 个调用点（26 文件）逐点归类：
+- **A 类（约 2/3）**：`requireMinVersionAnyQQ(X) || requireMinTimVersion(Y)` 复合条件——宽语义即作者本意（"QQ 家族或 TIM"），收紧到严格 species 将改变 Play/Lite/HD 上的行为；
+- **B 类**：阈值 ≥ 8.9.0 的独立调用——Play 止于 8.2.11、Lite/HD 真实版本号远低于该区间，宽/严在现存宿主上不可区分；
+- **C 类**：< 8.9.0 的独立调用——恰属 Lite/HD/Play 并存年代，宽语义是当时的有意支持。
+
+**处置**：不收紧。`isAnyQQSpecies`/`requireMinVersionAnyQQ` 去除 `@Deprecated`，KDoc 正名为"QQ-family (non-TIM)"一等语义。§E 关闭，RFC-02 全部完成。
