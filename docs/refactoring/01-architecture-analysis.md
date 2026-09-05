@@ -264,3 +264,10 @@ grep -cF 'public static Class<?> _' app/src/main/java/io/github/qauxv/util/Initi
 ```
 
 *文档生成于 2026-09-05，基于 commit `37ca88e`（branch `arena/01a0718a-qself`）。*
+
+## 8. P1 执行记录（2026-09-05）
+
+1. **Reflex 迁移完成**（commit cbd3081，CI 绿）：`cc.ioctl.util.Reflex` → `io.github.qauxv.util`，99 个消费文件机械替换，核心包对该类的反向依赖清零。
+2. **CapabilityRegistry 骨架落地**（`sumicya.qself.hostapi`）：纯 JVM、线程安全的能力降级状态机——UNKNOWN→AVAILABLE/DEGRADED/ABSENT；ABSENT 进程内终态（宿主类集启动后不可变，禁止抖动）；AVAILABLE↔DEGRADED 可恢复；首次缺席原因保留、恢复清除原因。8 个策略测试钉死语义。P2 试点时接入 `BaseFunctionHook.isAvailable`。
+3. **HostInfo 迁移的教训（重要）**：首次尝试被 CI 打回。根因——**上游自己已半途迁移**：`io.github.qauxv.util/HostInfo.kt`（`@file:JvmName("HostInfo")` 真身）与 `cc.ioctl.util/HostInfo.java`（委托门面）并存。把门面机械移过去会制造同类名冲突，且 Kotlin 消费者无法以 `HostInfo.method()` 风格调用 `@JvmName` 文件类（那是 Java 二进制视图）。结论：HostInfo 统一需要"调用风格迁移"级别的专门设计（候选：真身包一层 `object` + `@JvmStatic`，或全量改写 Kotlin 调用点），列为独立步骤。**流程教训：迁移前必须先查目标包是否已有 Kotlin 对应物**——本仓库正处在上游自身的演进中途。
+4. **排障基建再度生效**：本轮 10 个 `cannot find symbol` 全部经由 check-run 注解通道定位（沙箱内闭环，未需要人工取日志）。
