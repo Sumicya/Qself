@@ -241,6 +241,7 @@ flowchart LR
 2. **首批安全网（4 个测试类，~30 断言）**：`QQVersionTest`（常量表唯一性/严格递增/锚点）、`SyncUtilsProcessMapTest`（进程位图单比特不变式）、`InitiatorTest`（名字归一化/缺类语义，配套生产钩子 `Initiator.initForTest`，为 P0 唯一生产改动）、`DexMethodDescriptorTest`（描述符文法全量钉死）。
 3. **安全网首轮即捕获存量 bug**：`DexMethodDescriptor.splitParameterTypes` 存在 off-by-one——`L`/`[` 分支推进游标后循环尾再 `i++`，**吞掉对象/数组类型参数的后一个参数**；唯一生产调用点 `LibXposedNewApiByteCodeGenerator.referenceMethod` 据此生成 `ImmutableMethodReference`，参数被吞 = 代理字节码签名错配。修复与暴露测试分两个 commit（git 历史保留红→绿证据链）。
 4. **环境结论**：沙箱网络矩阵（github.com 通 / Gradle·Maven·Google·JITPack·Adoptium 全断）→ 本地构建物理不可能，`dev-env.md` 记录复现方法。
+8. **P0 收口（2026-09-05）**：run 33969225216 全绿。`:app:testDebugUnitTest` 从零到 CI 常驻门禁；当日产出 = 安全网(4 测试类) + 2 个存量 bug 修复 + 注解回传通道 + 本文档。P1（核心接缝）无需额外权限，可自主推进。
 6. **安全网第二个存量发现（CI 注解回传，2026-09-05）**：`Initiator.checkHostHasClass` 未初始化时 NPE——与 `load()` 的 fail-safe 契约不对称。按“无宿主 ⇒ 无该类”语义加固返回 false。至此测试落地当日：1 个描述符解析 bug + 1 个契约不对称，P0 投入产出比成立。7. **注解回传通道**：run 日志域名被墙，但 check-run 注解走 api.github.com 可读；test.yml 已内置“失败测试 → 注解”步骤，沙箱可自主闭环排障（本轮即靠它定位）。
 5. **GitHub 侧阻塞**：本仓库为 cinit/QAuxiliary 的 fork 且 Actions 默认禁用；token 亦无 `workflows` 权限 → `test.yml` 暂存本地待所有者启用 Actions 后落地（详见 `dev-env.md` §4）。
 
