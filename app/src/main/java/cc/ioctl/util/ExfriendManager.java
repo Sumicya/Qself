@@ -21,6 +21,7 @@
  */
 package cc.ioctl.util;
 
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Reflex;
 
 import static cc.ioctl.util.DateTimeUtil.getRelTimeStrSec;
