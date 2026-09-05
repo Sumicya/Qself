@@ -283,3 +283,10 @@ grep -cF 'public static Class<?> _' app/src/main/java/io/github/qauxv/util/Initi
 1. **HostInfo 统一完成**（RFC-02 B/C/D）：93+ 文件迁移至真身 API，门面 `cc.ioctl.util/HostInfo.java` 删除；外部不可达的取反 `isPlayQQ` 门面路径随之消亡；58 个宽语义调用点走 `isAnyQQSpecies`/`requireMinVersionAnyQQ` 桥接（行为保持，§E 收紧为后续独立提案）。
 2. **依赖方向指标**：核心包反向 import 作者包 **168 → 95**（-43.5%）。残量头名：`cc.ioctl.util.ui.ThemeAttrUtils`(8)、`RecyclerListViewController`(5)、`FaultyDialog`(3)——P1 后续批次；以及 `SettingEntryHook`/`ReplyNoAtHook` 等功能类引用（属 P4 包重组范畴）。
 3. **五连红的排障复盘**（062af65→fa30266）：① Kotlinc 未解析引用不产生 check-run 注解（与 javac 不同），催生了 test.yml 的“构建日志尾部切块转注解”升级（待中转落地）；② 迁移脚本三处边角翻车：同包误豁免（startswith 前缀匹配）、val 属性带括号调用、Kotlin 成员 import 常量被打断成裸 import——全部由“CI 红→本地推演/审计→修”闭环解决；③ 教训固化：**大规模机械迁移的验收审计必须用脚本化的全量符号审计**（本次终审 python 审计一次通过），肉眼与单行 shell 都不可靠。
+
+## 11. P1 正式收官（2026-09-05）
+
+1. **最终指标**：核心包反向依赖作者包 import **168 → 74（-56%）**。本轮补刀：`cc.ioctl.util.ui` 整树（13 文件/48 消费者）→ `io.github.qauxv.util.ui`（一次过绿）；`me.ketal.data.ConfigData`（§P2 点名的"最刺眼"证据，DexKitTarget 所依赖）→ `io.github.qauxv.config`。
+2. **残量定性（74 的构成）**：约 50 为 hook 入口/fragment/decorator 类引用（`MainHook` 白名单、分发器数组、设置页路由）——本质是"核心引用功能"，属 P4 包重组用 `sumicya.qself.feature.*` 解决；约 24 为长尾工具（`QAppUtils`×3 牵 `hicore XMethod/XClass` 闭包、`SessionUtils/SessionHooker` 为 hicore 消息桥内部件、`customiuizer` 为内嵌第三方模块）——单件收益低闭包重，与 P4 一并处理。**P1 的膝点已过，继续磨指标边际收益为负。**
+3. **迁移方法论沉淀（本阶段 8 次迁移全部一次或数轮内绿）**：① 迁移前查目标包 Kotlin 对应物；② 整树优先于拆挑（内部关系原样保持+单条前缀规则）；③ 迁移后验收一律 python 全量符号审计（裸名无 import / Kotlin 缺符号 import / 单标识符非法 import 三查）；④ 同包裸用与静态 import 是两大暗礁，侦察阶段显式排查。
+4. **P2 试点选型原则（下阶段 RFC-03 素材）**：不用 decorator（如 FxxkQQBrowser 纯 Intent 逻辑，无宿主查找，展示不了 adapter 价值）；选"有真实 Initiator/DexKit 查找 + 行为单一"的小 hook，完整走 feature → hostapi 端口 → adapter（Initiator/DexKit 藏后）→ CapabilityRegistry 降级 → 契约测试（qq-stub 假 classloader）五件套，作为目标架构的活样张。
