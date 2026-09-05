@@ -103,6 +103,11 @@ public class Initiator {
 
     public static boolean checkHostHasClass(String className) {
         ClassLoader hostClassLoader = getHostClassLoader();
+        if (hostClassLoader == null) {
+            // not initialized: be fail-safe like load(), "no host" means
+            // "the host does not have this class" instead of an NPE
+            return false;
+        }
         try {
             hostClassLoader.loadClass(className);
             return true;
