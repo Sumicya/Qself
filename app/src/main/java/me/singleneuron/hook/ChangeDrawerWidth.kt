@@ -32,7 +32,7 @@ import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.View
 import android.view.WindowManager
-import PACKAGE_NAME_QQ
+import io.github.qauxv.util.PACKAGE_NAME_QQ
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import io.github.qauxv.util.xpcompat.XC_MethodHook
