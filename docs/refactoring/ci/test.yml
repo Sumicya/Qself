@@ -57,6 +57,36 @@ jobs:
       - name: Run JVM unit tests
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
+      - name: Surface test failures as annotations
+        if: failure()
+        run: |
+          # gradle test failures live in XML reports; mirror them into the
+          # check-run annotations so they are visible via the REST API
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+          found = False
+          for f in glob.glob('app/build/test-results/testDebugUnitTest/*.xml'):
+              try:
+                  root = ET.parse(f).getroot()
+              except Exception:
+                  continue
+              for tc in root.iter('testcase'):
+                  if tc.find('failure') is not None or tc.find('error') is not None:
+                      found = True
+                      print('::error title=Test failed::{}.{}'.format(
+                          tc.get('classname'), tc.get('name')))
+                      node = tc.find('failure')
+                      if node is None:
+                          node = tc.find('error')
+                      msg = (node.get('message') or '').replace('\n', ' ')[:300]
+                      print('::error title=Detail::{}'.format(msg))
+          if not found:
+              print('::error title=No test XML found::gradle failed before/without test results')
+          PY
+          echo '---- raw failure snippets ----'
+          grep -rA6 -E '<failure|<error' app/build/test-results/testDebugUnitTest 2>/dev/null | head -80 || true
+
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
