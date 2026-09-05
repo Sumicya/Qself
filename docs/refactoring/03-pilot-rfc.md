@@ -92,3 +92,11 @@ interface ScreenshotHelperApi {
 ## 6. RFC-02 §E 审计结论（同步完成）
 
 58 个桥接调用点（26 文件）逐点归类：**A 类**（约 2/3）为 `requireMinVersionAnyQQ(X) || requireMinTimVersion(Y)` 复合——宽语义即作者本意（"QQ 家族或 TIM"），收紧反而改变行为；**B 类**（阈值 ≥ 8.9.0 的独立调用）在 Play(止于 8.2.11)/Lite/HD 的真实版本号空间上与严格语义**不可区分**；**C 类**（< 8.9.0 独立调用）恰属 Lite/HD/Play 并存年代，宽语义同样是当时的有意支持。**结论：不收紧。桥接 API 升格为一等公民（去掉 @Deprecated），语义正名为 "QQ-family (non-TIM)"，§E 关闭。**
+
+## 7. 批量迁移第一批（2026-09-05）
+
+`DisableEnterEffect` + `DisableLightInteraction`，两个新知识点进入样张库：
+1. **版本分支属于 adapter**：NT(DexKit method)/legacy(Initiator 类+方法名特征) 的分支选择是易变宿主知识，feature 对版本无感知；
+2. **密封句柄承载"空值语义"**：轻互动两代内核需要不同空白值（NT=空 List，legacy=null），`Handle.NtListProvider/LegacySwitch` 把语义随方法一起交付，install 路径零版本分支；
+3. **第二类可测缝**：JVM 上版本门不可评估（hostInfo 未初始化）→ 端到端解析退化为 null（本身就是 fail-safe 断言），易变逻辑以公开特征谓词（`matchesLegacyTrait`/`matchesNtTrait`）逐方法钉死——adapter 是实现细节，谓词公开无 API 稳定性代价。
+两类均零外部引用（KSP 注册自动发现，无需任何白名单随迁）。批次规划：第二批 = RemoveCameraButton（版本→混淆名映射表进 adapter）+ RemoveSuperQQShow（作者包 xyz.nextalone 抽取，四路分支）。
