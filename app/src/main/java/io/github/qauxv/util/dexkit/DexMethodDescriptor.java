@@ -244,8 +244,8 @@ public class DexMethodDescriptor implements Serializable {
                 i = j + 1;
             } else {
                 list.add(String.valueOf(c));
+                i++;
             }
-            i++;
         }
         return list;
     }
