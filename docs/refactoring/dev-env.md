@@ -32,3 +32,17 @@
 1. `apt install openjdk-17/21` → 失败（Debian 镜像不可达）。
 2. Adoptium API / GitHub Release 直链下载 JDK 21 → 失败（对应域名被断）。
 3. 结论：沙箱最多做到「git 操作 + 文档 + 源码静态分析 + CI 触发与监控」，均已就绪。
+
+## 4. GitHub 侧权限矩阵（2026-09-05 实测，阻塞项）
+
+| 能力 | 状态 | 说明 |
+|---|---|---|
+| push 分支 / 提交普通文件 | ✅ | `arena/01a0718a-qself` 已推送 |
+| 创建/修改 `.github/workflows/*` | ❌ 403 | GH App token 缺 `workflows` 权限（`test.yml` 暂存于本地未提交） |
+| 触发/查看 Actions 运行 | ❌ | **本 fork 的 Actions 默认禁用**，启用需仓库所有者在网页操作；API 启用需 admin 权限 |
+
+**解除阻塞的最短路径（需仓库所有者操作）**：
+1. 在 `https://github.com/Sumicya/Qself/actions` 点击启用 Actions（一次性）；
+2. 提交本地已备好的 `.github/workflows/test.yml`（需在 Arena 重连 GitHub 并授予 workflows 权限，由我推送；或所有者自行提交该文件）。
+
+Actions 启用后，即使 `test.yml` 未落地，也可先 `workflow_dispatch` 现有 `push_ci.yml` 于本分支获得编译门禁。

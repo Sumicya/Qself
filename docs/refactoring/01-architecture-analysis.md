@@ -241,6 +241,7 @@ flowchart LR
 2. **首批安全网（4 个测试类，~30 断言）**：`QQVersionTest`（常量表唯一性/严格递增/锚点）、`SyncUtilsProcessMapTest`（进程位图单比特不变式）、`InitiatorTest`（名字归一化/缺类语义，配套生产钩子 `Initiator.initForTest`，为 P0 唯一生产改动）、`DexMethodDescriptorTest`（描述符文法全量钉死）。
 3. **安全网首轮即捕获存量 bug**：`DexMethodDescriptor.splitParameterTypes` 存在 off-by-one——`L`/`[` 分支推进游标后循环尾再 `i++`，**吞掉对象/数组类型参数的后一个参数**；唯一生产调用点 `LibXposedNewApiByteCodeGenerator.referenceMethod` 据此生成 `ImmutableMethodReference`，参数被吞 = 代理字节码签名错配。修复与暴露测试分两个 commit（git 历史保留红→绿证据链）。
 4. **环境结论**：沙箱网络矩阵（github.com 通 / Gradle·Maven·Google·JITPack·Adoptium 全断）→ 本地构建物理不可能，`dev-env.md` 记录复现方法。
+5. **GitHub 侧阻塞**：本仓库为 cinit/QAuxiliary 的 fork 且 Actions 默认禁用；token 亦无 `workflows` 权限 → `test.yml` 暂存本地待所有者启用 Actions 后落地（详见 `dev-env.md` §4）。
 
 ---
 
