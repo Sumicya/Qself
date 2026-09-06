@@ -63,3 +63,5 @@ hook 型宿主增强模块：被动拦截/增强宿主自身行为。**不模拟
 
 FunBox v2244 为加固打包（dex 为单字母混淆壳：234 类/1825 字符串 vs 3.5MB 体积；真身由 libfun.so 5.2MB + zygisk/funloader.so 运行时解包），且全网无源码——§4 的静态知识提取路径对其不可行。
 替代路径：所需知识多为 QQ 内部参数而非 FunBox 代码，改走**自建运行时捕获**——用本仓代码写调试用"灰字捕获器"（hook NtGrayTipHelper 落日志），真机触发真实交互后从日志读参数，再走正常五件套实现。7 项候选逐一评估此法可行性后排队。
+
+补充（同日）：捕获点选定 `JsonGrayElement` 构造器（具体数据类，所有本地灰字必经；busiId/jsonStr/recentAbstract 即构造参数），避免抽象接口不可 hook 与服务解析链。工具形态：`GrayTipCapture`（实验分类，默认关）。防撤回样式增强评估：树内 `cc.ioctl.hook.msg.RevokeMsgHook`（CommonConfigFunctionHook）为现成底子，待灰字参数取证后实施。
