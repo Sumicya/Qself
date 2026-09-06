@@ -69,7 +69,8 @@ object LiquidGlassBottomBar : CommonSwitchFunctionHook(
     override val name = "底部导航栏液态玻璃"
 
     override val description = "iOS 26 风格液态玻璃底栏（WeChat-LiquidGlass 移植，MIT）。" +
-        "玻璃亮边直贴按钮图标（无外圈薄带）；未读数为白色数字显示于按钮顶部居中。QQ 9.1.50+ 经真机验证的版本段，重启生效"
+        "玻璃按原始几何包裹整行，亮边与按钮间的外圈间隙暂保留（直贴方案待重做）；" +
+        "按钮恢复正常宽度；未读数为白色数字显示于按钮顶部居中。重启生效"
 
     override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EXPERIMENTAL_CATEGORY
 
