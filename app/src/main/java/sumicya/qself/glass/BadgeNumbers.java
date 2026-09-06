@@ -43,13 +43,18 @@ public final class BadgeNumbers {
     /** cached tab row per bar. */
     private static final WeakHashMap<View, View> sRow = new WeakHashMap<>();
 
-    /** Pure: label for a captured count; null for nothing-to-draw. */
+    /**
+     * Pure: label for a captured count; null for nothing-to-draw. A hooked
+     * count is the true number and is shown verbatim - no 99+ cap: the user
+     * runs QQ's exact-count display, and the stock capsule's own "99+" text
+     * (the fallback source) caps regardless of that setting.
+     */
     static String countLabel(Integer count, CharSequence text) {
         if (count != null) {
             if (count <= 0) {
                 return null;
             }
-            return count > 99 ? "99+" : String.valueOf(count.intValue());
+            return String.valueOf(count.intValue());
         }
         if (text == null) {
             return null;
@@ -79,7 +84,6 @@ public final class BadgeNumbers {
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setColor(Color.WHITE);
         paint.setShadowLayer(2f * density, 0f, 0f, 0x99000000);
-        float baseline = 11f * density;
         for (int i = 0; i < ((ViewGroup) row).getChildCount(); i++) {
             View tab = ((ViewGroup) row).getChildAt(i);
             if (!(tab instanceof ViewGroup) || tab.getVisibility() != View.VISIBLE) {
@@ -98,10 +102,63 @@ public final class BadgeNumbers {
                 // instead of hiding it into nothing.
                 continue;
             }
+            // Anchor to the icon itself, in host coordinates: tab.getLeft()
+            // is row-local and the canvas is the host's, which is wider than
+            // the row by the shadow padding - drawing in row coordinates put
+            // the first tab's number outside the glass, top-left (device
+            // evidence, QQ 9.2.10).
+            View icon = findIcon((ViewGroup) tab, 0);
+            if (icon == null) {
+                continue;
+            }
+            int[] at = offsetInHost(icon, host);
+            if (at == null) {
+                continue;
+            }
             badge.setAlpha(0f);
-            float cx = tab.getLeft() + tab.getWidth() * 0.5f;
+            float cx = at[0] + icon.getWidth() * 0.5f;
+            // Baseline just under the icon's bottom edge: the gap between
+            // the icon and the button label.
+            float baseline = at[1] + icon.getHeight() + paint.getTextSize() * 0.75f;
             canvas.drawText(label, cx, baseline, paint);
         }
+    }
+
+    /** The tab's icon view: the drag-animation view QQ uses, or any ImageView. */
+    private static View findIcon(ViewGroup group, int depth) {
+        if (depth > 4) {
+            return null;
+        }
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            String n = child.getClass().getName();
+            if (n.contains("TabDragAnimationView") || child instanceof android.widget.ImageView) {
+                return child;
+            }
+            if (child instanceof ViewGroup) {
+                View found = findIcon((ViewGroup) child, depth + 1);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** [x, y] of {@code v}'s top-left in {@code ancestor} coordinates, null if unrelated. */
+    private static int[] offsetInHost(View v, View ancestor) {
+        int x = 0;
+        int y = 0;
+        while (v != ancestor) {
+            android.view.ViewParent p = v.getParent();
+            if (!(p instanceof View)) {
+                return null;
+            }
+            x += v.getLeft();
+            y += v.getTop();
+            v = (View) p;
+        }
+        return new int[]{x, y};
     }
 
     private static View findBadge(ViewGroup group, int depth) {

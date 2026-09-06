@@ -31,9 +31,10 @@ import org.junit.Test;
 import java.lang.reflect.Method;
 
 /**
- * Plain-number overlay: label derivation (captured count wins, text
- * fallback) and the QQ 9.2.10-driven updateNum matcher (name-based,
- * numeric first argument, narrowest signature wins, null when absent).
+ * Plain-number overlay: label derivation (a hooked count is shown exact -
+ * no 99+ cap, the user runs QQ's exact-count display; text fallback stays
+ * verbatim) and the QQ 9.2.10-driven updateNum matcher (name-based, numeric
+ * first argument, narrowest signature wins, null when absent).
  */
 public class BadgeNumbersTest {
 
@@ -74,9 +75,9 @@ public class BadgeNumbersTest {
     }
 
     @Test
-    public void bigCountsCapAt99Plus() {
-        assertEquals("99+", BadgeNumbers.countLabel(100, null));
-        assertEquals("99", BadgeNumbers.countLabel(99, null));
+    public void hookedCountsAreExactNoCap() {
+        assertEquals("237", BadgeNumbers.countLabel(237, null));
+        assertEquals("100", BadgeNumbers.countLabel(100, "99+"));
     }
 
     @Test
