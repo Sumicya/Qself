@@ -117,3 +117,11 @@ interface ScreenshotHelperApi {
 3. **bug-for-bug 保真**：旧实现 SuperQQShow 的 config-validator 路径无运行时开关门（其余路径有门），端口 KDoc 明示保留该差异，收紧另立提案；
 4. PlayQQ 裁剪路径（hookAfter + 字段改 GONE）以 `CameraHandle.PlayQqCrop` 独立句柄形态入端口。
 `MainHook` 早初始化白名单随迁（Java 侧引用 Kotlin object 必须保留 `.INSTANCE`——本次返工的教训）。
+
+## 9. 批量迁移第三批（2026-09-06）：配置型功能形态
+
+`DeviceTypeHook`（io.github.duzhaokun123 作者包）→ `ModifyDeviceType`，首个 `CommonConfigFunctionHook` 形态样张。新知识点：
+1. **枚举以"不透明常量集"过端口**：`constantNames/constant/readOriginal` 三个操作覆盖配置 UI 的全部宿主需求（列表/取值/展示原值），feature 对话框零反射；
+2. **配置键双保真**：开关键（类简名默认派生 "DeviceTypeHook"）与取值键（历史全限定 FQN 字符串）都原样保留——值键尤须警惕，它藏在 `getString(...)` 的字面量里而非类名派生；
+3. **失败要响亮**：`constant()` 对损坏的存量配置抛出而非返回 null（旧语义：初始化大声失败进入 runtimeErrors，而非静默把 getter 置空），端口 KDoc 明示该取舍；
+4. **捕获时安装**：覆盖值在安装时捕获（"重启生效"是有意行为，端口契约写明）。
