@@ -108,3 +108,12 @@ interface ScreenshotHelperApi {
 2. **嵌套类作用域**：Kotlin 的嵌套类不随外层接口的 import 进入作用域，`Handle` 需显式 `import ...LightInteractionApi.Handle`；
 3. **rebase 冲突标记残留**：脚本化解决冲突后只 grep 了目标内容、未扫标记行，且 `git add <path>` 绕过了 git 的冲突检测——kotlinc 对 `=======` 行逐列报 "Expecting a top level declaration" 是其签名特征。**教训固化：脚本化冲突解决必须以"全仓标记扫描"收尾。**
 4. 基建闭环：v2 日志尾部注解 → v3 错误行优先过滤（所有者 671a20b）——此后 kotlinc 失败也 fully self-serve。
+
+## 8. 批量迁移第二批（2026-09-06）：标题栏域共享端口
+
+`RemoveCameraButton` + `RemoveSuperQQShow` → 单端口 `ConversationTitleBarApi`（同域聚合，D1 域原则首次落地）。新知识点：
+1. **版本→混淆方法名映射表 = 纯函数**（第三类可测缝）：`cameraHideName/cameraRemoveName/superShowGeneration(versionCode)` 与设备状态无关，边界连续性在 JVM 全测（含阈值下方一步的负边界）；
+2. **表必须引用 QQVersion 常量**：执行中一度凭记忆内联数字（全错，被常量核对当场纠正）——单一事实源原则的活教材；
+3. **bug-for-bug 保真**：旧实现 SuperQQShow 的 config-validator 路径无运行时开关门（其余路径有门），端口 KDoc 明示保留该差异，收紧另立提案；
+4. PlayQQ 裁剪路径（hookAfter + 字段改 GONE）以 `CameraHandle.PlayQqCrop` 独立句柄形态入端口。
+`MainHook` 早初始化白名单随迁（两个类，含 INSTANCE→object 调用形态变化）。

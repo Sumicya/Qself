@@ -43,7 +43,7 @@ import cc.ioctl.hook.misc.DisableQQCrashReportManager;
 import cc.ioctl.hook.msg.RevokeMsgHook;
 import sumicya.qself.feature.notification.MuteQZoneThumbsUp;
 import cc.ioctl.hook.ui.misc.OptXListViewScrollBar;
-import cc.ioctl.hook.ui.title.RemoveCameraButton;
+import sumicya.qself.feature.ui.RemoveCameraButton;
 import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Reflex;
 import io.github.qauxv.chainloader.detail.ExternalModuleChainLoader;
@@ -64,7 +64,7 @@ import io.github.qauxv.util.SyncUtils;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import xyz.nextalone.hook.RemoveSuperQQShow;
+import sumicya.qself.feature.ui.RemoveSuperQQShow;
 
 /*TitleKit:Lcom/tencent/mobileqq/widget/navbar/NavBarCommon*/
 
@@ -124,8 +124,8 @@ public class MainHook {
             HookInstaller.allowEarlyInit(MuteAtAllAndRedPacket.INSTANCE);
             HookInstaller.allowEarlyInit(GagInfoDisclosure.INSTANCE);
             HookInstaller.allowEarlyInit(CustomSplash.INSTANCE);
-            HookInstaller.allowEarlyInit(RemoveCameraButton.INSTANCE);
-            HookInstaller.allowEarlyInit(RemoveSuperQQShow.INSTANCE);
+            HookInstaller.allowEarlyInit(RemoveCameraButton);
+            HookInstaller.allowEarlyInit(RemoveSuperQQShow);
             HookInstaller.allowEarlyInit(FileRecvRedirect.INSTANCE);
             HookInstaller.allowEarlyInit(OptXListViewScrollBar.INSTANCE);
             HookInstaller.allowEarlyInit(ForcePadMode.INSTANCE);
