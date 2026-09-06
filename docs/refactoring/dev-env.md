@@ -69,3 +69,13 @@ gh run list --limit 3
 ```
 
 Actions 启用后，即使 `test.yml` 未落地，也可先 `workflow_dispatch` 现有 `push_ci.yml` 于本分支获得编译门禁。
+
+## 中继协议 v2（2026-09-06 定稿，教训固化）
+
+**背景**：内联大命令块经聊天链路中继不可靠——实证两次 `git add` 到达时已是 `t add`（agent 输出侧错，非 Termux 粘贴问题），YAML/python 缩进也被变形两次。 giant payload + 多行块 = 高风险。
+
+**规则**：
+1. **文件内容绝不内联进命令块**。agent 先把文件直推到暂存路径 `docs/refactoring/ci/`（普通文件，agent token 可推，字节精确）；
+2. 用户侧中继只剩 5 条短命令：`git fetch` / `git checkout -B ...` / `cp docs/refactoring/ci/xxx.yml .github/workflows/xxx.yml` / `git add ... ; git commit -m "..."` / `git push`——每条一行、独立代码块、无特殊字符；
+3. **一条命令一个代码块**，禁止把多条命令合成一个巨型粘贴块；单行被吃字符时肉眼立刻可见、影响隔离；
+4. 命令块发出前 agent 逐行复读一遍（自检）；关键短命令（git add/commit/push）永远单独成块。
