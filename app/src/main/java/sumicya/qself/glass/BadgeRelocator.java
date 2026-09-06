@@ -25,36 +25,20 @@ public final class BadgeRelocator {
     private static final int INSTALLED_TAG_KEY = 0x7F5A0004;
 
     /**
-     * Group-centring relocation with an overlay badge: the badge is proposed
-     * straddling the icon's top edge — centre-x on the icon, centre-y
-     * gapPx above the icon top — instead of hovering fully above it. A fully
-     * elevated badge made the (icon + badge) union nearly as tall as the tab,
-     * which pushed the badge right back onto the tab's top edge; the overlay
-     * adds only half a badge of height, so the pair truly centres as one
-     * body and nothing sticks out.
+     * The number rides the icon's top edge: the badge centre lands on the
+     * icon's centre-x and top line (half above, half over the glyph). No
+     * group math, the icon is never moved. gapPx lifts the centre line for
+     * fine-tuning (0 = exactly on the edge).
      *
-     * <p>Returns additive deltas: {iconDx, iconDy, badgeDx, badgeDy}. The
-     * target is a fixed point of the additive update (at target every value
-     * is zero), so per-layout reapplication cannot drift.</p>
+     * <p>Returns additive deltas {dx, dy}; a fixed point by construction.</p>
      */
-    static float[] groupRelocation(
-            float iconL, float iconT, float iconR, float iconB,
+    static float[] overlayDeltas(
+            float iconL, float iconT, float iconR,
             float badgeL, float badgeT, float badgeR, float badgeB,
-            float tabW, float tabH, float gapPx) {
-        // proposed badge: centre-x on the icon centre; centre-y on the icon
-        // top line, lifted by gapPx
-        float bx = (iconL + iconR) * 0.5f - (badgeL + badgeR) * 0.5f;
-        float badgeCy = (badgeT + badgeB) * 0.5f;
-        float by = (iconT - gapPx) - badgeCy;
-        // union of the icon and the proposed badge
-        float ul = Math.min(iconL, badgeL + bx);
-        float ut = Math.min(iconT, badgeT + by);
-        float ur = Math.max(iconR, badgeR + bx);
-        float ub = Math.max(iconB, badgeB + by);
-        // centre the union within the tab
-        float g0 = tabW * 0.5f - (ul + ur) * 0.5f;
-        float g1 = tabH * 0.5f - (ut + ub) * 0.5f;
-        return new float[]{g0, g1, bx + g0, by + g1};
+            float gapPx) {
+        float dx = (iconL + iconR) * 0.5f - (badgeL + badgeR) * 0.5f;
+        float dy = (iconT - gapPx) - (badgeT + badgeB) * 0.5f;
+        return new float[]{dx, dy};
     }
 
     /** Attaches the per-layout reapplication listener once per tab row. */
@@ -91,18 +75,13 @@ public final class BadgeRelocator {
         // collectBadges folds translations in the same way)
         Entry icon = icons.get(0);
         float iconR = icon.l + icon.v.getWidth();
-        float iconB = icon.t + icon.v.getHeight();
-        float tabW = tab.getWidth();
-        float tabH = tab.getHeight();
         for (Entry badge : badges) {
             float right = badge.l + badge.v.getWidth();
             float bottom = badge.t + badge.v.getHeight();
-            float[] d = groupRelocation(icon.l, icon.t, iconR, iconB,
-                    badge.l, badge.t, right, bottom, tabW, tabH, gapPx);
-            icon.v.setTranslationX(icon.v.getTranslationX() + d[0]);
-            icon.v.setTranslationY(icon.v.getTranslationY() + d[1]);
-            badge.v.setTranslationX(badge.v.getTranslationX() + d[2]);
-            badge.v.setTranslationY(badge.v.getTranslationY() + d[3]);
+            float[] d = overlayDeltas(icon.l, icon.t, iconR,
+                    badge.l, badge.t, right, bottom, gapPx);
+            badge.v.setTranslationX(badge.v.getTranslationX() + d[0]);
+            badge.v.setTranslationY(badge.v.getTranslationY() + d[1]);
         }
     }
 

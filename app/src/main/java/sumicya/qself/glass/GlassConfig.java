@@ -23,12 +23,10 @@ public final class GlassConfig {
     static volatile int barOffsetDp = 12;
 
     /**
-     * Breathing room added to each tab column when the pill hugs its content,
-     * dp. Together with the 24dp icon basis this sizes the touch column:
-     * 12 made 36dp columns (cramped), upstream 32 gives 56dp. 24 lands at
-     * 48dp — comfortable and still tight to the rim.
+     * Breathing room added to each tab column when the pill hugs its
+     * content, dp — upstream default restored.
      */
-    static volatile int hugPaddingDp = 24;
+    static volatile int hugPaddingDp = 32;
 
     /** Whether the unread badge relocates to top-centre above the icon. */
     static volatile boolean badgeTopCenter = true;
