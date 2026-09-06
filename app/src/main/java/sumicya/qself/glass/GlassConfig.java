@@ -29,8 +29,6 @@ public final class GlassConfig {
      */
     static volatile int hugPaddingDp = 8;
 
-    /** Whether the unread badge relocates to top-centre above the icon. */
-    static volatile boolean badgeTopCenter = true;
 
     private GlassConfig() {
     }
