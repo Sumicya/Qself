@@ -1,120 +1,139 @@
 // Vendored-derived from liuran001/WeChat-LiquidGlass (MIT): https://github.com/liuran001/WeChat-LiquidGlass
-// Extension: QQ unread badge relocation (top-centre above the icon).
+// Extension: QQ unread badge as a plain number (no red capsule) in the tab's top margin band.
 package sumicya.qself.glass;
 
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 
-import java.util.ArrayList;
+import java.lang.reflect.Method;
 
 /**
- * Moves each QQ tab's unread badge from its stock top-right hang to
- * top-centre above the icon, purely as translation deltas on top of whatever
- * layout the host (and the glass surgery) produced.
- *
- * <p>Translation-only is the point: the real bar, the refracting glass and
- * the droplet's own badge collection (which folds translationX/Y in) all
- * follow automatically, with zero changes to the render pipeline.</p>
- *
- * <p>Recomputed on every layout of the tab row, so it tracks the icon-only
- * alignment shift; self-converging — once at target, the delta is zero.</p>
+ * Final badge form: the stock QUIBadge (red capsule painted in its own
+ * onDraw, unrestyleable) is hidden, and the count is drawn by an overlay
+ * view as a plain number, horizontally centred in the tab's top margin
+ * band. The overlay attaches to the glass host layout (a FrameLayout), so
+ * nothing is injected into the app's own view trees; counts are still read
+ * from the hidden stock badge, and a hook on {@code QUIBadge.updateNum(int)}
+ * keeps the overlay repainting when unread counts change.
  */
 public final class BadgeRelocator {
 
-    /** App-style tag key (see ICON_ONLY_TRANSLATION_TAG_KEY above). */
     private static final int INSTALLED_TAG_KEY = 0x7F5A0004;
 
-    /**
-     * The number rides the icon's top edge: the badge centre lands on the
-     * icon's centre-x and top line (half above, half over the glyph). No
-     * group math, the icon is never moved. gapPx lifts the centre line for
-     * fine-tuning (0 = exactly on the edge).
-     *
-     * <p>Returns additive deltas {dx, dy}; a fixed point by construction.</p>
-     */
-    static float[] overlayDeltas(
-            float iconL, float iconT, float iconR,
-            float badgeL, float badgeT, float badgeR, float badgeB,
-            float gapPx) {
-        float dx = (iconL + iconR) * 0.5f - (badgeL + badgeR) * 0.5f;
-        float dy = (iconT - gapPx) - (badgeT + badgeB) * 0.5f;
-        return new float[]{dx, dy};
+    /** Pure: the label to draw for a badge's current text; null = nothing. */
+    static String numberLabel(CharSequence raw) {
+        if (raw == null) {
+            return null;
+        }
+        String s = raw.toString().trim();
+        return s.isEmpty() ? null : s;
     }
 
-    /** Attaches the per-layout reapplication listener once per tab row. */
+    /** Attaches the number overlay once per tab row. */
     public static void install(ViewGroup tabRow, float density) {
         if (tabRow.getTag(INSTALLED_TAG_KEY) != null) {
             return;
         }
+        View parent = (View) tabRow.getParent();
+        if (!(parent instanceof ViewGroup)) {
+            return;
+        }
         tabRow.setTag(INSTALLED_TAG_KEY, Boolean.TRUE);
-        final float gapPx = 2f * density;
+        ViewGroup host = (ViewGroup) parent;
+        NumberOverlay overlay = new NumberOverlay(tabRow, density);
+        overlay.setClickable(false);
+        host.addView(overlay, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        syncBounds(tabRow, overlay);
         tabRow.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or2, ob) -> {
-            for (int i = 0; i < tabRow.getChildCount(); i++) {
-                View tab = tabRow.getChildAt(i);
-                if (tab instanceof ViewGroup && tab.getVisibility() == View.VISIBLE) {
-                    applyToTab((ViewGroup) tab, gapPx);
-                }
-            }
+            syncBounds(tabRow, overlay);
+            overlay.invalidate();
         });
     }
 
-    /** Applies the relocation delta to every badge inside one tab, if any. */
-    static void applyToTab(ViewGroup tab, float gapPx) {
-        HostApp app = LiquidGlassModule.app();
-        if (app == null) {
-            return;
-        }
-        ArrayList<Entry> icons = new ArrayList<>(1);
-        ArrayList<Entry> badges = new ArrayList<>(2);
-        collect(tab, 0f, 0f, app, icons, badges, 0);
-        if (icons.isEmpty() || badges.isEmpty()) {
-            return;
-        }
-        // icon and badge may sit at different hierarchy depths: only the
-        // tab-relative accumulated rects are comparable (upstream's
-        // collectBadges folds translations in the same way)
-        Entry icon = icons.get(0);
-        float iconR = icon.l + icon.v.getWidth();
-        for (Entry badge : badges) {
-            float right = badge.l + badge.v.getWidth();
-            float bottom = badge.t + badge.v.getHeight();
-            float[] d = overlayDeltas(icon.l, icon.t, iconR,
-                    badge.l, badge.t, right, bottom, gapPx);
-            badge.v.setTranslationX(badge.v.getTranslationX() + d[0]);
-            badge.v.setTranslationY(badge.v.getTranslationY() + d[1]);
-        }
+    private static void syncBounds(ViewGroup tabRow, View overlay) {
+        int hl = tabRow.getLeft();
+        int ht = tabRow.getTop();
+        overlay.layout(hl, ht, hl + tabRow.getWidth(), ht + tabRow.getHeight());
     }
 
-    /** A found view with its tab-relative left/top (translations folded in). */
-    private static final class Entry {
-        final View v;
-        final float l;
-        final float t;
+    /** Draws one plain number per tab, centred in the top margin band. */
+    private static final class NumberOverlay extends View {
 
-        Entry(View v, float l, float t) {
-            this.v = v;
-            this.l = l;
-            this.t = t;
-        }
-    }
+        private final ViewGroup mTabRow;
+        private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final float mTextSize;
+        private final float mBaseline;
+        private boolean mUpdateHooked;
 
-    private static void collect(View v, float ox, float oy, HostApp app,
-            ArrayList<Entry> icons, ArrayList<Entry> badges, int depth) {
-        if (depth > 6) {
-            return;
+        NumberOverlay(ViewGroup tabRow, float density) {
+            super(tabRow.getContext());
+            mTabRow = tabRow;
+            mTextSize = 10f * density;
+            mBaseline = 12f * density;
+            mPaint.setTextSize(mTextSize);
+            mPaint.setTextAlign(Paint.Align.CENTER);
+            mPaint.setColor(Color.WHITE);
+            mPaint.setShadowLayer(2f * density, 0f, 0f, 0x99000000);
+            setWillNotDraw(false);
         }
-        float cx = ox + v.getLeft() + v.getTranslationX();
-        float cy = oy + v.getTop() + v.getTranslationY();
-        String name = v.getClass().getName();
-        if (app.isTabIconClass(name)) {
-            icons.add(new Entry(v, cx, cy));
-        } else if (name.contains("Badge") && v.getWidth() > 0) {
-            badges.add(new Entry(v, cx, cy));
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            for (int i = 0; i < mTabRow.getChildCount(); i++) {
+                View tab = mTabRow.getChildAt(i);
+                if (!(tab instanceof ViewGroup) || tab.getVisibility() != View.VISIBLE) {
+                    continue;
+                }
+                View badge = findBadge((ViewGroup) tab, 0);
+                if (badge == null) {
+                    continue;
+                }
+                badge.setAlpha(0f);
+                maybeHookUpdateNum(badge);
+                String label = badge instanceof TextView
+                        ? numberLabel(((TextView) badge).getText()) : null;
+                if (label == null) {
+                    continue;
+                }
+                float cx = tab.getLeft() + tab.getWidth() * 0.5f;
+                canvas.drawText(label, cx, mBaseline, mPaint);
+            }
         }
-        if (v instanceof ViewGroup) {
-            ViewGroup g = (ViewGroup) v;
-            for (int i = 0; i < g.getChildCount(); i++) {
-                collect(g.getChildAt(i), cx, cy, app, icons, badges, depth + 1);
+
+        private View findBadge(ViewGroup group, int depth) {
+            if (depth > 6) {
+                return null;
+            }
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View child = group.getChildAt(i);
+                if (child.getWidth() > 0 && child.getClass().getName().contains("Badge")) {
+                    return child;
+                }
+                if (child instanceof ViewGroup) {
+                    View found = findBadge((ViewGroup) child, depth + 1);
+                    if (found != null) {
+                        return found;
+                    }
+                }
+            }
+            return null;
+        }
+
+        private void maybeHookUpdateNum(View badge) {
+            if (mUpdateHooked) {
+                return;
+            }
+            mUpdateHooked = true;
+            try {
+                Method m = badge.getClass().getMethod("updateNum", int.class);
+                LiquidGlassModule.hookAfter(m, param -> postInvalidate());
+            } catch (Throwable t) {
+                LiquidGlassModule.logErr("updateNum hook unavailable", t);
             }
         }
     }

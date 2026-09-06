@@ -24,9 +24,10 @@ public final class GlassConfig {
 
     /**
      * Breathing room added to each tab column when the pill hugs its
-     * content, dp — upstream default restored.
+     * content, dp. Trimmed to a minimum: the pill hugs the glyphs almost
+     * flush (columns = 24dp basis + this).
      */
-    static volatile int hugPaddingDp = 32;
+    static volatile int hugPaddingDp = 8;
 
     /** Whether the unread badge relocates to top-centre above the icon. */
     static volatile boolean badgeTopCenter = true;
