@@ -34,7 +34,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import cc.ioctl.util.BugUtils
 import io.github.qauxv.util.ui.FaultyDialog
-import cc.ioctl.hook.misc.CustomSplash
+import sumicya.qself.feature.ui.CustomSplash
 import io.github.qauxv.R
 import io.github.qauxv.databinding.FragmentCustomSplashConfigBinding
 import io.github.qauxv.fragment.BaseRootLayoutFragment

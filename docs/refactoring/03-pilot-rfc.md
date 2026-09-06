@@ -149,3 +149,11 @@ interface ScreenshotHelperApi {
 2. **环境事实参数化**（对批 2 形态的收紧）：`installForcePadAppId(classLoader, hostIsTim, hostVersionCode)`——宿主身份/版本由 feature 注入，adapter 不再自读 hostInfo，端口运行路径完全由参数决定；
 3. **失败契约保真**：原 ezx `findMethod` 缺失时抛异常（非返回 false），端口契约文档化为"absence throws"，`throwOrTrue` 的 isAvailable 门（不可用→initOnce 返回 false）与异常上抛一并保留；
 4. 测试教训再现：**"阈值下方一步"的期望值必须按表逐段推演**——下方一步落入的是下一段的值而非 else 值，自审拦下三处写反（9047→f/11479→g/12329→h）。
+
+## 13. 批量迁移第七批（2026-09-06）：配置+文件供给形态；bak 未注册件的处置原则
+
+`CustomSplash`（248 行 + 配置 Fragment 346 行）迁移。要点：
+1. **配置+文件供给形态**：feature 拥有配置键（custom_light_splash / custom_different_dark_splash）、qa_misc 文件布局（目录常量 `DIR_NANE_CONFIG_MISC` 保留历史 typo——它命名的是磁盘上已存在的目录）、暗色回退链（暗色键未开时回退亮色图，注释原文 "for those who use a same splash for both"）；三个 hook 位全部入 adapter（框架 `AssetManager.open` 必装位 + SplashWidget/ThemeSplashHelper 两个可选位静默跳过）；
+2. **纯函数群**：资源名分类（6 启动图 + 3 logo）→ SPLASH/LOGO/null；ThemeSplashHelper 合成方法 trait 拆成 shape（`Map(int)`）与 exact-modifiers（`STATIC|SYNTHETIC` 相等比较）两层——源码夹具无法携带 synthetic 标志，故 synthetic 要求以负向断言钉死；透明 PNG 以字节结构断言钉死（magic/IHDR/1x1/8bit/RGBA/IEND）；
+3. **Fragment 只改 import**：配置 Fragment 留在原包（试点契约=迁移 hook 逻辑），其 Kotlin 属性调用面（`isUseCustomLightSplash` 读写、`lightSplashFile` 等）与新 Kotlin feature 的属性名逐一对齐，fragment 零逻辑改动；
+4. **RemovePokeGrayTips 处置**：bak 包未注册件（全库零引用），迁移它=替用户做"是否启用"的产品决策，不属于重构——跳过，留在 bak 包。
