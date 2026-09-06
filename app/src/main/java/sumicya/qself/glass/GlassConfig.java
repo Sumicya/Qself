@@ -27,7 +27,7 @@ public final class GlassConfig {
      * content, dp. Trimmed to a minimum: the pill hugs the glyphs almost
      * flush (columns = 24dp basis + this).
      */
-    static volatile int hugPaddingDp = 8;
+    static volatile int hugPaddingDp = 32;
 
 
     private GlassConfig() {

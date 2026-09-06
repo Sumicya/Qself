@@ -2028,9 +2028,15 @@ public final class LiquidGlassInstaller {
             // see LiquidGlassPanel.
             final LiquidGlassPanel glass =
                     new LiquidGlassPanel(ctx, backdrop, density, night);
-            host.addView(glass, 0, new FrameLayout.LayoutParams(
+            // Trim the outer glass band: the rim lands on the outer icons'
+            // edges instead of half a hug-padding beyond them.
+            int rimTrim = Math.round(density * GlassConfig.hugPaddingDp * 0.5f);
+            FrameLayout.LayoutParams glassLp = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT));
+                    ViewGroup.LayoutParams.MATCH_PARENT);
+            glassLp.leftMargin = rimTrim;
+            glassLp.rightMargin = rimTrim;
+            host.addView(glass, 0, glassLp);
 
             // The droplet goes on top of the tabs, not under them: it refracts a
             // separately drawn, enlarged copy of the tab row, and that refracted

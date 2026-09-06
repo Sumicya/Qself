@@ -235,7 +235,17 @@ final class LiquidGlassHostLayout extends FrameLayout {
     /** The app's own bar, kept so the theme can be re-read off its labels. */
     private ViewGroup mBar;
 
-    LiquidGlassHostLayout(Context context, ViewGroup sampleRoot, ViewGroup bar) {
+    @Override
+    protected void dispatchDraw(android.graphics.Canvas canvas) {
+        super.dispatchDraw(canvas);
+        try {
+            BadgeNumbers.drawOver(this, mBar, canvas, mDensity);
+        } catch (Throwable t) {
+            LiquidGlassModule.logErr("number overlay draw failed", t);
+        }
+    }
+
+        LiquidGlassHostLayout(Context context, ViewGroup sampleRoot, ViewGroup bar) {
         super(context);
         mSampleRoot = sampleRoot;
         mBar = bar;
