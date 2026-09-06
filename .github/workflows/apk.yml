@@ -56,7 +56,7 @@ jobs:
           set -o pipefail
           ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee gradle-apk-output.log
 
-    - name: Surface build failures as annotations
+      - name: Surface build failures as annotations
         if: failure()
         run: |
           python3 - <<'PY'
