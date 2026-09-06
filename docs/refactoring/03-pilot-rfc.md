@@ -116,4 +116,4 @@ interface ScreenshotHelperApi {
 2. **表必须引用 QQVersion 常量**：执行中一度凭记忆内联数字（全错，被常量核对当场纠正）——单一事实源原则的活教材；
 3. **bug-for-bug 保真**：旧实现 SuperQQShow 的 config-validator 路径无运行时开关门（其余路径有门），端口 KDoc 明示保留该差异，收紧另立提案；
 4. PlayQQ 裁剪路径（hookAfter + 字段改 GONE）以 `CameraHandle.PlayQqCrop` 独立句柄形态入端口。
-`MainHook` 早初始化白名单随迁（两个类，含 INSTANCE→object 调用形态变化）。
+`MainHook` 早初始化白名单随迁（Java 侧引用 Kotlin object 必须保留 `.INSTANCE`——本次返工的教训）。

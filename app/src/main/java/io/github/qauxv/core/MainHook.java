@@ -124,8 +124,8 @@ public class MainHook {
             HookInstaller.allowEarlyInit(MuteAtAllAndRedPacket.INSTANCE);
             HookInstaller.allowEarlyInit(GagInfoDisclosure.INSTANCE);
             HookInstaller.allowEarlyInit(CustomSplash.INSTANCE);
-            HookInstaller.allowEarlyInit(RemoveCameraButton);
-            HookInstaller.allowEarlyInit(RemoveSuperQQShow);
+            HookInstaller.allowEarlyInit(RemoveCameraButton.INSTANCE);
+            HookInstaller.allowEarlyInit(RemoveSuperQQShow.INSTANCE);
             HookInstaller.allowEarlyInit(FileRecvRedirect.INSTANCE);
             HookInstaller.allowEarlyInit(OptXListViewScrollBar.INSTANCE);
             HookInstaller.allowEarlyInit(ForcePadMode.INSTANCE);
