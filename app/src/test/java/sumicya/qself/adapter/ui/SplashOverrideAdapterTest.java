@@ -98,7 +98,9 @@ public class SplashOverrideAdapterTest {
                 ThemeSplashHelper.class.getDeclaredMethod("wrongArity", int.class, int.class)));
         assertFalse(adapter.hasMapAccessorShape(
                 ThemeSplashHelper.class.getDeclaredMethod("wrongReturn", int.class)));
-        assertFalse(adapter.hasMapAccessorShape(
+        // shape is return+params ONLY: an instance method still has the shape —
+        // staticness lives exclusively in the exact-modifiers half below
+        assertTrue(adapter.hasMapAccessorShape(
                 ThemeSplashHelper.class.getDeclaredMethod("wrongNotStatic", int.class)));
     }
 
@@ -109,6 +111,9 @@ public class SplashOverrideAdapterTest {
         // requirement is pinned negatively here
         assertFalse(adapter.matchesSyntheticMapAccessor(
                 ThemeSplashHelper.class.getDeclaredMethod("config", int.class)));
+        // and neither does an instance method (modifiers != STATIC|SYNTHETIC)
+        assertFalse(adapter.matchesSyntheticMapAccessor(
+                ThemeSplashHelper.class.getDeclaredMethod("wrongNotStatic", int.class)));
     }
 
     @Test
