@@ -141,3 +141,11 @@ interface ScreenshotHelperApi {
 2. **查询式拦截端口**：与批 4 的事件交付相反，两个 hook 位都需要 hook 体内**同步布尔裁决**，端口形态是回调式 `isMuted(troopUin)` 而非事件流。
 保真要点：死配置 bug-for-bug（`qn_muted_at_all/qn_muted_red_packet` 全库无写入者，仅旧备份/手编配置可填充，消费逻辑照旧——含 `null` 串接成 ",null," 的匹配怪癖，已 JVM 钉死）；comma 包裹匹配的子串误配防御是纯函数重点（"123" 不得命中 "1234"）；`as Int` 解箱 NPE 复现原 Java 行为；initOnce 仍无条件返回 true（原类仅异常可致失败，缺失 hook 位改走 CapabilityRegistry 上报）。
 教训：测试断言方向要按实现语义算一遍再落——`isTroopInMutedList(null,"null")` 为 **true**（",null," 含 ",null,"），凭直觉写 assertFalse 必烧一轮 CI。
+
+## 12. 批量迁移第六批（2026-09-06）：版本表型入 device 域 + 环境事实参数化
+
+`ForcePadMode` 迁移（experimental 包）。要点：
+1. **双混淆表纯函数化**：AppSetting 读取方法名表（QQ_9_2_30 分界 e/f，TIM 恒 f）+ TABLET/PHONE 静态字段名表（七段 QQ 阈值 + TIM 优先行）。PHONE 表是原代码解构后**从未使用**的死知识，仍作为表保留并 JVM 钉死（混淆字段名的文档价值高于"删死码"）；
+2. **环境事实参数化**（对批 2 形态的收紧）：`installForcePadAppId(classLoader, hostIsTim, hostVersionCode)`——宿主身份/版本由 feature 注入，adapter 不再自读 hostInfo，端口运行路径完全由参数决定；
+3. **失败契约保真**：原 ezx `findMethod` 缺失时抛异常（非返回 false），端口契约文档化为"absence throws"，`throwOrTrue` 的 isAvailable 门（不可用→initOnce 返回 false）与异常上抛一并保留；
+4. 测试教训再现：**"阈值下方一步"的期望值必须按表逐段推演**——下方一步落入的是下一段的值而非 else 值，自审拦下三处写反（9047→f/11479→g/12329→h）。
