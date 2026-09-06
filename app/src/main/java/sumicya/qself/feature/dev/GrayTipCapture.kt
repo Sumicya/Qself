@@ -57,12 +57,24 @@ object GrayTipCapture : CommonSwitchFunctionHook(
     private val elementClasses = arrayOf(
         "com.tencent.qqnt.kernel.nativeinterface.JsonGrayElement",
         "com.tencent.qqnt.kernelpublic.nativeinterface.JsonGrayElement",
+        "com.tencent.qqnt.kernel.nativeinterface.GrayTipElement",
+        "com.tencent.qqnt.kernelpublic.nativeinterface.GrayTipElement",
     )
+
+    /** Content filter for the JSONObject(String) hook: gray-tip grammar only. */
+    private fun looksLikeGrayTipJson(s: String): Boolean {
+        if (s.length > 2000 || s.length < 10) {
+            return false
+        }
+        return s.contains("\"jp\"") || s.contains("busi_id") ||
+            (s.contains("\"txt\"") && s.contains("\"type\""))
+    }
 
     override val name = "灰字参数捕获（开发工具）"
 
-    override val description = "记录 QQ 本地灰字提示的构造参数（busiId/JSON/摘要）到日志。" +
-        "开启后正常使用 QQ（掷骰子/禁言/进群等），logcat -s GrayTipCapture 取证。仅调试用"
+    override val description = "记录 QQ 灰字提示参数（元素构造器 + 灰字 JSON 解析过滤监听）到日志。" +
+        "v2：接收型灰字由 native 反序列化不走 Java 构造器，故同时监听 JSON 解析。" +
+        "开启后正常使用 QQ（掷骰子/随机表情/禁言等），logcat -s GrayTipCapture 取证。仅调试用"
 
     override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EXPERIMENTAL_CATEGORY
 
@@ -86,9 +98,29 @@ object GrayTipCapture : CommonSwitchFunctionHook(
             }
         }
         if (hooked == 0) {
-            Log.w("$TAG: JsonGrayElement not found on this host (${hostInfo.versionName})")
+            Log.w("$TAG: no element classes found on this host (${hostInfo.versionName})")
         } else {
-            Log.i("$TAG: hooked $hooked JsonGrayElement constructors")
+            Log.i("$TAG: hooked $hooked element constructors")
+        }
+        // received tips are JNI-deserialized (no Java ctor fires), so also
+        // watch the JSON parse itself, filtered to gray-tip grammar
+        try {
+            val jsonCtor = org.json.JSONObject::class.java
+                .getConstructor(String::class.java)
+            XposedBridge.hookMethod(jsonCtor, object : XC_MethodHook(50) {
+                override fun afterHookedMethod(param: XC_MethodHook.MethodHookParam) {
+                    if (!isEnabled) {
+                        return
+                    }
+                    val s = param.args[0] as? String ?: return
+                    if (looksLikeGrayTipJson(s)) {
+                        Log.i("$TAG: json: $s")
+                    }
+                }
+            })
+            hooked++
+        } catch (t: Throwable) {
+            Log.w("$TAG: JSONObject hook failed: $t")
         }
         return hooked > 0
     }
