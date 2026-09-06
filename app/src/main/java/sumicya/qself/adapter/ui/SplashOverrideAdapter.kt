@@ -31,6 +31,7 @@ import io.github.qauxv.util.xpcompat.XC_MethodHook
 import io.github.qauxv.util.xpcompat.XposedBridge
 import sumicya.qself.hostapi.ui.SplashOverrideApi
 import java.io.ByteArrayInputStream
+import java.io.InputStream
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 

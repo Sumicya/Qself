@@ -116,7 +116,7 @@ class CustomSplashConfigFragment : BaseRootLayoutFragment() {
 
     @UiThread
     private fun updateStatus(binding: FragmentCustomSplashConfigBinding) {
-        val hook = CustomSplash.INSTANCE
+        val hook = CustomSplash
         mEnableFunction = hook.isEnabled
         mUseCustomLightSplash = hook.isUseCustomLightSplash
         mUseDifferentSplashInDarkMode = hook.isUseDifferentDarkSplash
@@ -275,7 +275,7 @@ class CustomSplashConfigFragment : BaseRootLayoutFragment() {
             }
         }
         // update options
-        val hook = CustomSplash.INSTANCE
+        val hook = CustomSplash
         hook.isEnabled = mEnableFunction
         hook.isUseCustomLightSplash = mUseCustomLightSplash
         hook.isUseDifferentDarkSplash = mUseDifferentSplashInDarkMode
