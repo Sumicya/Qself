@@ -40,6 +40,8 @@ import sumicya.qself.hostapi.chat.GagNoticeApi.MemberGag;
  */
 public class GagNoticeAdapterTest {
 
+    private final GagNoticeAdapter adapter = GagNoticeAdapter.INSTANCE;
+
     private static byte[] gagPayload(long troop, long op, long victim, long seconds) {
         byte[] b = new byte[24];
         b[4] = 12; // gag notice gate
@@ -59,7 +61,7 @@ public class GagNoticeAdapterTest {
 
     @Test
     public void parsesAllGagToggle() {
-        GagEvent on = GagNoticeAdapter.parseModernGagEvent(
+        GagEvent on = adapter.parseModernGagEvent(
                 gagPayload(123456L, 10001L, 0L, 3600L));
         assertTrue(on instanceof AllGag);
         AllGag all = (AllGag) on;
@@ -67,7 +69,7 @@ public class GagNoticeAdapterTest {
         assertEquals("10001", all.getOpUin());
         assertTrue(all.isEnabled());
 
-        GagEvent off = GagNoticeAdapter.parseModernGagEvent(
+        GagEvent off = adapter.parseModernGagEvent(
                 gagPayload(123456L, 10001L, 0L, 0L));
         assertTrue(off instanceof AllGag);
         assertFalse(((AllGag) off).isEnabled());
@@ -75,14 +77,14 @@ public class GagNoticeAdapterTest {
 
     @Test
     public void parsesMemberMuteAndUnmute() {
-        GagEvent mute = GagNoticeAdapter.parseModernGagEvent(
+        GagEvent mute = adapter.parseModernGagEvent(
                 gagPayload(123456L, 10001L, 22222L, 1800L));
         assertTrue(mute instanceof MemberGag);
         MemberGag member = (MemberGag) mute;
         assertEquals("22222", member.getVictimUin());
         assertEquals(1800L, member.getSeconds());
 
-        GagEvent unmute = GagNoticeAdapter.parseModernGagEvent(
+        GagEvent unmute = adapter.parseModernGagEvent(
                 gagPayload(123456L, 10001L, 22222L, 0L));
         assertTrue(unmute instanceof MemberGag);
         assertEquals(0L, ((MemberGag) unmute).getSeconds());
@@ -91,7 +93,7 @@ public class GagNoticeAdapterTest {
     @Test
     public void signedUinIsFixedUpToUnsigned() {
         // 0xFFFFFFFF as int32 is negative; the adapter must map it to 4294967295
-        GagEvent e = GagNoticeAdapter.parseModernGagEvent(
+        GagEvent e = adapter.parseModernGagEvent(
                 gagPayload(1L, 0xFFFFFFFFL, 0xFFFFFFFFL, 60L));
         assertTrue(e instanceof AllGag || e instanceof MemberGag);
         assertEquals("4294967295", ((AllGag) e).getOpUin());
@@ -101,15 +103,15 @@ public class GagNoticeAdapterTest {
     public void nonGagPayloadAndShortArrayYieldNull() {
         byte[] notGag = gagPayload(1L, 2L, 3L, 4L);
         notGag[4] = 11;
-        assertNull(GagNoticeAdapter.parseModernGagEvent(notGag));
-        assertNull(GagNoticeAdapter.parseModernGagEvent(new byte[10]));
+        assertNull(adapter.parseModernGagEvent(notGag));
+        assertNull(adapter.parseModernGagEvent(new byte[10]));
     }
 
     @Test
     public void normalizeBoundary() {
-        assertTrue(GagNoticeAdapter.normalize("1", "2", "0", 0L) instanceof AllGag);
-        assertFalse(((AllGag) GagNoticeAdapter.normalize("1", "2", "0", 0L)).isEnabled());
-        assertTrue(GagNoticeAdapter.normalize("1", "2", "3", 0L) instanceof MemberGag);
+        assertTrue(adapter.normalize("1", "2", "0", 0L) instanceof AllGag);
+        assertFalse(((AllGag) adapter.normalize("1", "2", "0", 0L)).isEnabled());
+        assertTrue(adapter.normalize("1", "2", "3", 0L) instanceof MemberGag);
     }
 
     @SuppressWarnings("unused")
@@ -130,7 +132,6 @@ public class GagNoticeAdapterTest {
 
     @Test
     public void legacyTraitPinned() throws Exception {
-        GagNoticeAdapter adapter = GagNoticeAdapter.INSTANCE;
         assertTrue(adapter.matchesLegacyTrait(TroopGagMgr.class.getDeclaredMethod(
                 "onGag", int.class, long.class, long.class, long.class, ArrayList.class)));
         assertFalse(adapter.matchesLegacyTrait(TroopGagMgr.class.getDeclaredMethod(
