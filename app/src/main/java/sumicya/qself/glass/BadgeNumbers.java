@@ -82,8 +82,12 @@ public final class BadgeNumbers {
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setTextSize(10f * density);
         paint.setTextAlign(Paint.Align.CENTER);
+        // Slightly translucent: the number overlays the icon itself, so the
+        // glyph must let the artwork show through (user direction: give it
+        // some transparency).
         paint.setColor(Color.WHITE);
-        paint.setShadowLayer(2f * density, 0f, 0f, 0x99000000);
+        paint.setAlpha(215);
+        paint.setShadowLayer(2f * density, 0f, 0f, 0x66000000);
         for (int i = 0; i < ((ViewGroup) row).getChildCount(); i++) {
             View tab = ((ViewGroup) row).getChildAt(i);
             if (!(tab instanceof ViewGroup) || tab.getVisibility() != View.VISIBLE) {
@@ -115,29 +119,31 @@ public final class BadgeNumbers {
                 continue;
             }
             badge.setAlpha(0f);
-            // Vertical centre of the gap between the icon above and the
-            // label below; horizontal centre on the label (the icon and the
-            // label share the cell's centre axis).
+            // Centre of the icon itself: the number sits ON the icon
+            // (user direction), horizontally on the shared label/icon axis.
+            // The icon's bottom edge is the lowest sibling bottom above the
+            // label; QQ tab icons are ~24dp, so the centre is half that
+            // above the bottom edge.
             ViewGroup tabGroup = (ViewGroup) tab;
             int labelTopLocal = labelView.getTop();
-            int gapTopLocal = labelTopLocal - Math.round(6f * density);
+            int iconBottomLocal = labelTopLocal - Math.round(6f * density);
             for (int s = 0; s < tabGroup.getChildCount(); s++) {
                 View sib = tabGroup.getChildAt(s);
                 if (sib == labelView || sib == badge) {
                     continue;
                 }
                 int bottom = sib.getTop() + sib.getHeight();
-                if (bottom <= labelTopLocal + Math.round(2f * density) && bottom > gapTopLocal) {
-                    gapTopLocal = bottom;
+                if (bottom <= labelTopLocal + Math.round(2f * density) && bottom > iconBottomLocal) {
+                    iconBottomLocal = bottom;
                 }
             }
-            if (labelTopLocal - gapTopLocal > Math.round(20f * density)) {
-                // Implausible gap (wrong sibling geometry): settle for the
-                // default 6dp above the label.
-                gapTopLocal = labelTopLocal - Math.round(6f * density);
+            if (labelTopLocal - iconBottomLocal > Math.round(20f * density)) {
+                // Implausible geometry: settle for the 6dp-gap default.
+                iconBottomLocal = labelTopLocal - Math.round(6f * density);
             }
-            int centreLocal = (gapTopLocal + labelTopLocal) / 2;
-            float baseline = labelAt[1] - (labelTopLocal - centreLocal)
+            int iconCentreLocal = Math.max(iconBottomLocal - Math.round(12f * density),
+                    Math.round(2f * density));
+            float baseline = labelAt[1] - (labelTopLocal - iconCentreLocal)
                     + paint.getTextSize() * 0.35f;
             float cx = labelAt[0] + labelView.getWidth() * 0.5f;
             canvas.drawText(label, cx, baseline, paint);

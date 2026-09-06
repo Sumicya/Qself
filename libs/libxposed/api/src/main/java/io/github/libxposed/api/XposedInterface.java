@@ -31,11 +31,20 @@ public interface XposedInterface {
     /* API 101 */
 
     /**
+     * API version 102: hot reload lifecycle, entry detach, and id-based hook
+     * replacement. Modules targeting 102 or higher can not call legacy
+     * {@code de.robv.android.xposed} APIs. Hot reload is supported only for
+     * modules that declare exactly one Java entry class.
+     */
+    @XposedApiMin(102)
+    int API_102 = 102;
+
+    /**
      * The API version of this <b>library</b>. This is a static value for the framework.
      * Modules should use {@link #getApiVersion()} to check the API version at runtime.
      */
     @XposedApiMin(101)
-    int LIB_API = 101;
+    int LIB_API = API_102;
 
     /**
      * The framework has the capability to hook system_server and other system processes.

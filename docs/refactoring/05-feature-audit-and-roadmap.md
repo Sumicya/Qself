@@ -97,17 +97,29 @@
 - 待勘察项（不断言）: 现设置页样式基座（模板/主题来源）、卡片化改造点、动态取色（Material You）可行性。
 - 验收: 分区重排不回退（P1 清单为基准）+ 真机视觉确认。
 
-## 6. P3 · API 102 + 热重载
+## 6. P3 · API 102 + 热重载（勘察后分期，2026-09-07 更新）
 
-1. 勘察当前入口结构（`targetApiVersion`、入口类数量、xpcompat `Lsp101HookWrapper` 边界）。
-2. 单 Java 入口类改造（热重载硬性前提）。
-3. targetApiVersion → 102；梳理 Legacy API 调用面（≥102 禁用）。
-4. 代码热重载: 实现 `onHotReloading`/`onHotReloaded`，交接状态类加载器中立
-   （玻璃 host 等运行时对象一律不进 saved state，重建即弃）。
-5. 设置免重启: remote preferences + listener 独立管线，逐功能接
-   （`isApplicationRestartRequired` 标注逐步摘除）。
-6. 验收: LSPosed 2.2.0 (7854) 实机——模块 APK 覆盖安装后**不重启 QQ** 生效（热重载）；
-   改开关不重启生效（remote prefs）。
+**仓内现状（勘察事实）**:
+- 多后端 loader 已在仓: `loader/sbl`（xp51/lsp100/**lsp101**/frida 四后端）、
+  `loader/startup`（HybridClassLoader/UnifiedEntryPoint）、vendored
+  `libs/libxposed/api`（本批 101→102 接口面）+ `libs/libxposed/service`。
+- 现代路径被 `qauxv.override.newxposedapi`（local 属性，默认关）控制；
+  当前 APK 走 legacy: `assets/xposed_init` → `Xp51HookEntry`。
+- 缺口: app 侧 **XposedModule 入口类不存在**; `META-INF/xposed/module.prop`
+  打包任务不存在; `HookHandle.getId/replaceHook`、`HookBuilder.setId` 未植。
+
+**分期**:
+- **S1（本批）**: vendored API 植入 102 接口面（`API_102` 常量、`HotReloadingParam`/
+  `HotReloadedParam`、`onHotReloading`/`onHotReloaded` 默认方法）——签名逐字取自
+  libxposed/api PR #62 diff；纯增量编译面，旗标仍关，零行为变化。
+- **S2**: `HookHandle.replaceHook/getId` + `HookBuilder.setId` 植入; app 侧
+  XposedModule 单入口类骨架; module.prop 生成与 META-INF/xposed 打包（旗标后）。
+- **S3**: 旗标开实验构建 → LSPosed 2.2.0 (7854) 实机迭代（legacy API 调用面在
+  102 下禁用，先以 lsp101 后端跑通再收窄）。
+- **S4**: 设置免重启 remote preferences 独立管线（service API 明确与热重载分开），
+  逐功能摘 `isApplicationRestartRequired`。
+- 验收: 模块 APK 覆盖安装后**不重启 QQ** 生效（热重载）; 改开关不重启生效（remote prefs）。
+- 交接纪律: 玻璃 host 等运行时对象一律不进 saved state（类加载器中立，重建即弃）。
 
 ## 7. 风险表
 
