@@ -17,8 +17,14 @@ public final class GlassConfig {
     /** Named before QQ was a target; kept so existing WeChat setups still read. */
     private static final String PREFS = "wx_liquid_glass_cfg";
 
-    /** Distance between the bottom of the glass pill and the screen edge, dp. */
-    static volatile int barOffsetDp = 12;
+    /**
+     * Distance between the bottom of the glass pill and the screen edge, dp.
+     * Default 0 (flush with the bottom edge) per local preference.
+     */
+    static volatile int barOffsetDp = 0;
+
+    /** Whether the unread badge relocates to top-centre above the icon. */
+    static volatile boolean badgeTopCenter = true;
 
     private GlassConfig() {
     }
@@ -27,6 +33,7 @@ public final class GlassConfig {
         try {
             SharedPreferences p = ctx.getSharedPreferences(PREFS, 0);
             barOffsetDp = p.getInt("barOffsetDp", barOffsetDp);
+            badgeTopCenter = p.getBoolean("badgeTopCenter", badgeTopCenter);
         } catch (Throwable t) {
             LiquidGlassModule.logErr("config load failed", t);
         }

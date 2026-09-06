@@ -1060,6 +1060,9 @@ public final class LiquidGlassInstaller {
         }
         boolean iconOnly = isQqIconOnlyRow(tabRow);
         applyQqIconOnlyAlignment(tabRow, iconOnly, density);
+        if (GlassConfig.badgeTopCenter) {
+            BadgeRelocator.install(tabRow, density);
+        }
         int childCount = tabRow.getChildCount();
         int count = 0;
         int unspecified = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
