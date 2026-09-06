@@ -36,7 +36,7 @@ import cc.ioctl.hook.SettingEntryHook;
 import sumicya.qself.feature.chat.MuteAtAllAndRedPacket;
 import sumicya.qself.feature.chat.GagInfoDisclosure;
 import cc.ioctl.hook.experimental.FileRecvRedirect;
-import cc.ioctl.hook.experimental.ForcePadMode;
+import sumicya.qself.feature.device.ForcePadMode;
 import cc.ioctl.hook.misc.CustomSplash;
 import cc.ioctl.hook.misc.DisableHotPatch;
 import cc.ioctl.hook.misc.DisableQQCrashReportManager;
