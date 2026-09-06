@@ -187,3 +187,11 @@ interface ScreenshotHelperApi {
 - D2（decorator KSP）/ P4（包重组）：按原计划等覆盖率阈值，未动；
 - 可选：push_ci 全量 APK 构建验证（workflow 变更须用户 Termux 中继）；
 - 后续新批次候选池：cc/hicore、me/ketal、me/hd 等作者包仍有大量 feature 未迁移，本 RFC 的端口形态学可直接复用。
+
+## 15. push_ci 全量 APK 构建验证（2026-09-06）收官
+
+新增 `.github/workflows/apk.yml`（经用户 Termux 三轮中继），`32ecfc1` 双绿：Unit Test ✅ + APK Build ✅（9.3 分钟），产物 app-debug-apk 16.2 MB（7 天）。11 个迁移 feature 经受完整构建管线（cmake/NDK 原生、资源、databinding、打包）验证。
+
+环境三轮迭代：① CXX1300——AGP 只自动装 NDK 不装 cmake，须显式 `sdkmanager "cmake;3.31.0"`；② YAML 步骤缩进被中继链路变形（run 0 秒即死，workflow 级解析失败）；③ 最终全面对齐上游 push_ci.yml 已验证配方：apt ninja-build + `qauxv.override.ninja.path` + `QAUXV_OVERRIDE_CMAKE_VERSION` + fetch-depth 0 + 关 configuration-cache——**放弃合成环境、抄上游是关键转折**。
+
+**中继链路可靠性规律**（协议更新）：全文件 tee 中继的空白变形两次（步骤缩进 4→6 空、python heredoc 内 2 行缩进）；sed/python 单行外科修复全部存活。故：全文件中继后必须 `wc -c`/diff 校验；能拆成单行修复的绝不整文件重传。
