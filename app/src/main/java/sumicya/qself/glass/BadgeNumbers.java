@@ -18,19 +18,26 @@ import java.util.WeakHashMap;
 /**
  * Plain unread numbers on top of the bar. The stock QUIBadge (red capsule
  * painted in its own onDraw) is hidden by alpha and its count is captured
- * from a {@code QUIBadge.updateNum(int)} hook — no assumption that the badge
- * is a TextView. Numbers are drawn from the host layout's dispatchDraw, on
- * top of every layer including the droplet: no view is ever added to any
- * tree, so no layout round is disturbed (the lesson of the withdrawn v3,
- * which called addView during a measure pass and tripped the installer's
- * stock-bar-restore safety valve).
+ * from an {@code updateNum} hook. Numbers are drawn from the host layout's
+ * dispatchDraw, on top of every layer including the droplet: no view is ever
+ * added to any tree, so no layout round is disturbed (the lesson of the
+ * withdrawn v3, which called addView during a measure pass and tripped the
+ * installer's stock-bar-restore safety valve).
+ *
+ * <p>QQ 9.2.10 lesson: {@code updateNum(int)} no longer exists there with
+ * that exact signature (NoSuchMethodException on device), so the match is
+ * name-based over declared methods with a numeric first argument, and the
+ * exact one-argument form wins when present. If no {@code updateNum} exists
+ * at all, the class's declared methods are dumped once to the module log for
+ * a data-driven follow-up — and the stock capsule is left visible: hiding it
+ * without a count source would make the badge disappear entirely.
  */
 public final class BadgeNumbers {
 
-    /** badge view -> last count reported via updateNum(int). */
+    /** badge view -> last count reported via an updateNum-style hook. */
     private static final WeakHashMap<View, Integer> sCounts = new WeakHashMap<>();
 
-    /** badge classes whose updateNum is already hooked. */
+    /** badge classes already hooked (or dumped because no hook exists). */
     private static final Set<Class<?>> sHooked = Collections.synchronizedSet(new HashSet<>());
 
     /** cached tab row per bar. */
@@ -82,14 +89,16 @@ public final class BadgeNumbers {
             if (badge == null) {
                 continue;
             }
-            badge.setAlpha(0f);
             hookUpdateNumOnce(badge, host);
             String label = badge instanceof TextView
                     ? countLabel(sCounts.get(badge), ((TextView) badge).getText())
                     : countLabel(sCounts.get(badge), null);
             if (label == null) {
+                // No count source (yet): keep the stock capsule visible
+                // instead of hiding it into nothing.
                 continue;
             }
+            badge.setAlpha(0f);
             float cx = tab.getLeft() + tab.getWidth() * 0.5f;
             canvas.drawText(label, cx, baseline, paint);
         }
@@ -114,23 +123,62 @@ public final class BadgeNumbers {
         return null;
     }
 
+    /**
+     * The updateNum to hook: name-based over declared methods, first argument
+     * numeric; the narrowest signature wins. Null when nothing matches.
+     */
+    static Method pickUpdateNum(Class<?> cls) {
+        Method best = null;
+        for (Method m : cls.getDeclaredMethods()) {
+            if (!m.getName().equals("updateNum")) {
+                continue;
+            }
+            Class<?>[] pt = m.getParameterTypes();
+            if (pt.length == 0 || !isCountType(pt[0])) {
+                continue;
+            }
+            if (best == null || best.getParameterTypes().length > pt.length) {
+                best = m;
+            }
+        }
+        return best;
+    }
+
+    private static boolean isCountType(Class<?> c) {
+        return c == int.class || c == long.class
+                || c == Integer.class || c == Long.class;
+    }
+
     private static void hookUpdateNumOnce(View badge, final View host) {
         Class<?> cls = badge.getClass();
         if (sHooked.contains(cls)) {
             return;
         }
         sHooked.add(cls);
+        Method target = pickUpdateNum(cls);
+        if (target == null) {
+            // Evidence for the next iteration: what does this version call
+            // its badge refresh methods?
+            StringBuilder sb = new StringBuilder("no updateNum on ")
+                    .append(cls.getName()).append("; declared methods:");
+            for (Method m : cls.getDeclaredMethods()) {
+                sb.append(' ').append(m.getName()).append('/')
+                        .append(m.getParameterTypes().length);
+            }
+            LiquidGlassModule.log(android.util.Log.WARN, sb.toString());
+            return;
+        }
         try {
-            Method m = cls.getMethod("updateNum", int.class);
-            LiquidGlassModule.hookAfter(m, param -> {
+            LiquidGlassModule.hookAfter(target, param -> {
                 Object thiz = param.thisObject;
-                if (thiz instanceof View) {
-                    sCounts.put((View) thiz, (Integer) param.args[0]);
+                Object arg = param.args.length > 0 ? param.args[0] : null;
+                if (thiz instanceof View && arg instanceof Number) {
+                    sCounts.put((View) thiz, ((Number) arg).intValue());
                     host.postInvalidate();
                 }
             });
         } catch (Throwable t) {
-            LiquidGlassModule.logErr("updateNum hook unavailable", t);
+            LiquidGlassModule.logErr("updateNum hook failed", t);
         }
     }
 

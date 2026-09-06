@@ -23,15 +23,49 @@
 package sumicya.qself.glass;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 import org.junit.Test;
 
+import java.lang.reflect.Method;
+
 /**
- * Plain-number overlay: label derivation from the captured count (primary)
- * with a TextView-text fallback.
+ * Plain-number overlay: label derivation (captured count wins, text
+ * fallback) and the QQ 9.2.10-driven updateNum matcher (name-based,
+ * numeric first argument, narrowest signature wins, null when absent).
  */
 public class BadgeNumbersTest {
+
+    // ---- fixtures: the shapes QUIBadge had across versions ----
+
+    static class ClassicBadge {
+        public void updateNum(int count) {
+        }
+    }
+
+    static class OverloadedBadge {
+        public void updateNum(int count, String source) {
+        }
+
+        public void updateNum(int count) {
+        }
+    }
+
+    static class WidenedBadge {
+        public void updateNum(long count) {
+        }
+    }
+
+    static class TextFirstBadge {
+        public void updateNum(String label) {
+        }
+    }
+
+    static class RenamedBadge {
+        public void setNum(int count) {
+        }
+    }
 
     @Test
     public void countWinsOverText() {
@@ -50,5 +84,24 @@ public class BadgeNumbersTest {
         assertEquals("12", BadgeNumbers.countLabel(null, " 12 "));
         assertNull(BadgeNumbers.countLabel(null, null));
         assertNull(BadgeNumbers.countLabel(null, "   "));
+    }
+
+    @Test
+    public void picksExactOneArgUpdateNum() throws Exception {
+        Method picked = BadgeNumbers.pickUpdateNum(OverloadedBadge.class);
+        assertNotNull(picked);
+        assertEquals(1, picked.getParameterTypes().length);
+    }
+
+    @Test
+    public void picksClassicBoxedAndWideForms() {
+        assertEquals(1, BadgeNumbers.pickUpdateNum(ClassicBadge.class).getParameterTypes().length);
+        assertEquals(1, BadgeNumbers.pickUpdateNum(WidenedBadge.class).getParameterTypes().length);
+    }
+
+    @Test
+    public void rejectsNonNumericFirstArgAndAbsentMethod() {
+        assertNull(BadgeNumbers.pickUpdateNum(TextFirstBadge.class));
+        assertNull(BadgeNumbers.pickUpdateNum(RenamedBadge.class));
     }
 }

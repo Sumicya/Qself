@@ -49,6 +49,7 @@ import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.view.children
 import cc.ioctl.hook.msg.FlashPicHook
 import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.Log
 import io.github.qauxv.util.Reflex
 import io.github.qauxv.util.ui.FaultyDialog
 import com.github.kyuubiran.ezxhelper.utils.argTypes
@@ -295,7 +296,10 @@ object ChatItemShowQQUin : CommonConfigFunctionHook(), OnBubbleBuilder {
         var formatTime = ""
         if (msgFmt.contains("\${formatTime}")) {
             if (mDataFormatter == null) {
-                mDataFormatter = SimpleDateFormat(timeFmt, Locale.ROOT)
+                if (TailTimeFormat.isBad(timeFmt)) {
+                    Log.e("ChatItemShowQQUin: bad stored time pattern \"" + timeFmt + "\"")
+                }
+                mDataFormatter = TailTimeFormat.safe(timeFmt, DEFAULT_TIME_FORMAT)
             }
             formatTime = mDataFormatter!!.format(Date(chatMessage.time * 1000L))
         }
@@ -338,7 +342,10 @@ object ChatItemShowQQUin : CommonConfigFunctionHook(), OnBubbleBuilder {
         var formatTime = ""
         if (msgFmt.contains("\${formatTime}")) {
             if (mDataFormatter == null) {
-                mDataFormatter = SimpleDateFormat(timeFmt, Locale.ROOT)
+                if (TailTimeFormat.isBad(timeFmt)) {
+                    Log.e("ChatItemShowQQUin: bad stored time pattern \"" + timeFmt + "\"")
+                }
+                mDataFormatter = TailTimeFormat.safe(timeFmt, DEFAULT_TIME_FORMAT)
             }
             formatTime = mDataFormatter!!.format(Date(chatMessage.msgTime * 1000L))
         }
