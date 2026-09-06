@@ -27,7 +27,7 @@ import java.lang.reflect.Method;
  * <p>Nothing below names a class: the bar arrives already located (see
  * {@link TabBarBridge}) and everything from there on is geometry.
  */
-final class LiquidGlassInstaller {
+public final class LiquidGlassInstaller {
 
     /**
      * Retry budget for the first layout pass after the home activity resumes.

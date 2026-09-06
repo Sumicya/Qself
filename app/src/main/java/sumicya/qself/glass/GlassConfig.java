@@ -12,7 +12,7 @@ import android.content.SharedPreferences;
  * that is really a matter of taste. Each host keeps its own copy, since the
  * file is read through that app's context and lands in that app's data dir.
  */
-final class GlassConfig {
+public final class GlassConfig {
 
     /** Named before QQ was a target; kept so existing WeChat setups still read. */
     private static final String PREFS = "wx_liquid_glass_cfg";

@@ -28,7 +28,7 @@ import java.lang.reflect.Method;
  * <p>The class names themselves live in {@link HostApp}; this class only knows
  * how to work with them.
  */
-final class TabBarBridge {
+public final class TabBarBridge {
 
     private static volatile boolean sHooked;
 
