@@ -196,7 +196,7 @@ me/hd/hook/TimReplyMsgMenu.kt	TIM 回复消息菜单	Auxiliary
 me/hd/hook/auxiliary/chat/CustomEmotionPanelColumns.kt	自定义表情面板列数	Auxiliary
 me/hd/hook/auxiliary/chat/DisableLeftSwipeReplyVibrate.kt	禁用左滑回复震动	Auxiliary
 me/hd/hook/auxiliary/chat/RemoveSelectedMedia.kt	移除选择媒体限制	Auxiliary
-me/hd/hook/auxiliary/experimental/DisableBigSticker.kt	屏蔽大号Emoji	Auxiliary
+me/hd/hook/auxiliary/experimental/DisableBigSticker.kt	屏蔽超级表情（接收）	Auxiliary
 me/hd/hook/auxiliary/experimental/DisableFekitToAppDialog.kt	屏蔽社交功能限制提醒	Auxiliary
 me/hd/hook/auxiliary/message/RemoveAudioPlayerDialog.kt	移除语音播放弹窗	Auxiliary
 me/hd/hook/auxiliary/misc/ChangeCircleJumpProfile.kt	更改小世界跳转资料	Auxiliary
@@ -230,7 +230,7 @@ me/hd/hook/simplify/ui/misc/HideBottomTabTitle.kt	隐藏底栏标题	Simplify
 me/hd/hook/simplify/ui/misc/RemoveDialogWaitTime.kt	移除弹窗等待时间	Simplify
 me/hd/hook/simplify/ui/misc/RemoveFavPreviewLimit.kt	-	Simplify
 me/ketal/hook/ChatItemShowQQUin.kt	消息显示 ID 和时间	Auxiliary
-me/ketal/hook/Emoji2Sticker.kt	关闭大号Emoji	Entertainment
+me/ketal/hook/Emoji2Sticker.kt	输入Emoji不转大表情	Entertainment
 me/ketal/hook/FakeMultiWindowStatus.kt	伪装处于非多窗口模式	Auxiliary
 me/ketal/hook/FakeNetworkType.kt	伪装网络类型为移动网络	Auxiliary
 me/ketal/hook/FakeQQLevel.kt	-	Entertainment

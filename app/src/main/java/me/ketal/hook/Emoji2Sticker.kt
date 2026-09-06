@@ -46,7 +46,7 @@ import xyz.nextalone.util.throwOrTrue
 @UiItemAgentEntry
 object Emoji2Sticker : CommonSwitchFunctionHook(arrayOf(EmoMsgUtils_isSingleLottie_QQNT)) {
 
-    override val name = "关闭大号Emoji"
+    override val name = "输入Emoji不转大表情"
     override val description = "禁用新版QQ输入单个Emoji后发送大表情"
     override val uiItemLocation = FunctionEntryRouter.Locations.Entertainment.ENTERTAIN_CATEGORY
 

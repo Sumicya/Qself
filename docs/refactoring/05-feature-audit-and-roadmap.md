@@ -52,22 +52,36 @@
 
 | 对 | 裁定 | 处置 |
 |----|------|------|
-| 关闭大号Emoji (`Emoji2Sticker`，管自己输入) × 屏蔽大号Emoji (`DisableBigSticker`，管别人发) | **互补，非重复** | 两者改名消歧: "输入Emoji不转大表情" / "屏蔽超级表情(接收)" |
+| 关闭大号Emoji (`Emoji2Sticker`，管自己输入) × 屏蔽大号Emoji (`DisableBigSticker`，管别人发) | **互补，非重复** | 两者改名消歧: "输入Emoji不转大表情" / "屏蔽超级表情（接收）"（已落地） |
 | 发送收藏消息添加分组 (`SendFavoriteHook`) × 允许发送收藏的语音 (`SendFavoriteVoice`) | 不同功能 | 保留，P1 归入"收藏"子组 |
 | 伪装手机号码 (`FakePhone`) × 设备类型修改 (`ModifyDeviceType`) × 强制手机模式 (`ForcePhoneMode`) | 三个不同伪装维度 | 保留，P1 归入"伪装与设备"子类 |
-| 侧滑栏精简 (`SimplifyQQSettingMe`) × 新版侧滑栏精简 (`SimplifyQQSettingMe2`) | **同概念跨宿主版本** | 合并候选: 一个开关+版本内部分支，P1 评审 |
+| 侧滑栏精简 (`SimplifyQQSettingMe`) × 新版侧滑栏精简 (`SimplifyQQSettingMe2`) | **保留，不合并**（代码核实后修正原"合并候选"）: 前者钩旧面板 config 类（DexKit 目标，26 项表），后者钩 `QQSettingMeMenuPanelPartV3`（硬编码类名，7 项 d_* 表）——不同宿主架构、不同条目词汇，合并需迁移两套多选项配置，纯增风险 | 保持现状（名称已互为消歧），无动作 |
 | VIP 三连: 侧滑面板 / 聊天界面 / QQ空间 VIP 图标 | 三个界面的同类隐藏 | 保留，归入"隐藏VIP标识"子组 |
-| `RepeaterHook` × `RepeaterPlus` | **待深审**（复读机系） | P1 逐对评审 |
+| `RepeaterHook` × `RepeaterPlus` | **上游已解决，结案**: 经典版 summary 自述"不支持较新的版本，推荐使用消息+1 Plus"——版本互补（旧版走经典，新版走 Plus），且 Plus 是超集（+1 标记 + 长按菜单复读 + AIO 参数钩） | 无动作（两者名均为动态 `getTitleProvider`，清单记 `-` 属预期） |
 | TIM 系重叠对（资料可选中/精华入口/频道入口/回复菜单） | 提取器假阳性 | 不处理 |
 
 后续新嫌疑对由漂移守卫工具持续产出，逐批深审。
 
 ## 4. P1 · 分类重组方案（原则: 最小风险面）
 
-- 保持 `FunctionEntryRouter.Locations` 机制与框架遍历逻辑不动，仅调整各 hook 的
-  `uiItemLocation` 指向与 router 常量组织。
-- 新顶层分区（草案）: 聊天 / 群聊 / 好友与关系 / 消息与通知 / 界面精简 / 伪装与设备 /
-  娱乐 / 收藏与工具 / 实验（`EXPERIMENTAL_CATEGORY` 保留为末位）。
+**机制勘察结论**（FunctionEntryRouter.kt 已读透）:
+
+- 分类体系在 `zwCreateBaseDslTree()` 的 DSL 树骨架里集中定义:
+  顶层 `净化设置 host-ui`（主页/侧滑栏/聊天界面/群聊/资料卡/杂项）、
+  `辅助功能 auxiliary-function`（聊天和消息/文件/好友资料/群聊/通知/实验/娱乐/杂项）、
+  `配置`、`调试`、`其他`。
+- 每个 hook 的 `uiItemLocation` 是 anycast 标签（`@any-cast` + id），经
+  `resolveUiItemAnycastLocation` 对树骨架解析落位；**失配条目自动进 lost-and-found
+  置顶节点**——现成的漂移可见信号，迁移批次的安全网。
+- 迁移程序（每批）: ①改树骨架/`Locations` 常量 → ②改条目 `uiItemLocation` 赋值 →
+  ③同步清单 → ④双绿 CI + 真机确认无 lost-and-found 新增。
+
+重组原则:
+
+- 保持 `FunctionEntryRouter.Locations` 机制与框架遍历逻辑不动，仅调整树骨架节点、
+  常量组织与各 hook 的 `uiItemLocation` 指向。
+- 顶层结构微调（草案）: 在 `辅助功能` 下增设 `伪装与设备`、`收藏与工具` 子组；
+  `EXPERIMENTAL_CATEGORY` 保留为末位；跨组错位条目逐批评审归位。
 - 增补: 搜索入口、收藏（star）、最近使用（前置勘察现有 SettingSearch 实现后接入）。
 - 批次: 每批一批次分区迁移 + 清单同步 + 双绿 CI（攒批规则）。
 
