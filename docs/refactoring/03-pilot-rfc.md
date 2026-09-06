@@ -157,3 +157,33 @@ interface ScreenshotHelperApi {
 2. **纯函数群**：资源名分类（6 启动图 + 3 logo）→ SPLASH/LOGO/null；ThemeSplashHelper 合成方法 trait 拆成 shape（`Map(int)`）与 exact-modifiers（`STATIC|SYNTHETIC` 相等比较）两层——源码夹具无法携带 synthetic 标志，故 synthetic 要求以负向断言钉死；透明 PNG 以字节结构断言钉死（magic/IHDR/1x1/8bit/RGBA/IEND）；
 3. **Fragment 只改 import**：配置 Fragment 留在原包（试点契约=迁移 hook 逻辑），其 Kotlin 属性调用面（`isUseCustomLightSplash` 读写、`lightSplashFile` 等）与新 Kotlin feature 的属性名逐一对齐，fragment 零逻辑改动；
 4. **RemovePokeGrayTips 处置**：bak 包未注册件（全库零引用），迁移它=替用户做"是否启用"的产品决策，不属于重构——跳过，留在 bak 包。
+
+## 14. 试点批量迁移收官（2026-09-06）
+
+**迁移完成清单（11 个 feature，全部 CI 绿）**：
+
+| 批次 | Feature | 形态 |
+|---|---|---|
+| 试点 | DisableScreenshotShare / MuteQZoneThumbsUp | 开关抑制型（端口雏形） |
+| 批 1 | DisableEnterEffect / DisableLightInteraction | 同域双生（chat 域端口起点） |
+| 批 2 | RemoveCameraButton / RemoveSuperQQShow | 版本表型 + 同域共享端口 |
+| 批 3 | ModifyDeviceType | 配置型（枚举不透明常量集） |
+| 批 4 | GagInfoDisclosure | 领域事件型（sealed GagEvent）+ HostEnvironmentApi 诞生 |
+| 批 5 | MuteAtAllAndRedPacket | 常驻后台无开关 + 查询式拦截端口 |
+| 批 6 | ForcePadMode | 版本表型 + 环境事实参数化 |
+| 批 7 | CustomSplash | 配置+文件供给型（Fragment 只换 import） |
+
+**端口形态学**（按宿主交互本质选型）：事件交付型（批 4，adapter 归一化后推事件）/ 查询式拦截型（批 5/7，hook 体内同步裁决）/ 解析句柄型（批 2/3，先 resolve 后 install）/ 版本表纯函数型（批 2/6，混淆名映射 JVM 全测）/ 环境端口（批 4，pull-based 单成员起步）。
+
+**capability keys 全表（12）**：chat.{screenshot_helper, qzone→notification 修正: notification.qzone_thumbs_up, enter_effect, light_interaction, gag_notice, mute_at_all, mute_red_packet}, ui.{title_camera_button, title_superqqshow, custom_splash}, device.{device_type, force_pad_app_id}。
+
+**教训家族（跨批次沉淀）**：
+1. **Kotlin/Java 视图不对称**（批 7 集中爆发三红）：Java 调 Kotlin object 须 `.INSTANCE`；object 成员在 Java 侧是实例方法；属性 `enabled` 的 Java getter 是 `getEnabled()`（`isXxx` 形态仅限属性名本身以 is 开头）；**反向**：`@file:JvmName` 门面类型只存在于 Java 视图，Kotlin 侧只能 import 顶层声明（`hostInfo` 而非 `HostInfo`）；override 签名函数类型里的 Java 类型（`InputStream?`）缺 import 时 K2 报 NOT_IMPLEMENTED_MEMBER 而非 unresolved，且注解按行截断看不到成员名——须回到两签名逐字比对；
+2. **测试断言按实现语义推演，拒绝夹具名/直觉**：null 列表串接 ",null," 可匹配（批 5）；版本表"阈值下方一步"落入下一段值（批 6）；shape 谓词不含静态性（批 7）；
+3. **流程纪律**：sed 替换后必须 grep 验证目标行已变（批 6 漏分号）；零引用检查禁用目录滤词（批 6 假阴性）；推送后 CI 查询须按 headSha 匹配；沙箱 .git 平台级重置→fetch+reset --mixed 标准恢复；gh api 偶发 EOF→curl 显式 token 直连同端点为备份通道；任务级日志（results-receiver）不可达时以注解拼案。
+
+**遗留与移交**：
+- `RemovePokeGrayTips.kt`（bak 未注册件，零引用）：迁移=产品决策，留在 bak 包；
+- D2（decorator KSP）/ P4（包重组）：按原计划等覆盖率阈值，未动；
+- 可选：push_ci 全量 APK 构建验证（workflow 变更须用户 Termux 中继）；
+- 后续新批次候选池：cc/hicore、me/ketal、me/hd 等作者包仍有大量 feature 未迁移，本 RFC 的端口形态学可直接复用。
