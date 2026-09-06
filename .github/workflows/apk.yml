@@ -77,8 +77,8 @@ jobs:
           picked = []
           for i in strong:
               for j in range(max(0, i - 3), min(len(lines), i + 9)):
-                 if j not in seen:
-                       seen.add(j)
+                  if j not in seen:
+                      seen.add(j)
                       picked.append(j)
           picked.sort()
           count = 0
