@@ -93,10 +93,15 @@ public class GagNoticeAdapterTest {
     @Test
     public void signedUinIsFixedUpToUnsigned() {
         // 0xFFFFFFFF as int32 is negative; the adapter must map it to 4294967295
-        GagEvent e = adapter.parseModernGagEvent(
-                gagPayload(1L, 0xFFFFFFFFL, 0xFFFFFFFFL, 60L));
-        assertTrue(e instanceof AllGag || e instanceof MemberGag);
-        assertEquals("4294967295", ((AllGag) e).getOpUin());
+        GagEvent op = adapter.parseModernGagEvent(
+                gagPayload(1L, 0xFFFFFFFFL, 0L, 60L));
+        assertTrue(op instanceof AllGag);
+        assertEquals("4294967295", ((AllGag) op).getOpUin());
+
+        GagEvent victim = adapter.parseModernGagEvent(
+                gagPayload(1L, 2L, 0xFFFFFFFFL, 60L));
+        assertTrue(victim instanceof MemberGag);
+        assertEquals("4294967295", ((MemberGag) victim).getVictimUin());
     }
 
     @Test
