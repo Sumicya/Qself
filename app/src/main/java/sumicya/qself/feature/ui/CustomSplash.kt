@@ -31,7 +31,7 @@ import io.github.qauxv.base.annotation.UiItemAgentEntry
 import io.github.qauxv.config.ConfigManager
 import io.github.qauxv.dsl.FunctionEntryRouter.Locations.Simplify
 import io.github.qauxv.hook.CommonConfigFunctionHook
-import io.github.qauxv.util.HostInfo
+import io.github.qauxv.util.hostInfo
 import io.github.qauxv.util.Initiator
 import io.github.qauxv.util.IoUtils
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -129,7 +129,7 @@ object CustomSplash : CommonConfigFunctionHook() {
 
     fun openSplashInputStream(which: String): InputStream? {
         val f = File(
-            HostInfo.getHostInfo().application.filesDir,
+            hostInfo.application.filesDir,
             DIR_NANE_CONFIG_MISC + File.separator + which,
         )
         return if (f.exists() && f.isFile) FileInputStream(f) else null
@@ -158,13 +158,13 @@ object CustomSplash : CommonConfigFunctionHook() {
 
     val lightSplashFile: File
         get() = File(
-            IoUtils.mkdirsOrThrow(File(HostInfo.getHostInfo().application.filesDir, DIR_NANE_CONFIG_MISC)),
+            IoUtils.mkdirsOrThrow(File(hostInfo.application.filesDir, DIR_NANE_CONFIG_MISC)),
             FILE_NAME_SPLASH_LIGHT,
         )
 
     val darkSplashFile: File
         get() = File(
-            IoUtils.mkdirsOrThrow(File(HostInfo.getHostInfo().application.filesDir, DIR_NANE_CONFIG_MISC)),
+            IoUtils.mkdirsOrThrow(File(hostInfo.application.filesDir, DIR_NANE_CONFIG_MISC)),
             FILE_NAME_SPLASH_DARK,
         )
 
