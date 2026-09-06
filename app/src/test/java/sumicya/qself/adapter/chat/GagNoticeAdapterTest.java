@@ -67,12 +67,12 @@ public class GagNoticeAdapterTest {
         AllGag all = (AllGag) on;
         assertEquals("123456", all.getTroopUin());
         assertEquals("10001", all.getOpUin());
-        assertTrue(all.isEnabled());
+        assertTrue(all.getEnabled());
 
         GagEvent off = adapter.parseModernGagEvent(
                 gagPayload(123456L, 10001L, 0L, 0L));
         assertTrue(off instanceof AllGag);
-        assertFalse(((AllGag) off).isEnabled());
+        assertFalse(((AllGag) off).getEnabled());
     }
 
     @Test
