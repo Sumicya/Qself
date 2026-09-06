@@ -25,10 +25,13 @@ public final class BadgeRelocator {
     private static final int INSTALLED_TAG_KEY = 0x7F5A0004;
 
     /**
-     * Group-centring relocation: the badge is first imagined at top-centre
-     * above the icon, then the UNION of (icon, proposed badge) is centred
-     * inside the tab's own bounds — so the pair reads as one whole and
-     * neither sticks out of the button.
+     * Group-centring relocation with an overlay badge: the badge is proposed
+     * straddling the icon's top edge — centre-x on the icon, centre-y
+     * gapPx above the icon top — instead of hovering fully above it. A fully
+     * elevated badge made the (icon + badge) union nearly as tall as the tab,
+     * which pushed the badge right back onto the tab's top edge; the overlay
+     * adds only half a badge of height, so the pair truly centres as one
+     * body and nothing sticks out.
      *
      * <p>Returns additive deltas: {iconDx, iconDy, badgeDx, badgeDy}. The
      * target is a fixed point of the additive update (at target every value
@@ -38,9 +41,11 @@ public final class BadgeRelocator {
             float iconL, float iconT, float iconR, float iconB,
             float badgeL, float badgeT, float badgeR, float badgeB,
             float tabW, float tabH, float gapPx) {
-        // proposed badge: centre-x on the icon, bottom gapPx above icon top
+        // proposed badge: centre-x on the icon centre; centre-y on the icon
+        // top line, lifted by gapPx
         float bx = (iconL + iconR) * 0.5f - (badgeL + badgeR) * 0.5f;
-        float by = (iconT - gapPx) - badgeB;
+        float badgeCy = (badgeT + badgeB) * 0.5f;
+        float by = (iconT - gapPx) - badgeCy;
         // union of the icon and the proposed badge
         float ul = Math.min(iconL, badgeL + bx);
         float ut = Math.min(iconT, badgeT + by);
