@@ -133,3 +133,11 @@ interface ScreenshotHelperApi {
 2. **HostEnvironment 端口诞生**（RFC-02 §6.2 兑现）：`isNtKernel()` 不再走作者包 `QAppUtils`，pull-based 单成员端口起步，"有需求再加成员"；
 3. **MSF 进程 + 4 个 DexKit 依赖**的功能首次过端口（targetProc 与 targets 声明原样保留在 feature）。
 注：沙箱 .git 二次被平台重置回基线，标准恢复流程（fetch→reset --mixed→重做收尾→显式路径提交）3 分钟内复原，无损失。
+
+## 11. 批量迁移第五批（2026-09-06）：常驻后台形态 + 查询式拦截端口
+
+`MuteAtAllAndRedPacket`（bak 包 115 行）迁移，样张新形态两件：
+1. **常驻后台无开关形态**：基类 `BasePersistBackgroundHook` 原样保留（无 UI 入口、isEnabled 恒 true、无注解约定），feature 不换基类不造开关——形态保真优先于"统一"；
+2. **查询式拦截端口**：与批 4 的事件交付相反，两个 hook 位都需要 hook 体内**同步布尔裁决**，端口形态是回调式 `isMuted(troopUin)` 而非事件流。
+保真要点：死配置 bug-for-bug（`qn_muted_at_all/qn_muted_red_packet` 全库无写入者，仅旧备份/手编配置可填充，消费逻辑照旧——含 `null` 串接成 ",null," 的匹配怪癖，已 JVM 钉死）；comma 包裹匹配的子串误配防御是纯函数重点（"123" 不得命中 "1234"）；`as Int` 解箱 NPE 复现原 Java 行为；initOnce 仍无条件返回 true（原类仅异常可致失败，缺失 hook 位改走 CapabilityRegistry 上报）。
+教训：测试断言方向要按实现语义算一遍再落——`isTroopInMutedList(null,"null")` 为 **true**（",null," 含 ",null,"），凭直觉写 assertFalse 必烧一轮 CI。
