@@ -38,6 +38,7 @@ import sumicya.qself.feature.chat.GagInfoDisclosure;
 import cc.ioctl.hook.experimental.FileRecvRedirect;
 import sumicya.qself.feature.device.ForcePadMode;
 import sumicya.qself.feature.ui.CustomSplash;
+import sumicya.qself.feature.ui.LiquidGlassBottomBar;
 import cc.ioctl.hook.misc.DisableHotPatch;
 import cc.ioctl.hook.misc.DisableQQCrashReportManager;
 import cc.ioctl.hook.msg.RevokeMsgHook;
@@ -124,6 +125,7 @@ public class MainHook {
             HookInstaller.allowEarlyInit(MuteAtAllAndRedPacket.INSTANCE);
             HookInstaller.allowEarlyInit(GagInfoDisclosure.INSTANCE);
             HookInstaller.allowEarlyInit(CustomSplash.INSTANCE);
+            HookInstaller.allowEarlyInit(LiquidGlassBottomBar.INSTANCE);
             HookInstaller.allowEarlyInit(RemoveCameraButton.INSTANCE);
             HookInstaller.allowEarlyInit(RemoveSuperQQShow.INSTANCE);
             HookInstaller.allowEarlyInit(FileRecvRedirect.INSTANCE);
