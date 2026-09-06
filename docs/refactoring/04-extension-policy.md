@@ -50,3 +50,11 @@ hook 型宿主增强模块：被动拦截/增强宿主自身行为。**不模拟
 
 - 第三方 APK 不入公共仓库（即使为分析目的）——只在本地沙箱处理；
 - 吸收按既有节奏：一批一 feature、五件套、CI 注解闭环、docs 记账。
+
+## 7. 液态玻璃谱系修正（2026-09-06，用户指正）
+
+双源头汇流（此前漏记渲染主干）：
+- **渲染主干**：Kyant0/AndroidLiquidGlass（Apache-2.0，3629★，Compose Multiplatform，活跃）——AGSL 液态玻璃 shader 的原点，后续实现的透镜数学几乎都源于它；
+- **产品/交互主干**：tiann/KernelSU（GPL-3.0）manager 的 FloatingBottomBar——悬浮 pill 设计语言、按压/拖拽动力学；
+- 汇流点：sjtt2/HeyBox-LiquidGlass（MIT，首个第三方 App 的 LSPosed 化）→ liuran001/WeChat-LiquidGlass（MIT，微信+QQ 双宿主，QQ 底栏手术知识所在地）。
+对本仓吸收的影响：载体不变（QQ 宿主注入需经典 View + AGSL，CMP 的 Compose 管线不可直接注入宿主视图树）；Kyant0 定位为 shader 数学参考（AGSL shader 字符串 + uniform 协议与框架无关，可移植），未来提升渲染质感（色散/凝胶感）时从这里取经，Apache-2.0 干净。
