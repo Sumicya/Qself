@@ -100,3 +100,11 @@ interface ScreenshotHelperApi {
 2. **密封句柄承载"空值语义"**：轻互动两代内核需要不同空白值（NT=空 List，legacy=null），`Handle.NtListProvider/LegacySwitch` 把语义随方法一起交付，install 路径零版本分支；
 3. **第二类可测缝**：JVM 上版本门不可评估（hostInfo 未初始化）→ 端到端解析退化为 null（本身就是 fail-safe 断言），易变逻辑以公开特征谓词（`matchesLegacyTrait`/`matchesNtTrait`）逐方法钉死——adapter 是实现细节，谓词公开无 API 稳定性代价。
 两类均零外部引用（KSP 注册自动发现，无需任何白名单随迁）。批次规划：第二批 = RemoveCameraButton（版本→混淆名映射表进 adapter）+ RemoveSuperQQShow（作者包 xyz.nextalone 抽取，四路分支）。
+
+### 7.1 执行波折记录（2026-09-06，run 4ec294d 绿）
+
+第一批经历三轮"零注解失败"，最终定位链与教训：
+1. **幽灵 import**（`getHostInfo`，真身仅有私有带参版本）——凭记忆写 import 而非从实际用法反推，删；
+2. **嵌套类作用域**：Kotlin 的嵌套类不随外层接口的 import 进入作用域，`Handle` 需显式 `import ...LightInteractionApi.Handle`；
+3. **rebase 冲突标记残留**：脚本化解决冲突后只 grep 了目标内容、未扫标记行，且 `git add <path>` 绕过了 git 的冲突检测——kotlinc 对 `=======` 行逐列报 "Expecting a top level declaration" 是其签名特征。**教训固化：脚本化冲突解决必须以"全仓标记扫描"收尾。**
+4. 基建闭环：v2 日志尾部注解 → v3 错误行优先过滤（所有者 671a20b）——此后 kotlinc 失败也 fully self-serve。
