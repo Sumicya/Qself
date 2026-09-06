@@ -26,6 +26,10 @@ import io.github.qauxv.util.requireMinQQVersion
 import io.github.qauxv.util.xpcompat.XC_MethodHook
 import io.github.qauxv.util.xpcompat.XposedBridge
 import sumicya.qself.hostapi.chat.LightInteractionApi
+<<<<<<< HEAD
+=======
+import sumicya.qself.hostapi.chat.LightInteractionApi.Handle
+>>>>>>> dc35d5a (fix: import nested Handle type explicitly (Kotlin scoping rule))
 import java.lang.reflect.Method
 
 /**
