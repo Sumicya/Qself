@@ -67,7 +67,7 @@ object FakeQQLevel : BaseFunctionHook("Ketal_FakeQQLevel",
         }
     }
 
-    override val uiItemLocation = FunctionEntryRouter.Locations.Entertainment.ENTERTAIN_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.DISGUISE_AND_DEVICE_CATEGORY
     override val runtimeErrorDependentComponents: List<RuntimeErrorTracer>? = null
 
     private val levelKey = ConfigData<String>("Ketal_FakeQQLevel_level")

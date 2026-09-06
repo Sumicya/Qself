@@ -66,7 +66,7 @@ object SendFavoriteVoice : PluginDelayableHook("send_favorite_voice") {
     override val preference = uiSwitchPreference {
         title = "允许发送收藏的语音"
     }
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.MESSAGE_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.FAVORITE_AND_TOOLS_CATEGORY
     override val isAvailable = requireMinQQVersion(QQVersion.QQ_9_1_70)
 
     @RequiresApi(Build.VERSION_CODES.O)

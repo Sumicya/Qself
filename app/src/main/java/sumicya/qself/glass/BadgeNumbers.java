@@ -102,47 +102,79 @@ public final class BadgeNumbers {
                 // instead of hiding it into nothing.
                 continue;
             }
-            // Anchor to the icon itself, in host coordinates: tab.getLeft()
-            // is row-local and the canvas is the host's, which is wider than
-            // the row by the shadow padding - drawing in row coordinates put
-            // the first tab's number outside the glass, top-left (device
-            // evidence, QQ 9.2.10).
-            View icon = findIcon((ViewGroup) tab, 0);
-            if (icon == null) {
+            // Anchor on the tab's text label, in host coordinates. The icon
+            // anchor matched the drag-animation layer, which spans the whole
+            // cell, so the number landed below the bar (device evidence,
+            // QQ 9.2.10). The label is the one reliably identifiable view.
+            View labelView = findLabel((ViewGroup) tab, badge, 0);
+            if (labelView == null) {
                 continue;
             }
-            int[] at = offsetInHost(icon, host);
-            if (at == null) {
+            int[] labelAt = offsetInHost(labelView, host);
+            if (labelAt == null) {
                 continue;
             }
             badge.setAlpha(0f);
-            float cx = at[0] + icon.getWidth() * 0.5f;
-            // Baseline just under the icon's bottom edge: the gap between
-            // the icon and the button label.
-            float baseline = at[1] + icon.getHeight() + paint.getTextSize() * 0.75f;
+            // Vertical centre of the gap between the icon above and the
+            // label below; horizontal centre on the label (the icon and the
+            // label share the cell's centre axis).
+            ViewGroup tabGroup = (ViewGroup) tab;
+            int labelTopLocal = labelView.getTop();
+            int gapTopLocal = labelTopLocal - Math.round(6f * density);
+            for (int s = 0; s < tabGroup.getChildCount(); s++) {
+                View sib = tabGroup.getChildAt(s);
+                if (sib == labelView || sib == badge) {
+                    continue;
+                }
+                int bottom = sib.getTop() + sib.getHeight();
+                if (bottom <= labelTopLocal + Math.round(2f * density) && bottom > gapTopLocal) {
+                    gapTopLocal = bottom;
+                }
+            }
+            if (labelTopLocal - gapTopLocal > Math.round(20f * density)) {
+                // Implausible gap (wrong sibling geometry): settle for the
+                // default 6dp above the label.
+                gapTopLocal = labelTopLocal - Math.round(6f * density);
+            }
+            int centreLocal = (gapTopLocal + labelTopLocal) / 2;
+            float baseline = labelAt[1] - (labelTopLocal - centreLocal)
+                    + paint.getTextSize() * 0.35f;
+            float cx = labelAt[0] + labelView.getWidth() * 0.5f;
             canvas.drawText(label, cx, baseline, paint);
         }
     }
 
-    /** The tab's icon view: the drag-animation view QQ uses, or any ImageView. */
-    private static View findIcon(ViewGroup group, int depth) {
-        if (depth > 4) {
+    /**
+     * The tab's text label: the lowest-positioned visible TextView carrying
+     * non-empty text, excluding the badge itself (a badge TextView also
+     * carries text, but sits at the top of the cell).
+     */
+    private static View findLabel(ViewGroup group, View badge, int depth) {
+        if (depth > 6) {
             return null;
         }
+        View best = null;
         for (int i = 0; i < group.getChildCount(); i++) {
             View child = group.getChildAt(i);
-            String n = child.getClass().getName();
-            if (n.contains("TabDragAnimationView") || child instanceof android.widget.ImageView) {
-                return child;
+            if (child == badge || child.getVisibility() != View.VISIBLE) {
+                continue;
+            }
+            if (child instanceof TextView) {
+                CharSequence txt = ((TextView) child).getText();
+                if (txt != null && txt.toString().trim().length() > 0) {
+                    if (best == null || child.getTop() > best.getTop()) {
+                        best = child;
+                    }
+                }
             }
             if (child instanceof ViewGroup) {
-                View found = findIcon((ViewGroup) child, depth + 1);
-                if (found != null) {
-                    return found;
+                View found = findLabel((ViewGroup) child, badge, depth + 1);
+                if (found != null && (best == null || found.getTop() > best.getTop())) {
+                    best = found;
                 }
             }
         }
-        return null;
+        return best;
     }
 
     /** [x, y] of {@code v}'s top-left in {@code ancestor} coordinates, null if unrelated. */

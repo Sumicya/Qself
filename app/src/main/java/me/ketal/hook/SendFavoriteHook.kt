@@ -49,7 +49,7 @@ object SendFavoriteHook : PluginDelayableHook("ketal_send_favorite") {
         title = "发送收藏消息添加分组"
     }
 
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.CHAT_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.FAVORITE_AND_TOOLS_CATEGORY
     override val isAvailable = requireMinQQVersion(QQVersion.QQ_8_2_0)
 
     override fun startHook(classLoader: ClassLoader) = throwOrTrue {

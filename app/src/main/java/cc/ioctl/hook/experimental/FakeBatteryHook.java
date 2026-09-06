@@ -367,7 +367,7 @@ public class FakeBatteryHook extends BaseFunctionHook implements InvocationHandl
     @NonNull
     @Override
     public String[] getUiItemLocation() {
-        return Auxiliary.EXPERIMENTAL_CATEGORY;
+        return Auxiliary.DISGUISE_AND_DEVICE_CATEGORY;
     }
 
     @Override

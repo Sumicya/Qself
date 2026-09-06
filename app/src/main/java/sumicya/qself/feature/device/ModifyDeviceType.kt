@@ -69,8 +69,7 @@ object ModifyDeviceType : CommonConfigFunctionHook(
         |重启生效
     """.trimMargin()
 
-    override val uiItemLocation: Array<String> =
-        FunctionEntryRouter.Locations.Auxiliary.EXPERIMENTAL_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.DISGUISE_AND_DEVICE_CATEGORY
 
     override val valueState: MutableStateFlow<String?> = MutableStateFlow(
         if (isEnabled) ConfigManager.getDefaultConfig().getString(VALUE_CONFIG_KEY) else "禁用"

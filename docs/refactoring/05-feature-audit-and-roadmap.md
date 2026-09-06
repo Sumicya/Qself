@@ -84,6 +84,11 @@
   `EXPERIMENTAL_CATEGORY` 保留为末位；跨组错位条目逐批评审归位。
 - 增补: 搜索入口、收藏（star）、最近使用（前置勘察现有 SettingSearch 实现后接入）。
 - 批次: 每批一批次分区迁移 + 清单同步 + 双绿 CI（攒批规则）。
+- **批次 1（已实施，待用户批准 CI）**: 新增 `伪装与设备`（FakePhone/FakeLocation/
+  FakePicSize/FakeVoiceTime/FakeQQLevel/FakeBattery/ForcePhoneMode/ModifyDeviceType
+  共 8 项迁入）与 `收藏与工具`（SendFavoriteHook/SendFavoriteVoice/
+  RemoveFavPreviewLimit 共 3 项迁入）两个 fragment 节点与对应 `Locations` 常量。
+  同批搭载底栏未读数字锚点重做（图标锚→文字标签锚，详见 BadgeNumbers 注释）。
 
 ## 5. P2 · UI 视觉改版（勘察后定稿）
 

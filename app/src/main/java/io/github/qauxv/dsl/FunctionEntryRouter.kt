@@ -128,6 +128,8 @@ object FunctionEntryRouter {
                 fragment("auxiliary-notification", "通知设置")
                 fragment("auxiliary-experimental", "实验性功能")
                 fragment("entertainment-function", "娱乐功能")
+                fragment("auxiliary-disguise-and-device", "伪装与设备")
+                fragment("auxiliary-favorite-and-tools", "收藏与工具")
                 fragment("auxiliary-misc", "杂项", false)
             }
             category("module-config", "配置", false) {
@@ -267,6 +269,12 @@ object FunctionEntryRouter {
 
             @JvmField
             val NOTIFICATION_CATEGORY: Array<String> = arrayOf(ANY_CAST_PREFIX, "auxiliary-notification")
+
+            @JvmField
+            val DISGUISE_AND_DEVICE_CATEGORY: Array<String> = arrayOf(ANY_CAST_PREFIX, "auxiliary-disguise-and-device")
+
+            @JvmField
+            val FAVORITE_AND_TOOLS_CATEGORY: Array<String> = arrayOf(ANY_CAST_PREFIX, "auxiliary-favorite-and-tools")
 
             @JvmField
             val EXPERIMENTAL_CATEGORY: Array<String> = arrayOf(ANY_CAST_PREFIX, "auxiliary-experimental")

@@ -71,7 +71,7 @@ object FakePicSize : BaseFunctionHook(
             }
         }
     }
-    override val uiItemLocation = FunctionEntryRouter.Locations.Entertainment.ENTERTAIN_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.DISGUISE_AND_DEVICE_CATEGORY
     override val isAvailable = requireMinQQVersion(QQVersion.QQ_8_9_88)
     override val runtimeErrorDependentComponents: List<RuntimeErrorTracer>? = null
 

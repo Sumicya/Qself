@@ -173,9 +173,9 @@ me/hd/hook/ChangeGroupStatus.kt	更改群聊状态	Auxiliary
 me/hd/hook/ChatGroupTab.kt	聊天分组标签	Auxiliary
 me/hd/hook/CustomPetHomeBg.kt	-	Entertainment
 me/hd/hook/DisableGrowHalfLayer.kt	屏蔽广告弹窗(测试版)	Auxiliary
-me/hd/hook/FakeLocation.kt	-	Entertainment
-me/hd/hook/FakePhone.kt	-	Simplify
-me/hd/hook/FakePicSize.kt	-	Entertainment
+me/hd/hook/FakeLocation.kt	-	Auxiliary
+me/hd/hook/FakePhone.kt	-	Auxiliary
+me/hd/hook/FakePicSize.kt	-	Auxiliary
 me/hd/hook/FakeVoiceTime.kt	-	Auxiliary
 me/hd/hook/HandleClickGroupBotMsgBtnSend.kt	拦截点击群机器人消息按钮直接发送	Auxiliary
 me/hd/hook/HandleClickPrivateBotRecMsgSend.kt	拦截点击私聊机器人推荐消息直接发送	Auxiliary
@@ -228,12 +228,12 @@ me/hd/hook/simplify/ui/chat/msg/RemoveReplyImagePreviewLimit.kt	移除引用图�
 me/hd/hook/simplify/ui/misc/CustomReportStep.kt	篡改上传运动步数	Simplify
 me/hd/hook/simplify/ui/misc/HideBottomTabTitle.kt	隐藏底栏标题	Simplify
 me/hd/hook/simplify/ui/misc/RemoveDialogWaitTime.kt	移除弹窗等待时间	Simplify
-me/hd/hook/simplify/ui/misc/RemoveFavPreviewLimit.kt	-	Simplify
+me/hd/hook/simplify/ui/misc/RemoveFavPreviewLimit.kt	-	Auxiliary
 me/ketal/hook/ChatItemShowQQUin.kt	消息显示 ID 和时间	Auxiliary
 me/ketal/hook/Emoji2Sticker.kt	输入Emoji不转大表情	Entertainment
 me/ketal/hook/FakeMultiWindowStatus.kt	伪装处于非多窗口模式	Auxiliary
 me/ketal/hook/FakeNetworkType.kt	伪装网络类型为移动网络	Auxiliary
-me/ketal/hook/FakeQQLevel.kt	-	Entertainment
+me/ketal/hook/FakeQQLevel.kt	-	Auxiliary
 me/ketal/hook/HideAssistantRemoveTips.kt	移除移出群助手提醒	Simplify
 me/ketal/hook/HideFriendCardSendGift.kt	屏蔽好友资料页送礼物按钮	Simplify
 me/ketal/hook/HideTab.kt	隐藏底栏	Entertainment
