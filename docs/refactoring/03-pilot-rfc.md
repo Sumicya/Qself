@@ -195,3 +195,9 @@ interface ScreenshotHelperApi {
 环境三轮迭代：① CXX1300——AGP 只自动装 NDK 不装 cmake，须显式 `sdkmanager "cmake;3.31.0"`；② YAML 步骤缩进被中继链路变形（run 0 秒即死，workflow 级解析失败）；③ 最终全面对齐上游 push_ci.yml 已验证配方：apt ninja-build + `qauxv.override.ninja.path` + `QAUXV_OVERRIDE_CMAKE_VERSION` + fetch-depth 0 + 关 configuration-cache——**放弃合成环境、抄上游是关键转折**。
 
 **中继链路可靠性规律**（协议更新）：全文件 tee 中继的空白变形两次（步骤缩进 4→6 空、python heredoc 内 2 行缩进）；sed/python 单行外科修复全部存活。故：全文件中继后必须 `wc -c`/diff 校验；能拆成单行修复的绝不整文件重传。
+
+## 16. 真机冒烟首战：P1 布局 FQCN 漏扫回归（2026-09-06）
+
+push_ci 的 debug APK 首次真机安装即抓到 P1 遗留回归：进入模块设置页必崩——`activity_settings_ui_host.xml` 以 FQCN 引用 `cc.ioctl.util.ui.fling.SimpleFlingInterceptLayout`，P1 的 `cc.ioctl.util.ui` 树迁移（b360c6e）扫尽了 .java/.kt 引用却漏了 XML 里的类名字符串，LayoutInflater 运行时 ClassNotFoundException。JVM 测试不 inflate 布局、assembleDebug 中 AAPT 不解析自定义 View 类名——**此故障面只有真机冒烟可见**，push_ci 的价值当场兑现。
+
+修复 + 绊线：布局改指新家；新增 `LayoutFqcnGuardTest`（JVM）扫描全部布局 XML 的带点标签，凡命中项目自有命名空间前缀（io.github./cc./me./xyz./moe./top./sumicya./com.alphi./com.xiaoniu./com.enlysure./com.likejson.）必须能在 src/main/java 找到对应源文件——该测试若存在于 P1 当日即会红。教训入库：**包迁移的引用扫描必须覆盖非代码文件（XML 布局/manifest/pro），FQCN 是字符串，编译器看不见它**。
