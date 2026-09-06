@@ -38,7 +38,6 @@ public final class GlassConfig {
             SharedPreferences p = ctx.getSharedPreferences(PREFS, 0);
             barOffsetDp = p.getInt("barOffsetDp", barOffsetDp);
             hugPaddingDp = p.getInt("hugPaddingDp", hugPaddingDp);
-            badgeTopCenter = p.getBoolean("badgeTopCenter", badgeTopCenter);
         } catch (Throwable t) {
             LiquidGlassModule.logErr("config load failed", t);
         }
