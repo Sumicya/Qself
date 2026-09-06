@@ -1,0 +1,79 @@
+name: APK Build CI
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+      - 'renovate.json'
+      - '.editorconfig'
+      - '.gitignore'
+      - '.idea/**'
+  workflow_dispatch:
+
+jobs:
+  apk:
+    name: Assemble Debug APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: 'true'
+          fetch-depth: 1
+
+      - name: Config submodules
+        run: |
+          git -C "libs/LSPlant" config "submodule.test/src/main/jni/external/lsprism.update" none
+          git -C "libs/LSPlant" config "submodule.test/src/main/jni/external/lsparself.update" none
+          git -C "libs/LSPlant" config "submodule.docs/doxygen-awesome-css.update" none
+          git -C "libs/mmkv/MMKV" config "submodule.Python/pybind11.update" none
+          git submodule foreach git submodule update --init --recursive
+
+      - name: set up JDK 21
+        uses: actions/setup-java@v5.7.0
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Setup SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME}"
+          mkdir -p "$ANDROID_HOME/licenses/"
+          echo > "$ANDROID_HOME/licenses/android-sdk-license"
+          echo -n 24333f8a63b6825ea9c5514f83c2829b004d1fee > "$ANDROID_HOME/licenses/android-sdk-license"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Assemble debug APK
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee gradle-apk-output.log
+
+      - name: Surface build failures as annotations
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import re
+          lines = open('gradle-apk-output.log', errors='replace').read().splitlines()
+          # priority: compiler/tool error lines (JVM + native); never pure stack frames
+          hits = [l for l in lines if re.search(
+              r'e: file:|error:|FAILED|What went wrong|Unresolved|cannot find|Caused by|ninja:|clang', l)]
+          if not hits:
+              hits = [l for l in lines[-400:] if l.strip() and not l.lstrip().startswith('at ')]
+          for i, l in enumerate(hits[-40:]):
+              print('::error title=Build error {}::{}'.format(i + 1, l[:700]))
+          PY
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+          if-no-files-found: error
