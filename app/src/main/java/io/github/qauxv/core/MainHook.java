@@ -34,7 +34,7 @@ import androidx.annotation.Nullable;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.hook.SettingEntryHook;
 import cc.ioctl.hook.bak.MuteAtAllAndRedPacket;
-import cc.ioctl.hook.chat.GagInfoDisclosure;
+import sumicya.qself.feature.chat.GagInfoDisclosure;
 import cc.ioctl.hook.experimental.FileRecvRedirect;
 import cc.ioctl.hook.experimental.ForcePadMode;
 import cc.ioctl.hook.misc.CustomSplash;

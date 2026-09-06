@@ -125,3 +125,11 @@ interface ScreenshotHelperApi {
 2. **配置键双保真**：开关键（类简名默认派生 "DeviceTypeHook"）与取值键（历史全限定 FQN 字符串）都原样保留——值键尤须警惕，它藏在 `getString(...)` 的字面量里而非类名派生；
 3. **失败要响亮**：`constant()` 对损坏的存量配置抛出而非返回 null（旧语义：初始化大声失败进入 runtimeErrors，而非静默把 getter 置空），端口 KDoc 明示该取舍；
 4. **捕获时安装**：覆盖值在安装时捕获（"重启生效"是有意行为，端口契约写明）。
+
+## 10. 批量迁移第四批（2026-09-06）：领域事件终形态 + HostEnvironment 端口
+
+`GagInfoDisclosure`（重型功能专项）落地，样张系列的终形态：
+1. **端口交付领域事件**：`GagNoticeApi.GagEvent`（sealed：`AllGag`/`MemberGag`）——adapter 吞下全部易变细节（代际分支、vMsg 字节文法：`vMsg[4]==12` 门 + 偏移 0/6/16/20 大端 + `and 0xFFFFFFFFL` 符号修正、legacy push 参数字段名提取），feature 只做 `when(event)` 组织文案。字节解析作为纯函数（`parseModernGagEvent/normalize`）全量 JVM 钉死（含符号修正与短数组防御）；
+2. **HostEnvironment 端口诞生**（RFC-02 §6.2 兑现）：`isNtKernel()` 不再走作者包 `QAppUtils`，pull-based 单成员端口起步，"有需求再加成员"；
+3. **MSF 进程 + 4 个 DexKit 依赖**的功能首次过端口（targetProc 与 targets 声明原样保留在 feature）。
+注：沙箱 .git 二次被平台重置回基线，标准恢复流程（fetch→reset --mixed→重做收尾→显式路径提交）3 分钟内复原，无损失。
