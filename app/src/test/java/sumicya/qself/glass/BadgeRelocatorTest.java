@@ -27,52 +27,65 @@ import static org.junit.Assert.assertEquals;
 import org.junit.Test;
 
 /**
- * Batch A2 contract tests: the badge relocation delta is a pure function of
- * the icon/badge rects — pin the arithmetic (centre-x alignment, gap above
- * icon top) including the badge-wider-than-icon and already-centred cases.
+ * Batch A2 contract tests: group-centring relocation — the badge is proposed
+ * at top-centre above the icon, then the UNION of the pair is centred in the
+ * tab, with additive deltas whose target is a fixed point.
  */
 public class BadgeRelocatorTest {
 
     private static final float EPS = 0.001f;
 
-    private static float[] deltas(float il, float it, float ir,
-            float bl, float bt, float br, float bb, float gap) {
-        return BadgeRelocator.badgeDeltas(il, it, ir, bl, bt, br, bb, gap);
+    private static float[] reloc(float il, float it, float ir, float ib,
+            float bl, float bt, float br, float bb, float w, float h, float gap) {
+        return BadgeRelocator.groupRelocation(il, it, ir, ib, bl, bt, br, bb, w, h, gap);
     }
 
     @Test
-    public void badgeMovesFromTopRightToTopCentre() {
-        // icon 100..180 x 40..110; badge hanging at 160..200 x 20..44; gap 4
-        float[] d = deltas(100, 40, 180, 160, 20, 200, 44, 4);
-        // centre-x: 140 vs 180 -> dx = -40 (move left)
-        assertEquals(-40f, d[0], EPS);
-        // icon top (40) - gap (4) - badge bottom (44) -> dy = -8 (move up)
-        assertEquals(-8f, d[1], EPS);
+    public void badgeProposedAboveIconThenUnionCentred() {
+        // icon 100..180 x 40..110; badge 160..200 x 20..44; tab 220x120; gap 4
+        float[] r = reloc(100, 40, 180, 110, 160, 20, 200, 44, 220, 120, 4);
+        // proposed badge shift: bx=-40, by=-8 -> badge 120..160 x 12..36
+        // union 100..180 x 12..110, centre (140,61); tab centre (110,60)
+        assertEquals(-30f, r[0], EPS); // icon dx
+        assertEquals(-1f, r[1], EPS);  // icon dy
+        assertEquals(-70f, r[2], EPS); // badge dx = -40 + -30
+        assertEquals(-9f, r[3], EPS);  // badge dy = -8 + -1
     }
 
     @Test
-    public void widerBadgeCentresOnNarrowIcon() {
-        // icon 100..140 (centre 120); badge 90..150 (centre 120 already)
-        float[] d = deltas(100, 40, 140, 90, 20, 150, 44, 0);
-        assertEquals(0f, d[0], EPS);
-        // gap 0: badge bottom lands exactly on icon top
-        assertEquals(40 - 44 - 0, d[1], EPS);
+    public void widerBadgeStillCentresAsAGroup() {
+        // icon 100..140 x 40..110; badge 90..150 x 20..44 (wider); tab 240x150; gap 0
+        float[] r = reloc(100, 40, 140, 110, 90, 20, 150, 44, 240, 150, 0);
+        // proposed badge by = 40-0-44 = -4 -> badge 90..150 x 16..40
+        // union 90..150 x 16..110 centre (120,63); tab centre (120,75)
+        assertEquals(0f, r[0], EPS);
+        assertEquals(12f, r[1], EPS);
+        assertEquals(0f, r[2], EPS);
+        assertEquals(8f, r[3], EPS);
     }
 
     @Test
-    public void alreadyRelocatedIsZeroDelta() {
-        // badge already centred and 4px above the icon top
-        float[] d = deltas(100, 44, 180, 120, 12, 160, 40, 4);
-        assertEquals(0f, d[0], EPS);
-        assertEquals(0f, d[1], EPS);
+    public void targetIsAFixedPoint() {
+        // apply once, then feed the moved rects back: every delta must be zero
+        float[] first = reloc(100, 40, 180, 110, 160, 20, 200, 44, 220, 120, 4);
+        float[] second = reloc(
+                100 + first[0], 40 + first[1], 180 + first[0], 110 + first[1],
+                160 + first[2], 20 + first[3], 200 + first[2], 44 + first[3],
+                220, 120, 4);
+        assertEquals(0f, second[0], EPS);
+        assertEquals(0f, second[1], EPS);
+        assertEquals(0f, second[2], EPS);
+        assertEquals(0f, second[3], EPS);
     }
 
     @Test
-    public void negativeSpaceStillComputes() {
-        // pathological: badge below the icon — the formula still returns the
-        // (large positive) delta that would drag it up above the icon
-        float[] d = deltas(0, 100, 50, 0, 300, 40, 320, 2);
-        assertEquals(5f, d[0], EPS);
-        assertEquals(100 - 2 - 320, d[1], EPS);
+    public void pathologicalBadgeBelowIconStillComputes() {
+        float[] r = reloc(0, 100, 50, 150, 0, 300, 40, 320, 60, 160, 2);
+        // bx=5, by=-222 -> proposed 5..45 x 78..98; union 0..50 x 78..150 centre (25,114)
+        // tab centre (30,80) -> g=(5,-34)
+        assertEquals(5f, r[0], EPS);
+        assertEquals(-34f, r[1], EPS);
+        assertEquals(10f, r[2], EPS);
+        assertEquals(-256f, r[3], EPS);
     }
 }

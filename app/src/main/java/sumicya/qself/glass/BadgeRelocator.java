@@ -25,17 +25,31 @@ public final class BadgeRelocator {
     private static final int INSTALLED_TAG_KEY = 0x7F5A0004;
 
     /**
-     * Delta to add to the badge's current translation so that its centre
-     * aligns with the icon's centre-x and its bottom sits gapPx above the
-     * icon's top. Pure function of the two tab-relative rects.
+     * Group-centring relocation: the badge is first imagined at top-centre
+     * above the icon, then the UNION of (icon, proposed badge) is centred
+     * inside the tab's own bounds — so the pair reads as one whole and
+     * neither sticks out of the button.
+     *
+     * <p>Returns additive deltas: {iconDx, iconDy, badgeDx, badgeDy}. The
+     * target is a fixed point of the additive update (at target every value
+     * is zero), so per-layout reapplication cannot drift.</p>
      */
-    static float[] badgeDeltas(
-            float iconLeft, float iconTop, float iconRight,
-            float badgeLeft, float badgeTop, float badgeRight, float badgeBottom,
-            float gapPx) {
-        float dx = (iconLeft + iconRight) * 0.5f - (badgeLeft + badgeRight) * 0.5f;
-        float dy = (iconTop - gapPx) - badgeBottom;
-        return new float[]{dx, dy};
+    static float[] groupRelocation(
+            float iconL, float iconT, float iconR, float iconB,
+            float badgeL, float badgeT, float badgeR, float badgeB,
+            float tabW, float tabH, float gapPx) {
+        // proposed badge: centre-x on the icon, bottom gapPx above icon top
+        float bx = (iconL + iconR) * 0.5f - (badgeL + badgeR) * 0.5f;
+        float by = (iconT - gapPx) - badgeB;
+        // union of the icon and the proposed badge
+        float ul = Math.min(iconL, badgeL + bx);
+        float ut = Math.min(iconT, badgeT + by);
+        float ur = Math.max(iconR, badgeR + bx);
+        float ub = Math.max(iconB, badgeB + by);
+        // centre the union within the tab
+        float g0 = tabW * 0.5f - (ul + ur) * 0.5f;
+        float g1 = tabH * 0.5f - (ut + ub) * 0.5f;
+        return new float[]{g0, g1, bx + g0, by + g1};
     }
 
     /** Attaches the per-layout reapplication listener once per tab row. */
@@ -71,14 +85,19 @@ public final class BadgeRelocator {
         // tab-relative accumulated rects are comparable (upstream's
         // collectBadges folds translations in the same way)
         Entry icon = icons.get(0);
-        float iconRight = icon.l + icon.v.getWidth();
+        float iconR = icon.l + icon.v.getWidth();
+        float iconB = icon.t + icon.v.getHeight();
+        float tabW = tab.getWidth();
+        float tabH = tab.getHeight();
         for (Entry badge : badges) {
             float right = badge.l + badge.v.getWidth();
             float bottom = badge.t + badge.v.getHeight();
-            float[] d = badgeDeltas(icon.l, icon.t, iconRight,
-                    badge.l, badge.t, right, bottom, gapPx);
-            badge.v.setTranslationX(badge.v.getTranslationX() + d[0]);
-            badge.v.setTranslationY(badge.v.getTranslationY() + d[1]);
+            float[] d = groupRelocation(icon.l, icon.t, iconR, iconB,
+                    badge.l, badge.t, right, bottom, tabW, tabH, gapPx);
+            icon.v.setTranslationX(icon.v.getTranslationX() + d[0]);
+            icon.v.setTranslationY(icon.v.getTranslationY() + d[1]);
+            badge.v.setTranslationX(badge.v.getTranslationX() + d[2]);
+            badge.v.setTranslationY(badge.v.getTranslationY() + d[3]);
         }
     }
 

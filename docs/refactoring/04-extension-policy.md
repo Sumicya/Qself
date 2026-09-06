@@ -58,3 +58,8 @@ hook 型宿主增强模块：被动拦截/增强宿主自身行为。**不模拟
 - **产品/交互主干**：tiann/KernelSU（GPL-3.0）manager 的 FloatingBottomBar——悬浮 pill 设计语言、按压/拖拽动力学；
 - 汇流点：sjtt2/HeyBox-LiquidGlass（MIT，首个第三方 App 的 LSPosed 化）→ liuran001/WeChat-LiquidGlass（MIT，微信+QQ 双宿主，QQ 底栏手术知识所在地）。
 对本仓吸收的影响：载体不变（QQ 宿主注入需经典 View + AGSL，CMP 的 Compose 管线不可直接注入宿主视图树）；Kyant0 定位为 shader 数学参考（AGSL shader 字符串 + uniform 协议与框架无关，可移植），未来提升渲染质感（色散/凝胶感）时从这里取经，Apache-2.0 干净。
+
+## 8. FunBox 静态分析定论与替代路径（2026-09-06）
+
+FunBox v2244 为加固打包（dex 为单字母混淆壳：234 类/1825 字符串 vs 3.5MB 体积；真身由 libfun.so 5.2MB + zygisk/funloader.so 运行时解包），且全网无源码——§4 的静态知识提取路径对其不可行。
+替代路径：所需知识多为 QQ 内部参数而非 FunBox 代码，改走**自建运行时捕获**——用本仓代码写调试用"灰字捕获器"（hook NtGrayTipHelper 落日志），真机触发真实交互后从日志读参数，再走正常五件套实现。7 项候选逐一评估此法可行性后排队。

@@ -19,9 +19,15 @@ public final class GlassConfig {
 
     /**
      * Distance between the bottom of the glass pill and the screen edge, dp.
-     * Default 0 (flush with the bottom edge) per local preference.
      */
-    static volatile int barOffsetDp = 0;
+    static volatile int barOffsetDp = 12;
+
+    /**
+     * Breathing room added to each tab column when the pill hugs its content,
+     * dp — the margin from the buttons to the glass rim. Upstream 32; local
+     * preference is a tight 12.
+     */
+    static volatile int hugPaddingDp = 12;
 
     /** Whether the unread badge relocates to top-centre above the icon. */
     static volatile boolean badgeTopCenter = true;
@@ -33,6 +39,7 @@ public final class GlassConfig {
         try {
             SharedPreferences p = ctx.getSharedPreferences(PREFS, 0);
             barOffsetDp = p.getInt("barOffsetDp", barOffsetDp);
+            hugPaddingDp = p.getInt("hugPaddingDp", hugPaddingDp);
             badgeTopCenter = p.getBoolean("badgeTopCenter", badgeTopCenter);
         } catch (Throwable t) {
             LiquidGlassModule.logErr("config load failed", t);

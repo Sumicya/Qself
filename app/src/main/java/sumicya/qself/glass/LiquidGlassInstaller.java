@@ -1114,7 +1114,7 @@ public final class LiquidGlassInstaller {
         // giving each column the same generous breathing room it uses (~32dp per
         // side), then capping so the pill still clears the screen edges.
         int pad = Math.round(density * 4f);
-        int tabWidth = widest + Math.round(density * 32f);
+        int tabWidth = widest + Math.round(density * GlassConfig.hugPaddingDp);
         int screen = tabRow.getResources().getDisplayMetrics().widthPixels;
         int maxTotal = screen - Math.round(density * 24f);
         if (tabWidth * count + pad * 2 > maxTotal) {
