@@ -91,7 +91,7 @@ object FavEmoticonSortBy : CommonConfigFunctionHook("FavEmoticonSortBy", arrayOf
         set(value) {
             throw UnsupportedOperationException()
         }
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.CHAT_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.FAVORITE_AND_TOOLS_CATEGORY
     override val isAvailable = QAppUtils.isQQnt()
     override fun initOnce(): Boolean {
         HookUtils.hookAfterIfEnabled(

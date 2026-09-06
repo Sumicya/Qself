@@ -138,6 +138,6 @@ public class FavMoreEmo extends CommonSwitchFunctionHook {
     @NonNull
     @Override
     public String[] getUiItemLocation() {
-        return Auxiliary.CHAT_CATEGORY;
+        return Auxiliary.FAVORITE_AND_TOOLS_CATEGORY;
     }
 }

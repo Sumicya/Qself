@@ -126,10 +126,10 @@ object FunctionEntryRouter {
                 }
                 fragment("auxiliary-group", "群聊")
                 fragment("auxiliary-notification", "通知设置")
-                fragment("auxiliary-experimental", "实验性功能")
-                fragment("entertainment-function", "娱乐功能")
                 fragment("auxiliary-disguise-and-device", "伪装与设备")
                 fragment("auxiliary-favorite-and-tools", "收藏与工具")
+                fragment("entertainment-function", "娱乐功能")
+                fragment("auxiliary-experimental", "实验性功能")
                 fragment("auxiliary-misc", "杂项", false)
             }
             category("module-config", "配置", false) {

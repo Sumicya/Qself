@@ -63,7 +63,10 @@ public class FeatureInventoryGuardTest {
     private static final Pattern NAME_GET = Pattern.compile("getName\\([\\s\\S]{0,200}?return \"([^\"]+)\"");
     private static final Pattern NAME_PREF_TITLE_TYPED = Pattern.compile("override val preferenceTitle: String = \"([^\"]+)\"");
     private static final Pattern NAME_PREF_TITLE = Pattern.compile("override val preferenceTitle = \"([^\"]+)\"");
-    private static final Pattern LOCATION = Pattern.compile("Locations\\.([A-Za-z_]+)");
+    private static final Pattern LOCATION_ASSIGN = Pattern.compile("uiItemLocation(?::\\s*Array<String>)?\\s*=");
+    private static final Pattern LOCATION_GETTER = Pattern.compile("getUiItemLocation\\(\\)");
+    private static final Pattern LOCATION_TOKEN = Pattern.compile("Locations\\.([A-Za-z_]+)");
+    private static final Pattern LOCATION_RETURN = Pattern.compile("return\\s+[\\w.]*?([A-Z][A-Z_]+)\\s*;");
     private static final Pattern ENTRY_ANNOTATION = Pattern.compile("@UiItemAgentEntry");
 
     private static Path sourceRoot() {
@@ -92,6 +95,38 @@ public class FeatureInventoryGuardTest {
         return m.find() ? m.group(1) : null;
     }
 
+    /**
+     * The location token anchored to the assignment (or the Java getter's
+     * return), never the import line: the first pass keyed off
+     * {@code import ...Locations.Auxiliary} and went blind to re-categorising
+     * within the same top-level group. The window is the 240 chars after the
+     * anchor; a bare constant behind a static import (return Auxiliary.X;)
+     * resolves to the constant name.
+     */
+    private static String locToken(String t) {
+        int from;
+        Matcher a = LOCATION_ASSIGN.matcher(t);
+        if (a.find()) {
+            from = a.end();
+        } else {
+            Matcher g = LOCATION_GETTER.matcher(t);
+            if (!g.find()) {
+                return null;
+            }
+            from = g.end();
+        }
+        String win = t.substring(from, Math.min(t.length(), from + 240));
+        Matcher m = LOCATION_TOKEN.matcher(win);
+        if (m.find()) {
+            return m.group(1);
+        }
+        m = LOCATION_RETURN.matcher(win);
+        if (m.find()) {
+            return m.group(1);
+        }
+        return null;
+    }
+
     private static String scanFile(Path file, Path root) throws IOException {
         String t = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
         if (!ENTRY_ANNOTATION.matcher(t).find()) {
@@ -110,7 +145,7 @@ public class FeatureInventoryGuardTest {
         if (name == null) {
             name = firstGroup(NAME_PREF_TITLE, t);
         }
-        String loc = firstGroup(LOCATION, t);
+        String loc = locToken(t);
         return root.relativize(file).toString().replace('\\', '/')
                 + "\t" + (name == null ? "-" : name)
                 + "\t" + (loc == null ? "-" : loc) + "\n";

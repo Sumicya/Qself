@@ -16,7 +16,7 @@ import java.util.Arrays
 object PermissionMaskingHook : CommonSwitchFunctionHook() {
     override val name = "伪装权限"
     override val description = "让QQ认为自己获取了所有权限\n配合 使用系统相册/文件 使用"
-    override val uiItemLocation: Array<String> = FunctionEntryRouter.Locations.Auxiliary.EXPERIMENTAL_CATEGORY
+    override val uiItemLocation: Array<String> = FunctionEntryRouter.Locations.Auxiliary.DISGUISE_AND_DEVICE_CATEGORY
     override fun initOnce(): Boolean {
         // beforeHookIfEnabled 会报 NoSuchMethod 拼尽全力无法战胜，反正现在代码能跑（）
         XposedHelpers.findAndHookMethod(

@@ -40,7 +40,7 @@ import me.hd.util.toHostClass
 object GroupMemberManageFakeMyRole : CommonSwitchFunctionHook() {
     override val name = "群成员管理页伪装身份为群主"
     override val description = "使其在管理页显示群昵称及设置禁言等入口"
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.PROFILE_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.DISGUISE_AND_DEVICE_CATEGORY
     override val isAvailable = requireMinQQVersion(QQVersion.QQ_9_2_20)
 
     override fun initOnce(): Boolean {
