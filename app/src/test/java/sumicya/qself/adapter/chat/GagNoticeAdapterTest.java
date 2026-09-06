@@ -110,7 +110,7 @@ public class GagNoticeAdapterTest {
     @Test
     public void normalizeBoundary() {
         assertTrue(adapter.normalize("1", "2", "0", 0L) instanceof AllGag);
-        assertFalse(((AllGag) adapter.normalize("1", "2", "0", 0L)).isEnabled());
+        assertFalse(((AllGag) adapter.normalize("1", "2", "0", 0L)).getEnabled());
         assertTrue(adapter.normalize("1", "2", "3", 0L) instanceof MemberGag);
     }
 
