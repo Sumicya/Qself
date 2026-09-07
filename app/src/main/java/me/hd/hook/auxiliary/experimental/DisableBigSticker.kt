@@ -42,7 +42,7 @@ import me.hd.util.toHostClass
 object DisableBigSticker : CommonSwitchFunctionHook() {
     override val name = "屏蔽超级表情（接收）"
     override val description = "屏蔽别人发送的超级表情, 仅显示小号Emoji"
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EXPERIMENTAL_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EMOTICON_AND_STICKER_CATEGORY
     override val isAvailable = requireMinQQVersion(QQVersion.QQ_8_9_88)
 
     private fun changeFace(msgElements: ArrayList<*>) {

@@ -48,7 +48,7 @@ object Emoji2Sticker : CommonSwitchFunctionHook(arrayOf(EmoMsgUtils_isSingleLott
 
     override val name = "输入Emoji不转大表情"
     override val description = "禁用新版QQ输入单个Emoji后发送大表情"
-    override val uiItemLocation = FunctionEntryRouter.Locations.Entertainment.ENTERTAIN_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EMOTICON_AND_STICKER_CATEGORY
 
     override val isAvailable: Boolean
         get() = requireMinQQVersion(QQVersion.QQ_8_7_5) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)

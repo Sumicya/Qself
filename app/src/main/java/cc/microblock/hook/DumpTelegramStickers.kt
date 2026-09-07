@@ -321,7 +321,7 @@ object DumpTelegramStickers : CommonConfigFunctionHook() {
             .setNegativeButton("取消", null)
             .show()
     }
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.CHAT_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EMOTICON_AND_STICKER_CATEGORY
 
     override fun initOnce(): Boolean {
         val EmoticonPanelController = Initiator.loadClass("com.tencent.mobileqq.emoticonview.EmoticonPanelController")

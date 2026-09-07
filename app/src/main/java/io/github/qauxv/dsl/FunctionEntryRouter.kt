@@ -119,6 +119,7 @@ object FunctionEntryRouter {
                     category("auxiliary-message", "消息")
                     category("auxiliary-guild", "频道")
                 }
+                fragment("auxiliary-emoticon-and-sticker", "表情与贴纸")
                 fragment("auxiliary-file", "文件与存储")
                 fragment("auxiliary-friend-and-profile", "好友和资料卡") {
                     category("auxiliary-friend", "好友")
@@ -272,6 +273,8 @@ object FunctionEntryRouter {
 
             @JvmField
             val DISGUISE_AND_DEVICE_CATEGORY: Array<String> = arrayOf(ANY_CAST_PREFIX, "auxiliary-disguise-and-device")
+
+            val EMOTICON_AND_STICKER_CATEGORY: Array<String> = arrayOf(ANY_CAST_PREFIX, "auxiliary-emoticon-and-sticker")
 
             @JvmField
             val FAVORITE_AND_TOOLS_CATEGORY: Array<String> = arrayOf(ANY_CAST_PREFIX, "auxiliary-favorite-and-tools")

@@ -38,7 +38,7 @@ object DisableReactionLimit : CommonSwitchFunctionHook() {
 
     override val name = "移除表情回应限制"
     override val description = "发送频率限制和部分表情被过滤限制"
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.GROUP_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EMOTICON_AND_STICKER_CATEGORY
     override val isAvailable = requireMinQQVersion(QQVersion.QQ_9_0_8)
 
     override fun initOnce() = throwOrTrue {
