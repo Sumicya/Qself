@@ -44,7 +44,7 @@
 | **群管理菜单** | FunBox 复刻（规格已由用户提供） | 🔨 **规格定稿**: 入口=群聊长按头像（顶替原@行为；查共同群可另行分配到点击类交互）。五项: 标记(本地) / 修改群名片 / 撤回消息 / 禁言和踢出 / 查询共同群。实现分级: v1a=入口+菜单壳+零API项(标记本地存储、共同群接 CheckCommonGroup.onClick 现成)；v1b=四项 kernel 动作(IKernelGroupService 桥自建，参照 MsgServiceHelper/ContactCompat 写法)。仓内群管理 API 存量=零(勘察 2026-09-07)，唯一直接可复用=CheckCommonGroup。FunBox 考古闭环: TG 流传包即精简包(9.59MB，native 已剥)，规格唯一样本=用户记忆 |
 | **群日志获取**（灰字扩展） | GrayTipCapture v2 已在仓 | ✅ **v1 已落**: 升格为「群日志记录（灰字）」（消息分类），记录写入滚动 JSONL（GroupLogStore，512KiB 轮转），点击条目弹查看器（最近 200 条+清空） |
 | 一键 20 赞/50 赞 | XAutoDaily 线（外部模块支持） | 点赞/等级加速，排后但入集 |
-| **风控上报拦截**（QQHook 整合） | 用户提供 QQHook_1.4.apk（io.github.jhl337.qqhook，12KB）：钩 MsfCore/ChannelProxyExt，拦 `trpc.o3.mobile_security.*`/`trpc.o3.report.*` | ✅ 用户决策"是"收编；与树内 QSecO3 缓解同族，整合为开关功能（dex 已解析入档 /tmp 之外未存，逻辑 4 个 hook 点清晰可复刻） |
+| **风控上报拦截**（QQHook 合并） | QQHook 1.4（io.github.jhl337.qqhook）复刻 | ✅ **已合并为功能**: `拦截风控上报（O3）`（RiskReportInterceptor，杂项分类），MsfCore.sendMessage(+Inner 回退)与 ChannelManager.sendMessage 全重载两路拦截，前缀 `trpc.o3.mobile_security.`/`trpc.o3.report.`，主+MSF 进程 |
 | 通知美化 | **仓内已有**: `cc.chenhe.qqnotifyevo`（MessagingStyle 重构，9 文件） | ✅ 声音问题已修: 重构通知改为**继承原通知渠道**（用户系统设置直接生效；原实现自建渠道强设默认铃声） |
 | 头像圆角调整 | 待查/全新 | 自由化旋钮型功能 |
 | 预返回动画 | 全新 | Android predictive back |

@@ -272,6 +272,7 @@ sumicya/qself/feature/chat/RevokeWrapHint.kt	防撤回消息标记	Auxiliary
 sumicya/qself/feature/dev/GrayTipCapture.kt	群日志记录（灰字）	Auxiliary
 sumicya/qself/feature/device/ForcePadMode.kt	强制平板模式	Auxiliary
 sumicya/qself/feature/device/ModifyDeviceType.kt	设备类型修改	Auxiliary
+sumicya/qself/feature/device/RiskReportInterceptor.kt	拦截风控上报（O3）	Auxiliary
 sumicya/qself/feature/notification/MuteQZoneThumbsUp.kt	被赞说说不提醒	-
 sumicya/qself/feature/screenshot/DisableScreenshotShare.kt	屏蔽截屏分享	-
 sumicya/qself/feature/ui/CustomSplash.kt	自定义启动图	-
