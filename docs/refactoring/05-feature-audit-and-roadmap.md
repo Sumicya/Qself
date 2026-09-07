@@ -139,7 +139,9 @@
 |---|---|---|---|
 | CNFE `MainChatsCardContainerPartImpl` + NPE `getDeclaredMethods on null` | 每次 QQ 启动成对出现（跨 5 个 pid 复现） | `DisableChatsCardContainer`，9.2.x 类已删 | ✅ 本批: initOnce 判空静默无操作 |
 | CCE `RelativeLayout/View → LinearLayout` | 每条群聊气泡一条（栈帧 `HideTroopLevel.onGetViewNt:86`） | ✅ `HideTroopLevel` 硬转 LinearLayout，9.2.10 起等级视图为 RelativeLayout | ✅ 本批: 改 `as? ViewGroup` 取首子（两种形状通吃） |
-| `XposedHelpers$ClassNotFoundError: parameter type must not be null` ×4/进程 | 初始化期，栈帧被普查 grep 滤掉 | 未定罪（某功能类缺失后仍组 hook 参数表） | ⏳ 下轮 grep 保留首栈帧行 |
+| `NoSuchFieldException field 'n' in QQCustomMenuExpandableLayout` + CCE `View→LinearLayout`（同一功能两 lambda） | 每次打开消息菜单 4 条（`LegacyContextMenu.kt:54/57`） | ✅ `LegacyContextMenu`（老式消息菜单）：高度字段 'n' 已删、布局方法返回普通 View | ✅ 本批: 字段写入一次失败即停试；结果转型改 `as? ViewGroup` |
+| NPE `null cannot be cast to non-null type kotlin.String` | 每次点群机器人按钮 1 条（`HandleClickGroupBotMsgBtnSend.kt:63`） | ✅ `HandleClickGroupBotMsgBtnSend`：版本阶梯止于 9.1.0，9.2.10 上 label/type/enter 为 null | ✅ 本批: 三字段改可空解析，null 时落回通用确认弹窗（保住防误触本意） |
+| `XposedHelpers$ClassNotFoundError: parameter type must not be null` ×4/进程 | 初始化期，sweep2 中未复现 | 未定罪（某功能类缺失后仍组 hook 参数表） | ⏳ 观察下轮 sweep（可能随 DisableChatsCardContainer 修复消失） |
 | `DexTarget: XXX` 找不到 ×20+（CGuildHelperProvider/CSimpleUiUtil/CIntimateDrawer/NFriendChatPie_updateUITitle/NLeftSwipeReplyHelper_reply…）+ 硬编码类 CNFE（QQSettingMeView/BuscardHelper/VideoVolumeControl/AIOPictureView/SettingMeApolloViewController…） | 全部开启模式初始化期一次性 | 版本失配清单（9.2.10 目标签名/类名漂移），非崩溃性 | 📋 入档；按用户点名逐个适配 |
 | FATAL EXCEPTION 计数 12 | 计数被剪贴板回显污染（Termux/AIUnit 把含 "FATAL EXCEPTION" 字样的命令文本记入 logcat，grep 自匹配） | 多数为自污染，真归属未知 | ⏳ 下轮采集: `logcat -c` 清缓冲后复现，grep 加 `-v ZeroTermux\|AIUnit` 排除，且改看 `E AndroidRuntime` |
 - 交接纪律: 玻璃 host 等运行时对象一律不进 saved state（类加载器中立，重建即弃）。

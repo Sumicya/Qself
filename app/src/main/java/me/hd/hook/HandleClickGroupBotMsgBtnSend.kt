@@ -57,13 +57,26 @@ object HandleClickGroupBotMsgBtnSend : CommonSwitchFunctionHook() {
                 requireMinQQVersion(QQVersion.QQ_9_0_0) -> Pair("n", "d")//9.0.0~9.0.50
                 else -> Pair("", "")
             }
+            val showGenericConfirm: (android.content.Context, io.github.qauxv.util.xpcompat.XC_MethodHook.MethodHookParam) -> Unit = { ctx, p ->
+                MaterialDialog(ctx).show {
+                    title(text = "是否发送或打开")
+                    message(text = p.thisObject.findFieldObjectAs<String> { type == String::class.java })
+                    positiveButton(text = "是") {
+                        XposedBridge.invokeOriginalMethod(p.method, p.thisObject, p.args)
+                    }
+                    negativeButton(text = "否")
+                }
+            }
             if (btnModelName != "" && prototypeName != "") {
                 val btnModel = param.thisObject.get(btnModelName)
                 val prototype = btnModel.get(prototypeName)
-                val label = prototype.get("label") as String
-                val type = prototype.get("type") as Int
-                val enter = prototype.get("enter") as Boolean
-                if (type == 2 && enter) {
+                // 9.2.10 drift (census sweep2): these fields can be null now -
+                // the old `as String` threw on every bot-button click. A null
+                // parse falls through to the generic confirm instead.
+                val label = prototype.get("label") as? String
+                val type = prototype.get("type") as? Int
+                val enter = prototype.get("enter") as? Boolean
+                if (type == 2 && enter == true && label != null) {
                     MaterialDialog(context).show {
                         title(text = "是否发送内容")
                         message(text = label)
@@ -72,18 +85,13 @@ object HandleClickGroupBotMsgBtnSend : CommonSwitchFunctionHook() {
                         }
                         negativeButton(text = "否")
                     }
-                } else {
+                } else if (type != null && enter != null) {
                     XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args)
+                } else {
+                    showGenericConfirm(context, param)
                 }
             } else {
-                MaterialDialog(context).show {
-                    title(text = "是否发送或打开")
-                    message(text = param.thisObject.findFieldObjectAs<String> { type == String::class.java })
-                    positiveButton(text = "是") {
-                        XposedBridge.invokeOriginalMethod(param.method, param.thisObject, param.args)
-                    }
-                    negativeButton(text = "否")
-                }
+                showGenericConfirm(context, param)
             }
 
         }
