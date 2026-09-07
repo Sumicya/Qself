@@ -31,7 +31,7 @@
 | 底部导航栏液态玻璃 | sumicya.qself.glass | ✅ 本周迭代至贴边+数字上位 |
 | 消息显示 ID 和时间 | ChatItemShowQQUin | ✅ 本周修 pattern 崩溃 |
 | +1 按钮 | RepeaterPlus（消息+1 Plus） | 上游已解决的版本互补对 |
-| 回复带图 | ReplyMsgWithImg | ⏳ 9.2.10 DexKit 失配待修 |
+| 回复带图 | ReplyMsgWithImg | 🔨 诊断已埋: initOnce 输出 8 个 DexKit 目标的 hit/miss 单行日志，终验采数后按缺口重签 |
 | 群文件增强 | TroopFileSaveLasting | 群文件保存时效等 |
 | 好友检测/历史好友 | CheckCommonGroup / FriendDeletionNotification / ShowDeletedFriendListEntry / OpenFriendChatHistory | 四件套 |
 | 资料卡增强 | OpenProfileCard 等 | 细化范围待定 |
@@ -44,13 +44,13 @@
 | 功能 | 底子/参考 | 备注 |
 |------|-----------|------|
 | **防撤回扩展**（包围消息的提示，FunBox 风格） | 树内 cc.ioctl.hook.msg.RevokeMsgHook 为底 | 🔨 **v1 已落**: RevokeMsgHook 撤回点记录 peerUid#msgSeq 注册表；新功能 `防撤回消息标记`(RevokeWrapHint) 在被撤回气泡顶部注入「已撤回 · 已保留」提示条；v2=真正边框包围（待 9.2.10 气泡布局族勘察） |
-| **群管理菜单** | FunBox 复刻（规格已由用户提供） | 🔨 **规格定稿**: 入口=群聊长按头像（顶替原@行为；查共同群可另行分配到点击类交互）。五项: 标记(本地) / 修改群名片 / 撤回消息 / 禁言和踢出 / 查询共同群。实现分级: v1a=入口+菜单壳+零API项(标记本地存储、共同群接 CheckCommonGroup.onClick 现成)；v1b=四项 kernel 动作(IKernelGroupService 桥自建，参照 MsgServiceHelper/ContactCompat 写法)。仓内群管理 API 存量=零(勘察 2026-09-07)，唯一直接可复用=CheckCommonGroup。FunBox 考古闭环: TG 流传包即精简包(9.59MB，native 已剥)，规格唯一样本=用户记忆 |
+| **群管理菜单** | FunBox 复刻（规格已由用户提供） | 🔨 **规格定稿**: 入口=群聊长按头像（顶替原@行为；查共同群可另行分配到点击类交互）。五项: 标记(本地) / 修改群名片 / 撤回消息 / 禁言和踢出 / 查询共同群。实现分级: v1a=✅**已落**（入口+菜单壳+标记[本地持久化]+查询共同群[ti.qq.com recall 页直开，uin 取自消息]）；v1b=四项 kernel 动作(IKernelGroupService 桥自建，参照 MsgServiceHelper/ContactCompat 写法)。仓内群管理 API 存量=零(勘察 2026-09-07)，唯一直接可复用=CheckCommonGroup。FunBox 考古闭环: TG 流传包即精简包(9.59MB，native 已剥)，规格唯一样本=用户记忆 |
 | **群日志获取**（灰字扩展） | GrayTipCapture v2 已在仓 | ✅ **v1 已落**: 升格为「群日志记录（灰字）」（消息分类），记录写入滚动 JSONL（GroupLogStore，512KiB 轮转），点击条目弹查看器（最近 200 条+清空） |
 | 一键 20 赞/50 赞 | XAutoDaily 线（外部模块支持） | 点赞/等级加速，排后但入集 |
 | **等级加速**（繁华观察） | 繁华 2.5.6 有此功能（实现被混淆壳保护，静态不可复刻，自建） | ✅ 收编入集，与一键赞/XAutoDaily 同线排后；⚠️ 用户标注「可能有封号风险」——实现时须可开关、默认关、动作限速 |
 | **风控上报拦截**（QQHook 合并） | QQHook 1.4（io.github.jhl337.qqhook）复刻 | ✅ **已合并为功能**: `拦截风控上报（O3）`（RiskReportInterceptor，杂项分类），MsfCore.sendMessage(+Inner 回退)与 ChannelManager.sendMessage 全重载两路拦截，前缀 `trpc.o3.mobile_security.`/`trpc.o3.report.`，主+MSF 进程 |
 | 通知美化 | **仓内已有**: `cc.chenhe.qqnotifyevo`（MessagingStyle 重构，9 文件） | ✅ 声音问题已修: 重构通知改为**继承原通知渠道**（用户系统设置直接生效；原实现自建渠道强设默认铃声） |
-| 头像圆角调整 | 待查/全新 | 自由化旋钮型功能 |
+| 头像圆角调整 | 全新（AvatarGeom 定位器+outline 裁剪） | ✅ **v1 已落（聊天范围）**: 「头像圆角（聊天）」，半径旋钮 `rq_avatar_rounding_dp`（默认8，0~36），类无关实现；联系人/资料卡 v2 |
 | 预返回动画 | 全新 | Android predictive back |
 
 ### C. 移除（v1 草案误收，用户明确"无"）

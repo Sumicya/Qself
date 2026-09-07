@@ -132,6 +132,35 @@ public class ReplyMsgWithImg extends CommonSwitchFunctionHook implements IBaseCh
 
     @Override
     protected boolean initOnce() throws Exception {
+        // 9.2.10 drift diagnostics (my-feature-set 06): which DexKit targets
+        // have a cached hit on this host - one INFO line per init, so the
+        // next logcat sweep names the exact targets needing new signatures.
+        try {
+            StringBuilder diag = new StringBuilder("ReplyMsgWithImg diag:");
+            io.github.qauxv.util.dexkit.DexKitTarget[] ts = {
+                    CGuildHelperProvider.INSTANCE, CGuildArkHelper.INSTANCE,
+                    CMessageRecordFactory.INSTANCE, CReplyMsgUtils.INSTANCE,
+                    CReplyMsgSender.INSTANCE, NPhotoListPanel_resetStatus.INSTANCE,
+                    NContactUtils_getDiscussionMemberShowName.INSTANCE,
+                    NContactUtils_getBuddyName.INSTANCE};
+            for (io.github.qauxv.util.dexkit.DexKitTarget t : ts) {
+                Object hit = null;
+                try {
+                    hit = io.github.qauxv.util.dexkit.DexKit.loadMethodFromCache(t);
+                } catch (Throwable ignored) {
+                }
+                if (hit == null) {
+                    try {
+                        hit = io.github.qauxv.util.dexkit.DexKit.loadClassFromCache(t);
+                    } catch (Throwable ignored) {
+                    }
+                }
+                diag.append(' ').append(t.getClass().getSimpleName())
+                        .append(hit != null ? "=hit" : "=miss");
+            }
+            io.github.qauxv.util.Log.i(diag.toString());
+        } catch (Throwable ignored) {
+        }
         kHelperProvider = Initiator.load("com.tencent.mobileqq.activity.aio.helper.HelperProvider");
         if (kHelperProvider == null) {
             kHelperProvider = Objects.requireNonNull(DexKit.loadClassFromCache(CGuildHelperProvider.INSTANCE), "CGuildHelperProvider.INSTANCE")

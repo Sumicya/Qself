@@ -268,6 +268,7 @@ nep/timeline/PromptForNoSeqMessage.kt	提示 NoSeq 消息	Auxiliary
 sumicya/qself/feature/chat/DisableEnterEffect.kt	屏蔽所有进场特效	-
 sumicya/qself/feature/chat/DisableLightInteraction.kt	禁用轻互动	Simplify
 sumicya/qself/feature/chat/GagInfoDisclosure.kt	显示设置禁言的管理	Auxiliary
+sumicya/qself/feature/chat/GroupAdminMenu.kt	群管理菜单	Auxiliary
 sumicya/qself/feature/chat/RevokeWrapHint.kt	防撤回消息标记	Auxiliary
 sumicya/qself/feature/dev/GrayTipCapture.kt	群日志记录（灰字）	Auxiliary
 sumicya/qself/feature/device/ForcePadMode.kt	强制平板模式	Auxiliary
@@ -275,6 +276,7 @@ sumicya/qself/feature/device/ModifyDeviceType.kt	设备类型修改	Auxiliary
 sumicya/qself/feature/device/RiskReportInterceptor.kt	拦截风控上报（O3）	Auxiliary
 sumicya/qself/feature/notification/MuteQZoneThumbsUp.kt	被赞说说不提醒	-
 sumicya/qself/feature/screenshot/DisableScreenshotShare.kt	屏蔽截屏分享	-
+sumicya/qself/feature/ui/AvatarRounding.kt	头像圆角（聊天）	Simplify
 sumicya/qself/feature/ui/CustomSplash.kt	自定义启动图	-
 sumicya/qself/feature/ui/LiquidGlassBottomBar.kt	底部导航栏液态玻璃	Auxiliary
 sumicya/qself/feature/ui/RemoveCameraButton.kt	屏蔽消息界面标题栏相机/小世界图标	Simplify
