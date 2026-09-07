@@ -72,8 +72,8 @@ object GroupAdminMenu : CommonSwitchFunctionHook(
     override val name: String = "群管理菜单"
 
     override val description: String =
-        "群聊中长按成员头像弹出管理菜单：标记此人 / 查询共同群（v1a）。" +
-            "长按头像的原生@行为将被本菜单替换。修改群名片、撤回消息、禁言和踢出为 v1b。重启生效"
+        "群聊中长按成员头像弹出管理菜单：标记 / 群名片 / 撤回本条 / 禁言 / 移出 / 共同群。" +
+            "长按头像的原生@行为将被本菜单替换。管理动作为诊断优先实现（未匹配时提示并记录 qself_diag.log），重启生效"
 
     override val uiItemLocation: Array<String> =
         FunctionEntryRouter.Locations.Auxiliary.GROUP_CATEGORY
@@ -112,17 +112,36 @@ object GroupAdminMenu : CommonSwitchFunctionHook(
         val avatar = AvatarGeom.findAvatar(rootView, 0) ?: return
         val uin = chatMessage.senderUin
         if (uin <= 0L) return
+        val peerUid = chatMessage.peerUid
+        val memberUid = chatMessage.senderUid
+        val msgId = chatMessage.msgId
+        val msgSeq = chatMessage.msgSeq
         avatar.setOnLongClickListener { v ->
-            showMenu(v.context, uin)
+            showMenu(v.context, uin, peerUid, memberUid, msgId, msgSeq)
             true
         }
     }
 
-    private fun showMenu(context: Context, uin: Long) {
+    private fun showMenu(
+        context: Context,
+        uin: Long,
+        peerUid: String?,
+        memberUid: String?,
+        msgId: Long,
+        msgSeq: Long,
+    ) {
         val ctx = CommonContextWrapper.createAppCompatContext(context)
+        // v1b diagnostics-first: dump candidate inventory once per process
+        sumicya.qself.feature.dev.DiagLog.w(
+            "GroupAdminMenu open uin=$uin peerUid=$peerUid memberUid=$memberUid msgId=$msgId msgSeq=$msgSeq")
+        GroupAdminBridge.dumpInventoryOnce()
         val marked = parseMarks(ConfigManager.getDefaultConfig().getStringOrDefault(CFG_MARKS, "")).contains(uin)
         val items = arrayOf(
             if (marked) "取消标记此人" else "标记此人",
+            "修改群名片",
+            "撤回本条消息",
+            "禁言",
+            "移出群聊",
             "查询共同群",
         )
         AlertDialog.Builder(ctx)
@@ -130,7 +149,11 @@ object GroupAdminMenu : CommonSwitchFunctionHook(
             .setItems(items) { _, which ->
                 when (which) {
                     0 -> toggleMark(ctx, uin)
-                    1 -> openCommonGroups(ctx, uin)
+                    1 -> if (peerUid != null && memberUid != null) GroupAdminBridge.cardDialog(ctx, peerUid, memberUid, uin)
+                    2 -> GroupAdminBridge.revokeDialog(ctx, msgId, msgSeq, uin)
+                    3 -> if (peerUid != null && memberUid != null) GroupAdminBridge.muteDialog(ctx, peerUid, memberUid, uin)
+                    4 -> if (peerUid != null && memberUid != null) GroupAdminBridge.kickDialog(ctx, peerUid, memberUid, uin)
+                    5 -> openCommonGroups(ctx, uin)
                 }
             }
             .setNegativeButton("关闭", null)
