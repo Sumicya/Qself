@@ -18,6 +18,9 @@
 - QQ 语境下"自己的客户端"的现实形态 = **模块即客户端**（官方 QQ 为内核，模块层拥有全部 UI/行为自由）。
 - **v2 新洞察: 功能母本 = QA 基座 + FunBox 招牌功能（防撤回包围提示/群管理菜单/半透明头像）+ TG 式原则**；
   FunBox 已判死（native 载荷不可维护，见 04 §8），其价值以功能复刻方式在新客户端中延续。
+- 繁华模块 2.5.6 观察（2026-09-07，样本已剖析后删除）: 等级加速（收编，风险标注）、
+  自定义气泡/主题（不入集——视觉由用户设计语言统一）；技术上 targetApiVersion=102 +
+  控制流混淆壳（libfanhua-obfuscator.so），为 102 热重载生产可用性再添旁证。
 
 ## 2. 《我的功能集》v2（用户实报）
 
@@ -44,6 +47,7 @@
 | **群管理菜单** | FunBox 复刻（规格已由用户提供） | 🔨 **规格定稿**: 入口=群聊长按头像（顶替原@行为；查共同群可另行分配到点击类交互）。五项: 标记(本地) / 修改群名片 / 撤回消息 / 禁言和踢出 / 查询共同群。实现分级: v1a=入口+菜单壳+零API项(标记本地存储、共同群接 CheckCommonGroup.onClick 现成)；v1b=四项 kernel 动作(IKernelGroupService 桥自建，参照 MsgServiceHelper/ContactCompat 写法)。仓内群管理 API 存量=零(勘察 2026-09-07)，唯一直接可复用=CheckCommonGroup。FunBox 考古闭环: TG 流传包即精简包(9.59MB，native 已剥)，规格唯一样本=用户记忆 |
 | **群日志获取**（灰字扩展） | GrayTipCapture v2 已在仓 | ✅ **v1 已落**: 升格为「群日志记录（灰字）」（消息分类），记录写入滚动 JSONL（GroupLogStore，512KiB 轮转），点击条目弹查看器（最近 200 条+清空） |
 | 一键 20 赞/50 赞 | XAutoDaily 线（外部模块支持） | 点赞/等级加速，排后但入集 |
+| **等级加速**（繁华观察） | 繁华 2.5.6 有此功能（实现被混淆壳保护，静态不可复刻，自建） | ✅ 收编入集，与一键赞/XAutoDaily 同线排后；⚠️ 用户标注「可能有封号风险」——实现时须可开关、默认关、动作限速 |
 | **风控上报拦截**（QQHook 合并） | QQHook 1.4（io.github.jhl337.qqhook）复刻 | ✅ **已合并为功能**: `拦截风控上报（O3）`（RiskReportInterceptor，杂项分类），MsfCore.sendMessage(+Inner 回退)与 ChannelManager.sendMessage 全重载两路拦截，前缀 `trpc.o3.mobile_security.`/`trpc.o3.report.`，主+MSF 进程 |
 | 通知美化 | **仓内已有**: `cc.chenhe.qqnotifyevo`（MessagingStyle 重构，9 文件） | ✅ 声音问题已修: 重构通知改为**继承原通知渠道**（用户系统设置直接生效；原实现自建渠道强设默认铃声） |
 | 头像圆角调整 | 待查/全新 | 自由化旋钮型功能 |
