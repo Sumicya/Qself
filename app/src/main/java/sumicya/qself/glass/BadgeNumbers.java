@@ -34,6 +34,9 @@ import java.util.WeakHashMap;
  */
 public final class BadgeNumbers {
 
+    /** one-shot device diagnostics switch (set after the first log). */
+    private static boolean sDiagLogged = false;
+
     /** badge view -> last count reported via an updateNum-style hook. */
     private static final WeakHashMap<View, Integer> sCounts = new WeakHashMap<>();
 
@@ -118,6 +121,18 @@ public final class BadgeNumbers {
             if (labelAt == null) {
                 continue;
             }
+            if (!sDiagLogged) {
+                sDiagLogged = true;
+                LiquidGlassModule.log(android.util.Log.INFO, "badge diag: cls="
+                        + badge.getClass().getName()
+                        + " tv=" + (badge instanceof TextView)
+                        + " text=" + (badge instanceof TextView ? ((TextView) badge).getText() : null)
+                        + " count=" + sCounts.get(badge)
+                        + " label=" + label
+                        + " labelTop=" + labelView.getTop()
+                        + " iconBottom=" + iconBottomLocal
+                        + " tabH=" + tab.getHeight());
+            }
             badge.setAlpha(0f);
             // Centre of the icon itself: the number sits ON the icon
             // (user direction), horizontally on the shared label/icon axis.
@@ -141,10 +156,16 @@ public final class BadgeNumbers {
                 // Implausible geometry: settle for the 6dp-gap default.
                 iconBottomLocal = labelTopLocal - Math.round(6f * density);
             }
-            int iconCentreLocal = Math.max(iconBottomLocal - Math.round(15f * density),
-                    Math.round(2f * density));
-            float baseline = labelAt[1] - (labelTopLocal - iconCentreLocal)
-                    + paint.getTextSize() * 0.35f;
+            // User-confirmed placement: the number sits directly ABOVE the
+            // icon's top edge (not overlapping it), centred on the shared
+            // icon/label axis. Icon top estimated at 24dp above the measured
+            // icon bottom; baseline 3dp above that edge.
+            int iconTopLocal = iconBottomLocal - Math.round(24f * density);
+            float baseline = labelAt[1] - (labelTopLocal - iconTopLocal)
+                    - Math.round(3f * density);
+            if (baseline < paint.getTextSize()) {
+                baseline = paint.getTextSize();
+            }
             float cx = labelAt[0] + labelView.getWidth() * 0.5f;
             canvas.drawText(label, cx, baseline, paint);
         }
