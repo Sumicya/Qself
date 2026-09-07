@@ -37,7 +37,6 @@ cc/ioctl/hook/experimental/ForcePhoneMode.kt	强制手机模式	Auxiliary
 cc/ioctl/hook/experimental/QrLoginAuthSecCheckMitigation.kt	跳过扫码风险登录五秒确认	Auxiliary
 cc/ioctl/hook/file/BaseApk.java	重命名 APK	FILE_CATEGORY
 cc/ioctl/hook/friend/ArbitraryFrdSourceId.java	显示加好友来源参数	FRIEND_CATEGORY
-cc/ioctl/hook/friend/CheckCommonGroup.java	-	FRIEND_CATEGORY
 cc/ioctl/hook/friend/CheckCommonGroupMenu.kt	查找共同群	Auxiliary
 cc/ioctl/hook/friend/FriendDeletionNotification.kt	-	Auxiliary
 cc/ioctl/hook/friend/OpenFriendChatHistory.kt	-	Auxiliary
@@ -270,6 +269,7 @@ sumicya/qself/feature/chat/DisableLightInteraction.kt	禁用轻互动	Simplify
 sumicya/qself/feature/chat/GagInfoDisclosure.kt	显示设置禁言的管理	Auxiliary
 sumicya/qself/feature/chat/GroupAdminMenu.kt	群管理菜单	Auxiliary
 sumicya/qself/feature/chat/RevokeWrapHint.kt	防撤回消息标记	Auxiliary
+sumicya/qself/feature/consolidation/AdPurifySuite.kt	广告净化（总开关）	Auxiliary
 sumicya/qself/feature/dev/GrayTipCapture.kt	群日志记录（灰字）	Auxiliary
 sumicya/qself/feature/device/ForcePadMode.kt	强制平板模式	Auxiliary
 sumicya/qself/feature/device/ModifyDeviceType.kt	设备类型修改	Auxiliary

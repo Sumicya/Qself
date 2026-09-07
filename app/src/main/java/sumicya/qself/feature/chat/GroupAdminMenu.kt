@@ -53,8 +53,9 @@ import sumicya.qself.hostapi.CapabilityState
  * Entry: long-press on a member's avatar in a group chat (the stock @-on-
  * long-press is displaced, per the user's spec). v1a ships the shell plus
  * the zero-API items: 标记 (local, persisted) and 查询共同群 (opens the same
- * ti.qq.com/friends/recall page the in-tree CheckCommonGroup uses, minus
- * its manual QQ-number input since the uin is known from the message).
+ * ti.qq.com/friends/recall page the friend-profile common-group feature
+ * uses, minus manual QQ-number input since the uin is known from the
+ * message).
  * The four kernel actions (群名片/撤回/禁言/踢出) are v1b behind a
  * GroupService bridge.
  */
