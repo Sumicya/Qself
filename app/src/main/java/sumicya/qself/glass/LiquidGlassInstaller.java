@@ -2050,10 +2050,16 @@ public final class LiquidGlassInstaller {
             host.setClipToPadding(false);
             sGlassRef = new WeakReference<>(glass);
 
+            // The flush-rim redo, measured this time: the first static attempt
+            // trimmed a guessed hugPadding/2 and cut into the outer icons.
+            // This version reads the real icon extent from the laid-out tabs
+            // and posts the margin change, so it runs after the layout pass -
+            // never during one (the v3 lesson).
             host.setGlassTuner(new LiquidGlassHostLayout.GlassTuner() {
                 @Override
                 public void onSize(int w, int h, float cornerRadius) {
                     glass.invalidate();
+                    applyMeasuredRimTrim(host, glass, sTabRowRef.get());
                 }
 
                 @Override
@@ -2179,5 +2185,88 @@ public final class LiquidGlassInstaller {
         } catch (Throwable t) {
             LiquidGlassModule.logErr("droplet sizing failed", t);
         }
+    }
+
+    /** one rim-trim attempt per process; reinstall is rare and a fresh process re-runs it. */
+    private static boolean sRimTrimDone = false;
+
+    private static void applyMeasuredRimTrim(final FrameLayout host,
+            final LiquidGlassPanel glass, final ViewGroup row) {
+        if (sRimTrimDone || host == null || glass == null || row == null) {
+            return;
+        }
+        sRimTrimDone = true;
+        host.post(() -> {
+            try {
+                int n = row.getChildCount();
+                if (n < 2 || host.getWidth() <= 0 || row.getWidth() <= 0) {
+                    LiquidGlassModule.log(android.util.Log.INFO,
+                            "rim trim: geometry not ready, skipped");
+                    return;
+                }
+                View firstTab = row.getChildAt(0);
+                View lastTab = row.getChildAt(n - 1);
+                View firstIcon = findTabIcon(firstTab, 0);
+                View lastIcon = findTabIcon(lastTab, 0);
+                if (firstIcon == null || lastIcon == null) {
+                    LiquidGlassModule.log(android.util.Log.INFO,
+                            "rim trim: no small square icon found, skipped");
+                    return;
+                }
+                int pad = Math.max(0, (host.getWidth() - row.getWidth()) / 2);
+                int insetL = (firstTab.getWidth() - firstIcon.getWidth()) / 2;
+                int insetR = (lastTab.getWidth() - lastIcon.getWidth()) / 2;
+                int iconLHost = pad + firstTab.getLeft() + insetL;
+                int iconRHost = pad + lastTab.getLeft() + lastTab.getWidth() - insetR;
+                int glassW = iconRHost - iconLHost;
+                if (glassW <= 0 || iconLHost < pad || insetL < 0 || insetR < 0) {
+                    LiquidGlassModule.log(android.util.Log.INFO,
+                            "rim trim: implausible geometry (insetL=" + insetL
+                                    + " insetR=" + insetR + "), skipped");
+                    return;
+                }
+                FrameLayout.LayoutParams lp =
+                        (FrameLayout.LayoutParams) glass.getLayoutParams();
+                lp.leftMargin = iconLHost;
+                lp.rightMargin = host.getWidth() - iconRHost;
+                glass.setLayoutParams(lp);
+                LiquidGlassModule.log(android.util.Log.INFO, "rim trim applied: pad="
+                        + pad + " insetL=" + insetL + " insetR=" + insetR
+                        + " glassW=" + glassW + " hostW=" + host.getWidth());
+            } catch (Throwable tr) {
+                LiquidGlassModule.logErr("rim trim failed", tr);
+            }
+        });
+    }
+
+    /**
+     * The tab's real icon: a small, roughly square ImageView. The drag
+     * animation layer is cell-sized and background images are not square, so
+     * the size window (12dp..44dp, |w-h| <= 8px) picks the icon out reliably.
+     */
+    private static View findTabIcon(View view, int depth) {
+        if (depth > 5) {
+            return null;
+        }
+        if (view instanceof android.widget.ImageView) {
+            int w = view.getWidth();
+            int h = view.getHeight();
+            float density = view.getResources().getDisplayMetrics().density;
+            int min = Math.round(12f * density);
+            int max = Math.round(44f * density);
+            if (w >= min && w <= max && h >= min && h <= max && Math.abs(w - h) <= 8) {
+                return view;
+            }
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) view;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                View found = findTabIcon(g.getChildAt(i), depth + 1);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 }
