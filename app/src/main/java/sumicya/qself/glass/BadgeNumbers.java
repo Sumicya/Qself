@@ -121,18 +121,6 @@ public final class BadgeNumbers {
             if (labelAt == null) {
                 continue;
             }
-            if (!sDiagLogged) {
-                sDiagLogged = true;
-                LiquidGlassModule.log(android.util.Log.INFO, "badge diag: cls="
-                        + badge.getClass().getName()
-                        + " tv=" + (badge instanceof TextView)
-                        + " text=" + (badge instanceof TextView ? ((TextView) badge).getText() : null)
-                        + " count=" + sCounts.get(badge)
-                        + " label=" + label
-                        + " labelTop=" + labelView.getTop()
-                        + " iconBottom=" + iconBottomLocal
-                        + " tabH=" + tab.getHeight());
-            }
             badge.setAlpha(0f);
             // Centre of the icon itself: the number sits ON the icon
             // (user direction), horizontally on the shared label/icon axis.
@@ -167,6 +155,18 @@ public final class BadgeNumbers {
                 baseline = paint.getTextSize();
             }
             float cx = labelAt[0] + labelView.getWidth() * 0.5f;
+            if (!sDiagLogged) {
+                sDiagLogged = true;
+                LiquidGlassModule.log(android.util.Log.INFO, "badge diag: cls="
+                        + badge.getClass().getName()
+                        + " tv=" + (badge instanceof TextView)
+                        + " text=" + (badge instanceof TextView ? ((TextView) badge).getText() : null)
+                        + " count=" + sCounts.get(badge)
+                        + " label=" + label
+                        + " labelTop=" + labelView.getTop()
+                        + " iconBottom=" + iconBottomLocal
+                        + " tabH=" + tab.getHeight());
+            }
             canvas.drawText(label, cx, baseline, paint);
         }
     }
