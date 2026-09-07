@@ -105,7 +105,6 @@ com/alphi/qhmk/module/HiddenApolloView.java	隐藏侧滑厘米秀	Simplify
 com/alphi/qhmk/module/HiddenVipIconForSe.java	隐藏侧滑面板的VIP图标	Simplify
 com/alphi/qhmk/module/HookQWallet.java	隐藏QQ钱包超值精选	Simplify
 com/alphi/qhmk/module/HookSwiftMenuQWeb.java	移除内置浏览器菜单栏的“QQ浏览器”	Simplify
-com/alphi/qhmk/module/HookUpgrade.java	屏蔽更新	Simplify
 com/enlysure/hook/HideGroupAssistantBanner.kt	隐藏群助手顶部Banner提示	Simplify
 com/likejson/hook/PermissionMaskingHook.kt	伪装权限	Auxiliary
 com/xiaoniu/hook/CtrlEnterToSend.kt	Ctrl+Enter发送消息	Auxiliary

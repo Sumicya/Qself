@@ -40,6 +40,15 @@ object AntiUpdate : CommonSwitchFunctionHook() {
     override val name: String = "屏蔽更新"
 
     override fun initOnce(): Boolean {
+        // shiply upgrade-strategy path, folded from the retired qhmk
+        // HookUpgrade (superseded twin; obfuscated names drift, so this
+        // surface is best-effort and must never fail the whole hook)
+        runCatching {
+            val shiply = Initiator.loadClass("com.tencent.mobileqq.upgrade.a.a")
+            val strategy = Initiator.loadClass("com.tencent.upgrade.bean.UpgradeStrategy")
+            val getConfigUpgrade = shiply.getDeclaredMethod("c", strategy, Boolean::class.javaPrimitiveType)
+            hookBeforeIfEnabled(getConfigUpgrade) { param -> param.result = null }
+        }
         val kUpgradeController = Initiator._UpgradeController()
             ?: throw ClassNotFoundException("UpgradeController")
         val kUpgradeDetailWrapper = Initiator.load("com.tencent.mobileqq.upgrade.UpgradeDetailWrapper")
