@@ -135,8 +135,8 @@ public class ReplyMsgWithImg extends CommonSwitchFunctionHook implements IBaseCh
         // 9.2.10 drift diagnostics (my-feature-set 06): which DexKit targets
         // have a cached hit on this host - one INFO line per init, so the
         // next logcat sweep names the exact targets needing new signatures.
+        StringBuilder diag = new StringBuilder("ReplyMsgWithImg diag:");
         try {
-            StringBuilder diag = new StringBuilder("ReplyMsgWithImg diag:");
             io.github.qauxv.util.dexkit.DexKitTarget[] ts = {
                     CGuildHelperProvider.INSTANCE, CGuildArkHelper.INSTANCE,
                     CMessageRecordFactory.INSTANCE, CReplyMsgUtils.INSTANCE,
@@ -158,9 +158,11 @@ public class ReplyMsgWithImg extends CommonSwitchFunctionHook implements IBaseCh
                 diag.append(' ').append(t.getClass().getSimpleName())
                         .append(hit != null ? "=hit" : "=miss");
             }
-            io.github.qauxv.util.Log.i(diag.toString());
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            diag.append(" builder-failed: ").append(t);
         }
+        io.github.qauxv.util.Log.i(diag.toString());
+        sumicya.qself.feature.dev.DiagLog.w(diag.toString());
         kHelperProvider = Initiator.load("com.tencent.mobileqq.activity.aio.helper.HelperProvider");
         if (kHelperProvider == null) {
             kHelperProvider = Objects.requireNonNull(DexKit.loadClassFromCache(CGuildHelperProvider.INSTANCE), "CGuildHelperProvider.INSTANCE")

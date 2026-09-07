@@ -31,7 +31,7 @@
 | 底部导航栏液态玻璃 | sumicya.qself.glass | ✅ 本周迭代至贴边+数字上位 |
 | 消息显示 ID 和时间 | ChatItemShowQQUin | ✅ 本周修 pattern 崩溃 |
 | +1 按钮 | RepeaterPlus（消息+1 Plus） | 上游已解决的版本互补对 |
-| 回复带图 | ReplyMsgWithImg | 🔨 诊断已埋: initOnce 输出 8 个 DexKit 目标的 hit/miss 单行日志，终验采数后按缺口重签 |
+| 回复带图 | ReplyMsgWithImg | 🔨 诊断 v2（用户实测无返回后加固）: 不可吞结构+双写（logcat + files/qself_diag.log，DiagLog），采集=`su -c "cat /data/data/com.tencent.mobileqq/files/qself_diag.log"`；首版失败归因=外层 catch 可能吞掉整行 + logcat 采集链路玄学，双修 |
 | 群文件增强 | TroopFileSaveLasting | 群文件保存时效等 |
 | 好友检测/历史好友 | CheckCommonGroup / FriendDeletionNotification / ShowDeletedFriendListEntry / OpenFriendChatHistory | 四件套 |
 | 资料卡增强 | OpenProfileCard 等 | 细化范围待定 |
@@ -50,7 +50,7 @@
 | **等级加速**（繁华观察） | 繁华 2.5.6 有此功能（实现被混淆壳保护，静态不可复刻，自建） | ✅ 收编入集，与一键赞/XAutoDaily 同线排后；⚠️ 用户标注「可能有封号风险」——实现时须可开关、默认关、动作限速 |
 | **风控上报拦截**（QQHook 合并） | QQHook 1.4（io.github.jhl337.qqhook）复刻 | ✅ **已合并为功能**: `拦截风控上报（O3）`（RiskReportInterceptor，杂项分类），MsfCore.sendMessage(+Inner 回退)与 ChannelManager.sendMessage 全重载两路拦截，前缀 `trpc.o3.mobile_security.`/`trpc.o3.report.`，主+MSF 进程 |
 | 通知美化 | **仓内已有**: `cc.chenhe.qqnotifyevo`（MessagingStyle 重构，9 文件） | ✅ 声音问题已修: 重构通知改为**继承原通知渠道**（用户系统设置直接生效；原实现自建渠道强设默认铃声） |
-| 头像圆角调整 | 全新（AvatarGeom 定位器+outline 裁剪） | ✅ **v1 已落（聊天范围）**: 「头像圆角（聊天）」，半径旋钮 `rq_avatar_rounding_dp`（默认8，0~36），类无关实现；联系人/资料卡 v2 |
+| 头像圆角调整 | 全新（AvatarGeom 定位器+outline 裁剪） | ✅ **v1.1**: 配置页已补（用户指摘 v1 只给键不给页）——条目点击弹 SeekBar（0~36dp，恢复默认），半径随气泡 bind 即时重读（tag 含半径，改值下一气泡生效，无需重启）；联系人/资料卡 v2 |
 | 预返回动画 | 全新 | Android predictive back |
 
 ### C. 移除（v1 草案误收，用户明确"无"）
