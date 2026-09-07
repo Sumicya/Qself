@@ -117,12 +117,14 @@
 - ✅ **S1+S2 编译面（本批）**: vendored API 植入完整 102 接口面——`API_102`、
   `HotReloadingParam`/`HotReloadedParam`、`onHotReloading`/`onHotReloaded` 默认方法、
   `HookHandle.getId/replaceHook`、`HookBuilder.setId`，签名逐字取自 PR #62 diff。
-- ⏳ **S3 终跳（一行，刻意暂缓）**: module.prop `targetApiVersion` 101→102 +
-  `autoHotReload=true` + 入口覆写热重载回调。**暂缓原因**: RFC 明文 ≥102 禁调
-  legacy API，而 xpcompat 桥的运行时栈含 de.robv 帧（9.2.10 实证）——禁令的
-  实际形状（拒绝加载/静默剥离/无碍）只有装机可测；失败模式=全模块失效，须在
-  用户可承受恢复成本的时段进行。可先行: CI 加 workflow_dispatch 变体构建
-  （sed module.prop 后出实验 APK，主构建不动），需用户中继 workflow 变更。
+- ✅ **S3 终跳（已执行，用户显式授权"直接做"）**: module.prop `targetApiVersion=102`
+  + `autoHotReload=true`; 入口 `Lsp10xUnifiedHookEntry` 覆写
+  `onHotReloading`（同意+交接最近包生命周期参数，框架类加载器对象=契约允许的中立值）
+  /`onHotReloaded`（先 unhook 全部旧钩柄，再重放包生命周期让新代全量重初始化）。
+  **已知实验面**: RFC 明文 ≥102 禁调 legacy API，xpcompat 桥栈含 de.robv 帧
+  （9.2.10 实证）——禁令实际形状（拒绝加载/静默剥离/无碍）装机才知，失败模式=
+  模块失效，回退=重装上一绿 APK（34069688106 及更早）。API 类为 compileOnly
+  （框架提供），102 方法签名在 100/101 框架上不被调用即不解析，安全。
 - **S4**: 设置免重启 remote preferences 独立管线（service API 明确与热重载分开），
   逐功能摘 `isApplicationRestartRequired`。
 - 验收: 模块 APK 覆盖安装后**不重启 QQ** 生效（热重载）; 改开关不重启生效（remote prefs）。

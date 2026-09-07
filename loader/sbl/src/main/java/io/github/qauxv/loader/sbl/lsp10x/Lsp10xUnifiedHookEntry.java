@@ -22,6 +22,7 @@
 
 package io.github.qauxv.loader.sbl.lsp10x;
 
+import android.util.Log;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
@@ -58,6 +59,7 @@ public class Lsp10xUnifiedHookEntry extends XposedModule {
 
     @Override
     public void onPackageLoaded(@NonNull XposedModule.PackageLoadedParam param) {
+        sLastPackageLoaded = param;
         mHandler.onPackageLoaded(param);
     }
 
@@ -82,9 +84,67 @@ public class Lsp10xUnifiedHookEntry extends XposedModule {
     @XposedApiMin(101)
     @Override
     public void onPackageReady(@NonNull PackageReadyParam param) {
+        sLastPackageReady = param;
         ((Lsp101HookEntry) mHandler).onPackageReady(param);
     }
 
     /* --- end of API 101 --- */
 
+    /* --- start of API 102 (hot reload) --- */
+
+    private static final String TAG = "QAuxvLoader";
+
+    /**
+     * Last seen package lifecycle params, captured so the hot-reloading old
+     * generation can hand them to the new one. They are framework-classloader
+     * objects, which the API contract allows across generations.
+     */
+    private static volatile PackageLoadedParam sLastPackageLoaded;
+    private static volatile PackageReadyParam sLastPackageReady;
+
+    @XposedApiMin(102)
+    @Override
+    public boolean onHotReloading(@NonNull HotReloadingParam param) {
+        // Consent to the reload and pass the last package params over. Old
+        // module-owned state (hook registries, feature singletons) lives in
+        // old-generation statics and is deliberately NOT transferred: the new
+        // generation re-runs the full startup chain instead.
+        try {
+            param.setSavedInstanceState(new Object[]{sLastPackageLoaded, sLastPackageReady});
+        } catch (Throwable t) {
+            Log.e(TAG, "hot reloading: saved state rejected, reloading without it", t);
+        }
+        return true;
+    }
+
+    @XposedApiMin(102)
+    @Override
+    public void onHotReloaded(@NonNull HotReloadedParam param) {
+        // Default semantics first: every hook the old generation made goes.
+        try {
+            param.getOldHookHandles().forEach(XposedInterface.HookHandle::unhook);
+        } catch (Throwable t) {
+            Log.w(TAG, "hot reloaded: unhook sweep failed", t);
+        }
+        // The package lifecycle is NOT replayed automatically - re-run it in
+        // the new generation so the whole feature chain re-initialises and
+        // re-hooks with fresh code.
+        Object state = param.getSavedInstanceState();
+        if (!(state instanceof Object[])) {
+            Log.i(TAG, "hot reloaded: no saved package state; hooks dropped only");
+            return;
+        }
+        Object[] pair = (Object[]) state;
+        try {
+            if (pair[0] instanceof PackageLoadedParam) {
+                mHandler.onPackageLoaded((PackageLoadedParam) pair[0]);
+            }
+            if (pair[1] instanceof PackageReadyParam && mHandler instanceof Lsp101HookEntry) {
+                ((Lsp101HookEntry) mHandler).onPackageReady((PackageReadyParam) pair[1]);
+            }
+            Log.i(TAG, "hot reloaded: package lifecycle replayed for the new generation");
+        } catch (Throwable t) {
+            Log.e(TAG, "hot reloaded: replay failed; module inactive until process restart", t);
+        }
+    }
 }
