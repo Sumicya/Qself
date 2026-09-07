@@ -114,6 +114,16 @@ import mqq.app.AppRuntime;
 @UiItemAgentEntry
 public class RevokeMsgHook extends CommonConfigFunctionHook {
 
+    /**
+     * Messages that had a recall attempt (FunBox-style wrap hint,
+     * sumicya.qself.feature.chat.RevokeWrapHint). Keyed by peerUid#msgSeq -
+     * the same pair the gray tip's MsgRefItem references. Populated in
+     * onRecallSysMsgForNT; bounded, best-effort, process-lifetime only.
+     */
+    public static final java.util.Set<String> sRevokedMsgKeys =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+
     public static final RevokeMsgHook INSTANCE = new RevokeMsgHook();
     private Object mQQMsgFacade = null;
 
@@ -668,6 +678,10 @@ public class RevokeMsgHook extends CommonConfigFunctionHook {
             Log.e("onRecallSysMsgForNT fatal: chatType is not c2c or troop");
             return;
         }
+        if (sRevokedMsgKeys.size() > 4096) {
+            sRevokedMsgKeys.clear();
+        }
+        sRevokedMsgKeys.add(peerUid + "#" + msgSeq);
         // for debug log
 //        Log.d("onRecallSysMsgForNT: chatType=" + chatType + ", peerUid=" + peerUid + ", recallOpUid=" + recallOpUid
 //                + ", msgAuthorUid=" + msgAuthorUid + ", toUid=" + toUid + ", random64=" + random64 + ", timeSeconds=" + timeSeconds

@@ -40,11 +40,11 @@
 
 | 功能 | 底子/参考 | 备注 |
 |------|-----------|------|
-| **防撤回扩展**（包围消息的提示，FunBox 风格） | 树内 cc.ioctl.hook.msg.RevokeMsgHook 为底 | qa 暂未使用、由 funbox 替代中 → 壳内复刻 FunBox 风格 |
+| **防撤回扩展**（包围消息的提示，FunBox 风格） | 树内 cc.ioctl.hook.msg.RevokeMsgHook 为底 | 🔨 **v1 已落**: RevokeMsgHook 撤回点记录 peerUid#msgSeq 注册表；新功能 `防撤回消息标记`(RevokeWrapHint) 在被撤回气泡顶部注入「已撤回 · 已保留」提示条；v2=真正边框包围（待 9.2.10 气泡布局族勘察） |
 | **群管理菜单** | FunBox 复刻 | 全新 |
 | **群日志获取**（灰字扩展） | GrayTipCapture v2 已在仓 | 从调试工具升级为功能 |
 | 一键 20 赞/50 赞 | XAutoDaily 线（外部模块支持） | 点赞/等级加速，排后但入集 |
-| 通知美化 | **仓内已有**: `cc.chenhe.qqnotifyevo`（MessagingStyle 重构，9 文件） | 🐛 已知问题: 通知带声音，疑似重构后未继承原渠道声音设置/未接系统通知管理 UI——A 类修复项（日常受益） |
+| 通知美化 | **仓内已有**: `cc.chenhe.qqnotifyevo`（MessagingStyle 重构，9 文件） | ✅ 声音问题已修: 重构通知改为**继承原通知渠道**（用户系统设置直接生效；原实现自建渠道强设默认铃声） |
 | 头像圆角调整 | 待查/全新 | 自由化旋钮型功能 |
 | 预返回动画 | 全新 | Android predictive back |
 

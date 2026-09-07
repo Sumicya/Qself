@@ -57,7 +57,8 @@ object BaseBubbleBuilderHook : BasePersistBackgroundHook() {
         ShowMsgAt,
         ChatItemShowQQUin,
         PromptForNoSeqMessage,
-        MultiForwardAvatarHook
+        MultiForwardAvatarHook,
+        sumicya.qself.feature.chat.RevokeWrapHint
     )
 
     @Throws(Exception::class)
