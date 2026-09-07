@@ -38,6 +38,9 @@ import io.github.qauxv.util.xpcompat.XposedBridge
  * (policy §8): FunBox is a packed binary, so the gray-tip knowledge we need
  * is taken from the HOST instead.
  *
+ * 群日志记录（灰字）— feature-ised from the v2 debug tool (my-feature-set 06).
+ * Records to the rolling GroupLogStore; click the settings entry to view.
+ *
  * Hooks every constructor of the concrete NT data class JsonGrayElement -
  * the one object every locally inserted json gray tip must build - and logs
  * the constructor arguments (busiId, jsonStr, recentAbstract). Trigger real
@@ -70,13 +73,33 @@ object GrayTipCapture : CommonSwitchFunctionHook(
             (s.contains("\"txt\"") && s.contains("\"type\""))
     }
 
-    override val name = "灰字参数捕获（开发工具）"
+    override val name = "群日志记录（灰字）"
 
-    override val description = "记录 QQ 灰字提示参数（元素构造器 + 灰字 JSON 解析过滤监听）到日志。" +
-        "v2：接收型灰字由 native 反序列化不走 Java 构造器，故同时监听 JSON 解析。" +
-        "开启后正常使用 QQ（掷骰子/随机表情/禁言等），logcat -s GrayTipCapture 取证。仅调试用"
+    override val description = "记录灰字提示（元素构造器 + 灰字 JSON 过滤）到本地滚动日志；" +
+        "点击本条目查看最近记录，对话框内可清空。v2：接收型灰字由 native 反序列化不走 Java 构造器，" +
+        "故同时监听 JSON 解析。重启生效"
 
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EXPERIMENTAL_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.MESSAGE_CATEGORY
+
+    private const val CAPABILITY_KEY = "chat.group_log"
+
+    override val onUiItemClickListener: (io.github.qauxv.base.IUiItemAgent, android.app.Activity, android.view.View) -> Unit =
+        { _, activity, _ ->
+            val ctx = io.github.qauxv.ui.CommonContextWrapper.createAppCompatContext(activity)
+            val entries = sumicya.qself.feature.chat.GroupLogStore.readTail(200)
+            io.github.qauxv.ui.CustomDialog.createFailsafe(ctx)
+                .setTitle("群日志（最近 200 条，新在上）")
+                .setMessage(if (entries.isEmpty()) "暂无记录" else entries.joinToString("\n"))
+                .setPositiveButton("清空") { _, _ ->
+                    sumicya.qself.feature.chat.GroupLogStore.clear()
+                    io.github.qauxv.util.Toasts.info(ctx, "已清空")
+                }
+                .setNegativeButton("关闭", null)
+                .show()
+                .apply {
+                    findViewById<android.widget.TextView>(android.R.id.message)?.setTextIsSelectable(true)
+                }
+        }
 
     // dev tool: any NT host is a valid capture target
     override val isAvailable = !isTim()
@@ -115,12 +138,17 @@ object GrayTipCapture : CommonSwitchFunctionHook(
                     val s = param.args[0] as? String ?: return
                     if (looksLikeGrayTipJson(s)) {
                         Log.i("$TAG: json: $s")
+                        sumicya.qself.feature.chat.GroupLogStore.append("json", s)
                     }
                 }
             })
             hooked++
         } catch (t: Throwable) {
             Log.w("$TAG: JSONObject hook failed: $t")
+        }
+        if (hooked > 0) {
+            sumicya.qself.hostapi.CapabilityRegistry.report(
+                CAPABILITY_KEY, sumicya.qself.hostapi.CapabilityState.AVAILABLE)
         }
         return hooked > 0
     }
@@ -141,5 +169,6 @@ object GrayTipCapture : CommonSwitchFunctionHook(
         }
         sb.append(')')
         Log.i("$TAG: $sb")
+        sumicya.qself.feature.chat.GroupLogStore.append("ctor", sb.toString())
     }
 }

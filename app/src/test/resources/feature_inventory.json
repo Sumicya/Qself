@@ -269,7 +269,7 @@ sumicya/qself/feature/chat/DisableEnterEffect.kt	屏蔽所有进场特效	-
 sumicya/qself/feature/chat/DisableLightInteraction.kt	禁用轻互动	Simplify
 sumicya/qself/feature/chat/GagInfoDisclosure.kt	显示设置禁言的管理	Auxiliary
 sumicya/qself/feature/chat/RevokeWrapHint.kt	防撤回消息标记	Auxiliary
-sumicya/qself/feature/dev/GrayTipCapture.kt	灰字参数捕获（开发工具）	Auxiliary
+sumicya/qself/feature/dev/GrayTipCapture.kt	群日志记录（灰字）	Auxiliary
 sumicya/qself/feature/device/ForcePadMode.kt	强制平板模式	Auxiliary
 sumicya/qself/feature/device/ModifyDeviceType.kt	设备类型修改	Auxiliary
 sumicya/qself/feature/notification/MuteQZoneThumbsUp.kt	被赞说说不提醒	-
