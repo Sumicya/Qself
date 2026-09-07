@@ -108,14 +108,21 @@
 - 缺口: app 侧 **XposedModule 入口类不存在**; `META-INF/xposed/module.prop`
   打包任务不存在; `HookHandle.getId/replaceHook`、`HookBuilder.setId` 未植。
 
-**分期**:
-- **S1（本批）**: vendored API 植入 102 接口面（`API_102` 常量、`HotReloadingParam`/
-  `HotReloadedParam`、`onHotReloading`/`onHotReloaded` 默认方法）——签名逐字取自
-  libxposed/api PR #62 diff；纯增量编译面，旗标仍关，零行为变化。
-- **S2**: `HookHandle.replaceHook/getId` + `HookBuilder.setId` 植入; app 侧
-  XposedModule 单入口类骨架; module.prop 生成与 META-INF/xposed 打包（旗标后）。
-- **S3**: 旗标开实验构建 → LSPosed 2.2.0 (7854) 实机迭代（legacy API 调用面在
-  102 下禁用，先以 lsp101 后端跑通再收窄）。
+**分期（2026-09-07 二次勘察修正）**:
+- ✅ **现状即现代路径**: 旗标 `qauxv.override.newxposedapi` 默认 **true**（与上游一致），
+  APK 一直携带 `META-INF/xposed`（targetApiVersion=**101**）+ 单入口
+  `Lsp10xUnifiedHookEntry`（与上游逐字一致）+ native_init（libqauxv-core0.so 本就在编）。
+  9.2.10 日志栈中的 `Lsp101HookWrapper`/`xpcompat.WrappedCallbacks` 帧已实证
+  装机运行走 lsp101 现代后端。"S3 第一跳"实为已完成且设备验证过的现状。
+- ✅ **S1+S2 编译面（本批）**: vendored API 植入完整 102 接口面——`API_102`、
+  `HotReloadingParam`/`HotReloadedParam`、`onHotReloading`/`onHotReloaded` 默认方法、
+  `HookHandle.getId/replaceHook`、`HookBuilder.setId`，签名逐字取自 PR #62 diff。
+- ⏳ **S3 终跳（一行，刻意暂缓）**: module.prop `targetApiVersion` 101→102 +
+  `autoHotReload=true` + 入口覆写热重载回调。**暂缓原因**: RFC 明文 ≥102 禁调
+  legacy API，而 xpcompat 桥的运行时栈含 de.robv 帧（9.2.10 实证）——禁令的
+  实际形状（拒绝加载/静默剥离/无碍）只有装机可测；失败模式=全模块失效，须在
+  用户可承受恢复成本的时段进行。可先行: CI 加 workflow_dispatch 变体构建
+  （sed module.prop 后出实验 APK，主构建不动），需用户中继 workflow 变更。
 - **S4**: 设置免重启 remote preferences 独立管线（service API 明确与热重载分开），
   逐功能摘 `isApplicationRestartRequired`。
 - 验收: 模块 APK 覆盖安装后**不重启 QQ** 生效（热重载）; 改开关不重启生效（remote prefs）。

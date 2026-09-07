@@ -141,7 +141,7 @@ public final class BadgeNumbers {
                 // Implausible geometry: settle for the 6dp-gap default.
                 iconBottomLocal = labelTopLocal - Math.round(6f * density);
             }
-            int iconCentreLocal = Math.max(iconBottomLocal - Math.round(12f * density),
+            int iconCentreLocal = Math.max(iconBottomLocal - Math.round(15f * density),
                     Math.round(2f * density));
             float baseline = labelAt[1] - (labelTopLocal - iconCentreLocal)
                     + paint.getTextSize() * 0.35f;

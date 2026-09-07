@@ -520,6 +520,33 @@ public interface XposedInterface {
          * Cancels the hook. This method is idempotent. It is safe to call this method multiple times.
          */
         void unhook();
+
+        /**
+         * Gets the unique id of the hook, or null if the hook is not assigned with an id.
+         */
+        @XposedApiMin(102)
+        @Nullable
+        String getId();
+
+        /**
+         * Atomically replaces this hook with a new hooker and returns the new hook handle.
+         * <p>
+         * The replacement keeps the executable, priority, exception handling mode, and id of this
+         * hook. It is useful during hot reloading when new code receives old hook handles. After a
+         * successful replacement, this handle is no longer valid.
+         * </p>
+         * <p>The hook chain is snapshot based. Replacing a hook while a call is running does not
+         * affect that in-flight call.</p>
+         *
+         * @param hooker The new hooker object
+         * @return The new handle for the replaced hook
+         * @throws IllegalArgumentException if hooker is invalid
+         * @throws IllegalStateException    if this hook handle is no longer valid
+         * @throws io.github.libxposed.api.error.HookFailedError if replacement fails due to framework internal error
+         */
+        @XposedApiMin(102)
+        @NonNull
+        HookHandle replaceHook(@NonNull Hooker hooker);
     }
 
     /**
@@ -574,6 +601,21 @@ public interface XposedInterface {
          * @return The builder itself for chaining
          */
         HookBuilder setExceptionMode(@NonNull ExceptionMode mode);
+
+        /**
+         * Sets a unique id for the hook, default to {@code null}. An id is used for exclusively
+         * identifying a hook in the same module on the executable. A new hook with the same id in
+         * the same module on the executable will replace the old one atomically, and the old hook
+         * handle will be invalid. Hook ids are isolated between modules.
+         *
+         * <p>The hook chain is snapshot based. Replacing or adding a hook while a call is running
+         * does not affect that in-flight call.</p>
+         *
+         * @param id The id for the hook. It can be null if you don't care about replacing the hook later.
+         * @return The builder itself for chaining
+         */
+        @XposedApiMin(102)
+        HookBuilder setId(@Nullable String id);
 
         /**
          * Sets the hooker for the method / constructor and builds the hook.
