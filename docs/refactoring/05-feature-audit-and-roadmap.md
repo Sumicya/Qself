@@ -128,6 +128,18 @@
 - **S4**: 设置免重启 remote preferences 独立管线（service API 明确与热重载分开），
   逐功能摘 `isApplicationRestartRequired`。
 - 验收: 模块 APK 覆盖安装后**不重启 QQ** 生效（热重载）; 改开关不重启生效（remote prefs）。
+- ✅ **热重载实机验收通过（2026-09-07）**: 更新模块后未重启 QQ，两进程日志
+  `QAuxvLoader: hot reloaded: package lifecycle replayed for the new generation`，
+  玻璃底栏随后在新代自装（`liquid glass installed` 于同批日志）。101→102 过渡期的
+  两条"热重载失败"提示为旧代无回调所致，属一次性正常现象。
+
+## 6.1 · 全部开启错误普查（2026-09-07 首轮，设备 9.2.10）
+
+| 错误签名 | 频次/模式 | 定罪 | 处置 |
+|---|---|---|---|
+| CNFE `MainChatsCardContainerPartImpl` + NPE `getDeclaredMethods on null` | 每次 QQ 启动成对出现（跨 5 个 pid 复现） | `DisableChatsCardContainer`，9.2.x 类已删 | ✅ 本批: initOnce 判空静默无操作 |
+| CCE `RelativeLayout/View → LinearLayout` | 交互时成串爆发（6 秒 30+ 条） | 待栈帧定罪（候选含 SimplifyQQSettingMe 盲转型等） | ⏳ 等设备 grep 栈帧 |
+| FATAL EXCEPTION ×2 | 缓冲区内 2 次，归属未知 | 未定罪 | ⏳ 等设备 grep 栈帧 |
 - 交接纪律: 玻璃 host 等运行时对象一律不进 saved state（类加载器中立，重建即弃）。
 
 ## 7. 风险表
