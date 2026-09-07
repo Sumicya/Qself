@@ -83,23 +83,47 @@ object GrayTipCapture : CommonSwitchFunctionHook(
 
     private const val CAPABILITY_KEY = "chat.group_log"
 
-    override val onUiItemClickListener: (io.github.qauxv.base.IUiItemAgent, android.app.Activity, android.view.View) -> Unit =
-        { _, activity, _ ->
-            val ctx = io.github.qauxv.ui.CommonContextWrapper.createAppCompatContext(activity)
-            val entries = sumicya.qself.feature.chat.GroupLogStore.readTail(200)
-            io.github.qauxv.ui.CustomDialog.createFailsafe(ctx)
-                .setTitle("群日志（最近 200 条，新在上）")
-                .setMessage(if (entries.isEmpty()) "暂无记录" else entries.joinToString("\n"))
-                .setPositiveButton("清空") { _, _ ->
-                    sumicya.qself.feature.chat.GroupLogStore.clear()
-                    io.github.qauxv.util.Toasts.info(ctx, "已清空")
+    // CommonSwitchFunctionHook hard-codes onClickListener=null in its agent
+    // (onUiItemClickListener exists only on CommonConfigFunctionHook), so the
+    // agent is overridden here to offer the switch AND the click-to-view.
+    override val uiItemAgent: io.github.qauxv.base.IUiItemAgent by lazy {
+        object : io.github.qauxv.base.IUiItemAgent {
+            override val titleProvider: (io.github.qauxv.base.IEntityAgent) -> String = { _ -> name }
+            override val summaryProvider: (io.github.qauxv.base.IEntityAgent, android.content.Context) -> CharSequence? =
+                { _, _ -> description }
+            override val valueState: kotlinx.coroutines.flow.StateFlow<String?>? = null
+            override val validator: ((io.github.qauxv.base.IUiItemAgent) -> Boolean)? = { _ -> true }
+            override val switchProvider: io.github.qauxv.base.ISwitchCellAgent? =
+                object : io.github.qauxv.base.ISwitchCellAgent {
+                    override val isCheckable = true
+                    override var isChecked: Boolean
+                        get() = isEnabled
+                        set(value) {
+                            if (value != isEnabled) isEnabled = value
+                        }
                 }
-                .setNegativeButton("关闭", null)
-                .show()
-                .apply {
-                    findViewById<android.widget.TextView>(android.R.id.message)?.setTextIsSelectable(true)
-                }
+            override val onClickListener: ((io.github.qauxv.base.IUiItemAgent, android.app.Activity, android.view.View) -> Unit)? =
+                { _, activity, _ -> showViewer(activity) }
+            override val extraSearchKeywordProvider: ((io.github.qauxv.base.IUiItemAgent, android.content.Context) -> Array<String>?)? = null
         }
+    }
+
+    private fun showViewer(activity: android.app.Activity) {
+        val ctx = io.github.qauxv.ui.CommonContextWrapper.createAppCompatContext(activity)
+        val entries = sumicya.qself.feature.chat.GroupLogStore.readTail(200)
+        io.github.qauxv.ui.CustomDialog.createFailsafe(ctx)
+            .setTitle("群日志（最近 200 条，新在上）")
+            .setMessage(if (entries.isEmpty()) "暂无记录" else entries.joinToString("\n"))
+            .setPositiveButton("清空") { _, _ ->
+                sumicya.qself.feature.chat.GroupLogStore.clear()
+                io.github.qauxv.util.Toasts.info(ctx, "已清空")
+            }
+            .setNegativeButton("关闭", null)
+            .show()
+            .apply {
+                findViewById<android.widget.TextView>(android.R.id.message)?.setTextIsSelectable(true)
+            }
+    }
 
     // dev tool: any NT host is a valid capture target
     override val isAvailable = !isTim()
