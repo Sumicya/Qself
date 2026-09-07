@@ -21,7 +21,6 @@
  */
 package sumicya.qself.feature.chat
 
-import android.app.Activity
 import android.content.DialogInterface
 import android.text.InputType
 import android.view.View
@@ -54,6 +53,10 @@ object GroupAdminBridge {
 
     private var sInventoryDumped = false
 
+    // Long::class.javaPrimitiveType is Class<Long>? - unusable in Class<*> varargs
+    private val PRIM_LONG: Class<*> = java.lang.Long.TYPE
+    private val PRIM_INT: Class<*> = java.lang.Integer.TYPE
+
     /** Pure: does this method look like an implementation of the action? */
     @JvmStatic
     fun matchesAction(m: Method, keyword: String, paramCount: Int, vararg paramTypes: Class<*>): Boolean {
@@ -62,16 +65,16 @@ object GroupAdminBridge {
         if (ps.size != paramCount) return false
         paramTypes.forEachIndexed { i, c ->
             val p = ps[i]
-            if (c == Long::class.javaPrimitiveType && p != java.lang.Long.TYPE && p != java.lang.Long::class.java) return false
+            if (c == PRIM_LONG && p != PRIM_LONG && p != java.lang.Long::class.java) return false
             if (c == String::class.java && p != String::class.java) return false
-            if (c == Int::class.javaPrimitiveType && p != Integer.TYPE && p != Integer::class.java) return false
+            if (c == PRIM_INT && p != PRIM_INT && p != java.lang.Integer::class.java) return false
         }
         return true
     }
 
     @Suppress("UNCHECKED_CAST")
     private fun kernelService(): Any? = runCatching {
-        val app = AppRuntimeHelper.getAppRuntime()
+        val app = AppRuntimeHelper.getAppRuntime() ?: error("AppRuntime unavailable")
         val kIKernelService = io.github.qauxv.util.Initiator
             .loadClass("com.tencent.qqnt.kernel.api.IKernelService") as Class<mqq.app.api.IRuntimeService>
         app.getRuntimeService(kIKernelService, "")
@@ -132,10 +135,10 @@ object GroupAdminBridge {
     @JvmStatic
     fun muteMember(peerUid: String, memberUid: String, durationSec: Long): String? =
         dispatch(
-            groupService(), "shutup", 3, String::class.java, String::class.java, Long::class.javaPrimitiveType,
+            groupService(), "shutup", 3, String::class.java, String::class.java, PRIM_LONG,
             args = arrayOf(peerUid, memberUid, durationSec),
         ) ?: dispatch(
-            groupService(), "mute", 3, String::class.java, String::class.java, Long::class.javaPrimitiveType,
+            groupService(), "mute", 3, String::class.java, String::class.java, PRIM_LONG,
             args = arrayOf(peerUid, memberUid, durationSec),
         )
 
@@ -190,7 +193,7 @@ object GroupAdminBridge {
 
     // ---- UI: confirm dialogs wired into the v1a menu ----
 
-    fun muteDialog(activity: Activity, peerUid: String, memberUid: String, uin: Long) {
+    fun muteDialog(activity: android.content.Context, peerUid: String, memberUid: String, uin: Long) {
         val durations = arrayOf("10 分钟", "1 小时", "12 小时", "1 天", "解除禁言")
         val seconds = longArrayOf(600, 3600, 43200, 86400, 0)
         AlertDialog.Builder(activity)
@@ -204,7 +207,7 @@ object GroupAdminBridge {
             .show()
     }
 
-    fun kickDialog(activity: Activity, peerUid: String, memberUid: String, uin: Long) {
+    fun kickDialog(activity: android.content.Context, peerUid: String, memberUid: String, uin: Long) {
         AlertDialog.Builder(activity)
             .setTitle("移出群聊")
             .setMessage("确定将 $uin 移出本群？")
@@ -217,7 +220,7 @@ object GroupAdminBridge {
             .show()
     }
 
-    fun cardDialog(activity: Activity, peerUid: String, memberUid: String, uin: Long) {
+    fun cardDialog(activity: android.content.Context, peerUid: String, memberUid: String, uin: Long) {
         val edit = EditText(activity).apply { inputType = InputType.TYPE_CLASS_TEXT }
         val pad = Math.round(16f * activity.resources.displayMetrics.density)
         val box = LinearLayout(activity).apply {
@@ -237,7 +240,7 @@ object GroupAdminBridge {
             .show()
     }
 
-    fun revokeDialog(activity: Activity, msgId: Long, msgSeq: Long, uin: Long) {
+    fun revokeDialog(activity: android.content.Context, msgId: Long, msgSeq: Long, uin: Long) {
         AlertDialog.Builder(activity)
             .setTitle("撤回本条消息")
             .setMessage("确定撤回 $uin 的这条消息？")

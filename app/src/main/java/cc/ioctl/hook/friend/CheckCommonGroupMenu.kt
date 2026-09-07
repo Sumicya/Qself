@@ -70,7 +70,46 @@ object CheckCommonGroupMenu : CommonSwitchFunctionHook(
         }
         DexKit.requireMethodFromCache(RecentPopup_onClickAction).hookBefore {
             if (it.args[0].get("id") == menuItemId) {
-                CheckCommonGroup.onClick(context())
+                // popup items carry no uin, hence the manual input - self-contained
+                // replication of the retired shared entry's dialog (dedup pass)
+                val ctx = CommonContextWrapper.createAppCompatContext(ContextUtils.getCurrentActivity())
+                val edit = android.widget.EditText(ctx).apply { textSize = 16f }
+                val box = android.widget.LinearLayout(ctx).apply {
+                    orientation = android.widget.LinearLayout.VERTICAL
+                    addView(edit, android.widget.LinearLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT))
+                }
+                val dialog = androidx.appcompat.app.AlertDialog.Builder(ctx)
+                    .setTitle("输入对方QQ号")
+                    .setView(box)
+                    .setCancelable(true)
+                    .setPositiveButton("打开", null)
+                    .setNegativeButton("取消", null)
+                    .create()
+                dialog.show()
+                dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE)
+                    .setOnClickListener {
+                        val text = edit.text.toString()
+                        val uin = text.toLongOrNull() ?: 0L
+                        if (android.text.TextUtils.isEmpty(text) || uin < 10000) {
+                            io.github.qauxv.util.Toasts.error(ctx, "请输入有效的QQ号")
+                        } else {
+                            dialog.dismiss()
+                            try {
+                                val browser = Initiator.loadClass("com.tencent.mobileqq.activity.QQBrowserDelegationActivity")
+                                val intent = android.content.Intent(ctx, browser)
+                                intent.putExtra("fling_action_key", 2)
+                                intent.putExtra("fling_code_key", ctx.hashCode())
+                                intent.putExtra("useDefBackText", true)
+                                intent.putExtra("param_force_internal_browser", true)
+                                intent.putExtra("url", "https://ti.qq.com/friends/recall?uin=$uin")
+                                ctx.startActivity(intent)
+                            } catch (e: Throwable) {
+                                io.github.qauxv.util.Log.e("CheckCommonGroupMenu: open failed: $e")
+                            }
+                        }
+                    }
                 it.result = null
             }
         }
