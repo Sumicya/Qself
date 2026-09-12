@@ -119,7 +119,7 @@ object MessageCopyHook : CommonSwitchFunctionHook(targets = arrayOf(AIOMsgItem_i
             .setNegativeButton(android.R.string.cancel, null)
             .show()
             .findViewById<TextView>(android.R.id.message)
-            .setTextIsSelectable(true)
+            ?.setTextIsSelectable(true)
     }
 
     override val targetComponentTypes = null

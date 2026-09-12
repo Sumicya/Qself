@@ -30,6 +30,7 @@ class InlineAlertDialogBuilder @JvmOverloads constructor(context: Context, theme
 
     private class InlineDialog(context: Context) : AlertDialog(context) {
         private var close: (() -> Unit)? = null
+        private var inlinePanel: android.view.View? = null
         private var shown = false
         private var cancelable = true
         private var cancelListener: DialogInterface.OnCancelListener? = null
@@ -40,12 +41,12 @@ class InlineAlertDialogBuilder @JvmOverloads constructor(context: Context, theme
         override fun setOnDismissListener(listener: DialogInterface.OnDismissListener?) { dismissListener = listener }
         override fun setOnShowListener(listener: DialogInterface.OnShowListener?) { showListener = listener }
         override fun isShowing(): Boolean = shown
+        override fun <T : android.view.View?> findViewById(id: Int): T? = inlinePanel?.findViewById<T>(id) ?: super.findViewById(id)
         override fun show() {
             if (shown) return
             create() // Inflate AppCompat's content without adding a Window to WindowManager.
             val content = window!!.decorView.findViewById<ViewGroup>(android.R.id.content)
-            val panel = content.getChildAt(0)
-            content.removeView(panel)
+            val panel = inlinePanel ?: content.getChildAt(0).also { inlinePanel = it; content.removeView(it) }
             close = InlineSettings.show(context, panel, Runnable {
                 if (shown) { shown = false; close = null; dismissListener?.onDismiss(this) }
             }, cancelable, Runnable { cancel() })

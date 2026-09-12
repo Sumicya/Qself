@@ -85,13 +85,14 @@ class SettingsErrorInteractionTest {
             InlineSettings.anchor(row)
             var saved = "old"
             var cancelled = 0
-            val input = android.widget.EditText(activity).apply { setText("draft") }
+            val input = android.widget.EditText(activity).apply { id = android.view.View.generateViewId(); setText("draft") }
             val dialog = InlineAlertDialogBuilder(activity).setTitle("编辑")
                 .setView(input).setPositiveButton("保存") { _, _ -> saved = input.text.toString() }
                 .setNegativeButton("取消", null).setOnCancelListener { cancelled++ }.create()
             dialog.show()
             assertTrue(dialog.isShowing)
             assertEquals(1, row.inlineContent.childCount)
+            assertSame(input, dialog.findViewById<android.widget.EditText>(input.id))
             assertNull(dialog.window!!.decorView.parent)
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
             org.robolectric.shadows.ShadowLooper.idleMainLooper()

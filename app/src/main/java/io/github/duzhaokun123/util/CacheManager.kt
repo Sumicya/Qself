@@ -71,7 +71,7 @@ object CacheManager : CommonConfigFunctionHook(defaultEnabled = true) {
                 .setNegativeButton("关闭", null)
                 .show()
                 .findViewById<TextView>(android.R.id.message)
-                .apply {
+                ?.apply {
                     typeface = Typeface.MONOSPACE
                     textSize = TypedValueCompat.spToPx(5F, activity.resources.displayMetrics)
                 }
