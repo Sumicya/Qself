@@ -653,7 +653,7 @@ public class SettingsVisualTest {
     @Test public void migrationPreservesEveryFeatureKeyAndIsIdempotent() {
         android.content.SharedPreferences config = RuntimeEnvironment.getApplication().getSharedPreferences("profile-migration", 0);
         config.edit().clear().putBoolean("rq_risk_report_interceptor.enabled", true)
-            .putBoolean("ForcePadMode.enabled", true).putBoolean("HideQZoneAD.enabled", true)
+            .putBoolean("ExternalModuleConfigHook.enabled", true).putBoolean("HideQZoneAD.enabled", true)
             .putBoolean("HideMiniAppLoadingAd.enabled", false).putString("rq_group_admin_marks", "test-fixture")
             .putInt("qself.settings.glass", 0).apply();
         java.util.Map<String, ?> original = config.getAll();
@@ -686,8 +686,8 @@ public class SettingsVisualTest {
     }
 
     @Test public void runtimePolicyBlocksDormantClassNamesAndNestedCallbacks() {
-        assertFalse(sumicya.qself.profile.SimplifiedProfile.isAllowedClass("sumicya.qself.feature.device.ForcePadMode"));
-        assertFalse(sumicya.qself.profile.SimplifiedProfile.isAllowedClass("sumicya.qself.feature.device.ForcePadMode$Callback"));
+        assertFalse(sumicya.qself.profile.SimplifiedProfile.isAllowedClass("io.github.qauxv.chainloader.detail.ui.ExternalModuleConfigHook"));
+        assertFalse(sumicya.qself.profile.SimplifiedProfile.isAllowedClass("io.github.qauxv.chainloader.detail.ui.ExternalModuleConfigHook$Callback"));
         assertTrue(sumicya.qself.profile.SimplifiedProfile.isAllowedClass("sumicya.qself.feature.device.RiskReportInterceptor"));
         assertTrue(sumicya.qself.profile.SimplifiedProfile.isAllowedClass(HomeCatalog.DIAGNOSTICS));
         assertTrue(sumicya.qself.profile.SimplifiedProfile.dormantEntryCount() > 100);
@@ -711,7 +711,7 @@ public class SettingsVisualTest {
         }
         for (String registry : new String[]{"AnnotatedFunctionHookEntryList", "AnnotatedUiItemAgentEntryList"}) {
             String generated = Files.readString(project.resolve("build/generated/ksp/debug/kotlin/io/github/qauxv/gen/" + registry + ".kt"));
-            assertFalse(generated.contains("ForcePadMode"));
+            assertFalse(generated.contains("ExternalModuleConfigHook"));
             assertFalse(generated.contains("ExternalModuleConfigHook"));
             String annotation = registry.contains("FunctionHook") ? "FunctionHookEntry" : "UiItemAgentEntry";
             for (String name : allowed) {

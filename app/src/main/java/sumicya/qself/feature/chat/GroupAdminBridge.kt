@@ -21,18 +21,9 @@
  */
 package sumicya.qself.feature.chat
 
-import android.content.DialogInterface
-import android.text.InputType
-import android.view.View
-import android.view.ViewGroup
-import android.widget.EditText
-import android.widget.LinearLayout
-import androidx.appcompat.app.AlertDialog
-import com.tencent.qqnt.kernel.nativeinterface.MsgRecord
 import io.github.qauxv.bridge.AppRuntimeHelper
 import io.github.qauxv.util.Log
-import io.github.qauxv.util.Toasts
-import io.github.qauxv.util.hostInfo
+import hostInfo
 import java.lang.reflect.Method
 
 /** Group-management inventory only. Unverified write operations are deliberately disabled. */
@@ -41,6 +32,7 @@ object GroupAdminBridge {
     private const val TAG = "GroupAdminBridge"
 
     private var sInventoryDumped = false
+    private var lastInventory: String? = null
 
     // Long::class.javaPrimitiveType is Class<Long>? - unusable in Class<*> varargs
     private val PRIM_LONG: Class<*> = java.lang.Long.TYPE
@@ -80,28 +72,94 @@ object GroupAdminBridge {
     }.onFailure { Log.e("$TAG: getMsgService failed: $it") }.getOrNull()
 
     /**
-     * One-shot candidate inventory to DiagLog - the on-device answer to
-     * "what are the real method names this build".
+     * One-shot candidate inventory. Writes to DiagLog and keeps the full
+     * report for [exportInventory] - the on-device answer to "what are the
+     * real method names this build".
      */
     @JvmStatic
-    fun dumpInventoryOnce() {
-        if (sInventoryDumped) return
+    fun dumpInventoryOnce(): String {
+        if (sInventoryDumped) return lastInventory ?: ""
         sInventoryDumped = true
+        val report = buildInventoryReport()
+        lastInventory = report
+        report.lineSequence().forEach { sumicya.qself.feature.dev.DiagLog.w("$TAG inventory $it") }
+        return report
+    }
+
+    /** Full parameter/return type names, so the dump pins exact signatures. */
+    private fun describeMethod(m: java.lang.reflect.Method): String =
+        "${m.returnType.name} ${m.name}(${m.parameterTypes.joinToString(",") { it.name }})"
+
+    private fun buildInventoryReport(): String {
         val kw = listOf("shutup", "mute", "kick", "remove", "card", "revoke", "recall", "member")
-        for (svc in listOfNotNull(groupService(), msgService())) {
-            val svcName = svc.javaClass.interfaces.firstOrNull()?.simpleName ?: svc.javaClass.simpleName
-            for (m in svc.javaClass.methods) {
-                val n = m.name.lowercase()
-                if (kw.any { n.contains(it) }) {
-                    sumicya.qself.feature.dev.DiagLog.w(
-                        "$TAG inventory $svcName: ${m.name}(${m.parameterTypes.joinToString(",") { it.simpleName }})")
-                }
+        val sb = StringBuilder()
+        sb.appendLine("Qself group-admin inventory")
+        sb.appendLine("host: ${hostInfo.versionName} (${hostInfo.versionCode})")
+        sb.appendLine("time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}")
+        val services = listOf("GroupService" to groupService(), "MsgService" to msgService())
+        var hits = 0
+        for ((label, svc) in services) {
+            sb.appendLine("== $label ==")
+            if (svc == null) {
+                sbAppendUnavailable(sb, label)
+                continue
+            }
+            val iface = svc.javaClass.interfaces.firstOrNull()?.name ?: svc.javaClass.name
+            sb.appendLine("impl-iface: $iface")
+            val matched = svc.javaClass.methods
+                .filter { m -> kw.any { m.name.lowercase().contains(it) } }
+                .sortedBy { it.name }
+            if (matched.isEmpty()) {
+                sbAppendUnavailable(sb, label)
+            } else {
+                matched.forEach { sb.appendLine("  ${describeMethod(it)}") }
+                hits += matched.size
+            }
+        }
+        sb.appendLine("matched: $hits")
+        return sb.toString()
+    }
+
+    private fun sbAppendUnavailable(sb: StringBuilder, label: String) {
+        sb.appendLine("  <unavailable: $label could not be resolved on this host>")
+    }
+
+    /**
+     * Share the candidate inventory through the system share sheet. No root,
+     * no storage permission: the report rides a plain ACTION_SEND intent.
+     * Returns false (and logs) when neither share nor clipboard is possible.
+     */
+    @JvmStatic
+    fun exportInventory(context: android.content.Context): Boolean {
+        val report = dumpInventoryOnce().ifBlank { buildInventoryReport().also { lastInventory = it } }
+        return try {
+            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(android.content.Intent.EXTRA_SUBJECT, "Qself group-admin inventory")
+                putExtra(android.content.Intent.EXTRA_TEXT, report)
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(android.content.Intent.createChooser(send, "导出群管理接口库存")
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (t: Throwable) {
+            Log.e("$TAG: inventory share failed: $t")
+            try {
+                val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                    as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("qself-inventory", report))
+                io.github.qauxv.util.Toasts.info(context, "接口库存已复制到剪贴板")
+                true
+            } catch (t2: Throwable) {
+                Log.e("$TAG: inventory clipboard failed: $t2")
+                false
             }
         }
     }
 
     // Exact descriptors/permissions/callback semantics are not verified for this host.
     // Diagnostic name/shape matching MUST NOT authorize a group-management write.
+    // These stay null until an exported inventory pins the exact signatures.
     @Suppress("UNUSED_PARAMETER")
     @JvmStatic
     fun muteMember(peerUid: String, memberUid: String, durationSec: Long): String? = null
@@ -117,66 +175,4 @@ object GroupAdminBridge {
     @Suppress("UNUSED_PARAMETER")
     @JvmStatic
     fun revokeMessage(msgId: Long, msgSeq: Long): String? = null
-
-    // ---- UI: confirm dialogs wired into the v1a menu ----
-
-    fun muteDialog(activity: android.content.Context, peerUid: String, memberUid: String, uin: Long) {
-        val durations = arrayOf("10 分钟", "1 小时", "12 小时", "1 天", "解除禁言")
-        val seconds = longArrayOf(600, 3600, 43200, 86400, 0)
-        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
-            .setTitle("禁言 $uin")
-            .setItems(durations) { _: DialogInterface, which: Int ->
-                val r = muteMember(peerUid, memberUid, seconds[which])
-
-                if (r != null) Toasts.info(activity, "已发出禁言指令") else Toasts.error(activity, "管理写操作尚未验证，当前版本已停用")
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    fun kickDialog(activity: android.content.Context, peerUid: String, memberUid: String, uin: Long) {
-        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
-            .setTitle("移出群聊")
-            .setMessage("确定将 $uin 移出本群？")
-            .setPositiveButton("移出") { _: DialogInterface, _: Int ->
-                val r = kickMember(peerUid, memberUid)
-
-                if (r != null) Toasts.info(activity, "已发出移出指令") else Toasts.error(activity, "管理写操作尚未验证，当前版本已停用")
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    fun cardDialog(activity: android.content.Context, peerUid: String, memberUid: String, uin: Long) {
-        val edit = EditText(activity).apply { inputType = InputType.TYPE_CLASS_TEXT }
-        val pad = Math.round(16f * activity.resources.displayMetrics.density)
-        val box = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(pad, pad / 2, pad, 0)
-            addView(edit)
-        }
-        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
-            .setTitle("设置 $uin 的群名片")
-            .setView(box)
-            .setPositiveButton("保存") { _: DialogInterface, _: Int ->
-                val r = setMemberCard(peerUid, memberUid, edit.text.toString())
-
-                if (r != null) Toasts.info(activity, "已发出名片修改") else Toasts.error(activity, "管理写操作尚未验证，当前版本已停用")
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    fun revokeDialog(activity: android.content.Context, msgId: Long, msgSeq: Long, uin: Long) {
-        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
-            .setTitle("撤回本条消息")
-            .setMessage("确定撤回 $uin 的这条消息？")
-            .setPositiveButton("撤回") { _: DialogInterface, _: Int ->
-                val r = revokeMessage(msgId, msgSeq)
-
-                if (r != null) Toasts.info(activity, "已发出撤回指令") else Toasts.error(activity, "管理写操作尚未验证，当前版本已停用")
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
 }

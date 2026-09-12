@@ -25,7 +25,6 @@ import android.content.Context
 import android.content.Intent
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.app.AlertDialog
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry
@@ -73,7 +72,7 @@ object GroupAdminMenu : CommonSwitchFunctionHook(
 
     override val description: String =
         "群聊中长按成员头像弹出管理菜单：标记 / 群名片 / 撤回本条 / 禁言 / 移出 / 共同群。" +
-            "长按头像的原生@行为将被本菜单替换。管理写操作未验证，当前版本停用，重启生效"
+            "长按头像的原生@行为将被本菜单替换。写操作需先导出接口库存、钉死精确签名后开放，重启生效"
 
     override val uiItemLocation: Array<String> =
         FunctionEntryRouter.Locations.Auxiliary.GROUP_CATEGORY
@@ -131,13 +130,17 @@ object GroupAdminMenu : CommonSwitchFunctionHook(
         msgSeq: Long,
     ) {
         val ctx = CommonContextWrapper.createAppCompatContext(context)
+        // First open of a session collects the host's real method inventory,
+        // ready for the one-tap export used to pin exact signatures.
+        GroupAdminBridge.dumpInventoryOnce()
         val marked = parseMarks(ConfigManager.getDefaultConfig().getStringOrDefault(CFG_MARKS, "")).contains(uin)
         val items = arrayOf(
             if (marked) "取消标记此人" else "标记此人",
-            "修改群名片（未适配）",
-            "撤回本条消息（未适配）",
-            "禁言（未适配）",
-            "移出群聊（未适配）",
+            "修改群名片（待签名）",
+            "撤回本条消息（待签名）",
+            "禁言（待签名）",
+            "移出群聊（待签名）",
+            "导出管理接口库存",
             "查询共同群",
         )
         sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
@@ -145,8 +148,9 @@ object GroupAdminMenu : CommonSwitchFunctionHook(
             .setItems(items) { _, which ->
                 when (which) {
                     0 -> toggleMark(ctx, uin)
-                    in 1..4 -> Toasts.info(ctx, "管理写操作尚未完成精确适配，已停用。")
-                    5 -> openCommonGroups(ctx, uin)
+                    in 1..4 -> Toasts.info(ctx, "写操作待钉死精确签名：请先点「导出管理接口库存」回传")
+                    5 -> if (!GroupAdminBridge.exportInventory(ctx)) Toasts.error(ctx, "导出失败，请查看 qself_diag.log")
+                    6 -> openCommonGroups(ctx, uin)
                 }
             }
             .setNegativeButton("关闭", null)
