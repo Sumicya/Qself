@@ -68,9 +68,15 @@ object LiquidGlassBottomBar : CommonSwitchFunctionHook(
 
     override val name = "底部导航栏液态玻璃"
 
-    override val description = "iOS 26 风格液态玻璃底栏（WeChat-LiquidGlass 移植，MIT）。" +
-        "玻璃亮边按实测图标边界直贴最外侧按钮（无外圈薄带）；" +
-        "按钮恢复正常宽度；未读数为白色数字显示于按钮顶部居中。重启生效"
+    override val description = "左侧开关启用底栏，点击说明配置文字、未读数量、透明度、背景和明暗。按钮数量跟随 QQ 实际页面。"
+
+    override val uiItemAgent by lazy {
+        val base = super.uiItemAgent
+        object : io.github.qauxv.base.IUiItemAgent by base {
+            override val onClickListener: (io.github.qauxv.base.IUiItemAgent, Activity, android.view.View) -> Unit =
+                { _, activity, _ -> sumicya.qself.ui.GlassAppearanceEditor.show(activity, true) }
+        }
+    }
 
     override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EXPERIMENTAL_CATEGORY
 

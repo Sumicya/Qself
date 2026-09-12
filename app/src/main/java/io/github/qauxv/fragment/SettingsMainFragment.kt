@@ -345,10 +345,8 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             return
         }
         if (HomeCatalog.sections.any { it.id == action } || action == HomeCatalog.CATALOG) {
-            val fragment = newInstance(emptyArray())
-            if (action == HomeCatalog.CATALOG) fragment.arguments!!.putBoolean(SHOW_CATALOG, true)
-            else fragment.arguments!!.putString(HOME_SECTION, action)
-            requireSettingsHostActivity().presentFragment(fragment)
+            sumicya.qself.ui.SettingsOptionSheet.show(requireSettingsHostActivity(),
+                home = action.takeUnless { it == HomeCatalog.CATALOG })
             return
         }
         if (action == HomeCatalog.DIAGNOSTICS) {
@@ -364,6 +362,10 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             HomeCatalog.BACKUP -> "cfg-backup-restore"
             HomeCatalog.ABOUT -> "other-about"
             else -> return
+        }
+        if (id == "cfg-theme") {
+            sumicya.qself.ui.SettingsOptionSheet.show(requireSettingsHostActivity(), group = id)
+            return
         }
         val location = FunctionEntryRouter.resolveUiItemAnycastLocation(arrayOf(FunctionEntryRouter.Locations.ANY_CAST_PREFIX, id)) ?: return
         val desc = FunctionEntryRouter.findDescriptionByLocation(location) as? IDslFragmentNode ?: return

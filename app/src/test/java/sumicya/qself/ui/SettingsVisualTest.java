@@ -255,8 +255,7 @@ public class SettingsVisualTest {
                 assertEquals(width, page.list.getWidth());
                 assertEquals(width, page.list.getRecycler().getWidth());
                 assertEquals(width, page.home().getWidth());
-                View search = page.home().findViewWithTag(HomeCatalog.SEARCH);
-                assertEquals(width-page.home().getPaddingLeft()-page.home().getPaddingRight(), search.getWidth());
+                assertNull("Only the toolbar offers search", page.home().findViewWithTag(HomeCatalog.SEARCH));
                 verifyTextBounds(page.home()); verifyContainedChildren(page.home());
                 View people = page.home().findViewWithTag("people");
                 View tools = page.home().findViewWithTag("tools");
@@ -272,8 +271,8 @@ public class SettingsVisualTest {
         measurePage(page, 320, 915, View.MeasureSpec.EXACTLY);
         assertNotSame(page.home().findViewWithTag("appearance").getParent(), page.home().findViewWithTag("chat").getParent());
         verifyTextBounds(page.home()); verifyContainedChildren(page.home());
-        page.home().findViewWithTag(HomeCatalog.SEARCH).performClick();
-        assertEquals(java.util.Collections.singletonList(HomeCatalog.SEARCH), clicks);
+        page.home().findViewWithTag(HomeCatalog.CATALOG).performClick();
+        assertEquals(java.util.Collections.singletonList(HomeCatalog.CATALOG), clicks);
         measurePage(page, 480, 915, View.MeasureSpec.EXACTLY);
         assertSame(page.home().findViewWithTag("appearance").getParent(), page.home().findViewWithTag("chat").getParent());
         assertEquals(480, page.home().getWidth());
@@ -328,7 +327,7 @@ public class SettingsVisualTest {
         layout(view, 412);
         List<String> expected = new ArrayList<>();
         for (HomeCatalog.Section section : HomeCatalog.sections) expected.add(section.getId());
-        java.util.Collections.addAll(expected, HomeCatalog.SEARCH, HomeCatalog.DIAGNOSTICS,
+        java.util.Collections.addAll(expected, HomeCatalog.DIAGNOSTICS,
             HomeCatalog.THEME, HomeCatalog.BACKUP, HomeCatalog.CATALOG, HomeCatalog.ABOUT);
         for (String id : expected) {
             View button = view.findViewWithTag(id);
@@ -358,13 +357,13 @@ public class SettingsVisualTest {
     @Test public void sameStateRefreshPreservesFocusTargetsAndUpdatesDispatch() {
         List<String> oldClicks = new ArrayList<>(), newClicks = new ArrayList<>();
         SettingsHomeView view = home(context(false, 1f, 412, false), false, 1, oldClicks);
-        View search = view.findViewWithTag(HomeCatalog.SEARCH);
+        View search = view.findViewWithTag(HomeCatalog.CATALOG);
         view.bind(new SettingsHomeView.State("QQ 9.2.10", false, false), 1,
             id -> { newClicks.add(id); return Unit.INSTANCE; });
-        assertSame(search, view.findViewWithTag(HomeCatalog.SEARCH));
+        assertSame(search, view.findViewWithTag(HomeCatalog.CATALOG));
         search.performClick();
         assertTrue(oldClicks.isEmpty());
-        assertEquals(java.util.Collections.singletonList(HomeCatalog.SEARCH), newClicks);
+        assertEquals(java.util.Collections.singletonList(HomeCatalog.CATALOG), newClicks);
     }
 
     @Test public void realSwitchCellGrowsWithTextAndKeepsSwitchHitTarget() {
@@ -383,14 +382,39 @@ public class SettingsVisualTest {
         cell.draw(new Canvas(Bitmap.createBitmap(288, cell.getHeight(), Bitmap.Config.ARGB_8888)));
     }
 
-    @Test public void rtlTrailingControlStaysOnTheLeft() {
+    @Test public void rtlLeadingControlStaysOnTheRight() {
         TitleValueCell cell = new TitleValueCell(context(true, 1f, 412, true));
         cell.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         cell.setTitle("RTL feature");
         cell.setChecked(false);
         layout(cell, 380);
-        assertTrue(cell.getSwitchView().getRight() < 190);
+        assertTrue(cell.getSwitchView().getLeft() > 190);
         assertTrue(cell.isClickOnSwitch(cell.getSwitchView().getLeft()));
+    }
+
+    @Test public void compactLeadingSquarePreservesCheckableSemantics() {
+        TitleValueCell cell = new TitleValueCell(context(false, 1f, 412, false));
+        cell.setTitle("独立开关"); cell.setChecked(false);
+        layout(cell, 380);
+        assertEquals(56, cell.getHeight());
+        assertEquals(48, cell.getSwitchView().getWidth());
+        assertTrue(cell.getSwitchView().getRight() < ((View) cell.getTitleView().getParent()).getLeft());
+        final int[] changes = {0};
+        cell.getSwitchView().setOnCheckedChangeListener((button, value) -> changes[0]++);
+        cell.getSwitchView().toggle();
+        assertTrue(cell.isChecked()); assertEquals(1, changes[0]);
+        cell.setUnavailable(true);
+        cell.getSwitchView().toggle();
+        assertFalse(cell.isChecked()); assertEquals(2, changes[0]);
+    }
+
+    @Test public void explicitOverlayToneKeepsOpaqueReadableOptionSurfaces() {
+        for (int tone : new int[]{1, 2}) {
+            SettingsVisuals.Palette p = GlassAppearanceEditor.INSTANCE.palette(context(false, 1f, 412, false), tone, 1);
+            assertEquals(tone == 2, p.getDark());
+            assertEquals(255, Color.alpha(p.getSurface()));
+            assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(p.getText(), p.getSurface()) >= 4.5);
+        }
     }
 
     @Test public void glassBackdropDoesNotPaintOutsideItsBounds() {
@@ -477,7 +501,7 @@ public class SettingsVisualTest {
             SettingsHomeView view = home(context, false, 0, new ArrayList<>());
             layout(view, 412);
             assertTrue(view.findViewWithTag("appearance") instanceof com.google.android.material.card.MaterialCardView);
-            assertTrue(new TitleValueCell(context).getSwitchView() instanceof com.google.android.material.materialswitch.MaterialSwitch);
+            assertTrue(new TitleValueCell(context).getSwitchView() instanceof SquareStateControl);
         }
     }
 

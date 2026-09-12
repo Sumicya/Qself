@@ -194,8 +194,9 @@ final class LiquidGlassPanel extends View {
 
     /** KernelSU: containerColor = surfaceContainer.copy(0.4f). */
     void setTheme(boolean night) {
+        night = GlassConfig.resolveNight(night);
         mNight = night;
-        mBaseColor = night ? 0xFF111111 : 0xFFF7F7F7;
+        mBaseColor = GlassConfig.backgroundColor(night);
         mSurfacePaint.setColor(night ? 0x662C2C2E : 0x66F2F2F7);
         // iosIndicatorSpecular: BloomStroke(white @ 0.12), width 1.dp, alpha 0.75.
         mHighlightPaint.setStyle(Paint.Style.STROKE);
@@ -258,7 +259,8 @@ final class LiquidGlassPanel extends View {
 
     private void drawPanel(Canvas canvas, int w, int h, float radius,
                            RenderNode node, float captureScale) {
-        if (mSupported && canvas.isHardwareAccelerated()) {
+        int materialSave = canvas.saveLayerAlpha(0, 0, w, h, GlassConfig.materialAlpha());
+        if (GlassConfig.background == 0 && mSupported && canvas.isHardwareAccelerated()) {
             try {
                 drawGlass(canvas, w, h, radius, node, captureScale);
             } catch (Throwable t) {
@@ -269,11 +271,14 @@ final class LiquidGlassPanel extends View {
 
         // Surface wash and rim highlight sit on top of the refracted backdrop —
         // this is what carries legibility, not a heavy blur.
+        mSurfacePaint.setColor(GlassConfig.background == 0
+                ? (mNight ? 0x662C2C2E : 0x66F2F2F7) : GlassConfig.backgroundColor(mNight));
         canvas.drawRoundRect(0, 0, w, h, radius, radius, mSurfacePaint);
         drawInteractiveHighlight(canvas, w, h, radius);
         float half = mHighlightPaint.getStrokeWidth() * 0.5f;
         canvas.drawRoundRect(half, half, w - half, h - half,
                 radius - half, radius - half, mHighlightPaint);
+        canvas.restoreToCount(materialSave);
     }
 
     /** KernelSU's InteractiveHighlight, drawn over the pill while dragging. */

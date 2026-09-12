@@ -275,6 +275,7 @@ final class LiquidGlassHostLayout extends FrameLayout {
      * probe leads and uiMode is the fallback for when it finds no labels.
      */
     private static boolean resolveDark(Context context, Boolean textProbe) {
+        if (GlassConfig.tone != 0) return GlassConfig.tone == 2;
         HostApp app = LiquidGlassModule.app();
         if (app != null && app.preferTextColorProbe && textProbe != null) {
             return textProbe;
@@ -510,6 +511,13 @@ final class LiquidGlassHostLayout extends FrameLayout {
 
     /** Re-evaluates dark/light periodically so theme switches follow the app
      *  live, through the same signal {@link #resolveDark} picked at install. */
+    void refreshConfiguration() {
+        mDarkMode = resolveDark(getContext(), detectDarkFromText(mBar));
+        if (mTuner != null) mTuner.onTheme(mDarkMode);
+        setupPaints();
+        invalidate();
+    }
+
     private void maybeRefreshTheme() {
         mCaptureCount++;
         if (mCaptureCount % 20 != 1) {
@@ -557,13 +565,15 @@ final class LiquidGlassHostLayout extends FrameLayout {
         if (getWidth() <= 0 || getHeight() <= 0) {
             return;
         }
+        int save = canvas.saveLayerAlpha(0, 0, getWidth(), getHeight(), GlassConfig.materialAlpha());
         drawLegacyFrost(canvas);
+        canvas.restoreToCount(save);
     }
 
     private void drawLegacyFrost(Canvas canvas) {
         float r = mCornerRadius;
 
-        if (mRegionBuf != null && !mRegionBuf.isRecycled()) {
+        if (GlassConfig.background == 0 && mRegionBuf != null && !mRegionBuf.isRecycled()) {
             BitmapShader shader = new BitmapShader(
                     mRegionBuf, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
             Matrix m = new Matrix();
@@ -574,7 +584,7 @@ final class LiquidGlassHostLayout extends FrameLayout {
             mBackdropPaint.setShader(shader);
         } else {
             mBackdropPaint.setShader(null);
-            mBackdropPaint.setColor(mDarkMode ? 0x50000000 : 0x8CFFFFFF);
+            mBackdropPaint.setColor(GlassConfig.backgroundColor(mDarkMode));
         }
         canvas.drawRoundRect(mBounds, r, r, mBackdropPaint);
 

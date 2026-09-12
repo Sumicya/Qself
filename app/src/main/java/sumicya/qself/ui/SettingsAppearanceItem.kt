@@ -2,10 +2,10 @@
 package sumicya.qself.ui
 
 import android.app.Activity
+import android.content.Context
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.view.View
-import android.view.WindowManager
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.qauxv.base.IUiItemAgent
 import io.github.qauxv.base.annotation.UiItemAgentEntry
 import io.github.qauxv.config.ConfigManager
@@ -15,27 +15,23 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import sumicya.qself.profile.ProfileMigration
 
 @UiItemAgentEntry
-object SettingsAppearanceItem : BasePlainUiAgentItem(title = "局部弹窗玻璃",
-    description = "仅本材质弹窗使用；再次打开可预览。常规页面固定使用 MD3 Expressive，不影响 QQ 底栏。") {
-    private val labels = arrayOf("通透玻璃", "柔和玻璃", "实色 · 更高可读性")
-    // All ordinary settings pages are opaque MD3E, independent of the old preference.
+object SettingsAppearanceItem : BasePlainUiAgentItem("浮层玻璃外观",
+    "透明度、背景、明暗与纹理。用于分类浮层；常规页面和选项保持 MD3，QQ 底栏单独配置。") {
+    private val labels = arrayOf("通透", "柔和", "实色")
     const val mode: Int = 2
     val overlayMode: Int get() = runCatching { ConfigManager.getDefaultConfig().getIntOrDefault(ProfileMigration.OVERLAY_GLASS, 1) }.getOrDefault(1).coerceIn(0, 2)
     override val uiItemLocation = FunctionEntryRouter.Locations.ConfigCategory.THEME_CATEGORY
     override val valueState by lazy { MutableStateFlow<String?>(labels[overlayMode]) }
-    override val onClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, activity, _ ->
-        val p = SettingsVisuals.palette(activity, overlayMode)
-        val dialog = MaterialAlertDialogBuilder(activity)
-            .setTitle("弹窗材质（本窗口预览）")
-            .setSingleChoiceItems(labels, overlayMode) { dialog, which ->
-                ConfigManager.getDefaultConfig().putInt(ProfileMigration.OVERLAY_GLASS, which)
-                valueState.value = labels[which]
-                dialog.dismiss()
-            }
-            .setNegativeButton("关闭", null)
-            .setBackground(SettingsGlass.material(activity, p, 28, null, ColorDrawable(p.surface)))
-            .create()
-        dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
-        dialog.show()
+    fun refreshLabel() { valueState.value = labels[overlayMode] }
+    fun overlayPalette(context: Context) = GlassAppearanceEditor.palette(context,
+        GlassAppearanceEditor.read(GlassAppearanceEditor.OVERLAY, "tone", 0, 0..2), overlayMode)
+    fun material(context: Context, owner: View): Drawable {
+        val background = GlassAppearanceEditor.read(GlassAppearanceEditor.OVERLAY, "background", 0, 0..2)
+        val p = overlayPalette(context).let { if (background == 0) it else it.copy(mode = 2) }
+        val fallback = ColorDrawable(if (background == 2) { if (p.dark) 0xff18243f.toInt() else 0xffe3eaff.toInt() } else p.surface)
+        return SettingsGlass.material(context, p, 28, owner, fallback).apply {
+            alpha = (255 * (100 - GlassAppearanceEditor.read(GlassAppearanceEditor.OVERLAY, "transparency", 0, 0..100)) / 100f).toInt()
+        }
     }
+    override val onClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, activity, _ -> GlassAppearanceEditor.show(activity, false) }
 }

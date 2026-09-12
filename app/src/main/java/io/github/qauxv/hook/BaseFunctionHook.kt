@@ -60,6 +60,7 @@ abstract class BaseFunctionHook(
         if (mInitialized) {
             return mInitializeResult
         }
+        sumicya.qself.diagnostics.FeatureJournal.record("INIT_BEGIN", javaClass.name)
         mInitializeResult = try {
             initOnce()
         } catch (e: Throwable) {
@@ -71,6 +72,7 @@ abstract class BaseFunctionHook(
             }
             false
         }
+        sumicya.qself.diagnostics.FeatureJournal.record("INIT_END", javaClass.name, mInitializeResult.toString())
         mInitialized = true
         return mInitializeResult
     }
@@ -116,6 +118,7 @@ abstract class BaseFunctionHook(
     override val dependentComponents: List<ITraceableDynamicHook>? = null
 
     override fun traceError(e: Throwable) {
+        sumicya.qself.diagnostics.FeatureJournal.error(javaClass.name, e)
         // check if there is already an error with the same error message and stack trace
         var alreadyLogged = false
         synchronized(mErrorsLock) {

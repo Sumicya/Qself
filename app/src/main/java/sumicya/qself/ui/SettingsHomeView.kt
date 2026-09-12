@@ -62,21 +62,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
             .apply { setPadding(dp(12), dp(7), dp(12), dp(7)); background = SettingsVisuals.surface(context, palette, 12, owner = this) },
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
 
-        val search = LinearLayout(context).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = dp(56)
-            setPadding(dp(18), dp(12), dp(18), dp(12))
-            addView(text("搜索功能与设置", 15, palette.secondary), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-            addView(ImageView(context).apply {
-                setImageResource(R.drawable.ic_search_baseline)
-                imageTintList = ColorStateList.valueOf(palette.accent)
-                importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-            }, LayoutParams(dp(24), dp(24)))
-        }
-        button(search, HomeCatalog.SEARCH, "搜索功能与设置")
-        addView(search, lp(top = 22, bottom = 25))
-
-        addView(text("功能", 14, palette.secondary, true), lp(bottom = 12))
+        addView(text("功能", 14, palette.secondary, true), lp(top = 20, bottom = 12))
         for (pair in HomeCatalog.sections.chunked(if (compact) 1 else 2)) {
             val row = LinearLayout(context).apply { orientation = HORIZONTAL }
             for ((index, section) in pair.withIndex()) {

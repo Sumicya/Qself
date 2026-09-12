@@ -90,9 +90,10 @@ object SettingsVisuals {
         })
     }
 
-    fun decorateRow(view: View, context: Context, clickable: Boolean) {
+    @JvmOverloads
+    fun decorateRow(view: View, context: Context, clickable: Boolean, paletteOverride: Palette? = null) {
         if (view is SpacerCell) return
-        val p = palette(context, SettingsAppearanceItem.mode)
+        val p = paletteOverride ?: palette(context, SettingsAppearanceItem.mode)
         if (view is HeaderCell) {
             view.titleTextView.setTextColor(p.accent)
             return
@@ -101,15 +102,16 @@ object SettingsVisuals {
             ?: RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         params.marginStart = dp(context, 16)
         params.marginEnd = dp(context, 16)
-        params.bottomMargin = dp(context, 7)
+        params.bottomMargin = dp(context, 2)
         view.layoutParams = params
-        view.background = surface(context, p, 24, clickable, view)
+        view.background = surface(context, p, 12, clickable, view)
         view.isFocusable = clickable
         if (view is TextInfoCell) {
             view.textColor = p.secondary
             view.textLinkColor = p.accent
         }
         if (view is TitleValueCell) {
+            view.switchView.paletteOverride = p
             view.hasDivider = false
             view.titleView.setTextColor(p.text)
             view.summaryView.setTextColor(p.secondary)

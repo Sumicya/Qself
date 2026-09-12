@@ -46,6 +46,8 @@ class UiAgentItem(
         val agentProvider: IUiItemAgentProvider,
 ) : IDslItemNode, TMsgListItem {
 
+    var beforeOpenDetails: (() -> Unit)? = null
+
     override val isSearchable: Boolean = true
     override val isClickable: Boolean get() = isEnabled
     override val isEnabled: Boolean
@@ -62,13 +64,21 @@ class UiAgentItem(
         return HeaderViewHolder(TitleValueCell(context))
     }
 
+    private fun restoreCheck(button: CompoundButton, value: Boolean) {
+        button.setOnCheckedChangeListener(null)
+        button.isChecked = value
+        button.setOnCheckedChangeListener(mCheckChangedListener)
+    }
+
     private val mCheckChangedListener = CompoundButton.OnCheckedChangeListener { btn, isChecked ->
         val agent = agentProvider.uiItemAgent
         val funcName = agent.titleProvider.invoke(agent)
         val switchCellAgent = agent.switchProvider
         val unsupported = agentProvider is IDynamicHook && !agentProvider.isAvailable
-        switchCellAgent?.isChecked = isChecked
+        val previous = switchCellAgent?.isChecked ?: false
         val action = {
+            switchCellAgent?.isChecked = isChecked
+            sumicya.qself.diagnostics.FeatureJournal.toggle(agentProvider.javaClass.name, previous, isChecked)
             // if the function is enabled but not initialized, initialize it
             if (agentProvider is IDynamicHook) {
                 val hook: IDynamicHook = agentProvider
@@ -92,10 +102,10 @@ class UiAgentItem(
                     action()
                 }
                 .setNegativeButton(android.R.string.cancel) { _, _ ->
-                    btn.isChecked = false
+                    restoreCheck(btn, previous)
                 }
                 .setOnCancelListener {
-                    btn.isChecked = false
+                    restoreCheck(btn, previous)
                 }
                 .setCancelable(true)
                 .show()
@@ -131,6 +141,7 @@ class UiAgentItem(
             }
         } else false
         cell.hasError = hasError
+        cell.isUnavailable = agentProvider is IDynamicHook && !agentProvider.isAvailable
         if (switchAgent != null) {
             // has switch!!, must not both have a switch and a value
             var toBeShownAtSummary: CharSequence? = valueState?.value
@@ -149,6 +160,10 @@ class UiAgentItem(
             cell.summary = description
             cell.value = valueStateValue
         }
+        if (hasError || cell.isUnavailable) {
+            cell.summary = (if (hasError) "出现错误 · 查看功能错误记录" else "当前版本不支持") +
+                cell.summary?.let { "\n$it" }.orEmpty()
+        }
         cell.setOnClickListener(mOnClickListener)
     }
 
@@ -159,10 +174,11 @@ class UiAgentItem(
         val activity: Activity = v.context as Activity
         val onClick = agent.onClickListener
         if (onClick != null) {
+            beforeOpenDetails?.invoke()
             onClick.invoke(agent, activity, v)
         } else {
             // check if it has switch
-            if (cell.isHasSwitch) {
+            if (cell.isHasSwitch && cell.switchView.isEnabled) {
                 cell.switchView.toggle()
             }
         }

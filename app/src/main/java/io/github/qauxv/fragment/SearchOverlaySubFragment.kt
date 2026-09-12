@@ -517,7 +517,9 @@ class SearchOverlaySubFragment {
             imm.hideSoftInputFromWindow(requireView().windowToken, 0)
             val fragment = SettingsMainFragment.newInstance(targetFragmentLocation, identifier)
             parent!!.onNavigateToOtherFragment()
-            settingsHostActivity!!.presentFragment(fragment)
+            val group = sumicya.qself.feature.consolidation.FeatureCatalog.groups.firstOrNull { it.path.contentEquals(targetFragmentLocation) }
+            if (group != null) sumicya.qself.ui.SettingsOptionSheet.show(settingsHostActivity!!, group = group.id, focus = identifier)
+            else settingsHostActivity!!.presentFragment(fragment)
         }
     }
 

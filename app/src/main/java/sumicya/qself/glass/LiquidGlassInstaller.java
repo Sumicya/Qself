@@ -163,6 +163,8 @@ public final class LiquidGlassInstaller {
                 // Nothing to install, but coming back from a chat or any other
                 // screen rebuilds the window state: the navigation inset is
                 // applied again and the dead strip at the bottom re-opens.
+                applyLabelSettings(sTabRowRef.get());
+                live.refreshConfiguration();
                 reassertBottom(activity);
                 return;
             }
@@ -896,6 +898,28 @@ public final class LiquidGlassInstaller {
         return null;
     }
 
+    private static final java.util.WeakHashMap<android.widget.TextView, Float> sTitleAlphas = new java.util.WeakHashMap<>();
+    private static void applyLabelSettings(ViewGroup row) {
+        if (row == null) return;
+        int count = 0;
+        for (int i = 0; i < row.getChildCount(); i++) {
+            View tab = row.getChildAt(i);
+            if (tab.getVisibility() != View.VISIBLE) continue;
+            count++;
+            android.widget.TextView title = findTabTitle(tab);
+            if (title == null) continue;
+            if (GlassConfig.labelMode == 1) {
+                if (!sTitleAlphas.containsKey(title)) sTitleAlphas.put(title, title.getAlpha());
+                title.setAlpha(0f); // Retain the stock anchor for unread counts; never alter host text.
+            } else if (sTitleAlphas.containsKey(title)) {
+                title.setAlpha(sTitleAlphas.remove(title));
+            }
+            title.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, GlassConfig.labelSize);
+        }
+        GlassConfig.visibleTabCount = count;
+        applyQqIconOnlyAlignment(row, GlassConfig.labelMode == 1 || isQqIconOnlyRow(row), row.getResources().getDisplayMetrics().density);
+    }
+
     /** Whether a title still occupies a real slot in its tab. */
     private static boolean hasUsableTabTitle(View tab) {
         android.widget.TextView title = findTabTitle(tab);
@@ -1058,7 +1082,8 @@ public final class LiquidGlassInstaller {
         if (tabRow == null || tabRow.getChildCount() == 0) {
             return 0;
         }
-        boolean iconOnly = isQqIconOnlyRow(tabRow);
+        applyLabelSettings(tabRow);
+        boolean iconOnly = GlassConfig.labelMode == 1 || isQqIconOnlyRow(tabRow);
         applyQqIconOnlyAlignment(tabRow, iconOnly, density);
         int childCount = tabRow.getChildCount();
         int count = 0;

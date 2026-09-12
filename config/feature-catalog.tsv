@@ -117,3 +117,4 @@ _core					io.github.qauxv.router.dispacher.InputButtonHookDispatcher
 _core					io.github.qauxv.router.dispacher.StartActivityHook
 _core					io.github.qauxv.router.dispacher.ItemBuilderFactoryHook
 _core					me.ketal.dispacher.BaseBubbleBuilderHook
+qself-safety	tools	维护与诊断	diagnostics	诊断	sumicya.qself.diagnostics.FeatureDiagnosticsItem

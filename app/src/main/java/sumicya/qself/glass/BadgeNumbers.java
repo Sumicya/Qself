@@ -83,7 +83,7 @@ public final class BadgeNumbers {
             return;
         }
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        paint.setTextSize(10f * density);
+        paint.setTextSize(GlassConfig.badgeSize * host.getResources().getDisplayMetrics().scaledDensity);
         paint.setTextAlign(Paint.Align.CENTER);
         // Slightly translucent: the number overlays the icon itself, so the
         // glyph must let the artwork show through (user direction: give it
@@ -100,10 +100,19 @@ public final class BadgeNumbers {
             if (badge == null) {
                 continue;
             }
+            if (GlassConfig.badgeMode == 2 || GlassConfig.badgeMode == 3) {
+                badge.setAlpha(GlassConfig.badgeMode == 2 ? 1f : 0f);
+                continue;
+            }
+            // Restore before attempting a custom draw, so a lost count/anchor never hides stock UI.
+            badge.setAlpha(1f);
             hookUpdateNumOnce(badge, host);
             String label = badge instanceof TextView
                     ? countLabel(sCounts.get(badge), ((TextView) badge).getText())
                     : countLabel(sCounts.get(badge), null);
+            if (GlassConfig.badgeMode == 1 && label != null) {
+                try { if (Long.parseLong(label) > 99) label = "99+"; } catch (NumberFormatException ignored) { }
+            }
             if (label == null) {
                 // No count source (yet): keep the stock capsule visible
                 // instead of hiding it into nothing.
@@ -151,6 +160,7 @@ public final class BadgeNumbers {
             int iconTopLocal = iconBottomLocal - Math.round(24f * density);
             float baseline = labelAt[1] - (labelTopLocal - iconTopLocal)
                     - Math.round(3f * density);
+            if (GlassConfig.labelMode == 1) baseline += 7.5f * density;
             if (baseline < paint.getTextSize()) {
                 baseline = paint.getTextSize();
             }

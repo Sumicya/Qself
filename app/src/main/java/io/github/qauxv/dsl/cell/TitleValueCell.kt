@@ -31,7 +31,7 @@ import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.LinearLayout
-import com.google.android.material.materialswitch.MaterialSwitch
+import sumicya.qself.ui.SquareStateControl
 import androidx.core.content.res.ResourcesCompat
 import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
@@ -47,7 +47,7 @@ class TitleValueCell(
     val titleView: TextView
     val summaryView: TextView
     val valueView: TextView
-    val switchView: MaterialSwitch
+    val switchView: SquareStateControl
 
     private val dividerColor: Int
     private val dip1: Float = 1.dp.toFloat()
@@ -59,7 +59,7 @@ class TitleValueCell(
     private var trailingWidth = 0
 
     init {
-        minimumHeight = 64.dp
+        minimumHeight = 56.dp
         setWillNotDraw(false)
         addView(textColumn)
         dividerColor = ResourcesCompat.getColor(resources, R.color.divideColor, context.theme)
@@ -80,7 +80,7 @@ class TitleValueCell(
             gravity = Gravity.START
             visibility = GONE
         }.also {
-            textColumn.addView(it, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = 6.dp })
+            textColumn.addView(it, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = 4.dp })
         }
         val valueTextColor = ThemeAttrUtils.resolveColorOrDefaultColorRes(context, androidx.appcompat.R.attr.colorAccent, R.color.colorAccent)
         errorLineColor = ThemeAttrUtils.resolveColorOrDefaultColorInt(context, R.attr.unusableColor, valueTextColor)
@@ -101,13 +101,11 @@ class TitleValueCell(
             )
         }
         // switch view
-        switchView = MaterialSwitch(context).apply {
+        switchView = SquareStateControl(context).apply {
             visibility = GONE
             // disable click for default because this behavior is managed by the recycler view,
             // but they can still set onCheckedChangeListener if they want
             isClickable = false
-            textOn = ""
-            textOff = ""
         }.also {
             addView(
                 it, LayoutHelper.newFrameLayoutParamsRel(
@@ -165,8 +163,12 @@ class TitleValueCell(
             }
         }
 
+    var isUnavailable: Boolean = false
+        set(value) { field = value; switchView.unavailable = value }
+
     var hasError: Boolean = false
         set(value) {
+            switchView.failed = value
             val needInvalidate = field != value
             field = value
             if (needInvalidate) {
@@ -193,27 +195,31 @@ class TitleValueCell(
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val unspecified = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-        val trailing = if (isHasSwitch) switchView else valueView
+        val control = if (isHasSwitch) switchView else valueView
         trailingWidth = 0
-        if (trailing.visibility != GONE) {
-            trailing.measure(MeasureSpec.makeMeasureSpec((width * .36f).toInt(), MeasureSpec.AT_MOST), unspecified)
-            trailingWidth = trailing.measuredWidth + 12.dp
+        if (control.visibility != GONE) {
+            control.measure(MeasureSpec.makeMeasureSpec(if (isHasSwitch) 48.dp else (width * .30f).toInt(),
+                if (isHasSwitch) MeasureSpec.EXACTLY else MeasureSpec.AT_MOST), unspecified)
+            trailingWidth = control.measuredWidth + 12.dp
         }
-        textColumn.measure(MeasureSpec.makeMeasureSpec((width - 36.dp - trailingWidth).coerceAtLeast(0), MeasureSpec.EXACTLY), unspecified)
-        val height = maxOf(minimumHeight, textColumn.measuredHeight + 28.dp,
-            if (trailing.visibility == GONE) 0 else trailing.measuredHeight + 24.dp)
+        textColumn.measure(MeasureSpec.makeMeasureSpec((width - 32.dp - trailingWidth).coerceAtLeast(0), MeasureSpec.EXACTLY), unspecified)
+        val height = maxOf(minimumHeight, textColumn.measuredHeight + 16.dp,
+            if (control.visibility == GONE) 0 else control.measuredHeight + 8.dp)
         setMeasuredDimension(width, resolveSize(height, heightMeasureSpec))
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
-        val columnLeft = 18.dp + if (rtl) trailingWidth else 0
+        // State belongs at the leading edge; explanatory text follows it.
+        val leadingControl = isHasSwitch
+        val columnLeft = 16.dp + if (leadingControl != rtl) trailingWidth else 0
         val columnTop = (measuredHeight - textColumn.measuredHeight) / 2
         textColumn.layout(columnLeft, columnTop, columnLeft + textColumn.measuredWidth, columnTop + textColumn.measuredHeight)
-        for (trailing in arrayOf(valueView, switchView)) if (trailing.visibility != GONE) {
-            val x = if (rtl) 18.dp else measuredWidth - 18.dp - trailing.measuredWidth
-            val y = (measuredHeight - trailing.measuredHeight) / 2
-            trailing.layout(x, y, x + trailing.measuredWidth, y + trailing.measuredHeight)
+        for (control in arrayOf(valueView, switchView)) if (control.visibility != GONE) {
+            val atLeft = if (control === switchView) !rtl else rtl
+            val x = if (atLeft) 16.dp else measuredWidth - 16.dp - control.measuredWidth
+            val y = (measuredHeight - control.measuredHeight) / 2
+            control.layout(x, y, x + control.measuredWidth, y + control.measuredHeight)
         }
     }
 
