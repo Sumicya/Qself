@@ -62,6 +62,12 @@ object SettingsVisuals {
         return target
     }
 
+    /** Non-text state glyphs must remain legible when a dynamic container changes luminance. */
+    @JvmStatic
+    fun stateForeground(candidate: Int, background: Int): Int =
+        if (ColorUtils.calculateContrast(candidate, background) >= 3.0) candidate
+        else if (ColorUtils.calculateLuminance(background) > .179) Color.BLACK else Color.WHITE
+
     private fun blend(a: Int, b: Int, fraction: Float): Int = Color.rgb(
         (Color.red(a) * (1 - fraction) + Color.red(b) * fraction).toInt(),
         (Color.green(a) * (1 - fraction) + Color.green(b) * fraction).toInt(),

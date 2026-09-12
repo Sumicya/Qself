@@ -381,6 +381,19 @@ public class SettingsVisualTest {
         assertFalse(SettingsGlass.INSTANCE.isOptical(flat));
     }
 
+    @Test public void dynamicStateGlyphsStayLegibleThroughTheTransition() {
+        for (boolean dark : new boolean[]{false, true}) {
+            SettingsVisuals.Palette p = SettingsVisuals.palette(context(dark, 1f, 412, false), 2);
+            for (int step = 0; step <= 20; step++) {
+                float progress = step / 20f;
+                int background = androidx.core.graphics.ColorUtils.blendARGB(p.getSurface(), p.getContainer(), .35f + .65f * progress);
+                int candidate = androidx.core.graphics.ColorUtils.blendARGB(p.getText(), p.getOnContainer(), progress);
+                int foreground = SettingsVisuals.stateForeground(candidate, background);
+                assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(foreground, background) >= 3.0);
+            }
+        }
+    }
+
     @Test public void settingsPrimaryUsesTheFrameworkWallpaperPalette() {
         for (boolean dark : new boolean[]{false, true}) {
             Context context = context(dark, 1f, 412, false);

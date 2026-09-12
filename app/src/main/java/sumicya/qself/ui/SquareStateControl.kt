@@ -51,7 +51,10 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
         paint.style = Paint.Style.FILL
         val checkedFraction = if (progress == 1f) { if (isChecked) 1f else 0f }
             else if (isChecked) progress else 1f - progress
-        paint.color = androidx.core.graphics.ColorUtils.blendARGB(p.surface, p.container, .35f + .65f * checkedFraction)
+        val background = if (failed) com.google.android.material.color.MaterialColors.getColor(context,
+            com.google.android.material.R.attr.colorErrorContainer, p.container)
+            else androidx.core.graphics.ColorUtils.blendARGB(p.surface, p.container, .35f + .65f * checkedFraction)
+        paint.color = background
         paint.alpha = 255
         canvas.drawRoundRect(x, y, x + size, y + size, 4f, 4f, paint)
         paint.style = Paint.Style.STROKE
@@ -60,7 +63,10 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
         paint.alpha = ((1f - checkedFraction) * 255).toInt()
         canvas.drawRoundRect(x, y, x + size, y + size, 4f, 4f, paint)
         paint.style = Paint.Style.FILL
-        paint.color = if (failed) { if (p.dark) 0xfff2b8b5.toInt() else 0xffb3261e.toInt() } else p.onContainer
+        val foreground = if (failed) com.google.android.material.color.MaterialColors.getColor(context,
+            com.google.android.material.R.attr.colorOnErrorContainer, p.text)
+            else androidx.core.graphics.ColorUtils.blendARGB(p.text, p.onContainer, checkedFraction)
+        paint.color = SettingsVisuals.stateForeground(foreground, background)
         paint.textAlign = Paint.Align.CENTER
         paint.textSize = SettingsVisuals.dp(context, 22).toFloat()
         val glyph = if (unavailable || failed) "−" else if (isChecked) "✓" else "×"
