@@ -36,7 +36,11 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
         val glyph = if (unavailable || failed) "−" else if (isChecked) "✓" else "×"
         val fm = paint.fontMetrics
         canvas.drawText(glyph, width / 2f, height / 2f - (fm.ascent + fm.descent) / 2f, paint)
-        if (Build.VERSION.SDK_INT >= 30) stateDescription = when {
+    }
+
+    override fun onInitializeAccessibilityNodeInfo(info: android.view.accessibility.AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        if (Build.VERSION.SDK_INT >= 30) info.stateDescription = when {
             failed -> "初始化或运行出错，配置${if (isChecked) "开启" else "关闭"}"
             unavailable -> "当前不支持，配置${if (isChecked) "开启" else "关闭"}"
             isChecked -> "开启"

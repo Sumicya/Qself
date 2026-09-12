@@ -104,8 +104,6 @@ public final class BadgeNumbers {
                 badge.setAlpha(GlassConfig.badgeMode == 2 ? 1f : 0f);
                 continue;
             }
-            // Restore before attempting a custom draw, so a lost count/anchor never hides stock UI.
-            badge.setAlpha(1f);
             hookUpdateNumOnce(badge, host);
             String label = badge instanceof TextView
                     ? countLabel(sCounts.get(badge), ((TextView) badge).getText())
@@ -114,6 +112,7 @@ public final class BadgeNumbers {
                 try { if (Long.parseLong(label) > 99) label = "99+"; } catch (NumberFormatException ignored) { }
             }
             if (label == null) {
+                badge.setAlpha(1f);
                 // No count source (yet): keep the stock capsule visible
                 // instead of hiding it into nothing.
                 continue;
@@ -124,10 +123,12 @@ public final class BadgeNumbers {
             // QQ 9.2.10). The label is the one reliably identifiable view.
             View labelView = findLabel((ViewGroup) tab, badge, 0);
             if (labelView == null) {
+                badge.setAlpha(1f);
                 continue;
             }
             int[] labelAt = offsetInHost(labelView, host);
             if (labelAt == null) {
+                badge.setAlpha(1f);
                 continue;
             }
             badge.setAlpha(0f);

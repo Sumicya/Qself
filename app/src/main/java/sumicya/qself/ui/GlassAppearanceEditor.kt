@@ -48,7 +48,8 @@ object GlassAppearanceEditor {
             text = if (bar) "仅示意材质 · 非 QQ 截图\n文字和图标不随玻璃透明度变淡" else "浮层材质预览\n常规页面仍使用不透明 MD3"
             gravity = Gravity.CENTER; textSize = 14f
         }
-        content.addView(preview, LinearLayout.LayoutParams(-1, SettingsVisuals.dp(activity, 100)))
+        val sample = FrameLayout(activity).apply { addView(preview, FrameLayout.LayoutParams(-1, -1)) }
+        content.addView(sample, LinearLayout.LayoutParams(-1, SettingsVisuals.dp(activity, 100)))
         fun refresh() {
             val mode = if (draft.getValue("background") == 0) draft.getValue("material") else 2
             val p = palette(activity, draft.getValue("tone"), mode)
@@ -56,7 +57,8 @@ object GlassAppearanceEditor {
             preview.background = SettingsGlass.material(activity, p, 20, preview, flat).apply {
                 alpha = (255 * (100 - draft.getValue("transparency")) / 100f).toInt()
             }
-            preview.setTextColor(SettingsVisuals.palette(activity).text)
+            sample.setBackgroundColor(p.background)
+            preview.setTextColor(p.text)
         }
         fun label(text: String): TextView = TextView(activity).apply { this.text = text; textSize = 14f; setPadding(0, 12, 0, 0); content.addView(this) }
         fun choice(key: String, title: String, labels: Array<String>) {
@@ -90,7 +92,12 @@ object GlassAppearanceEditor {
             choice("badges", "未读数量", arrayOf("顶部数字 · 优先精确数", "顶部数字 · 超过99显示99+", "QQ 原生徽标", "隐藏未读徽标"))
             slider("badgeSize", "顶部数字字号", 8..18, "sp")
             val count = GlassConfig.visibleTabCount.takeIf { it > 0 }?.toString() ?: "尚未检测"
-            label("实际按钮数量：$count。按 QQ 当前可见页面自动均分，不创建/删除页面。\n无法获取精确数或定位时保留 QQ 原徽标，不编造数字。")
+            label("实际按钮数量：$count。宽度按当前可见页面分配；在下方选择隐藏页面，保留消息页。\n无法获取精确数或定位时保留 QQ 原徽标，不编造数字。")
+            content.addView(com.google.android.material.button.MaterialButton(activity).apply {
+                text = "选择底栏页面 / 调整按钮数量"
+                setOnClickListener { xyz.nextalone.hook.SimplifyBottomTab.onUiItemClickListener.invoke(
+                    xyz.nextalone.hook.SimplifyBottomTab.uiItemAgent, activity, this) }
+            })
         }
         refresh()
         MaterialAlertDialogBuilder(activity).setTitle(if (bar) "底栏文字、数量与玻璃" else "浮层玻璃外观")

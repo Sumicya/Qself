@@ -107,6 +107,7 @@ public class MainHook {
         }
         boolean safeMode = SafeModeManager.getManager().isEnabledForNextTime();
         SafeModeManager.getManager().setSafeModeForThisTime(safeMode);
+        sumicya.qself.diagnostics.FeatureJournal.start("safeMode=" + safeMode);
         if (safeMode) {
             LicenseStatus.sDisableCommonHooks = true;
             Log.i("Safe mode enabled, disable hooks");

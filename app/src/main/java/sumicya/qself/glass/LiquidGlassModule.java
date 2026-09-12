@@ -93,6 +93,7 @@ public final class LiquidGlassModule {
     }
 
     public static void logErr(String msg, Throwable t) {
+        sumicya.qself.diagnostics.FeatureJournal.error("sumicya.qself.glass", t);
         android.util.Log.e(TAG, msg, t);
     }
 

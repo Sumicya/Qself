@@ -94,8 +94,12 @@ object ReportDiagnostics : CommonConfigFunctionHook(
                 }
                 for (method in type.declaredMethods.filter { it.name in names }) {
                     candidates++
+                    val shape = "${type.simpleName}.${method.name}(" +
+                        method.parameterTypes.joinToString(",") { it.simpleName } + ")->${method.returnType.simpleName}"
+
                     if (Modifier.isAbstract(method.modifiers) || method.parameterCount > 16) {
                         unsupported++
+                        ReportDiagnosticsStore.record(process, "UNSUPPORTED", "$shape reason=abstract-or-arity")
                         continue
                     }
                     val getters = method.parameterTypes.mapIndexedNotNull { index, parameter ->
@@ -104,7 +108,11 @@ object ReportDiagnostics : CommonConfigFunctionHook(
                     val directCommand = className == "com.tencent.mobileqq.channel.ChannelProxyExt" &&
                         method.returnType == Void.TYPE && method.parameterTypes.contentEquals(
                             arrayOf(String::class.java, ByteArray::class.java, java.lang.Long.TYPE))
-                    if (getters.isEmpty() && !directCommand) { unsupported++; continue }
+                    if (getters.isEmpty() && !directCommand) {
+                        unsupported++
+                        ReportDiagnosticsStore.record(process, "UNSUPPORTED", "$shape reason=no-public-command-getter-or-known-signature")
+                        continue
+                    }
                     try {
                         // Method selection is exact (the reflected Method), but command carriers
                         // typed Object/no public String getter are deliberately not covered.

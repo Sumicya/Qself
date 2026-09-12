@@ -90,6 +90,7 @@ abstract class MultiItemDelayableHook(keyName: String,targets: Array<DexKitTarge
         }
         set(value) {
             itemsConfigKeys.value = value.toSet()
+            sumicya.qself.diagnostics.FeatureJournal.record("OPTIONS", javaClass.name, "selectedCount=${value.size}")
             valueState.update { "已选择" + value.size + "项" }
         }
 

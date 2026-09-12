@@ -259,7 +259,9 @@ final class LiquidGlassPanel extends View {
 
     private void drawPanel(Canvas canvas, int w, int h, float radius,
                            RenderNode node, float captureScale) {
-        int materialSave = canvas.saveLayerAlpha(0, 0, w, h, GlassConfig.materialAlpha());
+        int alpha = GlassConfig.materialAlpha();
+        if (alpha == 0) return;
+        int materialSave = alpha == 255 ? canvas.save() : canvas.saveLayerAlpha(0, 0, w, h, alpha);
         if (GlassConfig.background == 0 && mSupported && canvas.isHardwareAccelerated()) {
             try {
                 drawGlass(canvas, w, h, radius, node, captureScale);

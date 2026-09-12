@@ -19,23 +19,30 @@ object FeatureJournal {
     private val sources = listOf("main", "msf", "other")
     private val dropped = AtomicLong()
     private val errors = AtomicLong()
+    private val started = java.util.concurrent.atomic.AtomicBoolean()
     private val worker = ThreadPoolExecutor(1, 1, 30, TimeUnit.SECONDS, ArrayBlockingQueue(128),
         { task -> Thread(task, "Qself-feature-journal").apply { isDaemon = true } },
         { _, _ -> dropped.incrementAndGet() })
     private val source get() = when { SyncUtils.isMainProcess() -> "main"; SyncUtils.isTargetProcess(SyncUtils.PROC_MSF) -> "msf"; else -> "other" }
     var enabled: Boolean
         get() = runCatching { ConfigManager.getDefaultConfig().getBooleanOrDefault(PREFIX + "enabled", true) }.getOrDefault(false)
-        set(value) { ConfigManager.getDefaultConfig().putBoolean(PREFIX + "enabled", value) }
+        set(value) {
+            ConfigManager.getDefaultConfig().putBoolean(PREFIX + "enabled", value)
+            ConfigManager.getCache().putString(PREFIX + "epoch", java.util.UUID.randomUUID().toString())
+        }
     private fun epoch() = ConfigManager.getCache().getStringOrDefault(PREFIX + "epoch", "0")
     private fun <T> locked(block: () -> T): T = ReportFileLock.withLock(
         File(requireNotNull(ConfigManager.getCache().file?.parentFile), "qself_feature_journal.lock")) { block() }
     @JvmStatic fun toggle(id: String, before: Boolean, after: Boolean) {
         if (before != after) record("SWITCH", id, "$before->$after")
     }
+    @JvmStatic fun start(detail: String) {
+        if (started.compareAndSet(false, true)) record("START", "MainHook", detail)
+    }
     @JvmStatic fun error(id: String, error: Throwable) {
-        // No Throwable.message, argument values, accounts, commands or filenames.
-        val frames = error.stackTrace.take(6).joinToString(";") { "${it.className}.${it.methodName}:${it.lineNumber}" }
-        record("ERROR", id, "${error.javaClass.name} $frames")
+        try {
+            if (enabled) record("ERROR", id, FeatureErrorMetadata.describe(error))
+        } catch (_: Throwable) { errors.incrementAndGet() }
     }
     @JvmStatic fun record(phase: String, id: String, detail: String = "") {
         try {
