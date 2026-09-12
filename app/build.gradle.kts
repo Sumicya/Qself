@@ -204,6 +204,9 @@ android {
             }
         }
         getByName("debug") {
+            // Distribution from the existing CI task must not expose JDWP/debuggable mode.
+            // The task/artifact keeps its old name; signing is still the CI debug certificate.
+            isDebuggable = false
             ndk {
                 if (isNativeFullDebugMode) {
                     isJniDebuggable = true
@@ -626,6 +629,26 @@ afterEvaluate {
         val variantName = buildType.name.capitalizeUS()
         tasks.named("ksp${variantName}Kotlin").configure {
             dependsOn("generate${variantName}Proto")
+        }
+    }
+}
+
+// Audit the exact uploaded APK on the CI runner. No workflow edits/extra permissions required.
+if (System.getenv("GITHUB_ACTIONS") == "true") {
+    afterEvaluate {
+        tasks.named("assembleDebug").configure {
+            doLast {
+                val sdk = System.getenv("ANDROID_HOME") ?: error("ANDROID_HOME missing in CI")
+                val audit = providers.exec {
+                    commandLine(
+                        "python3", rootProject.file("scripts/verify_diagnostic_apk.py").absolutePath,
+                        "--sdk", sdk, "--build-tools", Version.buildToolsVersion,
+                        "--apk-dir", layout.buildDirectory.dir("outputs/apk/debug").get().asFile.absolutePath
+                    )
+                }
+                println(audit.standardOutput.asText.get())
+                audit.result.get().assertNormalExitValue()
+            }
         }
     }
 }

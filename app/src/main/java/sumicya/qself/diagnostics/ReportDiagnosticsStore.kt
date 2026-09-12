@@ -41,10 +41,11 @@ internal object ReportDiagnosticsStore {
         get() = ConfigManager.getDefaultConfig().getBooleanOrDefault(ENABLED, false)
         set(value) {
             withJournalLock {
-            val config = ConfigManager.getDefaultConfig()
-            config.putBoolean(ENABLED, false)
-            config.putString(GENERATION, UUID.randomUUID().toString())
-            if (value) config.putBoolean(ENABLED, true)
+                val config = ConfigManager.getDefaultConfig()
+                config.putBoolean(ENABLED, false)
+                config.putString(GENERATION, UUID.randomUUID().toString())
+                if (value) config.putBoolean(ENABLED, true)
+                Unit
             }
         }
 
