@@ -220,6 +220,17 @@ public class SettingsVisualTest {
         assertTrue(cell.isClickOnSwitch(cell.getSwitchView().getLeft()));
     }
 
+    @Test public void glassBackdropDoesNotPaintOutsideItsBounds() {
+        Bitmap bitmap = Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap); canvas.drawColor(Color.MAGENTA);
+        android.graphics.drawable.Drawable backdrop = SettingsVisuals.backdrop(SettingsVisuals.palette(context(false, 1f, 412, false), 1));
+        backdrop.setBounds(10, 10, 30, 30); backdrop.draw(canvas);
+        assertEquals(Color.MAGENTA, bitmap.getPixel(0, 0));
+        assertEquals(Color.MAGENTA, bitmap.getPixel(39, 39));
+        assertNotEquals(Color.MAGENTA, bitmap.getPixel(20, 20));
+        bitmap.recycle();
+    }
+
     @Test public void themeAccentMaintainsTextContrastEvenForWhiteYellowAndBlack() {
         for (boolean dark : new boolean[]{false, true}) {
             int backdrop = dark ? Color.rgb(48, 60, 82) : Color.rgb(203, 222, 255);

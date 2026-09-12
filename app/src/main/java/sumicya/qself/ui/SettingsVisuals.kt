@@ -61,14 +61,17 @@ object SettingsVisuals {
     fun backdrop(p: Palette): Drawable = object : Drawable() {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         override fun draw(canvas: Canvas) {
-            canvas.drawColor(p.background)
+            // A Drawable must never clear its parent's canvas outside its own bounds.
+            paint.shader = null
+            paint.color = p.background
+            canvas.drawRect(bounds, paint)
             if (p.mode == 2 || bounds.width() == 0) return
             val width = bounds.width().toFloat()
             val height = bounds.height().toFloat()
-            paint.shader = RadialGradient(width * .91f, height * .07f, width * .95f,
+            paint.shader = RadialGradient(bounds.left + width * .91f, bounds.top + height * .07f, width * .95f,
                 if (p.dark) Color.rgb(39, 57, 91) else Color.rgb(203, 222, 255), Color.TRANSPARENT, Shader.TileMode.CLAMP)
             canvas.drawRect(bounds, paint)
-            paint.shader = RadialGradient(width * .06f, height * .56f, width * .8f,
+            paint.shader = RadialGradient(bounds.left + width * .06f, bounds.top + height * .56f, width * .8f,
                 if (p.dark) Color.argb(100, 62, 48, 87) else Color.argb(150, 225, 214, 246), Color.TRANSPARENT, Shader.TileMode.CLAMP)
             canvas.drawRect(bounds, paint)
             paint.shader = null
