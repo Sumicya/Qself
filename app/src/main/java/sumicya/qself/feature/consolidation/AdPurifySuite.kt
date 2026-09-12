@@ -48,7 +48,10 @@ object AdPurifySuite : CommonSwitchFunctionHook(hookKey = "rq_ad_purify_suite") 
 
     override val name: String = "广告净化（总开关）"
 
-    override val description: String =
+    override val isApplicationRestartRequired = true
+
+    override val description: String
+        get() = "当前开启 ${children.count { it.isEnabled }}/5 项；总开关勾选表示全部开启，修改后重启 QQ 生效。" +
         "一键管理五个广告净化功能（弹窗/悬浮/评论/空间/小程序开屏）。开=全部开启，关=全部关闭；" +
             "子功能仍可在各自分类单独微调。本条目自身不挂钩"
 

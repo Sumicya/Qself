@@ -15,11 +15,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import sumicya.qself.profile.ProfileMigration
 
 @UiItemAgentEntry
-object SettingsAppearanceItem : BasePlainUiAgentItem(title = "局部弹窗玻璃") {
+object SettingsAppearanceItem : BasePlainUiAgentItem(title = "局部弹窗玻璃",
+    description = "仅本材质弹窗使用；再次打开可预览。常规页面固定使用 MD3 Expressive，不影响 QQ 底栏。") {
     private val labels = arrayOf("通透玻璃", "柔和玻璃", "实色 · 更高可读性")
     // All ordinary settings pages are opaque MD3E, independent of the old preference.
     const val mode: Int = 2
-    val overlayMode: Int get() = ConfigManager.getDefaultConfig().getIntOrDefault(ProfileMigration.OVERLAY_GLASS, 1).coerceIn(0, 2)
+    val overlayMode: Int get() = runCatching { ConfigManager.getDefaultConfig().getIntOrDefault(ProfileMigration.OVERLAY_GLASS, 1) }.getOrDefault(1).coerceIn(0, 2)
     override val uiItemLocation = FunctionEntryRouter.Locations.ConfigCategory.THEME_CATEGORY
     override val valueState by lazy { MutableStateFlow<String?>(labels[overlayMode]) }
     override val onClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, activity, _ ->

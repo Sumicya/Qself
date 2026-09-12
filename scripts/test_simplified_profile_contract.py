@@ -13,6 +13,7 @@ class ProfileContract(unittest.TestCase):
             self.assertTrue(any(p.exists() and ('@FunctionHookEntry' in p.read_text() or '@UiItemAgentEntry' in p.read_text()) for p in files), name)
         self.assertIn('sumicya.qself.feature.device.RiskReportInterceptor', ALLOWED)
         self.assertIn('sumicya.qself.diagnostics.ReportDiagnostics', ALLOWED)
+        self.assertIn('cc.ioctl.hook.misc.CleanUpMitigation', ALLOWED)
         self.assertNotIn('sumicya.qself.feature.device.ForcePadMode', ALLOWED)
     def test_shortcuts_and_early_init_are_inventory_members(self):
         catalog = (SRC / 'sumicya/qself/ui/HomeCatalog.kt').read_text()
@@ -33,6 +34,11 @@ class ProfileContract(unittest.TestCase):
             body = re.search(r'(?:DECORATORS = \{|decorators.*?= arrayOf(?:<[^>]+>)?\()(.*?)(?:\};|\n    \))', s, re.S).group(1)
             actual = [x.strip().removesuffix('.INSTANCE').rsplit('.', 1)[-1] for x in body.split(',') if x.strip()]
             self.assertEqual(actual, expected)
+    def test_tail_renderer_does_not_instantiate_removed_decorators(self):
+        s = (SRC / "me/ketal/hook/ChatItemShowQQUin.kt").read_text()
+        self.assertNotIn("FlashPicHook", s)
+        self.assertNotIn("PromptForNoSeqMessage", s)
+
     def test_initialize_is_gated_before_preparation_or_installation(self):
         for name in ('BaseFunctionHook','BaseComponentHook','BaseHookDispatcher','BasePersistBackgroundHook'):
             s = (SRC / f'io/github/qauxv/hook/{name}.kt').read_text().split('override fun initialize(): Boolean {')[1]

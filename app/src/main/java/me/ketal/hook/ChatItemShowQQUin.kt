@@ -47,7 +47,6 @@ import androidx.appcompat.widget.SwitchCompat
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.view.children
-import cc.ioctl.hook.msg.FlashPicHook
 import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.Log
 import io.github.qauxv.util.Reflex
@@ -76,7 +75,6 @@ import io.github.qauxv.util.Toasts
 import io.github.qauxv.util.requireMinQQVersion
 import io.github.qauxv.util.requireMinTimVersion
 import io.github.qauxv.util.xpcompat.XC_MethodHook
-import nep.timeline.PromptForNoSeqMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import me.ketal.dispacher.BaseBubbleBuilderHook
 import me.ketal.dispacher.OnBubbleBuilder
@@ -324,13 +322,10 @@ object ChatItemShowQQUin : CommonConfigFunctionHook(), OnBubbleBuilder {
 
     override fun onGetView(rootView: ViewGroup, chatMessage: MsgRecordData, param: XC_MethodHook.MethodHookParam) {
         if (!isEnabled) return
-        var text = formatTailMessage(chatMessage)
+        val text = formatTailMessage(chatMessage)
         if (!::pfnSetTailMessage.isInitialized) {
             pfnSetTailMessage =
                 "Lcom/tencent/mobileqq/activity/aio/BaseChatItemLayout;->setTailMessage(ZLjava/lang/CharSequence;Landroid/view/View\$OnClickListener;)V".method
-        }
-        if (FlashPicHook.INSTANCE.isInitializationSuccessful && isFlashPic(chatMessage)) {
-            text = "闪照 $text"
         }
         pfnSetTailMessage.invoke(rootView, true, text, if (mEnableDetailInfo) mOnTailMessageClickListener else null)
     }
@@ -375,14 +370,8 @@ object ChatItemShowQQUin : CommonConfigFunctionHook(), OnBubbleBuilder {
 
     @SuppressLint("ResourceType", "SetTextI18n")
     override fun onGetViewNt(rootView: ViewGroup, chatMessage: MsgRecord, param: XC_MethodHook.MethodHookParam) {
-        // 因为tailMessage是自己添加的，所以闪照文字也放这里处理
-        val isFlashPicTagNeedShow = FlashPicHook.INSTANCE.isInitializationSuccessful && isFlashPicNt(chatMessage)
-        val isNoSeqMessage = PromptForNoSeqMessage.isEnabled && PromptForNoSeqMessage.shouldShowTailMsgForMsgRecord(chatMessage)
-        if (isNoSeqMessage)
-            return
-
-        if (!isEnabled && !isFlashPicTagNeedShow)
-            return
+        // Excluded decorators must not be instantiated through the retained tail renderer.
+        if (!isEnabled) return
 
         if (requireMinQQVersion(QQVersion.QQ_8_9_63_BETA_11345) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)) {
             if (!rootView.children.map { it.id }.contains(ID_ADD_LAYOUT)) {
@@ -475,12 +464,12 @@ object ChatItemShowQQUin : CommonConfigFunctionHook(), OnBubbleBuilder {
             val layout = rootView.findViewById<LinearLayout>(ID_ADD_LAYOUT)
             val textView = rootView.findViewById<TextView>(ID_ADD_TEXTVIEW)
 
-            if (isFlashPicTagNeedShow || shouldShowTailMsgForMsgRecord(chatMessage)) {
+            if (shouldShowTailMsgForMsgRecord(chatMessage)) {
                 layout.visibility = View.VISIBLE
                 textView.visibility = View.VISIBLE
                 textView.let {
                     it.tag = chatMessage
-                    it.text = (if (isFlashPicTagNeedShow) "闪照 " else "") + (if (isEnabled) formatTailMessageNt(chatMessage) else "")
+                    it.text = formatTailMessageNt(chatMessage)
                 }
             } else {
                 layout.visibility = View.GONE
@@ -543,21 +532,7 @@ object ChatItemShowQQUin : CommonConfigFunctionHook(), OnBubbleBuilder {
 
         rootView.findViewById<TextView>(ID_ADD_TEXTVIEW).let {
             it.tag = chatMessage
-            it.text = (if (isFlashPicTagNeedShow) "闪照 " else "") + (if (isEnabled) formatTailMessageNt(chatMessage) else "")
-        }
-    }
-
-    private fun isFlashPic(chatMessage: MsgRecordData): Boolean {
-        val msgtype = chatMessage.msgType
-        return (msgtype == -2000 || msgtype == -2006) &&
-            chatMessage.getExtInfoFromExtStr("commen_flash_pic").isNotEmpty()
-    }
-
-    private fun isFlashPicNt(chatMessage: MsgRecord): Boolean {
-        return chatMessage.javaClass.getDeclaredField("subMsgType").run {
-            isAccessible = true
-            val subMsgType = getInt(chatMessage)
-            subMsgType == 8194 || subMsgType == 12288
+            it.text = formatTailMessageNt(chatMessage)
         }
     }
 

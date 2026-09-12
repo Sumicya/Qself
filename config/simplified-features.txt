@@ -11,6 +11,7 @@ cc.ioctl.hook.friend.FriendDeletionNotification
 cc.ioctl.hook.friend.OpenFriendChatHistory
 cc.ioctl.hook.friend.ShowDeletedFriendListEntry
 cc.ioctl.hook.mini.HideMiniAppLoadingAd
+cc.ioctl.hook.misc.CleanUpMitigation
 cc.ioctl.hook.misc.DisableHotPatch
 cc.ioctl.hook.misc.DisableQQCrashReportManager
 cc.ioctl.hook.misc.ShadowInitDependencyStub

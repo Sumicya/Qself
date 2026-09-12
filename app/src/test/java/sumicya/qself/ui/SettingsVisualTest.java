@@ -506,13 +506,17 @@ public class SettingsVisualTest {
         sumicya.qself.profile.ProfileMigration.migrate(config);
         assertEquals(1, config.getInt("qself.overlays.glass", -1));
         assertEquals(99, config.getInt("qself.settings.glass", -1));
+        config.edit().clear().putString("qself.settings.glass", "malformed-test-value").apply();
+        sumicya.qself.profile.ProfileMigration.migrate(config);
+        assertEquals(1, config.getInt("qself.overlays.glass", -1));
+        assertEquals("malformed-test-value", config.getString("qself.settings.glass", ""));
         config.edit().clear().putInt("qself.profile.schema", 3).apply();
         sumicya.qself.profile.ProfileMigration.migrate(config);
         assertEquals(3, config.getInt("qself.profile.schema", -1));
         assertFalse(config.contains("qself.overlays.glass"));
     }
 
-    @Test public void dormantFeaturesAreBlockedEvenWithSavedEnabledValues() {
+    @Test public void runtimePolicyBlocksDormantClassNamesAndNestedCallbacks() {
         assertFalse(sumicya.qself.profile.SimplifiedProfile.isAllowedClass("sumicya.qself.feature.device.ForcePadMode"));
         assertFalse(sumicya.qself.profile.SimplifiedProfile.isAllowedClass("sumicya.qself.feature.device.ForcePadMode$Callback"));
         assertTrue(sumicya.qself.profile.SimplifiedProfile.isAllowedClass("sumicya.qself.feature.device.RiskReportInterceptor"));

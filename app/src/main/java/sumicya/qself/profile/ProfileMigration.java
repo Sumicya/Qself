@@ -12,10 +12,10 @@ public final class ProfileMigration {
 
     public static synchronized void migrate(SharedPreferences config) {
         // Never down-migrate a backup produced by a newer edition.
-        if (config.getInt(SCHEMA, 0) >= 1) return;
+        if (readInt(config, SCHEMA, 0) >= 1) return;
         SharedPreferences.Editor editor = config.edit();
         if (!config.contains(OVERLAY_GLASS)) {
-            int old = config.getInt(LEGACY_GLASS, 1);
+            int old = readInt(config, LEGACY_GLASS, 1);
             editor.putInt(OVERLAY_GLASS, old >= 0 && old <= 2 ? old : 1);
         }
         // Keep every legacy feature value (including O3 and mixed ad-suite children),
@@ -23,4 +23,9 @@ public final class ProfileMigration {
         // Runtime policy, NOT destructive config rewriting, parks excluded features.
         editor.putInt(SCHEMA, 1).apply();
     }
+    private static int readInt(SharedPreferences config, String key, int fallback) {
+        try { return config.getInt(key, fallback); }
+        catch (ClassCastException malformedBackupValue) { return fallback; }
+    }
+
 }
