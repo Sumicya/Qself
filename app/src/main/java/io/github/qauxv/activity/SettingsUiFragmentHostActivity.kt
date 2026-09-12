@@ -48,6 +48,8 @@ import java.lang.Integer.max
 
 open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingInterceptLayout.SimpleOnFlingHandler {
 
+    private var dynamicColorSignature = 0
+
     private val FRAGMENT_TAG = "SettingsUiFragmentHostActivity.FRAGMENT_TAG"
     private val FRAGMENT_SAVED_STATE_KEY = "SettingsUiFragmentHostActivity.FRAGMENT_SAVED_STATE_KEY"
     private val FRAGMENT_CLASS_KEY = "SettingsUiFragmentHostActivity.FRAGMENT_CLASS_KEY"
@@ -69,6 +71,7 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
         setTheme(ModuleThemeManager.getCurrentThemeColorStyleId())
         theme.applyStyle(R.style.Theme_Qself_Expressive, true)
         sumicya.qself.ui.SettingsDynamicColors.apply(this)
+        dynamicColorSignature = sumicya.qself.ui.SettingsDynamicColors.signature(this)
     }
 
     /**
@@ -379,6 +382,12 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
     @CallSuper
     override fun doOnResume() {
         super.doOnResume()
+        val colors = sumicya.qself.ui.SettingsDynamicColors.signature(this)
+        if (dynamicColorSignature != colors) {
+            dynamicColorSignature = colors
+            recreate()
+            return
+        }
         synchronized(mPendingActionsLock) {
             // on start actions
             for (action in mPendingOnStartActions) {

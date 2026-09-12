@@ -4,13 +4,13 @@ package sumicya.qself.ui
 import android.animation.ValueAnimator
 import android.content.Context
 import android.view.View
-import android.view.animation.Interpolator
+import android.animation.TimeInterpolator
 import android.view.animation.PathInterpolator
 import com.google.android.material.motion.MotionUtils
 
 object SettingsMotion {
     fun enabled() = ValueAnimator.areAnimatorsEnabled()
-    fun easing(context: Context): Interpolator = MotionUtils.resolveThemeInterpolator(context,
+    fun easing(context: Context): TimeInterpolator = MotionUtils.resolveThemeInterpolator(context,
         com.google.android.material.R.attr.motionEasingEmphasizedInterpolator, PathInterpolator(.2f, 0f, 0f, 1f))
     fun duration(context: Context, short: Boolean = false): Long = MotionUtils.resolveThemeDuration(context,
         if (short) com.google.android.material.R.attr.motionDurationShort4 else com.google.android.material.R.attr.motionDurationMedium2,
