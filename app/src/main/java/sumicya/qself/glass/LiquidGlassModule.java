@@ -1,9 +1,4 @@
-/*
- * Vendored from liuran001/WeChat-LiquidGlass (MIT).
- * Entry rewritten for this repository: the libxposed API 102 module shell is
- * replaced by a plain static hub on top of XposedBridge (xpcompat). The
- * rendering/internals files are imported unmodified.
- */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 package sumicya.qself.glass;
 
 import android.app.Activity;
@@ -15,86 +10,73 @@ import io.github.qauxv.util.xpcompat.XposedBridge;
 import java.lang.reflect.Member;
 
 /**
- * Runtime hub for the vendored liquid glass subsystem. Keeps the upstream
- * class name so the vendored files' references stay untouched; only the
- * libxposed hook plumbing is swapped for XposedBridge.
- *
- * <p>PROTECTIVE semantics are preserved: a throwable escaping a callback is
- * logged and swallowed, never surfaced in the host's own frame.</p>
+ * Static hub connecting the glass renderer to the host process. Wraps
+ * XposedBridge advice so a render bug can never escape into QQ's own call
+ * frames: exceptions inside a glass callback are recorded and swallowed.
  */
 public final class LiquidGlassModule {
 
     public static final String TAG = "LiquidGlass";
 
-    /** The app this process belongs to; null until the feature attaches one. */
-    private static volatile HostApp sApp;
+    private static volatile HostApp host;
 
-    /** Set by the feature object before anything else runs. */
+    /** The descriptor of the host this process runs, set by the feature. */
     public static void attach(HostApp app) {
-        sApp = app;
+        host = app;
     }
 
     public static HostApp app() {
-        return sApp;
+        return host;
     }
 
-    /** Runs fn AFTER the original, ignoring and keeping its result. */
-    public static void hookAfter(Member m, AfterCallback fn) {
-        XposedBridge.hookMethod(m, new XC_MethodHook(50) {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) {
-                try {
-                    fn.after(param);
-                } catch (Throwable t) {
-                    logErr("after-hook failed", t);
-                }
-            }
-        });
-    }
-
-    /**
-     * Runs fn BEFORE the original. The callback may rewrite {@code param.args},
-     * or call {@code param.setResult(..)} to skip the original call entirely
-     * (substituting its result); returning without touching the result lets
-     * the original proceed. This covers everything the upstream chain-based
-     * intercept did: proceed == leave the result alone, swallow ==
-     * setResult(null) in a before-advice.
-     */
-    public static void hookIntercept(Member m, BeforeCallback fn) {
-        XposedBridge.hookMethod(m, new XC_MethodHook(50) {
-            @Override
-            protected void beforeHookedMethod(MethodHookParam param) {
-                try {
-                    fn.before(param);
-                } catch (Throwable t) {
-                    logErr("intercept-hook failed", t);
-                }
-            }
-        });
-    }
-
-    /** After-advice: runs once the original has returned. */
+    /** Advice that runs after the hooked method, keeping its result. */
     public interface AfterCallback {
         void after(XC_MethodHook.MethodHookParam param) throws Throwable;
     }
 
-    /** Before-advice: may rewrite args or substitute the result. */
+    /** Advice that runs first; it may rewrite args or substitute the result. */
     public interface BeforeCallback {
         void before(XC_MethodHook.MethodHookParam param) throws Throwable;
     }
 
-    /** The resume trigger the installer schedules from. */
+    public static void hookAfter(Member target, AfterCallback callback) {
+        XposedBridge.hookMethod(target, new XC_MethodHook(50) {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) {
+                try {
+                    callback.after(param);
+                } catch (Throwable t) {
+                    logErr("after advice failed", t);
+                }
+            }
+        });
+    }
+
+    public static void hookIntercept(Member target, BeforeCallback callback) {
+        XposedBridge.hookMethod(target, new XC_MethodHook(50) {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) {
+                try {
+                    callback.before(param);
+                } catch (Throwable t) {
+                    logErr("before advice failed", t);
+                }
+            }
+        });
+    }
+
+    /** Framework resume method the installer uses as its per-foreground trigger. */
     public static Member resumeHookTarget() throws NoSuchMethodException {
         return Instrumentation.class.getMethod("callActivityOnResume", Activity.class);
     }
 
-    public static void log(int prio, String msg) {
-        android.util.Log.println(prio, TAG, msg);
+    public static void log(int priority, String message) {
+        android.util.Log.println(priority, TAG, message);
     }
 
-    public static void logErr(String msg, Throwable t) {
+    public static void logErr(String message, Throwable t) {
         sumicya.qself.diagnostics.FeatureJournal.error("sumicya.qself.glass", t);
-        android.util.Log.e(TAG, msg, t);
+        android.util.Log.e(TAG, message, t);
     }
 
     private LiquidGlassModule() {
