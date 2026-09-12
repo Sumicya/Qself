@@ -257,6 +257,9 @@ public class SettingsVisualTest {
                 View search = page.home().findViewWithTag(HomeCatalog.SEARCH);
                 assertEquals(width-page.home().getPaddingLeft()-page.home().getPaddingRight(), search.getWidth());
                 verifyTextBounds(page.home()); verifyContainedChildren(page.home());
+                View people = page.home().findViewWithTag("people");
+                View tools = page.home().findViewWithTag("tools");
+                if (people.getParent() == tools.getParent()) assertEquals(people.getHeight(), tools.getHeight());
             }
         }
     }

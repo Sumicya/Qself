@@ -87,7 +87,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
                     addView(text(section.summary, 13, palette.secondary), lp(top = 9))
                 }
                 button(card, section.id, "${section.title}，${section.summary}")
-                row.addView(card, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply {
+                row.addView(card, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
                     if (index > 0) marginStart = dp(12)
                 })
             }

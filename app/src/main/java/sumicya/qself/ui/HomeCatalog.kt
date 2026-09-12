@@ -20,7 +20,7 @@ object HomeCatalog {
             "sumicya.qself.feature.chat.RevokeWrapHint",
             "me.ketal.hook.ChatItemShowQQUin",
         )),
-        Section("people", "群与好友", "群日志 · 共同群 · 好友记录", listOf(
+        Section("people", "群与好友", "群日志与好友工具", listOf(
             "sumicya.qself.feature.chat.GroupAdminMenu",
             "sumicya.qself.feature.dev.GrayTipCapture",
             "cc.ioctl.hook.friend.CheckCommonGroupMenu",
