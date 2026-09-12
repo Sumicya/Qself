@@ -21,6 +21,12 @@
  */
 package io.github.qauxv.core;
 
+import sumicya.qself.feature.ui.CustomSplash;
+import sumicya.qself.feature.notification.MuteQZoneThumbsUp;
+import sumicya.qself.feature.chat.GagInfoDisclosure;
+import sumicya.qself.feature.ui.RemoveCameraButton;
+import sumicya.qself.feature.ui.RemoveSuperQQShow;
+import cc.ioctl.hook.ui.misc.OptXListViewScrollBar;
 import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
@@ -112,6 +118,13 @@ public class MainHook {
             HookInstaller.allowEarlyInit(RevokeMsgHook.INSTANCE);
             HookInstaller.allowEarlyInit(LiquidGlassBottomBar.INSTANCE);
             HookInstaller.allowEarlyInit(GrayTipCapture.INSTANCE);
+            // Restored capabilities retain their original early-install timing.
+            HookInstaller.allowEarlyInit(CustomSplash.INSTANCE);
+            HookInstaller.allowEarlyInit(MuteQZoneThumbsUp.INSTANCE);
+            HookInstaller.allowEarlyInit(GagInfoDisclosure.INSTANCE);
+            HookInstaller.allowEarlyInit(RemoveCameraButton.INSTANCE);
+            HookInstaller.allowEarlyInit(RemoveSuperQQShow.INSTANCE);
+            HookInstaller.allowEarlyInit(OptXListViewScrollBar.INSTANCE);
         }
         if (SyncUtils.isMainProcess()) {
             ConfigItems.removePreviousCacheIfNecessary();

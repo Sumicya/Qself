@@ -23,6 +23,8 @@ class ProfileContract(unittest.TestCase):
         allowed_simple = {s.rsplit('.', 1)[1] for s in ALLOWED}
         self.assertTrue(set(re.findall(r'allowEarlyInit\((\w+)\.INSTANCE\)', main)) <= allowed_simple)
         self.assertNotIn('ExternalModuleChainLoader.loadExternalModulesForStartup()', main)
+        for restored in ('CustomSplash', 'MuteQZoneThumbsUp', 'GagInfoDisclosure', 'RemoveCameraButton', 'RemoveSuperQQShow', 'OptXListViewScrollBar'):
+            self.assertIn('allowEarlyInit(' + restored + '.INSTANCE)', main)
     def test_shared_dispatchers_do_not_construct_legacy_decorators(self):
         arrays = {
             'cc/hicore/message/chat/SessionHooker.java': ['RepeaterPlus', 'InputButtonHookDispatcher'],
