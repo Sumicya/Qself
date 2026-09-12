@@ -86,10 +86,42 @@ public class SettingsVisualTest {
         }
     }
 
+    private Bitmap drawHardware(int width, int height, java.util.function.Consumer<Canvas> draw) {
+        android.graphics.RenderNode node = new android.graphics.RenderNode("settings-test");
+        node.setPosition(0, 0, width, height);
+        Canvas recording = node.beginRecording(width, height);
+        assertTrue("Optical tests must exercise the accelerated path", recording.isHardwareAccelerated());
+        try { draw.accept(recording); } finally { node.endRecording(); }
+        android.graphics.HardwareRenderer renderer = new android.graphics.HardwareRenderer();
+        try (android.media.ImageReader reader = android.media.ImageReader.newInstance(width, height, android.graphics.PixelFormat.RGBA_8888, 1)) {
+            android.view.Surface surface = reader.getSurface();
+            try {
+                renderer.setSurface(surface); renderer.setContentRoot(node);
+                renderer.setLightSourceGeometry(0, 0, 0, 0); renderer.setLightSourceAlpha(0, 0);
+                renderer.createRenderRequest().syncAndDraw();
+                try (android.media.Image image = reader.acquireNextImage()) {
+                    assertNotNull("No hardware render output", image);
+                    android.media.Image.Plane plane = image.getPlanes()[0];
+                    assertEquals(4, plane.getPixelStride());
+                    java.nio.ByteBuffer packed = java.nio.ByteBuffer.allocate(width*height*4);
+                    java.nio.ByteBuffer source = plane.getBuffer();
+                    for (int y = 0; y < height; y++) {
+                        java.nio.ByteBuffer row = source.duplicate();
+                        row.position(y*plane.getRowStride()); row.limit(y*plane.getRowStride()+width*4);
+                        packed.put(row);
+                    }
+                    packed.rewind();
+                    Bitmap result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                    result.copyPixelsFromBuffer(packed);
+                    return result;
+                }
+            } finally { renderer.destroy(); surface.release(); node.discardDisplayList(); }
+        }
+    }
+
     private void render(String name, View view) throws Exception {
-        Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight() + 28, Bitmap.Config.ARGB_8888);
+        Bitmap bitmap = drawHardware(view.getWidth(), view.getHeight() + 28, view::draw);
         Canvas canvas = new Canvas(bitmap);
-        view.draw(canvas);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setColor(Color.rgb(238, 238, 238));
         canvas.drawRect(0, view.getHeight(), view.getWidth(), bitmap.getHeight(), paint);
@@ -109,15 +141,15 @@ public class SettingsVisualTest {
         // Keep one real-view contact sheet within nine small base64 chunks, plus test totals.
         float scale = 720f / (light.getWidth() + dark.getWidth());
         int contentHeight = Math.round(Math.max(light.getHeight(), dark.getHeight()) * scale);
-        Bitmap bitmap = Bitmap.createBitmap(720, contentHeight + 28, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        canvas.drawColor(Color.rgb(235, 239, 246));
-        canvas.save(); canvas.scale(scale, scale);
-        light.draw(canvas); canvas.translate(light.getWidth(), 0); dark.draw(canvas);
-        canvas.restore();
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        paint.setColor(Color.DKGRAY); paint.setTextSize(10);
-        canvas.drawText("NATIVE ANDROID VIEWS / DEFAULT THEME / SAMPLE STATE / NOT DEVICE", 14, bitmap.getHeight() - 10, paint);
+        Bitmap bitmap = drawHardware(720, contentHeight + 28, canvas -> {
+            canvas.drawColor(Color.rgb(235, 239, 246));
+            canvas.save(); canvas.scale(scale, scale);
+            light.draw(canvas); canvas.translate(light.getWidth(), 0); dark.draw(canvas);
+            canvas.restore();
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            paint.setColor(Color.DKGRAY); paint.setTextSize(10);
+            canvas.drawText("REAL HOST LAYOUT / RECYCLERVIEW / HWUI GLASS / TEST DATA / NOT DEVICE", 14, contentHeight + 18, paint);
+        });
         byte[] result = null;
         for (int quality = 75; quality >= 5; quality -= 5) {
             java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
@@ -266,8 +298,8 @@ public class SettingsVisualTest {
         Context context = context(false, 1f, 412, false);
         android.graphics.drawable.Drawable glass = SettingsVisuals.surface(context, SettingsVisuals.palette(context, 1), 24, false);
         assertTrue(SettingsGlass.INSTANCE.isOptical(glass));
-        Bitmap bitmap = Bitmap.createBitmap(300, 110, Bitmap.Config.ARGB_8888);
-        glass.setBounds(0, 0, 300, 110); glass.draw(new Canvas(bitmap));
+        glass.setBounds(0, 0, 300, 110);
+        Bitmap bitmap = drawHardware(300, 110, glass::draw);
         assertNotEquals(bitmap.getPixel(150, 1), bitmap.getPixel(150, 20));
         assertNotEquals(bitmap.getPixel(30, 55), bitmap.getPixel(270, 55));
         android.graphics.drawable.Drawable solid = SettingsVisuals.surface(context, SettingsVisuals.palette(context, 2), 24, false);
@@ -358,14 +390,24 @@ public class SettingsVisualTest {
     }
 
     @Test public void glassBackdropDoesNotPaintOutsideItsBounds() {
-        Bitmap bitmap = Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap); canvas.drawColor(Color.MAGENTA);
         android.graphics.drawable.Drawable backdrop = SettingsVisuals.backdrop(SettingsVisuals.palette(context(false, 1f, 412, false), 1));
-        backdrop.setBounds(10, 10, 30, 30); backdrop.draw(canvas);
+        backdrop.setBounds(10, 10, 30, 30);
+        Bitmap bitmap = drawHardware(40, 40, canvas -> { canvas.drawColor(Color.MAGENTA); backdrop.draw(canvas); });
         assertEquals(Color.MAGENTA, bitmap.getPixel(0, 0));
         assertEquals(Color.MAGENTA, bitmap.getPixel(39, 39));
         assertNotEquals(Color.MAGENTA, bitmap.getPixel(20, 20));
         bitmap.recycle();
+    }
+
+    @Test public void softwareCaptureFallsBackWithoutCrashing() {
+        Context context = context(false, 1f, 412, false);
+        Bitmap bitmap = Bitmap.createBitmap(200, 100, Bitmap.Config.ARGB_8888);
+        Canvas software = new Canvas(bitmap);
+        android.graphics.drawable.Drawable backdrop = SettingsVisuals.backdrop(SettingsVisuals.palette(context, 1));
+        backdrop.setBounds(0, 0, 200, 100); backdrop.draw(software);
+        android.graphics.drawable.Drawable material = SettingsVisuals.surface(context, SettingsVisuals.palette(context, 1), 24, false);
+        material.setBounds(0, 0, 200, 100); material.draw(software);
+        assertNotEquals(0, bitmap.getPixel(100, 50)); bitmap.recycle();
     }
 
     @Test public void themeAccentMaintainsTextContrastEvenForWhiteYellowAndBlack() {

@@ -99,6 +99,11 @@ object SettingsVisuals {
     }
 
     fun addListSpacing(recycler: RecyclerView) {
+        if (recycler.parent !is SettingsListLayout) recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                if (dx != 0 || dy != 0) SettingsGlass.invalidateMaterials(recyclerView)
+            }
+        })
         recycler.addItemDecoration(object : RecyclerView.ItemDecoration() {
             override fun getItemOffsets(outRect: Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
                 val position = parent.getChildAdapterPosition(view)

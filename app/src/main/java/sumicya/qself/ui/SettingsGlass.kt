@@ -6,6 +6,8 @@ import android.graphics.*
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.view.View
+import android.view.ViewGroup
+import android.graphics.drawable.RippleDrawable
 import androidx.annotation.RequiresApi
 import java.lang.ref.WeakReference
 
@@ -104,6 +106,13 @@ internal object SettingsGlass {
     fun material(context: Context, p: SettingsVisuals.Palette, radius: Int, owner: View?, fallback: Drawable): Drawable =
         Material(context.resources.displayMetrics.density, p, radius, owner, fallback)
 
+    /** Moving a cached RenderNode does not redraw its background. Refresh only on actual scrolling. */
+    fun invalidateMaterials(view: View) {
+        val background = view.background
+        if (background is Material || background is RippleDrawable) background.invalidateSelf()
+        if (view is ViewGroup) for (i in 0 until view.childCount) invalidateMaterials(view.getChildAt(i))
+    }
+
     // Public to tests in the same module: a supported renderer must not silently fall back.
     fun isOptical(drawable: Drawable): Boolean = when (drawable) {
         is Material -> drawable.program != null
@@ -116,7 +125,7 @@ internal object SettingsGlass {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         override fun draw(canvas: Canvas) {
             val effect = program
-            if (effect == null || bounds.isEmpty) { fallback.bounds = bounds; fallback.draw(canvas); return }
+            if (effect == null || bounds.isEmpty || !canvas.isHardwareAccelerated()) { fallback.bounds = bounds; fallback.draw(canvas); return }
             effect.scene(bounds.width().toFloat(), bounds.height().toFloat(), p.dark)
             paint.shader = effect.shader
             val save = canvas.save()
@@ -136,7 +145,7 @@ internal object SettingsGlass {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         override fun draw(canvas: Canvas) {
             val effect = program
-            if (effect == null || bounds.isEmpty) { fallback.bounds = bounds; fallback.draw(canvas); return }
+            if (effect == null || bounds.isEmpty || !canvas.isHardwareAccelerated()) { fallback.bounds = bounds; fallback.draw(canvas); return }
             val w = bounds.width().toFloat()
             val h = bounds.height().toFloat()
             var x = 0f; var y = 0f
