@@ -686,7 +686,7 @@ ksp {
     val rows = providers.fileContents(rootProject.layout.projectDirectory.file("config/feature-catalog.tsv"))
         .asText.get().lineSequence().filter { it.isNotBlank() && !it.startsWith('#') }.toList()
     require(rows.all { it.split('\t').size == 6 }) { "Invalid feature catalog row" }
-    val entries = rows.map { it.split('\t')[5] }
+    val entries = rows.map { it.split('\t')[5].replace('$', '.') }
     require(entries.distinct().size == entries.size) { "Duplicate capability in catalog" }
     arg("qself.allowedEntries", entries.sorted().joinToString("|"))
     arg("qself.catalogRows", rows.filterNot { it.startsWith("_core\t") }.joinToString("|"))

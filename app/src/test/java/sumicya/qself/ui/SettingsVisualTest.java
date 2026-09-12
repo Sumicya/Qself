@@ -456,8 +456,8 @@ public class SettingsVisualTest {
             assertFalse(section.getFeatures().isEmpty());
             for (String feature : section.getFeatures()) {
                 assertTrue("duplicate " + feature, features.add(feature));
-                Path file = root.resolve(feature.replace('.', '/') + ".kt");
-                if (!Files.exists(file)) file = root.resolve(feature.replace('.', '/') + ".java");
+                Path file = root.resolve(feature.split("\\$")[0].replace('.', '/') + ".kt");
+                if (!Files.exists(file)) file = root.resolve(feature.split("\\$")[0].replace('.', '/') + ".java");
                 assertTrue("missing " + feature, Files.exists(file));
                 assertTrue("not registered " + feature, new String(Files.readAllBytes(file), java.nio.charset.StandardCharsets.UTF_8).contains("UiItemAgentEntry"));
             }
@@ -539,17 +539,17 @@ public class SettingsVisualTest {
             assertFalse(generated.contains("ExternalModuleConfigHook"));
             String annotation = registry.contains("FunctionHook") ? "FunctionHookEntry" : "UiItemAgentEntry";
             for (String name : allowed) {
-                Path source = project.resolve("src/main/java/" + name.replace('.', '/') + ".kt");
-                if (!Files.exists(source)) source = project.resolve("src/main/java/" + name.replace('.', '/') + ".java");
+                Path source = project.resolve("src/main/java/" + name.split("\\$")[0].replace('.', '/') + ".kt");
+                if (!Files.exists(source)) source = project.resolve("src/main/java/" + name.split("\\$")[0].replace('.', '/') + ".java");
                 String text = Files.readString(source);
                 boolean annotated = text.contains("@" + annotation) || java.util.regex.Pattern
                     .compile("@\\[[^\\]]*\\b" + annotation + "\\b").matcher(text).find();
-                if (annotated) assertTrue(name, generated.contains("import " + name + "\n"));
+                if (annotated) assertTrue(name, generated.contains("import " + name.replace('$', '.') + "\n"));
             }
             java.util.regex.Matcher imports = java.util.regex.Pattern.compile("(?m)^import ([a-zA-Z0-9_.]+)$").matcher(generated);
             while (imports.find()) {
                 String name = imports.group(1);
-                if (!name.startsWith("kotlin.") && !name.startsWith("io.github.qauxv.base.")) assertTrue(name, allowed.contains(name));
+                if (!name.startsWith("kotlin.") && !name.startsWith("io.github.qauxv.base.")) assertTrue(name, allowed.stream().anyMatch(id -> id.replace('$', '.').equals(name)));
             }
         }
     }

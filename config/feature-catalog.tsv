@@ -71,7 +71,7 @@ qself-contacts	people	好友与群工具	friends	好友	cc.ioctl.hook.friend.Che
 qself-contacts	people	好友与群工具	friends	好友	cc.ioctl.hook.friend.FriendDeletionNotification
 qself-contacts	people	好友与群工具	friends	好友	cc.ioctl.hook.friend.ShowDeletedFriendListEntry
 qself-contacts	people	好友与群工具	friends	好友	cc.ioctl.hook.friend.OpenFriendChatHistory
-qself-contacts	people	好友与群工具	friends	好友	cc.ioctl.fragment.FriendListExportFragment
+qself-contacts	people	好友与群工具	friends	好友	cc.ioctl.fragment.FriendListExportFragment$ItemEntry
 qself-contacts	people	好友与群工具	groups	群聊	sumicya.qself.feature.chat.GroupAdminMenu
 qself-contacts	people	好友与群工具	groups	群聊	sumicya.qself.feature.dev.GrayTipCapture
 qself-contacts	people	好友与群工具	groups	群聊	sumicya.qself.feature.chat.GagInfoDisclosure
