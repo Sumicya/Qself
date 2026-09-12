@@ -18,4 +18,14 @@
 
 这批完成目录与消息处理的合并；通知等跨不同宿主接口的具体 Hook 仍保留独立实现，不把“同一设置页”冒称为所有底层 Hook 已统一。
 
-构建结果待 CI 完成后记录。
+## 最终交付
+
+- 源码：`cb94e79f5599c9efacc50e8e82d425820922df0b`。
+- [全量 JVM CI](https://github.com/Sumicya/Qself/actions/runs/34681255824)：成功；新增合并测试 **10/10**、原设置/配置回归 **22/22**，均为 0 失败、0 错误；**26 项静态契约**通过。
+- [APK 构建与审计](https://github.com/Sumicya/Qself/actions/runs/34681255612)：成功，同一源码。
+- [下载 app-debug-apk](https://github.com/Sumicya/Qself/actions/runs/34681255612/artifacts/10293134218)：`1.6.1.r3074.cb94e79`，versionCode `3074`。
+- APK 17,814,934 字节；SHA-256：`276f9be69cbe5cca20087b347eb7ed66f4595f551121d1d9c7d49ba621fde4e5`。
+- 签名证书 SHA-256：`a719d99051388358a2567f85b9cc3e7885fd0a0eed714130194cc5cce2ea5edb`。
+- 实包审计确认 FeatureCatalog、HookInstallRegistry、MessageTailPolicy 均已打包；debuggable=false、API 102、autoHotReload=false，AppCenter 不存在。
+
+验证说明：好友导出使用 Java 嵌套 ItemEntry，目录采用二进制 `$` 标识，KSP 注册转换为源码 `.` 标识；覆盖 KotlinPoet 导入外层类的实际生成形式。源码中早已注释停用的旧钱包插件不当作可恢复条目。以上为编译/自动化验证，不替代 QQ 注入真机验证。
