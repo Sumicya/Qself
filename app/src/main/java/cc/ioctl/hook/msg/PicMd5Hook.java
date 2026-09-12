@@ -35,7 +35,7 @@ import cc.hicore.ReflectUtil.XField;
 import cc.hicore.ReflectUtil.XMethod;
 import cc.hicore.Utils.FunProtoData;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import com.tencent.qphone.base.remote.FromServiceMsg;
 import com.tencent.qqnt.kernel.nativeinterface.PicElement;
 import com.xiaoniu.dispatcher.ComponentType;

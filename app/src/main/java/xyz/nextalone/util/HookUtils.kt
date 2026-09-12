@@ -22,7 +22,7 @@
 package xyz.nextalone.util
 
 import android.os.Looper
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import io.github.qauxv.util.xpcompat.XC_MethodHook
 import io.github.qauxv.util.xpcompat.XC_MethodReplacement
 import io.github.qauxv.util.xpcompat.XposedBridge

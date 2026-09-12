@@ -42,7 +42,7 @@ import io.github.qauxv.util.requireMinQQVersion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 import xyz.nextalone.util.throwOrTrue
 import cc.ioctl.util.hookAfterIfEnabled
 import cc.ioctl.util.hookBeforeIfEnabled

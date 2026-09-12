@@ -33,7 +33,7 @@ import android.os.Looper;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.PermissionChecker;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.IDynamicHook;
 import io.github.qauxv.core.HookInstaller;
 import io.github.qauxv.util.dexkit.DexDeobfsProvider;
@@ -186,7 +186,7 @@ public class SyncUtils {
 
     public static void sendGenericBroadcast(Context ctx, Intent intent) {
         if (ctx == null) {
-            ctx = HostInfo.getApplication();
+            ctx = HostInfo.getHostInfo().getApplication();
         }
         intent.putExtra(_REAL_INTENT, intent.getAction());
         intent.setAction(GENERIC_WRAPPER);
@@ -204,7 +204,7 @@ public class SyncUtils {
      * @param what 0 for unspecified
      */
     public static void onFileChanged(int file, long uin, int what) {
-        Context ctx = HostInfo.getApplication();
+        Context ctx = HostInfo.getHostInfo().getApplication();
         Intent changed = new Intent(SYNC_FILE_CHANGED);
         changed.setPackage(ctx.getPackageName());
         initId();
@@ -216,7 +216,7 @@ public class SyncUtils {
     }
 
     public static void requestInitHook(int hookId, int process) {
-        Context ctx = HostInfo.getApplication();
+        Context ctx = HostInfo.getHostInfo().getApplication();
         Intent changed = new Intent(HOOK_DO_INIT);
         changed.setPackage(ctx.getPackageName());
         initId();
@@ -286,7 +286,7 @@ public class SyncUtils {
         do {
             try {
                 List<ActivityManager.RunningAppProcessInfo> runningAppProcesses =
-                        ((ActivityManager) HostInfo.getApplication().getSystemService(Context.ACTIVITY_SERVICE))
+                        ((ActivityManager) HostInfo.getHostInfo().getApplication().getSystemService(Context.ACTIVITY_SERVICE))
                                 .getRunningAppProcesses();
                 if (runningAppProcesses != null) {
                     for (ActivityManager.RunningAppProcessInfo runningAppProcessInfo : runningAppProcesses) {

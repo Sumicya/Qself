@@ -54,7 +54,7 @@ object CustomEmotionPanelColumns : CommonConfigFunctionHook() {
 
     override val name = "自定义表情面板列数"
     override val description = "自定义收藏与热图面板显示列数"
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.CHAT_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EMOTICON_AND_STICKER_CATEGORY
     override val isAvailable = requireMinQQVersion(QQVersion.QQ_8_9_88)
 
     private const val KEY_COLUMN_COUNT = "CustomEmotionPanelColumns.columnCount"

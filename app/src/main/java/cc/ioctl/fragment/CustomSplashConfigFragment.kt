@@ -33,8 +33,8 @@ import androidx.annotation.UiThread
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import cc.ioctl.util.BugUtils
-import cc.ioctl.util.ui.FaultyDialog
-import cc.ioctl.hook.misc.CustomSplash
+import io.github.qauxv.util.ui.FaultyDialog
+import sumicya.qself.feature.ui.CustomSplash
 import io.github.qauxv.R
 import io.github.qauxv.databinding.FragmentCustomSplashConfigBinding
 import io.github.qauxv.fragment.BaseRootLayoutFragment
@@ -116,7 +116,7 @@ class CustomSplashConfigFragment : BaseRootLayoutFragment() {
 
     @UiThread
     private fun updateStatus(binding: FragmentCustomSplashConfigBinding) {
-        val hook = CustomSplash.INSTANCE
+        val hook = CustomSplash
         mEnableFunction = hook.isEnabled
         mUseCustomLightSplash = hook.isUseCustomLightSplash
         mUseDifferentSplashInDarkMode = hook.isUseDifferentDarkSplash
@@ -275,7 +275,7 @@ class CustomSplashConfigFragment : BaseRootLayoutFragment() {
             }
         }
         // update options
-        val hook = CustomSplash.INSTANCE
+        val hook = CustomSplash
         hook.isEnabled = mEnableFunction
         hook.isUseCustomLightSplash = mUseCustomLightSplash
         hook.isUseDifferentDarkSplash = mUseDifferentSplashInDarkMode

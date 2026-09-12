@@ -21,7 +21,9 @@
  */
 package io.github.qauxv.tlb
 
-import cc.ioctl.util.HostInfo.isTim
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
+import io.github.qauxv.util.isTim
 import io.github.qauxv.base.annotation.InternalApi
 import io.github.qauxv.util.hostInfo
 import io.github.qauxv.util.isPlayQQ

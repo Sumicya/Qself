@@ -23,7 +23,7 @@
 package cc.ioctl.hook.guild
 
 import android.view.View
-import cc.ioctl.util.Reflex.getFirstByType
+import io.github.qauxv.util.Reflex.getFirstByType
 import io.github.qauxv.R
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry

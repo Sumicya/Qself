@@ -45,7 +45,7 @@ object RemoveFavPreviewLimit : PluginDelayableHook("hd_fav_preview_limit") {
     override val preference = uiSwitchPreference {
         title = "移除收藏预览限制"
     }
-    override val uiItemLocation = FunctionEntryRouter.Locations.Simplify.UI_MISC
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.FAVORITE_AND_TOOLS_CATEGORY
     override val isAvailable = requireMinQQVersion(QQVersion.QQ_8_9_85)
 
     override fun startHook(classLoader: ClassLoader): Boolean {

@@ -33,7 +33,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import cc.ioctl.hook.chat.CustomMsgTimeFormat;
 import io.github.qauxv.R;
 import io.github.qauxv.config.ConfigManager;
@@ -190,7 +190,7 @@ public class RikkaCustomDeviceModelDialog {
                     //移除缓存文件
                     new File(ctx.getCacheDir().getParent()+"/app_x5webview/Default/Local Storage/leveldb","MANIFEST-000001").delete();
                     cfg.save();
-                    Toasts.success(ctx, "重启" + HostInfo.getAppName() + "生效!");
+                    Toasts.success(ctx, "重启" + HostInfo.getHostInfo().getHostName() + "生效!");
                     dialog.dismiss();
                     if (enableCustomDeviceModel) {
                         CustomMsgTimeFormat hook = CustomMsgTimeFormat.INSTANCE;
@@ -206,6 +206,6 @@ public class RikkaCustomDeviceModelDialog {
     }
 
     public String getName() {
-        return "自定义机型[需要重启" + HostInfo.getAppName() + "]";
+        return "自定义机型[需要重启" + HostInfo.getHostInfo().getHostName() + "]";
     }
 }

@@ -22,6 +22,8 @@
 
 package cc.ioctl.util
 
+import io.github.qauxv.util.Reflex
+
 import android.content.Context
 import androidx.annotation.Keep
 import com.github.kyuubiran.ezxhelper.utils.hookAfter

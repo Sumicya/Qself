@@ -38,7 +38,7 @@ import io.github.qauxv.hook.BaseFunctionHook
 import io.github.qauxv.util.Initiator
 import io.github.qauxv.util.QQVersion
 import io.github.qauxv.util.requireMinQQVersion
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 import me.ketal.util.ignoreResult
 import xyz.nextalone.util.method
 import java.io.Serializable
@@ -71,7 +71,7 @@ object FakePicSize : BaseFunctionHook(
             }
         }
     }
-    override val uiItemLocation = FunctionEntryRouter.Locations.Entertainment.ENTERTAIN_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.DISGUISE_AND_DEVICE_CATEGORY
     override val isAvailable = requireMinQQVersion(QQVersion.QQ_8_9_88)
     override val runtimeErrorDependentComponents: List<RuntimeErrorTracer>? = null
 

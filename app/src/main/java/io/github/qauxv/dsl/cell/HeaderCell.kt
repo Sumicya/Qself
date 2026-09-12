@@ -27,9 +27,9 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.TextView
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.LayoutHelperViewScope
-import cc.ioctl.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelperViewScope
+import io.github.qauxv.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 
 class HeaderCell(context: Context) : FrameLayout(context), LayoutHelperViewScope {

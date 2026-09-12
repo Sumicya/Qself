@@ -24,7 +24,7 @@ package io.github.qauxv.core;
 import android.content.Context;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import com.tencent.mmkv.MMKV;
 import com.tencent.qqnt.kernel.nativeinterface.StarInfo;
 import io.github.qauxv.base.RuntimeErrorTracer;
@@ -47,7 +47,7 @@ public class NativeCoreBridge {
      * The HostInfo MUST be initialized before calling this method.
      */
     public static void initNativeCore() {
-        Context context = HostInfo.getApplication();
+        Context context = HostInfo.getHostInfo().getApplication();
         if (StartupInfo.isInHostProcess()) {
             NativeLoader.primaryNativeLibraryFullInitialize(context);
             if (NativeLoader.isSecondaryNativeLibraryNeeded(context)) {

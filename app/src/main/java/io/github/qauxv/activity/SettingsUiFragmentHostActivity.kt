@@ -35,8 +35,8 @@ import androidx.activity.OnBackPressedCallback
 import androidx.annotation.CallSuper
 import androidx.core.view.doOnLayout
 import androidx.fragment.app.Fragment
-import cc.ioctl.util.ui.ThemeAttrUtils
-import cc.ioctl.util.ui.fling.SimpleFlingInterceptLayout
+import io.github.qauxv.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.ui.fling.SimpleFlingInterceptLayout
 import com.google.android.material.appbar.AppBarLayout
 import io.github.qauxv.R
 import io.github.qauxv.fragment.BaseSettingFragment

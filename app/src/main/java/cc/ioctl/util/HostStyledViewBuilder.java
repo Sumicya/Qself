@@ -24,8 +24,8 @@ package cc.ioctl.util;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
-import static cc.ioctl.util.LayoutHelper.dip2px;
-import static cc.ioctl.util.LayoutHelper.dip2sp;
+import static io.github.qauxv.util.LayoutHelper.dip2px;
+import static io.github.qauxv.util.LayoutHelper.dip2sp;
 
 import android.content.Context;
 import android.graphics.drawable.Drawable;
@@ -38,8 +38,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.ui.drawable.HostStyleCommonItemBackground;
-import cc.ioctl.util.ui.widget.FunctionDummy;
+import io.github.qauxv.util.ui.drawable.HostStyleCommonItemBackground;
+import io.github.qauxv.util.ui.widget.FunctionDummy;
 import io.github.qauxv.R;
 import io.github.qauxv.ui.ResUtils;
 import io.github.qauxv.util.Toasts;

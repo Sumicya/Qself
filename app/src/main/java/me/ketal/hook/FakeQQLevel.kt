@@ -44,7 +44,7 @@ import io.github.qauxv.dsl.uiClickableItem
 import io.github.qauxv.hook.BaseFunctionHook
 import io.github.qauxv.util.dexkit.DexKit
 import io.github.qauxv.util.dexkit.NProfileCardUtil_getCard
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 import me.ketal.ui.view.ConfigView
 import me.ketal.util.ignoreResult
 import xyz.nextalone.util.get
@@ -67,7 +67,7 @@ object FakeQQLevel : BaseFunctionHook("Ketal_FakeQQLevel",
         }
     }
 
-    override val uiItemLocation = FunctionEntryRouter.Locations.Entertainment.ENTERTAIN_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.DISGUISE_AND_DEVICE_CATEGORY
     override val runtimeErrorDependentComponents: List<RuntimeErrorTracer>? = null
 
     private val levelKey = ConfigData<String>("Ketal_FakeQQLevel_level")

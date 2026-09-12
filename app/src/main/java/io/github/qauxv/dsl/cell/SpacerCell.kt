@@ -24,7 +24,7 @@ package io.github.qauxv.dsl.cell
 
 import android.content.Context
 import android.widget.FrameLayout
-import cc.ioctl.util.LayoutHelperViewScope
+import io.github.qauxv.util.LayoutHelperViewScope
 
 class SpacerCell(context: Context) : FrameLayout(context), LayoutHelperViewScope {
 

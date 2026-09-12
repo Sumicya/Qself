@@ -28,7 +28,7 @@ import android.os.Parcelable
 import android.view.View
 import androidx.appcompat.app.AlertDialog
 import cc.ioctl.util.HookUtils
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import io.github.qauxv.util.xpcompat.XposedBridge
 import io.github.qauxv.R
 import io.github.qauxv.base.annotation.ComponentHookEntry

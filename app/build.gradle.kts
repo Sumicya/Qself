@@ -108,7 +108,7 @@ android {
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
 
         targetSdk = Version.targetSdk
-        versionCode = Common.getBuildVersionCode(rootProject)
+        versionCode = 10_000 + Common.getBuildVersionCode(rootProject)
         versionName = Common.getBuildVersionName(rootProject)
         resourceConfigurations += listOf("zh", "en")
 
@@ -303,6 +303,14 @@ android {
     lint {
         disable += arrayOf("BlockedPrivateApi", "DiscouragedPrivateApi", "PrivateApi", "SoonBlockedPrivateApi")
     }
+
+    // JVM unit tests (app/src/test): android.jar method calls return defaults
+    // instead of throwing "not mocked"; tests must not rely on those return values.
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 kotlin {
@@ -333,8 +341,6 @@ dependencies {
     // for get activation status
     implementation(projects.libs.libxposed.service)
     implementation(libs.hiddenapibypass)
-    implementation(libs.appcenter.analytics)
-    implementation(libs.appcenter.crashes)
     implementation(libs.androidx.browser)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.core.ktx)
@@ -360,6 +366,7 @@ dependencies {
     implementation(libs.google.guava)
     implementation(libs.sealedEnum.runtime)
     ksp(libs.sealedEnum.ksp)
+    testImplementation(libs.junit)
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.runner)
 }

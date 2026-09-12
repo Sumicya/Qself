@@ -26,7 +26,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.poststartup.StartupInfo;
 import java.io.File;
 import java.io.IOException;
@@ -55,7 +55,7 @@ public class AbiUtils {
 
     @Nullable
     public static String getApplicationActiveAbi(@NonNull String packageName) {
-        Context ctx = HostInfo.getApplication();
+        Context ctx = HostInfo.getHostInfo().getApplication();
         PackageManager pm = ctx.getPackageManager();
         try {
             // find apk path
@@ -92,7 +92,7 @@ public class AbiUtils {
             apkPath = StartupInfo.getModulePath();
         } else {
             // self process
-            apkPath = HostInfo.getApplication().getPackageCodePath();
+            apkPath = HostInfo.getHostInfo().getApplication().getPackageCodePath();
         }
         if (!new File(apkPath).exists()) {
             throw new IllegalStateException("getModuleFlavorName, apk not found: " + apkPath);

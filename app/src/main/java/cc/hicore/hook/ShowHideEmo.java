@@ -24,7 +24,7 @@ package cc.hicore.hook;
 import androidx.annotation.NonNull;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
 import io.github.qauxv.dsl.FunctionEntryRouter;
@@ -94,7 +94,7 @@ public class ShowHideEmo extends CommonSwitchFunctionHook {
 
     public static boolean isSticker(int i) {
         try {
-            File faceConfig = new File(HostInfo.getApplication().getDataDir(), "files/qq_emoticon_res/face_config.json");
+            File faceConfig = new File(HostInfo.getHostInfo().getApplication().getDataDir(), "files/qq_emoticon_res/face_config.json");
             if (!faceConfig.exists()) {
                 return false;
             }

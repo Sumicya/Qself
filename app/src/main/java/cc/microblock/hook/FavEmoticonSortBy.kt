@@ -25,7 +25,7 @@ import android.app.Activity
 import android.view.View
 import cc.hicore.QApp.QAppUtils
 import cc.ioctl.util.HookUtils
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import com.github.kyuubiran.ezxhelper.utils.hookAllConstructorAfter
 import io.github.qauxv.base.IUiItemAgent
 import io.github.qauxv.base.annotation.FunctionHookEntry
@@ -91,7 +91,7 @@ object FavEmoticonSortBy : CommonConfigFunctionHook("FavEmoticonSortBy", arrayOf
         set(value) {
             throw UnsupportedOperationException()
         }
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.CHAT_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.FAVORITE_AND_TOOLS_CATEGORY
     override val isAvailable = QAppUtils.isQQnt()
     override fun initOnce(): Boolean {
         HookUtils.hookAfterIfEnabled(

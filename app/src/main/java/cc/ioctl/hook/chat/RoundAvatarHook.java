@@ -25,7 +25,7 @@ import static io.github.qauxv.util.QQVersion.QQ_8_8_11;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedBridge;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
@@ -105,6 +105,6 @@ public class RoundAvatarHook extends CommonSwitchFunctionHook {
 
     @Override
     public boolean isAvailable() {
-        return !HostInfo.isTim() && HostInfo.getVersionCode() < QQ_8_8_11;
+        return !HostInfo.isTim() && HostInfo.getHostInfo().getVersionCode32() < QQ_8_8_11;
     }
 }

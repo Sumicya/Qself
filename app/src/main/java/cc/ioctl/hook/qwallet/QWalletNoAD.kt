@@ -26,7 +26,7 @@ import android.app.Activity
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver.OnGlobalLayoutListener
-import cc.ioctl.util.Reflex.getFirstByType
+import io.github.qauxv.util.Reflex.getFirstByType
 import io.github.qauxv.dsl.FunctionEntryRouter
 import io.github.qauxv.dsl.uiSwitchPreference
 import io.github.qauxv.util.QQVersion

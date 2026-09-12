@@ -44,7 +44,7 @@ object ForcePhoneMode : CommonSwitchFunctionHook(targetProc = SyncUtils.PROC_ANY
     override val name = "强制手机模式"
     override val description = "支持 QQ8.9.15 及以上，未经测试，谨慎使用"
     override val extraSearchKeywords: Array<String> = arrayOf("phone")
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EXPERIMENTAL_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.DISGUISE_AND_DEVICE_CATEGORY
     override val isApplicationRestartRequired = true
     override val isAvailable = requireMinQQVersion(QQVersion.QQ_8_9_15) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)
 

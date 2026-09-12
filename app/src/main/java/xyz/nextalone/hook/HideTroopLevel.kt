@@ -83,6 +83,9 @@ object HideTroopLevel : CommonSwitchFunctionHook(), OnBubbleBuilder {
         val isAdmin = admin?.contains(sendUin) == true || ownerUin == sendUin
         //levelView.children.filter { it !is TextView }.forEach { it.visibility = android.view.View.GONE }
         // 如果forEach，则会隐藏昵称右侧的部分图标
-        (levelView as LinearLayout).children.first().isVisible = isAdmin
+        // 9.2.10: the level view is a RelativeLayout now, not a LinearLayout -
+        // the hard cast threw on every group bubble (device census 2026-09-07).
+        // ViewGroup covers both shapes; non-view-group hits skip quietly.
+        (levelView as? ViewGroup)?.getChildAt(0)?.isVisible = isAdmin
     }
 }

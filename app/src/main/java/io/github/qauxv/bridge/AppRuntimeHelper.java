@@ -23,7 +23,7 @@
 package io.github.qauxv.bridge;
 
 import androidx.annotation.Nullable;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.Initiator;
 import io.github.qauxv.util.IoUtils;
 import io.github.qauxv.util.Log;

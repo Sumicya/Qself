@@ -23,7 +23,7 @@
 package me.singleneuron.hook.decorator
 
 import cc.hicore.message.common.MsgBuilder
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord
 import io.github.qauxv.BuildConfig
 import io.github.qauxv.base.annotation.FunctionHookEntry

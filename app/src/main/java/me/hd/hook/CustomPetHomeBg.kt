@@ -22,6 +22,7 @@
 
 package me.hd.hook
 
+import io.github.qauxv.util.hostInfo
 import androidx.appcompat.app.AlertDialog
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry
@@ -37,7 +38,7 @@ import me.hd.util.parameters
 import me.hd.util.returnType
 import me.hd.util.singleMethod
 import me.hd.util.toClass
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 
 @FunctionHookEntry
 @UiItemAgentEntry

@@ -29,8 +29,8 @@ import android.view.ViewGroup
 import android.widget.CompoundButton
 import android.widget.LinearLayout
 import androidx.core.view.plusAssign
-import cc.ioctl.util.ui.newListItemHookSwitchInit
-import cc.ioctl.util.ui.newListItemSwitch
+import io.github.qauxv.util.ui.newListItemHookSwitchInit
+import io.github.qauxv.util.ui.newListItemSwitch
 import com.tencent.mobileqq.widget.BounceScrollView
 import io.github.qauxv.fragment.BaseRootLayoutFragment
 import me.ketal.hook.LeftSwipeReplyHook

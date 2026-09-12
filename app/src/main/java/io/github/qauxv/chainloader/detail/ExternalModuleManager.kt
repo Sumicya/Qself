@@ -22,7 +22,8 @@
 
 package io.github.qauxv.chainloader.detail
 
-import cc.ioctl.util.HostInfo
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.hostInfo
 import java.io.File
 import java.io.IOException
 import kotlin.jvm.Throws
@@ -66,7 +67,7 @@ object ExternalModuleManager {
     }
 
     private val mExternalModuleInfoListFile: File by lazy {
-        val miscDir = File(HostInfo.getApplication().filesDir, "qa_misc")
+        val miscDir = File(hostInfo.application.filesDir, "qa_misc")
         File(miscDir, "qa_external_module_info.list")
     }
 

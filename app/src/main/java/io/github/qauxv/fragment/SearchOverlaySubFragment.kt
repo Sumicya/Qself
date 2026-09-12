@@ -39,7 +39,7 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import cc.ioctl.hook.profile.OpenProfileCard
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import com.google.android.flexbox.FlexDirection
 import com.google.android.flexbox.FlexWrap
 import com.google.android.flexbox.FlexboxLayoutManager

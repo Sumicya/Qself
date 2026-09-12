@@ -27,7 +27,7 @@ import android.graphics.Bitmap;
 import android.view.View;
 import android.widget.ImageView;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.SyncUtils;
 import io.github.qauxv.ui.ResUtils;
 import io.github.qauxv.util.Initiator;

@@ -46,9 +46,9 @@ import androidx.recyclerview.widget.RecyclerView
 import cc.ioctl.hook.friend.OpenFriendChatHistory
 import cc.ioctl.hook.profile.OpenProfileCard
 import cc.ioctl.util.ExfriendManager
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import cc.ioctl.util.TroopManagerHelper
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.FaultyDialog
 import io.github.qauxv.R
 import io.github.qauxv.bridge.AppRuntimeHelper
 import io.github.qauxv.fragment.BaseRootLayoutFragment

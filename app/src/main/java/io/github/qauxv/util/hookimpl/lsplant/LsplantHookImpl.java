@@ -24,7 +24,7 @@ package io.github.qauxv.util.hookimpl.lsplant;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.loader.hookapi.IHookBridge;
 import io.github.qauxv.poststartup.StartupInfo;
 import io.github.qauxv.util.IoUtils;

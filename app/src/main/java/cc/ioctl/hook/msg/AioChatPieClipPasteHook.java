@@ -47,7 +47,7 @@ import androidx.core.view.inputmethod.EditorInfoCompat;
 import androidx.core.view.inputmethod.InputConnectionCompat;
 import cc.hicore.message.bridge.Chat_facade_bridge;
 import cc.ioctl.util.SendCacheUtils;
-import cc.ioctl.util.ui.FaultyDialog;
+import io.github.qauxv.util.ui.FaultyDialog;
 import io.github.duzhaokun123.activity.PictureEditProxyActivity;
 import io.github.duzhaokun123.util.AioChatPieClipPasteHookUtils;
 import io.github.duzhaokun123.util.CacheManager;

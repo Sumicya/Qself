@@ -22,14 +22,14 @@
 package cc.hicore.message.common;
 
 import cc.hicore.Utils.FileUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class MsgUtils {
     public static int DecodeAntEmoCode(int EmoCode) {
         try {
-            String s = FileUtils.readFileString(HostInfo.getApplication().getFilesDir() + "/qq_emoticon_res/face_config.json");
+            String s = FileUtils.readFileString(HostInfo.getHostInfo().getApplication().getFilesDir() + "/qq_emoticon_res/face_config.json");
             JSONObject j = new JSONObject(s);
             JSONArray arr = j.getJSONArray("sysface");
             for (int i = 0; i < arr.length(); i++) {

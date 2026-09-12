@@ -33,19 +33,21 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.hook.SettingEntryHook;
-import cc.ioctl.hook.bak.MuteAtAllAndRedPacket;
-import cc.ioctl.hook.chat.GagInfoDisclosure;
+import sumicya.qself.feature.chat.MuteAtAllAndRedPacket;
+import sumicya.qself.feature.chat.GagInfoDisclosure;
 import cc.ioctl.hook.experimental.FileRecvRedirect;
-import cc.ioctl.hook.experimental.ForcePadMode;
-import cc.ioctl.hook.misc.CustomSplash;
+import sumicya.qself.feature.device.ForcePadMode;
+import sumicya.qself.feature.ui.CustomSplash;
+import sumicya.qself.feature.dev.GrayTipCapture;
+import sumicya.qself.feature.ui.LiquidGlassBottomBar;
 import cc.ioctl.hook.misc.DisableHotPatch;
 import cc.ioctl.hook.misc.DisableQQCrashReportManager;
 import cc.ioctl.hook.msg.RevokeMsgHook;
-import cc.ioctl.hook.notification.MuteQZoneThumbsUp;
+import sumicya.qself.feature.notification.MuteQZoneThumbsUp;
 import cc.ioctl.hook.ui.misc.OptXListViewScrollBar;
-import cc.ioctl.hook.ui.title.RemoveCameraButton;
-import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.Reflex;
+import sumicya.qself.feature.ui.RemoveCameraButton;
+import io.github.qauxv.util.HostInfo;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.chainloader.detail.ExternalModuleChainLoader;
 import io.github.qauxv.chainloader.detail.ui.ExternalModuleConfigHook;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
@@ -64,7 +66,7 @@ import io.github.qauxv.util.SyncUtils;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import xyz.nextalone.hook.RemoveSuperQQShow;
+import sumicya.qself.feature.ui.RemoveSuperQQShow;
 
 /*TitleKit:Lcom/tencent/mobileqq/widget/navbar/NavBarCommon*/
 
@@ -124,6 +126,8 @@ public class MainHook {
             HookInstaller.allowEarlyInit(MuteAtAllAndRedPacket.INSTANCE);
             HookInstaller.allowEarlyInit(GagInfoDisclosure.INSTANCE);
             HookInstaller.allowEarlyInit(CustomSplash.INSTANCE);
+            HookInstaller.allowEarlyInit(LiquidGlassBottomBar.INSTANCE);
+            HookInstaller.allowEarlyInit(GrayTipCapture.INSTANCE);
             HookInstaller.allowEarlyInit(RemoveCameraButton.INSTANCE);
             HookInstaller.allowEarlyInit(RemoveSuperQQShow.INSTANCE);
             HookInstaller.allowEarlyInit(FileRecvRedirect.INSTANCE);
@@ -230,7 +234,7 @@ public class MainHook {
                         String className = null;
                         if (intent != null) {
                             ComponentName component = intent.getComponent();
-                            if (component != null && HostInfo.getPackageName().equals(component.getPackageName())) {
+                            if (component != null && HostInfo.getHostInfo().getPackageName().equals(component.getPackageName())) {
                                 className = component.getClassName();
                             }
                         }

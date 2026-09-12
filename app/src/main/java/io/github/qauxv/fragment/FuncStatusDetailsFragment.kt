@@ -43,9 +43,9 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.res.ResourcesCompat
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.Reflex
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.Reflex
+import io.github.qauxv.util.ui.FaultyDialog
 import io.github.qauxv.BuildConfig
 import io.github.qauxv.R
 import io.github.qauxv.activity.ShadowShareFileAgentActivity
