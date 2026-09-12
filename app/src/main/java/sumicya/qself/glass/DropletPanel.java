@@ -119,6 +119,11 @@ final class DropletPanel extends View {
     private RuntimeShader mInnerShadow;
 
     private final Paint mWash = new Paint(Paint.ANTI_ALIAS_FLAG);
+    /** Edge-less radial state layer marking the resting selected tab. */
+    private final Paint mRestGlow = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private android.graphics.RadialGradient mRestGlowShader;
+    private int mGlowW = -1;
+    private int mGlowH = -1;
     private final Paint mPressTint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mInnerShadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mSurfacePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -182,6 +187,7 @@ final class DropletPanel extends View {
         mNight = night;
         mSurfacePaint.setColor(night ? 0x662C2C2E : 0x66F2F2F7);
         mWash.setColor(night ? 0x1AFFFFFF : 0x1A000000);
+        mGlowW = -1;
         invalidate();
     }
 
@@ -211,6 +217,32 @@ final class DropletPanel extends View {
         mClipPath.reset();
         float radius = h * 0.5f;
         mClipPath.addRoundRect(0, 0, w, h, radius, radius, Path.Direction.CW);
+        mGlowW = -1; // rebuild the radial state layer for the new size
+    }
+
+    /**
+     * Builds the edge-less resting highlight: a radial light state layer over
+     * the icon area, fully transparent at its perimeter so there is no contour
+     * between the outer glass and the button.
+     */
+    private void ensureRestGlow(int w, int h) {
+        if (mGlowW == w && mGlowH == h && mRestGlowShader != null) {
+            return;
+        }
+        float cx = w * 0.5f;
+        float cy = h * 0.42f;
+        float r = Math.min(w * 0.62f, h * 0.78f);
+        int core = mNight ? 0x26FFFFFF : 0x14000000;
+        int mid = mNight ? 0x0FFFFFFF : 0x08000000;
+        int edge = 0x00000000;
+        mRestGlowShader = new android.graphics.RadialGradient(
+                cx, cy, r,
+                new int[]{core, mid, edge},
+                new float[]{0f, 0.62f, 1f},
+                android.graphics.Shader.TileMode.CLAMP);
+        mRestGlow.setShader(mRestGlowShader);
+        mGlowW = w;
+        mGlowH = h;
     }
 
     @Override
@@ -223,11 +255,13 @@ final class DropletPanel extends View {
         float radius = h * 0.5f;
         float p = mProgress;
 
-        // At rest the droplet paints nothing: the outer pill is the only
-        // capsule surface and the real tab views already draw over it. A
-        // resting wash would read as a faint inner contour between the glass
-        // edge and the glyphs (the "thin separation layer" artifact).
+        // At rest show only a soft, fully fading state layer behind the
+        // selected glyph. A hard-edged round rect here reads as a contour
+        // ("thin separation" between outer glass and button); the radial
+        // falloff marks the button range without one.
         if (p <= 0.01f) {
+            ensureRestGlow(w, h);
+            canvas.drawRect(0f, 0f, w, h, mRestGlow);
             return;
         }
 
