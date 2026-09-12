@@ -319,6 +319,30 @@ public class SettingsVisualTest {
         SettingsGlass.INSTANCE.dispose(glass); first.recycle(); next.recycle();
     }
 
+    @Test public void lensBendsARealEdgeBeyondBlurAlone() {
+        Context context = context(false, 1f, 412, false);
+        View source = new View(context) {
+            @Override protected void onDraw(Canvas canvas) {
+                canvas.drawColor(Color.BLACK);
+                Paint paint = new Paint(); paint.setColor(Color.RED);
+                canvas.drawRect(8, 0, 300, 110, paint);
+            }
+        };
+        source.layout(0, 0, 300, 110);
+        android.graphics.drawable.Drawable lens = SettingsGlass.INSTANCE.material(context, SettingsVisuals.palette(context, 0), 24, null,
+            new android.graphics.drawable.ColorDrawable(Color.WHITE), source);
+        lens.setBounds(0, 0, 300, 110);
+        android.graphics.RenderNode blur = new android.graphics.RenderNode("blur-only reference");
+        blur.setPosition(0, 0, 300, 110);
+        Canvas recording = blur.beginRecording(300, 110); source.draw(recording); blur.endRecording();
+        blur.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(2f, 2f, android.graphics.Shader.TileMode.CLAMP));
+        Bitmap reference = drawHardware(300, 110, c -> c.drawRenderNode(blur));
+        Bitmap refracted = drawHardware(300, 110, lens::draw);
+        assertTrue("A real edge must bend, not merely tint or blur", Color.red(refracted.getPixel(5, 55)) > Color.red(reference.getPixel(5, 55)) + 80);
+        assertTrue(SettingsGlass.INSTANCE.isOptical(lens));
+        SettingsGlass.INSTANCE.dispose(lens); blur.discardDisplayList(); reference.recycle(); refracted.recycle();
+    }
+
     @Test public void checkedMotionDoesNotReplayOnBindingOrChangeStateTwice() throws Exception {
         org.robolectric.android.controller.ActivityController<android.app.Activity> controller =
             org.robolectric.Robolectric.buildActivity(android.app.Activity.class);
@@ -356,7 +380,8 @@ public class SettingsVisualTest {
         for (boolean dark : new boolean[]{false, true}) {
             Context context = context(dark, 1f, 412, false);
             assertTrue(SettingsDynamicColors.apply(context));
-            int expected = context.getColor(dark ? android.R.color.system_accent1_200 : android.R.color.system_accent1_600);
+            // API 34+ exposes semantic roles (including system contrast), not just palette tones.
+            int expected = context.getColor(dark ? android.R.color.system_primary_dark : android.R.color.system_primary_light);
             assertEquals(expected, com.google.android.material.color.MaterialColors.getColor(context, androidx.appcompat.R.attr.colorPrimary, 0));
             assertEquals(expected, SettingsVisuals.palette(context, 2).getAccent());
         }

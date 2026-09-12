@@ -11,8 +11,11 @@ object SettingsDynamicColors {
         io.github.qauxv.config.ConfigManager.getDefaultConfig().getBooleanOrDefault(KEY, true)
     }.getOrDefault(true)
     fun signature(context: Context): Int = runCatching {
-        if (Build.VERSION.SDK_INT < 31 || !followsSystem) 0 else
-            31 * context.getColor(android.R.color.system_accent1_500) + context.getColor(android.R.color.system_neutral1_900) +
+        if (Build.VERSION.SDK_INT < 31 || !followsSystem) 0
+        else if (Build.VERSION.SDK_INT >= 34) {
+            31 * context.getColor(android.R.color.system_primary_light) + context.getColor(android.R.color.system_primary_dark) +
+                context.getColor(android.R.color.system_surface_light) + context.resources.configuration.uiMode
+        } else 31 * context.getColor(android.R.color.system_accent1_500) + context.getColor(android.R.color.system_neutral1_900) +
                 context.resources.configuration.uiMode
     }.getOrDefault(0)
     @JvmStatic fun apply(context: Context): Boolean {
