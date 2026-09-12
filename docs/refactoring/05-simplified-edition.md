@@ -34,4 +34,23 @@
 
 新增 JVM 测试覆盖：实际生成表只引用清单成员、排除判断、配置逐键不变/幂等/旧备份/新键优先/未来版本、普通页不生成玻璃、真实 MaterialCardView/MaterialSwitch 及深浅色对比度。保留实际 host XML + RecyclerView 测量和 HWUI 预览。
 
-CI/APK 结果将在构建结束后补入。没有 PLC110 真机结果；不宣称 O3 返回语义、旧日志、固定发行签名或后台掉线问题在本批解决。安装后必须完整重启 QQ 所有进程，新旧 APK 的已注入进程不能混用。
+最终源码：`bfcd0ff3d4538ccf30e872c047fd95ae7b8c63fd`。
+
+- [全量 JVM CI](https://github.com/Sumicya/Qself/actions/runs/34678015495)：成功；本批设置/策略/配置测试 **22 项，0 失败，0 错误**。
+- 9 + 6 + 9 = **24 项静态契约**均通过。
+- `previews/settings-md3e.webp` 来自同一最终源码的实际 host XML/RecyclerView/HWUI 测试夹具，含深浅色，不是真机截图。
+- [最终 APK 构建与审计](https://github.com/Sumicya/Qself/actions/runs/34678015498)：成功，与上述 JVM 测试使用同一源码。
+- [下载 app-debug-apk](https://github.com/Sumicya/Qself/actions/runs/34678015498/artifacts/10293245415)，ZIP 解压后安装 `app-debug.apk`；产物有效期至 2026-09-19 06:33 UTC。
+
+| 审计项 | 结果 |
+| --- | --- |
+| 版本 | `1.6.1.r3068.bfcd0ff`，versionCode `3068`（原 Git 计数） |
+| 包名 / APK 大小 | `io.github.qauxv` / 17,798,546 字节 |
+| APK SHA-256 | `30d316bce4e1214fbb64ae5251bc916d3a0807fb18d3ea801870880a70ce2694` |
+| 签名证书 SHA-256 | `83f1f1e0a419865a07b475381b0e89e8bf8df882d0938e1426e0d5bdbd278bbf` |
+| 发布属性 | debuggable=false、Xposed API 102、autoHotReload=false、arm64 loader 存在 |
+| 内容 | 策略/迁移/诊断/原生设置/局部玻璃实现均存在；AppCenter 不存在 |
+
+签名仍是 CI 测试签名，与先前构建可能不同，不能保证普通覆盖安装；安装器绕过版本限制不等于解决签名差异。更新前备份模块配置，不清除 QQ 数据，不以卸载 QQ 作为常规更新步骤。
+
+没有 PLC110 真机结果；不宣称 O3 返回语义、旧日志、固定发行签名或后台掉线问题在本批解决。安装后必须完整重启 QQ 所有进程，新旧 APK 的已注入进程不能混用。
