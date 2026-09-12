@@ -211,7 +211,7 @@ class UiAgentItem(
         val builder = com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
             .setTitle("功能详情 / 错误输出")
             .setView(android.widget.ScrollView(activity).apply { addView(text) })
-            .setPositiveButton("复制错误") { _, _ -> xyz.nextalone.util.SystemServiceUtils.copyToClipboard(activity, report); Toasts.info(activity, "已复制") }
+            .setPositiveButton("复制错误") { _, _ -> xyz.nextalone.util.SystemServiceUtils.copyToClipboard(activity, report); android.widget.Toast.makeText(activity, "已复制", android.widget.Toast.LENGTH_SHORT).show() }
             .setNegativeButton("关闭", null)
         if (activity is io.github.qauxv.activity.SettingsUiFragmentHostActivity) {
             builder.setNeutralButton("完整报告 / 导出") { _, _ ->

@@ -15,7 +15,7 @@ results = ET.parse(xml).getroot() if xml.is_file() else None
 if results is not None:
     merged = [ET.parse(p).getroot() for p in xml.parent.glob("TEST-sumicya.qself.feature.consolidation.*.xml")]
     totals = {key: sum(int(report.get(key, 0)) for report in merged) for key in ("tests", "failures", "errors")}
-    policy = [ET.parse(p).getroot() for pattern in ("TEST-sumicya.qself.diagnostics.FeatureErrorMetadataTest.xml", "TEST-sumicya.qself.glass.GlassConfigTest.xml") for p in xml.parent.glob(pattern)]
+    policy = [ET.parse(p).getroot() for pattern in ("TEST-sumicya.qself.diagnostics.FeatureErrorMetadataTest.xml", "TEST-sumicya.qself.glass.GlassConfigTest.xml", "TEST-sumicya.qself.glass.ExactCountCompatTest.xml", "TEST-sumicya.qself.ui.SettingsErrorInteractionTest.xml") for p in xml.parent.glob(pattern)]
     policy_totals = {key: sum(int(report.get(key, 0)) for report in policy) for key in ("tests", "failures", "errors")}
     print(f"::notice title=Qself native view tests::tests={results.get('tests')} failures={results.get('failures')} errors={results.get('errors')} mergeTests={totals['tests']} mergeFailures={totals['failures']} mergeErrors={totals['errors']} policyTests={policy_totals['tests']} policyFailures={policy_totals['failures']} policyErrors={policy_totals['errors']}")
 path = root / "options-pair.webp"

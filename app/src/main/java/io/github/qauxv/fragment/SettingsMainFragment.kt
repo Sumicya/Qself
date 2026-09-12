@@ -67,6 +67,8 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
     // DSL stuff below
     private var adapter: RecyclerView.Adapter<*>? = null
     private var listLayoutManager: LinearLayoutManager? = null
+    private var homeItem: SettingsHomeItem? = null
+    private var homeViewState: android.os.Parcelable? = null
     private var recyclerListView: RecyclerView? = null
     private var rootFrameLayout: FrameLayout? = null
 
@@ -113,12 +115,13 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             background = SettingsVisuals.backdrop(SettingsVisuals.palette(context, SettingsAppearanceItem.mode))
         }
         rootFrameLayout = rootView
+        if (homeViewState == null) homeViewState = savedInstanceState?.getParcelable("homeExpansion")
         val tmsgDslTree = if (isHome()) arrayListOf<DslTMsgListItemInflatable>(SettingsHomeItem(
             { SettingsHomeView.State(
                 if (isInHostProcess) "${hostInfo.hostName} ${hostInfo.versionName}" else "模块管理",
                 ReportDiagnostics.isEnabled, SafeModeManager.getManager().isEnabledForThisTime
             ) }, { SettingsAppearanceItem.mode }, ::openHomeAction
-        ))
+        ).also { it.savedState = homeViewState; homeItem = it })
             else convertFragmentDslToTMsgDslItemTree(context, mFragmentDescription)
         // inflate DSL tree, the most awful code in the world
         itemList = ArrayList()
@@ -258,7 +261,15 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
         highlight.animate().alpha(0f).setDuration(900).withEndAction { parent.removeView(highlight) }.start()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // RecyclerView freezes only itself, not its child hierarchy.
+        outState.putParcelable("homeExpansion", homeItem?.savedState ?: homeViewState)
+    }
+
     override fun onDestroyView() {
+        homeViewState = homeItem?.savedState ?: homeViewState
+        homeItem = null
         abortSearchMode()
         mSearchMenuItem = null
         adapter = null
