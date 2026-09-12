@@ -25,7 +25,7 @@ class FunctionHookEntryItemProcessor(
 ) : SymbolProcessor {
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
-        val allowed = requireNotNull(options["qself.allowedEntries"]) { "Missing simplified inventory" }.split("|").toSet()
+        val allowed = cn.lliiooll.processors.qself.QselfCatalog.allowedProviders
         val allSymbols = resolver.getSymbolsWithAnnotation("io.github.qauxv.base.annotation.FunctionHookEntry")
             .filterIsInstance<KSClassDeclaration>()
             .toList()
@@ -50,7 +50,7 @@ class FunctionHookEntryItemProcessor(
                 }.build()).build())
             .build().writeTo(codeGenerator, Dependencies(true, *known.mapNotNull { it.containingFile }.toTypedArray()))
 
-        val catalogRows = requireNotNull(options["qself.catalogRows"]).split("|")
+        val catalogRows = cn.lliiooll.processors.qself.QselfCatalog.catalogRows
         FileSpec.builder("io.github.qauxv.gen", "FeatureCatalogRows")
             .addFunction(FunSpec.builder("getFeatureCatalogRows")
                 .returns(ClassName("kotlin", "Array").parameterizedBy(ClassName("kotlin", "String")))

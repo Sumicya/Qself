@@ -25,8 +25,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Process-wide registry of host capability states, the seam where the
- * future ports-and-adapters boundary reports version coupling outcomes
- * (see docs/refactoring/01-architecture-analysis.md §3).
+ * ports-and-adapters boundary reports version coupling outcomes.
  *
  * Design principles:
  * - **Pure JVM**: no Android types, so the degradation policy is unit-testable.

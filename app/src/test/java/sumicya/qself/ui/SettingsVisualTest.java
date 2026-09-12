@@ -699,9 +699,16 @@ public class SettingsVisualTest {
     @Test public void actualGeneratedRegistriesOnlyImportInventoryMembers() throws Exception {
         Path project = Paths.get(".");
         if (!Files.isDirectory(project.resolve("src/main/java"))) project = project.resolve("app");
-        Path inventory = project.resolve("../config/feature-catalog.tsv");
+        Path catalog = project.resolve("../libs/ksp/src/main/kotlin/cn/lliiooll/processors/qself/QselfCatalog.kt");
         Set<String> allowed = new HashSet<>();
-        for (String line : Files.readAllLines(inventory)) if (!line.startsWith("#") && !line.trim().isEmpty()) allowed.add(line.split("\t", -1)[5]);
+        for (String line : Files.readAllLines(catalog)) {
+            int q1 = line.indexOf('"');
+            int q2 = line.lastIndexOf('"');
+            if (q1 >= 0 && q2 > q1) {
+                String row = line.substring(q1 + 1, q2).replace("${'$'}", "$");
+                if (row.split("\t", -1).length == 6) allowed.add(row.split("\t", -1)[5]);
+            }
+        }
         for (String registry : new String[]{"AnnotatedFunctionHookEntryList", "AnnotatedUiItemAgentEntryList"}) {
             String generated = Files.readString(project.resolve("build/generated/ksp/debug/kotlin/io/github/qauxv/gen/" + registry + ".kt"));
             assertFalse(generated.contains("ForcePadMode"));

@@ -25,7 +25,7 @@ class UiItemAgentEntryProcessor(
 ) : SymbolProcessor {
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
-        val allowed = requireNotNull(options["qself.allowedEntries"]) { "Missing simplified inventory" }.split("|").toSet()
+        val allowed = cn.lliiooll.processors.qself.QselfCatalog.allowedProviders
         val allSymbols = resolver.getSymbolsWithAnnotation("io.github.qauxv.base.annotation.UiItemAgentEntry")
                 .filterIsInstance<KSClassDeclaration>()
                 .toList()

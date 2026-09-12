@@ -36,13 +36,11 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Drift guard for the P1 feature-reorg roadmap (docs/refactoring/05): the
- * checked-in inventory manifest is the deliberate-change ledger. Adding,
+ * The checked-in inventory manifest is the deliberate-change ledger. Adding,
  * removing, renaming, or re-categorising any @UiItemAgentEntry entry MUST go
- * through a manifest update in the same commit - the reorg batches move
- * entries by editing the manifest first, and this test keeps the tree and
- * the ledger from silently diverging (the same discipline LayoutFqcnGuardTest
- * applies to layout FQCNs).
+ * through a manifest update in the same commit, and this test keeps the tree
+ * and the ledger from silently diverging (the same discipline
+ * LayoutFqcnGuardTest applies to layout FQCNs).
  *
  * <p>Manifest format: one line per entry, tab-separated
  * {@code relative/path.kt<TAB>display name or -<TB>Locations token or -}.

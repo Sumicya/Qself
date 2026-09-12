@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 package sumicya.qself.ui
 
-/** Groups from config/feature-catalog.tsv; never mutates feature configuration. */
+/** In-code catalog groups; never mutates feature configuration. */
 object HomeCatalog {
     data class Section(val id: String, val title: String, val summary: String, val features: List<String>)
 

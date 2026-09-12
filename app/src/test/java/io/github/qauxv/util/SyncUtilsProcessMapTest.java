@@ -41,8 +41,7 @@ import java.util.HashSet;
  *
  * <p>Only the constants are asserted here; {@link SyncUtils#getProcessType()}
  * itself reaches into {@code ActivityManager} and is not testable on a plain
- * JVM (it belongs to the host-runtime adapter, see
- * docs/refactoring/01-architecture-analysis.md).</p>
+ * JVM (it belongs to the host-runtime adapter).</p>
  */
 public class SyncUtilsProcessMapTest {
 
