@@ -1,4 +1,4 @@
-// Vendored from liuran001/WeChat-LiquidGlass (MIT): https://github.com/liuran001/WeChat-LiquidGlass
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 package sumicya.qself.glass;
 
 import android.content.Context;
@@ -15,29 +15,46 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.os.Build;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.animation.OvershootInterpolator;
 import android.widget.FrameLayout;
 
+/**
+ * Container for the floating navigation pill.
+ *
+ * <p>It hosts (bottom to top) the glass surface, the host app's own tab bar
+ * moved into it, and the draggable droplet, reserves an even padding ring for
+ * a self-drawn capsule shadow, shields horizontal drags from ancestor
+ * interceptors while letting taps and the host's vertical swipe gestures
+ * through, and includes a bitmap-capture frost fallback for API levels below
+ * the RuntimeShader requirement.
+ */
 final class LiquidGlassHostLayout extends FrameLayout {
 
     static final Object GLASS_TAG = new Object();
 
-    /** Light frost fallback for devices without RuntimeShader. */
-    private static final float SAMPLE_SCALE_LEGACY = 0.4f;
-    private static final int BLUR_RADIUS_LEGACY = 3;
+    private static final float SHADOW_PAD_DP = 8f;
+    private static final float SHADOW_BLUR_DP = 8f;
+    private static final float SHADOW_OFFSET_DP = 1.5f;
+    private static final float LEGACY_SAMPLE_SCALE = 0.4f;
+    private static final int LEGACY_BLUR_RADIUS = 3;
     private static final float SATURATION_BOOST = 1.08f;
+    private static final float MAX_CORNER_DP = 30f;
+    private static final long REVEAL_DURATION_MS = 380L;
 
     private final ViewGroup mSampleRoot;
+    private final ViewGroup mBar;
     private final float mDensity;
+    private final int mTouchSlop;
+    private final boolean mUseAgsl;
+
     private boolean mDarkMode;
     private int mCaptureCount;
 
-    private final boolean mUseAgsl;
-
-    /** Tuner for the vendored QmDeve renderer (API 33+). Null = legacy frost path. */
+    /** GPU renderer plug-in (API 33+); when set, no legacy frost is drawn. */
     interface GlassTuner {
         void onSize(int w, int h, float cornerRadius);
         void onTheme(boolean dark);
@@ -45,29 +62,23 @@ final class LiquidGlassHostLayout extends FrameLayout {
 
     private GlassTuner mTuner;
 
-    /**
-     * Self-drawn drop shadow.
-     *
-     * <p>{@code setElevation} draws nothing here — whatever WeChat's view tree
-     * does to this subtree, the platform shadow never appears even at absurd
-     * values. Drawing it ourselves also keeps it matched to the capsule.
-     *
-     * <p>The host reserves {@link #mShadowPad} of padding on every side; children
-     * (MATCH_PARENT) shrink into the inner box, so the opaque round-rect drawn
-     * here is fully covered by the glass and only its shadow shows.
-     */
+    /* ------------------------------------------------------------ shadow */
+
     private int mShadowPad;
     private final Paint mShadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Path mShadowClip = new Path();
+    private final Path mShadowHole = new Path();
+    private int mShadowHoleW = -1;
+    private int mShadowHoleH = -1;
     private float mShadowOffsetY;
     private boolean mShadowHidden;
     private int mShadowAlpha = 255;
 
-    /** Slides/fades the shadow along with WeChat's bar. */
+    /** Follows the host bar's own slide/fade. {@code Float.MAX_VALUE} hides. */
     void setShadowOffsetY(float ty, float alpha) {
         boolean hidden = ty == Float.MAX_VALUE;
-        int a = Math.round(255 * Math.max(0f, Math.min(1f, alpha)));
-        if (mShadowHidden == hidden && mShadowOffsetY == ty && mShadowAlpha == a) {
+        int a = Math.round(255f * clamp01(alpha));
+        if (mShadowHidden == hidden && mShadowOffsetY == ty
+                && mShadowAlpha == a) {
             return;
         }
         mShadowHidden = hidden;
@@ -76,17 +87,18 @@ final class LiquidGlassHostLayout extends FrameLayout {
         invalidate();
     }
 
-    /** KernelSU: dropShadow(radius = 10.dp, alpha = dark ? 0.2f : 0.1f). */
+    /**
+     * Reserves an even padding ring and paints the capsule shadow into it.
+     * The shadow layer is hardware accelerated since API 28 without promoting
+     * the whole host to a layer (which would show as a rectangular texture
+     * patch clipping content behind the pill).
+     */
     void setupShadow(float density, boolean night) {
-        mShadowPad = Math.round(density * 14f);
+        mShadowPad = Math.round(density * SHADOW_PAD_DP);
         setPadding(mShadowPad, mShadowPad, mShadowPad, mShadowPad);
         mShadowPaint.setColor(0xFF000000);
-        mShadowPaint.setShadowLayer(density * 10f, 0f, density * 2f,
-                night ? 0x33000000 : 0x1A000000);
-        // No setLayerType here: promoting the host to its own layer renders the
-        // whole padded box as one texture, which shows up as a rectangular patch
-        // clipping the list separators behind it. drawRoundRect's shadow layer is
-        // hardware-accelerated on its own since API 28.
+        mShadowPaint.setShadowLayer(density * SHADOW_BLUR_DP, 0f,
+                density * SHADOW_OFFSET_DP, night ? 0x33000000 : 0x1A000000);
         invalidate();
     }
 
@@ -94,7 +106,7 @@ final class LiquidGlassHostLayout extends FrameLayout {
         return mShadowPad;
     }
 
-    private void drawPillShadow(Canvas canvas) {
+    private void drawCapsuleShadow(Canvas canvas) {
         if (mShadowPad <= 0 || mShadowHidden || mShadowAlpha == 0) {
             return;
         }
@@ -108,38 +120,35 @@ final class LiquidGlassHostLayout extends FrameLayout {
         float radius = (b - t) * 0.5f;
         int save = canvas.save();
         canvas.translate(0f, mShadowOffsetY);
-        // Punch the pill out of the shadow instead of relying on the glass to
-        // cover it. The paint's fill is opaque black — it only ever existed to
-        // cast the shadow — so a single frame where the glass lags behind (as
-        // happens while WeChat slides the bar away) would otherwise flash a solid
-        // black band across the bottom of the pill.
-        if (mShadowClipW != getWidth() || mShadowClipH != getHeight()) {
-            mShadowClip.reset();
-            mShadowClip.addRoundRect(l, t, r, b, radius, radius, Path.Direction.CW);
-            mShadowClipW = getWidth();
-            mShadowClipH = getHeight();
+        // Punch the capsule out of the shadow fill: the paint's opaque fill
+        // exists only to cast the shadow, and a frame where the glass child
+        // lags would otherwise flash a black capsule.
+        if (mShadowHoleW != getWidth() || mShadowHoleH != getHeight()) {
+            mShadowHole.reset();
+            mShadowHole.addRoundRect(l, t, r, b, radius, radius,
+                    Path.Direction.CW);
+            mShadowHoleW = getWidth();
+            mShadowHoleH = getHeight();
         }
-        canvas.clipOutPath(mShadowClip);
-        int prev = mShadowPaint.getAlpha();
+        canvas.clipOutPath(mShadowHole);
+        int previousAlpha = mShadowPaint.getAlpha();
         mShadowPaint.setAlpha(mShadowAlpha);
         canvas.drawRoundRect(l, t, r, b, radius, radius, mShadowPaint);
-        mShadowPaint.setAlpha(prev);
+        mShadowPaint.setAlpha(previousAlpha);
         canvas.restoreToCount(save);
     }
 
-    /**
-     * Optional gesture owner. It gets first refusal on every touch, but is
-     * expected to claim only drags so WeChat's own tab views keep their taps.
-     */
+    /* ------------------------------------------------------------- touch */
+
+    /** Optional gesture owner with first refusal; it should claim only drags. */
     interface DragHandler {
-        boolean onIntercept(android.view.MotionEvent ev);
-        boolean onTouch(android.view.MotionEvent ev);
+        boolean onIntercept(MotionEvent ev);
+        boolean onTouch(MotionEvent ev);
     }
 
     private DragHandler mDragHandler;
-    private final int mTouchSlop;
-    private float mGestureDownX;
-    private float mGestureDownY;
+    private float mDownX;
+    private float mDownY;
     private boolean mAncestorsBlocked;
 
     void setDragHandler(DragHandler handler) {
@@ -147,53 +156,50 @@ final class LiquidGlassHostLayout extends FrameLayout {
     }
 
     /**
-     * Keeps an outer drawer or pager from claiming a drag that began on the
-     * floating bar.
-     *
-     * <p>Call the parent directly instead of {@link #requestDisallowInterceptTouchEvent}:
-     * setting the flag on this ViewGroup as well would prevent our own
-     * {@link #onInterceptTouchEvent} from seeing the MOVE that starts a droplet
-     * drag. Taps still go to the app's tab children. Horizontal movement stays
-     * protected for the droplet, while a clearly vertical gesture is released
-     * after QQ's own tab widget has had enough travel to fire its native
-     * swipe-up callback.
+     * Keeps ancestor drawers/pagers from stealing a drag that began on the
+     * pill while releasing a clearly vertical gesture so the host bar's own
+     * swipe-up action (fires after about 50px travel) still works.
      */
-    private void protectGestureFromAncestors(android.view.MotionEvent ev) {
-        int action = ev.getActionMasked();
+    private void shieldFromAncestors(MotionEvent ev) {
         android.view.ViewParent parent = getParent();
         if (parent == null) {
             return;
         }
-        if (action == android.view.MotionEvent.ACTION_DOWN) {
-            mGestureDownX = ev.getX();
-            mGestureDownY = ev.getY();
-            mAncestorsBlocked = true;
-            parent.requestDisallowInterceptTouchEvent(true);
-            return;
-        }
-        if (action == android.view.MotionEvent.ACTION_MOVE && mAncestorsBlocked) {
-            float dx = ev.getX() - mGestureDownX;
-            float dy = ev.getY() - mGestureDownY;
-            // QQTabWidget's native upward action fires after 50 px. Releasing
-            // before that would let the outer drawer cancel the child first.
-            float verticalRelease = Math.max(mTouchSlop, 50f);
-            if (Math.abs(dy) > verticalRelease && Math.abs(dy) > Math.abs(dx)) {
-                mAncestorsBlocked = false;
-                parent.requestDisallowInterceptTouchEvent(false);
-            }
-            return;
-        }
-        if ((action == android.view.MotionEvent.ACTION_UP
-                || action == android.view.MotionEvent.ACTION_CANCEL)
-                && mAncestorsBlocked) {
-            mAncestorsBlocked = false;
-            parent.requestDisallowInterceptTouchEvent(false);
+        switch (ev.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                mDownX = ev.getX();
+                mDownY = ev.getY();
+                mAncestorsBlocked = true;
+                parent.requestDisallowInterceptTouchEvent(true);
+                break;
+            case MotionEvent.ACTION_MOVE:
+                if (!mAncestorsBlocked) {
+                    break;
+                }
+                float dx = ev.getX() - mDownX;
+                float dy = ev.getY() - mDownY;
+                float verticalRelease = Math.max(mTouchSlop, 50f);
+                if (Math.abs(dy) > verticalRelease
+                        && Math.abs(dy) > Math.abs(dx)) {
+                    mAncestorsBlocked = false;
+                    parent.requestDisallowInterceptTouchEvent(false);
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (mAncestorsBlocked) {
+                    mAncestorsBlocked = false;
+                    parent.requestDisallowInterceptTouchEvent(false);
+                }
+                break;
+            default:
+                break;
         }
     }
 
     @Override
-    public boolean onInterceptTouchEvent(android.view.MotionEvent ev) {
-        protectGestureFromAncestors(ev);
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        shieldFromAncestors(ev);
         try {
             if (mDragHandler != null && mDragHandler.onIntercept(ev)) {
                 return true;
@@ -205,8 +211,8 @@ final class LiquidGlassHostLayout extends FrameLayout {
     }
 
     @Override
-    public boolean onTouchEvent(android.view.MotionEvent ev) {
-        protectGestureFromAncestors(ev);
+    public boolean onTouchEvent(MotionEvent ev) {
+        shieldFromAncestors(ev);
         try {
             if (mDragHandler != null && mDragHandler.onTouch(ev)) {
                 return true;
@@ -217,168 +223,112 @@ final class LiquidGlassHostLayout extends FrameLayout {
         return super.onTouchEvent(ev);
     }
 
-    private final Paint mBackdropPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint mTintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF mBounds = new RectF();
-
-    private float mCornerRadius;
-    private Bitmap mRegionBuf;
-    private boolean mCapturing;
-
-    private ViewTreeObserver.OnPreDrawListener mPreDrawListener;
-    private int mShadowClipW = -1;
-    private int mShadowClipH = -1;
-
-    /** The app's own bar, kept so the theme can be re-read off its labels. */
-    private ViewGroup mBar;
+    /* ------------------------------------------------------------ badges */
 
     @Override
-    protected void dispatchDraw(android.graphics.Canvas canvas) {
+    protected void dispatchDraw(Canvas canvas) {
         super.dispatchDraw(canvas);
         try {
             BadgeNumbers.drawOver(this, mBar, canvas, mDensity);
         } catch (Throwable t) {
-            LiquidGlassModule.logErr("number overlay draw failed", t);
+            LiquidGlassModule.logErr("badge overlay failed", t);
         }
     }
 
-        LiquidGlassHostLayout(Context context, ViewGroup sampleRoot, ViewGroup bar) {
+    /* ----------------------------------------------------------- drawing */
+
+    private final Paint mBackdropPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mTintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF mBounds = new RectF();
+    private float mCornerRadius;
+    private Bitmap mRegionBuffer;
+    private boolean mCapturing;
+    private ViewTreeObserver.OnPreDrawListener mPreDrawListener;
+
+    LiquidGlassHostLayout(Context context, ViewGroup sampleRoot, ViewGroup bar) {
         super(context);
         mSampleRoot = sampleRoot;
         mBar = bar;
-        mTouchSlop = android.view.ViewConfiguration.get(context).getScaledTouchSlop();
         mDensity = context.getResources().getDisplayMetrics().density;
-        Boolean detected = detectDarkFromText(bar);
-        mDarkMode = resolveDark(context, detected);
-        mUseAgsl = Build.VERSION.SDK_INT >= 33;
+        mTouchSlop = android.view.ViewConfiguration.get(context).getScaledTouchSlop();
+        mUseAgsl = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU;
+        mDarkMode = resolveDark(context, detectDarkFromText(bar));
         setTag(GLASS_TAG);
         setWillNotDraw(false);
-        setupPaints();
+        setupFallbackPaints();
         LiquidGlassModule.log(android.util.Log.INFO,
-                "host created: sdk=" + Build.VERSION.SDK_INT
-                        + " path=" + (mUseAgsl ? "agsl" : "legacy-frost")
-                        + " dark=" + mDarkMode + " source=" + darkSource(detected)
-                        + " uiMode=" + isSystemNight(context)
-                        + " textProbe=" + detected);
+                "glass host created: sdk=" + Build.VERSION.SDK_INT
+                        + " dark=" + mDarkMode + " agsl=" + mUseAgsl);
     }
 
-    /**
-     * Light or dark, from whichever signal the host app actually honours.
-     *
-     * <p>WeChat's uiMode is the whole story — it resolves day/night through
-     * standard {@code values-night} qualifiers — so the label probe there is
-     * logged and nothing more. QQ's skin engine has a night mode independent of
-     * the system's, and the labels are the only thing that reflects it, so the
-     * probe leads and uiMode is the fallback for when it finds no labels.
-     */
-    private static boolean resolveDark(Context context, Boolean textProbe) {
-        if (GlassConfig.tone != 0) return GlassConfig.tone == 2;
-        HostApp app = LiquidGlassModule.app();
-        if (app != null && app.preferTextColorProbe && textProbe != null) {
-            return textProbe;
-        }
-        return isSystemNight(context);
-    }
-
-    private static String darkSource(Boolean textProbe) {
-        HostApp app = LiquidGlassModule.app();
-        return app != null && app.preferTextColorProbe && textProbe != null
-                ? "text-color" : "uiMode";
-    }
-
-    /** Activates the vendored QmDeve renderer; disables internal frost drawing. */
+    /** Hand-off to the external GPU renderer and disables bitmap frost. */
     void setGlassTuner(GlassTuner tuner) {
         mTuner = tuner;
         if (tuner != null) {
-            // QQ can use a skin whose light/dark state differs from uiMode.
-            // The host has already resolved that from the live tab labels, so
-            // initialise the renderer from the same source immediately rather
-            // than waiting for a future theme transition that may never occur.
+            // Initialise from the already resolved host theme rather than
+            // waiting for a transition that may never come.
             tuner.onTheme(mDarkMode);
         }
     }
 
-    @SuppressWarnings("unused")
-    private static boolean isSystemNight(Context context) {
-        int mode = context.getResources().getConfiguration().uiMode
-                & Configuration.UI_MODE_NIGHT_MASK;
-        return mode == Configuration.UI_MODE_NIGHT_YES;
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        mBounds.set(0f, 0f, w, h);
+        mCornerRadius = Math.min(h * 0.46f, MAX_CORNER_DP * mDensity);
+        if (mTuner != null) {
+            // The glass surface lives inside the shadow padding ring.
+            mTuner.onSize(w - mShadowPad * 2, h - mShadowPad * 2, mCornerRadius);
+        }
     }
 
-    /**
-     * Follows the app's actual rendering: bright nav text means a dark bar.
-     *
-     * <p>WeChat nests each tab label three levels deep, and the same subtree also
-     * holds the unread-count badge (white on red) which would poison a
-     * first-match probe. Taking the most common colour across all labels sidesteps
-     * that: three of the four tabs always carry the unselected colour, so the
-     * badge and the single selected label can never win the vote.
-     */
-    static Boolean detectDarkFromText(ViewGroup bar) {
-        if (bar == null) {
-            return null;
-        }
-        try {
-            java.util.HashMap<Integer, Integer> votes = new java.util.HashMap<>();
-            collectTextColors(bar, votes);
-            int best = 0;
-            int bestCount = 0;
-            for (java.util.Map.Entry<Integer, Integer> e : votes.entrySet()) {
-                if (e.getValue() > bestCount) {
-                    bestCount = e.getValue();
-                    best = e.getKey();
-                }
-            }
-            if (bestCount == 0) {
-                return null;
-            }
-            float lum = (0.299f * Color.red(best)
-                    + 0.587f * Color.green(best)
-                    + 0.114f * Color.blue(best)) / 255f;
-            return lum > 0.5f;
-        } catch (Throwable ignored) {
-        }
-        return null;
-    }
-
-    private static void collectTextColors(View v, java.util.Map<Integer, Integer> votes) {
-        if (v.getVisibility() != VISIBLE) {
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        drawCapsuleShadow(canvas);
+        if (mTuner != null || getWidth() <= 0 || getHeight() <= 0) {
+            // GPU renderer paints through its own child view beneath us.
             return;
         }
-        if (v instanceof android.widget.TextView) {
-            android.widget.TextView tv = (android.widget.TextView) v;
-            // Badges carry a background drawable; plain labels do not.
-            if (tv.getBackground() == null && tv.getText() != null
-                    && tv.getText().length() > 0) {
-                android.content.res.ColorStateList csl = tv.getTextColors();
-                if (csl != null) {
-                    int col = csl.getDefaultColor() | 0xFF000000;
-                    Integer prev = votes.get(col);
-                    votes.put(col, prev == null ? 1 : prev + 1);
-                }
-            }
+        int save = canvas.saveLayerAlpha(0, 0, getWidth(), getHeight(),
+                GlassConfig.materialAlpha());
+        drawLegacyFrost(canvas);
+        canvas.restoreToCount(save);
+    }
+
+    private void drawLegacyFrost(Canvas canvas) {
+        float radius = mCornerRadius;
+        if (GlassConfig.background == 0 && mRegionBuffer != null
+                && !mRegionBuffer.isRecycled()) {
+            BitmapShader shader = new BitmapShader(mRegionBuffer,
+                    Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+            Matrix matrix = new Matrix();
+            matrix.setScale(getWidth() / (float) mRegionBuffer.getWidth(),
+                    getHeight() / (float) mRegionBuffer.getHeight());
+            shader.setLocalMatrix(matrix);
+            mBackdropPaint.setShader(shader);
+        } else {
+            mBackdropPaint.setShader(null);
+            mBackdropPaint.setColor(GlassConfig.backgroundColor(mDarkMode));
+        }
+        canvas.drawRoundRect(mBounds, radius, radius, mBackdropPaint);
+        canvas.drawRoundRect(mBounds, radius, radius, mTintPaint);
+    }
+
+    private void setupFallbackPaints() {
+        if (mUseAgsl) {
             return;
         }
-        if (v instanceof ViewGroup) {
-            ViewGroup vg = (ViewGroup) v;
-            for (int i = 0; i < vg.getChildCount(); i++) {
-                collectTextColors(vg.getChildAt(i), votes);
-            }
+        if (mDarkMode) {
+            mTintPaint.setColor(0x33000000);
+            mBackdropPaint.setColor(0x40000000);
+        } else {
+            mTintPaint.setColor(0x4DFFFFFF);
+            mBackdropPaint.setColor(0x8CFFFFFF);
         }
     }
 
-    private void setupPaints() {
-        if (!mUseAgsl) {
-            if (mDarkMode) {
-                mTintPaint.setColor(0x33000000);
-                mBackdropPaint.setColor(0x40000000);
-            } else {
-                mTintPaint.setColor(0x4DFFFFFF);
-                mBackdropPaint.setColor(0x8CFFFFFF);
-            }
-
-        }
-    }
+    /* --------------------------------------------------------- lifecycle */
 
     void attach() {
         detach();
@@ -397,7 +347,8 @@ final class LiquidGlassHostLayout extends FrameLayout {
 
     void detach() {
         if (mPreDrawListener != null) {
-            mSampleRoot.getViewTreeObserver().removeOnPreDrawListener(mPreDrawListener);
+            mSampleRoot.getViewTreeObserver()
+                    .removeOnPreDrawListener(mPreDrawListener);
             mPreDrawListener = null;
         }
     }
@@ -408,21 +359,14 @@ final class LiquidGlassHostLayout extends FrameLayout {
         super.onDetachedFromWindow();
     }
 
-    @Override
-    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        super.onSizeChanged(w, h, oldw, oldh);
-        mBounds.set(0f, 0f, w, h);
-        mCornerRadius = Math.min(h * 0.46f, 30f * mDensity);
+    /** Re-resolves dark/light and pushes it to the GPU renderer. */
+    void refreshConfiguration() {
+        mDarkMode = resolveDark(getContext(), detectDarkFromText(mBar));
         if (mTuner != null) {
-            // The tuner sizes the glass, which lives inside the shadow padding.
-            mTuner.onSize(w - mShadowPad * 2, h - mShadowPad * 2, mCornerRadius);
-            return;
+            mTuner.onTheme(mDarkMode);
         }
-
-    }
-
-    private float sampleScale() {
-        return mUseAgsl ? 1.0f : SAMPLE_SCALE_LEGACY;
+        setupFallbackPaints();
+        invalidate();
     }
 
     private void capture() {
@@ -430,7 +374,7 @@ final class LiquidGlassHostLayout extends FrameLayout {
             mCapturing = true;
             maybeRefreshTheme();
             if (mTuner != null) {
-                // External GPU renderer records content itself; no bitmaps needed.
+                // GPU renderer records content itself; no bitmap is needed.
                 return;
             }
             int w = getWidth();
@@ -440,143 +384,170 @@ final class LiquidGlassHostLayout extends FrameLayout {
             }
             ensureRegionBuffer(w, h);
 
-            Canvas c = new Canvas(mRegionBuf);
-            float scale = sampleScale();
-            int[] rootLoc = new int[2];
-            int[] selfLoc = new int[2];
-            mSampleRoot.getLocationOnScreen(rootLoc);
-            getLocationOnScreen(selfLoc);
-            float dx = selfLoc[0] - rootLoc[0];
-            float dy = selfLoc[1] - rootLoc[1];
+            int[] rootPos = new int[2];
+            int[] selfPos = new int[2];
+            mSampleRoot.getLocationOnScreen(rootPos);
+            getLocationOnScreen(selfPos);
+            float dx = selfPos[0] - rootPos[0];
+            float dy = selfPos[1] - rootPos[1];
 
+            Canvas c = new Canvas(mRegionBuffer);
+            float scale = mUseAgsl ? 1f : LEGACY_SAMPLE_SCALE;
             c.save();
             c.clipRect(0f, 0f, w, h);
             c.scale(scale, scale);
             c.translate(-dx, -dy);
-            int vis = getVisibility();
+            int visibility = getVisibility();
             setVisibility(INVISIBLE);
             try {
                 mSampleRoot.draw(c);
             } finally {
-                setVisibility(vis);
+                setVisibility(visibility);
                 c.restore();
             }
 
-            applySaturationBoost(mRegionBuf);
+            boostSaturation(mRegionBuffer);
             if (!mUseAgsl) {
-                StackBlur.blur(mRegionBuf, BLUR_RADIUS_LEGACY);
+                StackBlur.blur(mRegionBuffer, LEGACY_BLUR_RADIUS);
             }
             invalidate();
         } catch (Throwable t) {
-            LiquidGlassModule.logErr("capture failed", t);
+            LiquidGlassModule.logErr("background capture failed", t);
         } finally {
             mCapturing = false;
         }
     }
 
     private void ensureRegionBuffer(int w, int h) {
-        float scale = sampleScale();
+        float scale = mUseAgsl ? 1f : LEGACY_SAMPLE_SCALE;
         int bw = Math.max(Math.round(w * scale), 1);
         int bh = Math.max(Math.round(h * scale), 1);
-        if (mRegionBuf == null
-                || mRegionBuf.isRecycled()
-                || mRegionBuf.getWidth() != bw
-                || mRegionBuf.getHeight() != bh) {
-            Bitmap old = mRegionBuf;
-            mRegionBuf = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888);
+        if (mRegionBuffer == null || mRegionBuffer.isRecycled()
+                || mRegionBuffer.getWidth() != bw
+                || mRegionBuffer.getHeight() != bh) {
+            Bitmap old = mRegionBuffer;
+            mRegionBuffer = Bitmap.createBitmap(bw, bh,
+                    Bitmap.Config.ARGB_8888);
             if (old != null && !old.isRecycled()) {
                 old.recycle();
             }
         } else {
-            mRegionBuf.eraseColor(android.graphics.Color.TRANSPARENT);
+            mRegionBuffer.eraseColor(android.graphics.Color.TRANSPARENT);
         }
     }
 
-    /** Re-evaluates dark/light periodically so theme switches follow the app
-     *  live, through the same signal {@link #resolveDark} picked at install. */
-    void refreshConfiguration() {
-        mDarkMode = resolveDark(getContext(), detectDarkFromText(mBar));
-        if (mTuner != null) mTuner.onTheme(mDarkMode);
-        setupPaints();
-        invalidate();
-    }
-
+    /** Periodically re-probes host label colours so skin switches are
+     *  followed live without walking the view tree every frame. */
     private void maybeRefreshTheme() {
         mCaptureCount++;
         if (mCaptureCount % 20 != 1) {
             return;
         }
-        // Only walk the labels for the apps that are decided by them; for the
-        // rest this stays the config read it always was.
         HostApp app = LiquidGlassModule.app();
         Boolean probe = app != null && app.preferTextColorProbe
                 ? detectDarkFromText(mBar) : null;
-        boolean detected = resolveDark(getContext(), probe);
+        boolean dark = resolveDark(getContext(), probe);
         if (mCaptureCount == 1) {
             LiquidGlassModule.log(android.util.Log.INFO,
-                    "theme probe first sample: dark=" + detected
-                            + " current=" + mDarkMode);
+                    "theme probe: dark=" + dark + " current=" + mDarkMode);
         }
-        if (detected != mDarkMode) {
-            mDarkMode = detected;
+        if (dark != mDarkMode) {
+            mDarkMode = dark;
             if (mTuner != null) {
                 mTuner.onTheme(mDarkMode);
             }
-            setupPaints();
+            setupFallbackPaints();
             invalidate();
             LiquidGlassModule.log(android.util.Log.INFO,
                     "theme switched: dark=" + mDarkMode);
         }
     }
 
-    private void applySaturationBoost(Bitmap bmp) {
-        ColorMatrix cm = new ColorMatrix();
-        cm.setSaturation(SATURATION_BOOST);
-        Paint p = new Paint();
-        p.setColorFilter(new ColorMatrixColorFilter(cm));
-        new Canvas(bmp).drawBitmap(bmp, 0f, 0f, p);
+    private void boostSaturation(Bitmap bitmap) {
+        ColorMatrix matrix = new ColorMatrix();
+        matrix.setSaturation(SATURATION_BOOST);
+        Paint paint = new Paint();
+        paint.setColorFilter(new ColorMatrixColorFilter(matrix));
+        new Canvas(bitmap).drawBitmap(bitmap, 0f, 0f, paint);
     }
 
-    @Override
-    protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        drawPillShadow(canvas);
-        if (mTuner != null) {
-            // Vendored renderer draws as child view index 0 beneath us.
+    /* ------------------------------------------------------------- theme */
+
+    /** Config override first, live label probe for hosts that skin
+     *  independently of the system, uiMode last. */
+    private static boolean resolveDark(Context context, Boolean textProbe) {
+        if (GlassConfig.tone != 0) {
+            return GlassConfig.tone == 2;
+        }
+        HostApp app = LiquidGlassModule.app();
+        if (app != null && app.preferTextColorProbe && textProbe != null) {
+            return textProbe;
+        }
+        int mode = context.getResources().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK;
+        return mode == Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    /**
+     * Votes across every plain label colour. Badges (which carry backgrounds)
+     * are excluded, and the majority unselected colour wins over a single
+     * selected label. Bright label text implies a dark bar.
+     */
+    static Boolean detectDarkFromText(ViewGroup bar) {
+        if (bar == null) {
+            return null;
+        }
+        try {
+            java.util.HashMap<Integer, Integer> votes =
+                    new java.util.HashMap<>();
+            collectLabelColours(bar, votes);
+            int bestColour = 0;
+            int bestVotes = 0;
+            for (java.util.Map.Entry<Integer, Integer> e : votes.entrySet()) {
+                if (e.getValue() > bestVotes) {
+                    bestVotes = e.getValue();
+                    bestColour = e.getKey();
+                }
+            }
+            if (bestVotes == 0) {
+                return null;
+            }
+            float luminance = (0.299f * Color.red(bestColour)
+                    + 0.587f * Color.green(bestColour)
+                    + 0.114f * Color.blue(bestColour)) / 255f;
+            return luminance > 0.5f;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static void collectLabelColours(View v,
+                                            java.util.Map<Integer, Integer> votes) {
+        if (v.getVisibility() != VISIBLE) {
             return;
         }
-        if (getWidth() <= 0 || getHeight() <= 0) {
+        if (v instanceof android.widget.TextView) {
+            android.widget.TextView tv = (android.widget.TextView) v;
+            if (tv.getBackground() == null && tv.getText() != null
+                    && tv.getText().length() > 0) {
+                android.content.res.ColorStateList csl = tv.getTextColors();
+                if (csl != null) {
+                    int colour = csl.getDefaultColor() | 0xFF000000;
+                    Integer previous = votes.get(colour);
+                    votes.put(colour, previous == null ? 1 : previous + 1);
+                }
+            }
             return;
         }
-        int save = canvas.saveLayerAlpha(0, 0, getWidth(), getHeight(), GlassConfig.materialAlpha());
-        drawLegacyFrost(canvas);
-        canvas.restoreToCount(save);
-    }
-
-    private void drawLegacyFrost(Canvas canvas) {
-        float r = mCornerRadius;
-
-        if (GlassConfig.background == 0 && mRegionBuf != null && !mRegionBuf.isRecycled()) {
-            BitmapShader shader = new BitmapShader(
-                    mRegionBuf, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
-            Matrix m = new Matrix();
-            m.setScale(
-                    getWidth() / (float) mRegionBuf.getWidth(),
-                    getHeight() / (float) mRegionBuf.getHeight());
-            shader.setLocalMatrix(m);
-            mBackdropPaint.setShader(shader);
-        } else {
-            mBackdropPaint.setShader(null);
-            mBackdropPaint.setColor(GlassConfig.backgroundColor(mDarkMode));
+        if (v instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) v;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                collectLabelColours(group.getChildAt(i), votes);
+            }
         }
-        canvas.drawRoundRect(mBounds, r, r, mBackdropPaint);
-
-        canvas.drawRoundRect(mBounds, r, r, mTintPaint);
-
-
     }
 
-    /* ---------------- liquid motion ---------------- */
+    /* ------------------------------------------------------------ reveal */
 
     private void playRevealAnimation() {
         try {
@@ -585,11 +556,14 @@ final class LiquidGlassHostLayout extends FrameLayout {
             setScaleY(0.86f);
             setAlpha(0f);
             animate().alpha(1f).scaleY(1f)
-                    .setDuration(380L)
+                    .setDuration(REVEAL_DURATION_MS)
                     .setInterpolator(new OvershootInterpolator(1.1f))
                     .start();
         } catch (Throwable ignored) {
         }
     }
 
+    private static float clamp01(float v) {
+        return v < 0f ? 0f : (v > 1f ? 1f : v);
+    }
 }
