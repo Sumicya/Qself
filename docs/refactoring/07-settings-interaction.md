@@ -38,4 +38,27 @@ O3 新增未覆盖方法的形状与原因说明，仍不读取 payload，不把
 - 新增方形原生开关交互、紧凑高度、明暗对比、材质透明度/背景策略、错误脱敏与边界测试。
 - 发布原生宿主中实际选项行的亮暗对照测试图；它是 Robolectric 样例，不是 QQ 实机截图。
 - 静态合约：11（配置/注册）+6（设置）+9（O3）+7（交互）项。
-- 最终 CI 与 APK 信息见交付记录；在 CI 完成前不将中间版本视为交付包。未进行手机实测。
+- 最终源码 `99ff11f7919a098dc3bf4beb7258c65f1ff5df9e`。
+- 完整 JVM CI [34691849468](https://github.com/Sumicya/Qself/actions/runs/34691849468) 成功；
+  check `103548381284`：24 项原生界面 + 10 项合并回归 + 5 项新策略测试，均无失败或错误。
+- 33 项静态合约在最终本地检查与 CI 任务中通过；`git diff --check` 通过。
+- 最终原生选项测试图：[亮暗对照](previews/settings-compact-options.webp)。未进行手机实测。
+
+## 交付记录
+
+APK CI [34691849438](https://github.com/Sumicya/Qself/actions/runs/34691849438) 成功，check `103548380992`。
+[下载 r3081](https://github.com/Sumicya/Qself/actions/runs/34691849438/artifacts/10297665931)，artifact `app-debug-apk`。
+归档 12,886,792 字节，过期时间 2026-09-19T11:54:27Z。
+
+| 项目 | 验证结果 |
+| --- | --- |
+| APK | `app-debug.apk`，17,831,354 字节 |
+| 包名 | `io.github.qauxv` |
+| 版本 | `1.6.1.r3081.99ff11f` / 3081 |
+| APK SHA256 | `83ca6260f6f2d7d6f49f3cd96e7842528b1256f52b69a72f730f957e325b6f42` |
+| Signer SHA256 | `206562ff889714c54587f31cd50d8d9089327bab2be84f22fd4f04032561d65c` |
+| 发布检查 | debuggable=false，targetApiVersion=102，autoHotReload=false |
+| 包内容检查 | arm64 加载器、诊断/玻璃、原生设置、能力合并实现存在；无 AppCenter |
+
+中间 a2e6f3a/f6004f4 的 JVM 失败是新增诊断入口与重命名底栏项未同步功能清单；已在最终源码修复。
+未以中间包替代最终同源码通过测试的 APK。
