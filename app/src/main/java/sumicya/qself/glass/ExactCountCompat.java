@@ -16,7 +16,8 @@ public final class ExactCountCompat {
             for (Method method : c.getDeclaredMethods()) {
                 Class<?>[] args = method.getParameterTypes();
                 if (method.getName().equals(name) && !Modifier.isStatic(method.getModifiers())
-                        && method.getReturnType() == void.class && args.length > 0 && args[0] == int.class) {
+                        && method.getReturnType() == void.class && args.length > 0
+                        && (args[0] == int.class || args[0] == long.class || args[0] == Integer.class || args[0] == Long.class)) {
                     method.setAccessible(true);
                     result.add(method);
                 }
@@ -28,7 +29,7 @@ public final class ExactCountCompat {
         for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
             try {
                 Field field = c.getDeclaredField(name);
-                if (field.getType() != String.class || Modifier.isStatic(field.getModifiers())) continue;
+                if ((field.getType() != String.class && field.getType() != CharSequence.class) || Modifier.isStatic(field.getModifiers())) continue;
                 field.setAccessible(true);
                 return field;
             } catch (NoSuchFieldException ignored) { }

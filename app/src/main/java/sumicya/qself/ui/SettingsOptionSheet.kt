@@ -69,12 +69,12 @@ class SettingsOptionSheet : DialogFragment() {
         val context = requireActivity()
         val root = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         val top = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(SettingsVisuals.dp(context, 8), SettingsVisuals.dp(context, 8), SettingsVisuals.dp(context, 8), 0) }
-        back = MaterialButton(context).apply { text = "返回"; contentDescription = "返回分类"; setOnClickListener { navigate(null, false) } }
-        top.addView(back, LinearLayout.LayoutParams(SettingsVisuals.dp(context, 80), SettingsVisuals.dp(context, 48)))
+        back = MaterialButton(context).apply { text = "‹"; textSize = 24f; setPadding(0, 0, 0, 0); contentDescription = "返回分类"; setOnClickListener { navigate(null, false) } }
+        top.addView(back, LinearLayout.LayoutParams(SettingsVisuals.dp(context, 56), -2))
         heading = TextView(context).apply { textSize = 19f; gravity = Gravity.CENTER; setTextColor(SettingsAppearanceItem.overlayPalette(context).text) }
         top.addView(heading, LinearLayout.LayoutParams(0, -2, 1f))
-        top.addView(MaterialButton(context).apply { text = "关闭"; setOnClickListener { dismiss() } },
-            LinearLayout.LayoutParams(SettingsVisuals.dp(context, 80), SettingsVisuals.dp(context, 48)))
+        top.addView(MaterialButton(context).apply { text = "×"; textSize = 24f; contentDescription = "关闭小窗"; setPadding(0, 0, 0, 0); setOnClickListener { dismiss() } },
+            LinearLayout.LayoutParams(SettingsVisuals.dp(context, 56), -2))
         root.addView(top)
         root.addView(TextView(context).apply {
             text = "✓ 开启   × 关闭   − 不支持或出错 · 各项独立"; textSize = 12f; gravity = Gravity.CENTER; setTextColor(SettingsAppearanceItem.overlayPalette(context).secondary)

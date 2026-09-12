@@ -32,7 +32,6 @@ import cc.ioctl.util.hookAfterIfEnabled
 import sumicya.qself.glass.ExactCountCompat
 import cc.ioctl.util.hookBeforeIfEnabled
 import com.github.kyuubiran.ezxhelper.utils.findFieldObjectAs
-import com.github.kyuubiran.ezxhelper.utils.hookAfter
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry
 import io.github.qauxv.dsl.FunctionEntryRouter
@@ -77,6 +76,10 @@ object ShowMsgCount : CommonSwitchFunctionHook(
     """.trimIndent()
     override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.MESSAGE_CATEGORY
 
+    private fun java.lang.reflect.Method.afterEnabled(block: (MethodHookParam) -> Unit) {
+        this@ShowMsgCount.hookAfterIfEnabled(this) { param -> if (!param.hasThrowable()) block(param) }
+    }
+
     override fun initOnce(): Boolean {
         var installed = 0
         fun part(label: String, block: () -> Unit) {
@@ -95,7 +98,7 @@ object ShowMsgCount : CommonSwitchFunctionHook(
             methods.forEach { method ->
                 hookAfterIfEnabled(method) { param ->
                     if (!param.hasThrowable()) {
-                        val count = param.args[0] as Int
+                        val count = (param.args[0] as Number).toLong()
                         // Keep QQ's layout, visibility, zero/dot semantics and side effects.
                         if (count > 0 && text.get(param.thisObject) != count.toString()) {
                             text.set(param.thisObject, count.toString())
@@ -130,8 +133,7 @@ object ShowMsgCount : CommonSwitchFunctionHook(
                     }
                 })
                 // 群聊左上角返回
-                DexKit.requireMethodFromCache(AIOTitleVB_updateLeftTopBack_NT).hookAfter {
-                    if (!isEnabled) return@hookAfter
+                DexKit.requireMethodFromCache(AIOTitleVB_updateLeftTopBack_NT).afterEnabled {
                     if (it.args[0] is Int) {
                         val count = it.args[0] as Int
                         if (count > 0) {
@@ -215,8 +217,7 @@ object ShowMsgCount : CommonSwitchFunctionHook(
             // 小程序菜单键
             Initiator.loadClass("com.tencent.qqmini.sdk.core.utils.CustomWidgetUtil")
                 .getDeclaredMethod("updateCustomNoteTxt", TextView::class.java, Int::class.java)
-                .hookAfter { param ->
-                    if (!isEnabled) return@hookAfter
+                .afterEnabled { param ->
                     (param.args[0] as TextView).text = "${param.args[1] as Int}"
                 }
 
@@ -251,8 +252,7 @@ object ShowMsgCount : CommonSwitchFunctionHook(
             // 隐藏会话右上角
             Initiator.loadClass(floatViewManagerClass)
                 .getDeclaredMethod("updateUnreadCount", Int::class.java, Boolean::class.java)
-                .hookAfter { param ->
-                    if (!isEnabled) return@hookAfter
+                .afterEnabled { param ->
                     (param.thisObject.findFieldObjectAs<ViewGroup> {
                         type == View::class.java
                     }.findViewByType(TextView::class.java) as TextView).text = "${param.args[0] as Int}"
@@ -262,8 +262,7 @@ object ShowMsgCount : CommonSwitchFunctionHook(
             // 隐藏会话悬浮消息列表
             Initiator.loadClass(msgUnreadCallbackClass)
                 .getDeclaredMethod("updateUnreadCount", Int::class.java, Boolean::class.java)
-                .hookAfter { param ->
-                    if (!isEnabled) return@hookAfter
+                .afterEnabled { param ->
                     param.thisObject.findFieldObjectAs<TextView> {
                         type == TextView::class.java
                     }.text = "${param.args[0] as Int}"

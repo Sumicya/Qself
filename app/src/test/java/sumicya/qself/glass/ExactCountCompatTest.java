@@ -12,11 +12,12 @@ public class ExactCountCompatTest {
     }
     static class CurrentBadge extends Parent {
         public void updateNum(int count, boolean animate) { }
+        public void updateNum(long count) { }
         public void unrelated(int count) { }
         public static void updateNum(int count, String source) { }
     }
     @Test public void knownNumericOverloadsIncludeInheritedAndExcludeUnrelatedMethods() {
-        assertEquals(2, ExactCountCompat.updateMethods(CurrentBadge.class, "updateNum").size());
+        assertEquals(3, ExactCountCompat.updateMethods(CurrentBadge.class, "updateNum").size());
         assertTrue(ExactCountCompat.updateMethods(CurrentBadge.class, "missing").isEmpty());
     }
     @Test public void inheritedPrivateTextCanBeReplacedWithUncappedCount() throws Exception {

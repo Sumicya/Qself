@@ -59,7 +59,7 @@ class SettingsInteractionContract(unittest.TestCase):
         for token in ['ExactCountCompat.updateMethods', 'hookAfterIfEnabled(method)', 'part("总消息数量")', 'return installed > 0']:
             self.assertIn(token, hook)
         self.assertNotIn('param.result = null', hook)
-        self.assertIn('if (!isEnabled) return@hookAfter', hook)
+        self.assertIn('this@ShowMsgCount.hookAfterIfEnabled(this)', hook)
     def test_errors_have_detail_copy_export_without_toggling_the_switch(self):
         item = source('io/github/qauxv/dsl/item/UiAgentItem.kt')
         self.assertIn('if (hasFailure()) { showFailure(v); return }', item)

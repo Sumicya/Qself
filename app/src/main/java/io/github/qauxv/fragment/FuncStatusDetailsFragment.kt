@@ -67,29 +67,7 @@ class FuncStatusDetailsFragment : BaseRootLayoutFragment() {
 
     private var mFunction: IUiItemAgentProvider? = null
     private var mTextDetails: String? = null
-    private var observerDialog: AlertDialog? = null
-    private val observerPaths = HashSet<String>()
     private var mInitException: Throwable? = null
-
-    private val observer = object : ContentObserver(Handler()) {
-        override fun onChange(selfChange: Boolean, uri: Uri?) {
-            if (mInitException != null) {
-                // special case...
-                return
-            }
-            if (observerPaths.contains(uri?.path ?: "")) return
-            observerDialog?.cancel()
-            observerDialog = AlertDialog.Builder(requireActivity())
-                .setTitle("嘿！请不要截图日志")
-                .setMessage("由于截图的日志无法方便排查问题，请点击下方的“复制日志”按钮或在此界面右上角的复制按钮，将日志复制后进行反馈，感谢你的理解。")
-                .setPositiveButton("复制日志") { _, _ -> copyDebugLog() }
-                .setNegativeButton("取消", null)
-                .create()
-            observerDialog?.show()
-            uri?.path?.let { observerPaths.add(it) }
-            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
-    }
 
     private fun copyDebugLog() {
         mTextDetails?.let {
@@ -219,18 +197,6 @@ class FuncStatusDetailsFragment : BaseRootLayoutFragment() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        requireActivity().contentResolver.registerContentObserver(
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, observer
-        )
-    }
-
-    override fun onPause() {
-        super.onPause()
-        requireActivity().contentResolver.unregisterContentObserver(observer)
-    }
-
     override fun doOnCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         val ctx = inflater.context
         mTextDetails = if (mInitException != null) {
@@ -328,12 +294,6 @@ class FuncStatusDetailsFragment : BaseRootLayoutFragment() {
         }.onFailure {
             append('\n').append("dumpStatus failed: ").append(Log.getStackTraceString(it)).append("\n")
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        observerDialog = null
-        activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 
     companion object {

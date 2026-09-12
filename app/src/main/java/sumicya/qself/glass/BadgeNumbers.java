@@ -38,13 +38,16 @@ public final class BadgeNumbers {
     private static boolean sDiagLogged = false;
 
     /** badge view -> last count reported via an updateNum-style hook. */
-    private static final WeakHashMap<View, Integer> sCounts = new WeakHashMap<>();
+    private static final WeakHashMap<View, Long> sCounts = new WeakHashMap<>();
 
     /** badge classes already hooked (or dumped because no hook exists). */
     private static final Set<Class<?>> sHooked = Collections.synchronizedSet(new HashSet<>());
 
     /** cached tab row per bar. */
-    private static final WeakHashMap<View, View> sRow = new WeakHashMap<>();
+    private static final WeakHashMap<View, java.lang.ref.WeakReference<View>> sRow = new WeakHashMap<>();
+
+    private static final WeakHashMap<View, java.lang.ref.WeakReference<View>> sHosts = new WeakHashMap<>();
+    private static final Set<Method> sHookedMethods = Collections.synchronizedSet(new HashSet<>());
 
     /**
      * Pure: label for a captured count; null for nothing-to-draw. A hooked
@@ -52,12 +55,12 @@ public final class BadgeNumbers {
      * runs QQ's exact-count display, and the stock capsule's own "99+" text
      * (the fallback source) caps regardless of that setting.
      */
-    static String countLabel(Integer count, CharSequence text) {
+    static String countLabel(Number count, CharSequence text) {
         if (count != null) {
-            if (count <= 0) {
+            if (count.longValue() <= 0) {
                 return null;
             }
-            return String.valueOf(count.intValue());
+            return String.valueOf(count.longValue());
         }
         if (text == null) {
             return null;
@@ -71,13 +74,14 @@ public final class BadgeNumbers {
         if (bar == null) {
             return;
         }
-        View row = sRow.get(bar);
+        java.lang.ref.WeakReference<View> rowRef = sRow.get(bar);
+        View row = rowRef == null ? null : rowRef.get();
         if (row == null) {
             row = TabBarBridge.findTabRow(bar);
             if (row == null) {
                 return;
             }
-            sRow.put(bar, row);
+            sRow.put(bar, new java.lang.ref.WeakReference<>(row));
         }
         if (!(row instanceof ViewGroup)) {
             return;
@@ -256,27 +260,14 @@ public final class BadgeNumbers {
      */
     static Method pickUpdateNum(Class<?> cls) {
         Method best = null;
-        for (Method m : cls.getDeclaredMethods()) {
-            if (!m.getName().equals("updateNum")) {
-                continue;
-            }
-            Class<?>[] pt = m.getParameterTypes();
-            if (pt.length == 0 || !isCountType(pt[0])) {
-                continue;
-            }
-            if (best == null || best.getParameterTypes().length > pt.length) {
-                best = m;
-            }
+        for (Method method : ExactCountCompat.updateMethods(cls, "updateNum")) {
+            if (best == null || method.getParameterTypes().length < best.getParameterTypes().length) best = method;
         }
         return best;
     }
 
-    private static boolean isCountType(Class<?> c) {
-        return c == int.class || c == long.class
-                || c == Integer.class || c == Long.class;
-    }
-
     private static void hookUpdateNumOnce(View badge, final View host) {
+        sHosts.put(badge, new java.lang.ref.WeakReference<>(host));
         Class<?> cls = badge.getClass();
         if (sHooked.contains(cls)) {
             return;
@@ -295,17 +286,23 @@ public final class BadgeNumbers {
             LiquidGlassModule.log(android.util.Log.WARN, sb.toString());
             return;
         }
-        try {
-            LiquidGlassModule.hookAfter(target, param -> {
-                Object thiz = param.thisObject;
-                Object arg = param.args.length > 0 ? param.args[0] : null;
-                if (thiz instanceof View && arg instanceof Number) {
-                    sCounts.put((View) thiz, ((Number) arg).intValue());
-                    host.postInvalidate();
-                }
-            });
-        } catch (Throwable t) {
-            LiquidGlassModule.logErr("updateNum hook failed", t);
+        for (Method method : ExactCountCompat.updateMethods(cls, "updateNum")) {
+            if (!sHookedMethods.add(method)) continue;
+            try {
+                LiquidGlassModule.hookAfter(method, param -> {
+                    Object thiz = param.thisObject;
+                    Object arg = param.args.length > 0 ? param.args[0] : null;
+                    if (!param.hasThrowable() && thiz instanceof View && arg instanceof Number) {
+                        sCounts.put((View) thiz, ((Number) arg).longValue());
+                        java.lang.ref.WeakReference<View> reference = sHosts.get((View) thiz);
+                        View currentHost = reference == null ? null : reference.get();
+                        if (currentHost != null) currentHost.postInvalidate();
+                    }
+                });
+            } catch (Throwable t) {
+                sHookedMethods.remove(method);
+                LiquidGlassModule.logErr("updateNum hook failed", t);
+            }
         }
     }
 
