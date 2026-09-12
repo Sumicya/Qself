@@ -30,7 +30,7 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
         paint.style = Paint.Style.FILL
         paint.color = p.container
         canvas.drawRoundRect(x, y, x + size, y + size, 4f, 4f, paint)
-        paint.color = if (failed) 0xffb3261e.toInt() else p.onContainer
+        paint.color = if (failed) { if (p.dark) 0xfff2b8b5.toInt() else 0xffb3261e.toInt() } else p.onContainer
         paint.textAlign = Paint.Align.CENTER
         paint.textSize = SettingsVisuals.dp(context, 22).toFloat()
         val glyph = if (unavailable || failed) "−" else if (isChecked) "✓" else "×"

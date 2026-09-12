@@ -145,6 +145,7 @@ class SettingsOptionSheet : BottomSheetDialogFragment() {
     companion object {
         const val TAG = "qself-options"
         fun restore(activity: FragmentActivity, args: Bundle) {
+            args.classLoader = activity.javaClass.classLoader
             if (!activity.supportFragmentManager.isStateSaved && activity.supportFragmentManager.findFragmentByTag(TAG) == null)
                 SettingsOptionSheet().apply { arguments = args }.showNow(activity.supportFragmentManager, TAG)
         }

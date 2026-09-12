@@ -165,6 +165,7 @@ public final class LiquidGlassInstaller {
                 // applied again and the dead strip at the bottom re-opens.
                 applyLabelSettings(sTabRowRef.get());
                 live.refreshConfiguration();
+                decor.post(() -> refreshTabStructure(live));
                 reassertBottom(activity);
                 return;
             }
@@ -899,6 +900,7 @@ public final class LiquidGlassInstaller {
     }
 
     private static final java.util.WeakHashMap<android.widget.TextView, Float> sTitleAlphas = new java.util.WeakHashMap<>();
+    private static final java.util.WeakHashMap<android.widget.TextView, android.content.res.ColorStateList> sTitleColors = new java.util.WeakHashMap<>();
     private static void applyLabelSettings(ViewGroup row) {
         if (row == null) return;
         int count = 0;
@@ -913,6 +915,12 @@ public final class LiquidGlassInstaller {
                 title.setAlpha(0f); // Retain the stock anchor for unread counts; never alter host text.
             } else if (sTitleAlphas.containsKey(title)) {
                 title.setAlpha(sTitleAlphas.remove(title));
+            }
+            if (GlassConfig.tone != 0) {
+                if (!sTitleColors.containsKey(title)) sTitleColors.put(title, title.getTextColors());
+                title.setTextColor(GlassConfig.tone == 2 ? 0xFFF4F4F4 : 0xFF202020);
+            } else if (sTitleColors.containsKey(title)) {
+                title.setTextColor(sTitleColors.remove(title));
             }
             title.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, GlassConfig.labelSize);
         }
@@ -1064,6 +1072,11 @@ public final class LiquidGlassInstaller {
         ViewGroup.LayoutParams lp = v.getLayoutParams();
         if (lp != null && lp.width == ViewGroup.LayoutParams.MATCH_PARENT) {
             return 0;
+        }
+        if (v instanceof android.widget.TextView && !v.getClass().getName().contains("Badge")) {
+            android.widget.TextView text = (android.widget.TextView) v;
+            return (int) Math.ceil(text.getPaint().measureText(text.getText().toString()))
+                    + text.getPaddingLeft() + text.getPaddingRight();
         }
         return v.getWidth();
     }
