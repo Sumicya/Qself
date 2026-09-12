@@ -341,6 +341,10 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
         arguments?.getString(TARGET_UI_AGENT_IDENTIFIER) == null
 
     private fun openHomeAction(action: String) {
+        if (action.startsWith("group:")) {
+            sumicya.qself.ui.SettingsOptionSheet.show(requireSettingsHostActivity(), group = action.removePrefix("group:"))
+            return
+        }
         if (action == HomeCatalog.SEARCH) {
             mSearchMenuItem?.let { item ->
                 item.expandActionView()

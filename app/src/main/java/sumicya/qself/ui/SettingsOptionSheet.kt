@@ -18,9 +18,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.bottomsheet.BottomSheetBehavior
-import com.google.android.material.bottomsheet.BottomSheetDialog
-import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import androidx.fragment.app.DialogFragment
+import androidx.activity.ComponentDialog
 import com.google.android.material.button.MaterialButton
 import io.github.qauxv.dsl.FunctionEntryRouter
 import io.github.qauxv.dsl.cell.HeaderCell
@@ -30,11 +29,10 @@ import kotlinx.coroutines.launch
 import sumicya.qself.feature.consolidation.FeatureCatalog
 
 /** One restorable modal, not a stack of sliding full-screen category pages. */
-class SettingsOptionSheet : BottomSheetDialogFragment() {
+class SettingsOptionSheet : DialogFragment() {
     private var groupId: String? = null
     private lateinit var recycler: RecyclerView
     private lateinit var deck: FrameLayout
-    private lateinit var materialStatus: TextView
     private var transitioning = false
     private var homeScroll: android.os.Parcelable? = null
     private lateinit var listAdapter: RecyclerView.Adapter<RecyclerView.ViewHolder>
@@ -62,21 +60,15 @@ class SettingsOptionSheet : BottomSheetDialogFragment() {
         putBoolean("hostRestore", true); putString("currentGroup", groupId); putParcelable("homeScroll", homeScroll)
         if (::recycler.isInitialized) putParcelable("scroll", recycler.layoutManager?.onSaveInstanceState())
     }
-    override fun onCreateDialog(state: Bundle?): Dialog = BottomSheetDialog(requireContext(), theme).also {
+    override fun onCreateDialog(state: Bundle?): Dialog = ComponentDialog(requireContext(), theme).also {
         it.onBackPressedDispatcher.addCallback(this, backCallback)
-        it.setDismissWithAnimation(SettingsMotion.enabled())
+        it.requestWindowFeature(Window.FEATURE_NO_TITLE)
         it.window?.setWindowAnimations(0)
-        it.behavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
-            override fun onStateChanged(sheet: View, state: Int) = Unit
-            override fun onSlide(sheet: View, offset: Float) {
-                SettingsGlass.deform(sheet.background, (1f - offset).coerceIn(0f, 1f))
-            }
-        })
     }
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, state: Bundle?): View {
         val context = requireActivity()
         val root = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        val top = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(16, 8, 16, 0) }
+        val top = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(SettingsVisuals.dp(context, 8), SettingsVisuals.dp(context, 8), SettingsVisuals.dp(context, 8), 0) }
         back = MaterialButton(context).apply { text = "返回"; contentDescription = "返回分类"; setOnClickListener { navigate(null, false) } }
         top.addView(back, LinearLayout.LayoutParams(SettingsVisuals.dp(context, 80), SettingsVisuals.dp(context, 48)))
         heading = TextView(context).apply { textSize = 19f; gravity = Gravity.CENTER; setTextColor(SettingsAppearanceItem.overlayPalette(context).text) }
@@ -88,11 +80,6 @@ class SettingsOptionSheet : BottomSheetDialogFragment() {
             text = "✓ 开启   × 关闭   − 不支持或出错 · 各项独立"; textSize = 12f; gravity = Gravity.CENTER; setTextColor(SettingsAppearanceItem.overlayPalette(context).secondary)
             setPadding(8, 8, 8, 8)
         })
-        materialStatus = TextView(context).apply {
-            textSize = 12f; gravity = Gravity.CENTER; visibility = View.GONE
-            setTextColor(SettingsAppearanceItem.overlayPalette(context).secondary)
-        }
-        root.addView(materialStatus)
         deck = FrameLayout(context)
         root.addView(deck, LinearLayout.LayoutParams(-1, 0, 1f))
         populate()
@@ -116,31 +103,27 @@ class SettingsOptionSheet : BottomSheetDialogFragment() {
     }
     override fun onStart() {
         super.onStart()
-        (dialog as? BottomSheetDialog)?.let {
-            val sheet = it.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet) ?: return@let
-            SettingsGlass.dispose(sheet.background)
-            sheet.background = SettingsAppearanceItem.material(requireContext(), sheet)
-            SettingsGlass.observeStatus(sheet.background) {
-                materialStatus.text = it
-                materialStatus.visibility = if (it.startsWith("实色")) View.VISIBLE else View.GONE
-            }
-            sheet.layoutParams.height = (resources.displayMetrics.heightPixels * .85f).toInt()
-            it.behavior.state = BottomSheetBehavior.STATE_EXPANDED
-            it.behavior.skipCollapsed = true
-            SettingsMotion.enter(sheet)
+        val window = dialog?.window ?: return
+        val dm = resources.displayMetrics
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        window.setDimAmount(.12f)
+        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        window.setGravity(Gravity.CENTER)
+        window.setLayout(minOf(dm.widthPixels - SettingsVisuals.dp(requireContext(), 32), SettingsVisuals.dp(requireContext(), 560)),
+            minOf((dm.heightPixels * .72f).toInt(), SettingsVisuals.dp(requireContext(), 640)))
+        view?.let { root ->
+            root.background = SettingsAppearanceItem.material(requireContext(), root)
+            root.clipToOutline = true
+            SettingsMotion.enter(root)
         }
     }
     override fun onStop() {
-        (dialog as? BottomSheetDialog)?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)?.let {
-            it.animate().cancel(); SettingsGlass.dispose(it.background)
-        }
+        view?.animate()?.cancel()
         super.onStop()
     }
     override fun onDestroyView() {
         TransitionManager.endTransitions(deck)
-        (dialog as? BottomSheetDialog)?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)?.let {
-            it.animate().cancel(); SettingsGlass.dispose(it.background)
-        }
+        view?.animate()?.cancel()
         recycler.adapter = null
         super.onDestroyView()
     }
@@ -197,7 +180,9 @@ class SettingsOptionSheet : BottomSheetDialogFragment() {
         override fun getItemViewType(position: Int) = when (items[position]) { is String -> 0; is UiAgentItem -> 1; else -> 2 }
         override fun onCreateViewHolder(parent: ViewGroup, type: Int): RecyclerView.ViewHolder {
             val view = if (type == 0) HeaderCell(requireActivity()) else TitleValueCell(requireActivity())
-            SettingsVisuals.decorateRow(view, requireActivity(), type != 0, SettingsAppearanceItem.overlayPalette(requireActivity()))
+            val palette = SettingsAppearanceItem.overlayPalette(requireActivity())
+            SettingsVisuals.decorateRow(view, requireActivity(), type != 0, palette)
+            if (type != 0) view.background = SettingsVisuals.surface(requireActivity(), palette.copy(surface = android.graphics.Color.TRANSPARENT), 12, true)
             return object : RecyclerView.ViewHolder(view) {}
         }
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {

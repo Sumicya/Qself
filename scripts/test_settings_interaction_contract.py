@@ -11,7 +11,7 @@ class SettingsInteractionContract(unittest.TestCase):
     def test_actual_modal_and_manual_host_restore(self):
         sheet = source('sumicya/qself/ui/SettingsOptionSheet.kt')
         host = source('io/github/qauxv/activity/SettingsUiFragmentHostActivity.kt')
-        for token in ['BottomSheetDialogFragment()', 'onBackPressedDispatcher', 'onSaveInstanceState()', 'showNow(', 'repeatOnLifecycle']:
+        for token in ['DialogFragment()', 'onBackPressedDispatcher', 'onSaveInstanceState()', 'showNow(', 'repeatOnLifecycle']:
             self.assertIn(token, sheet)
         self.assertIn('SettingsOptionSheet.restore(this, it)', host)
         self.assertIn('it.saveForHost()', host)
@@ -47,11 +47,33 @@ class SettingsInteractionContract(unittest.TestCase):
         self.assertNotIn('Bitmap.createBitmap', text)
     def test_motion_and_system_palette_are_wired_to_production(self):
         sheet = source('sumicya/qself/ui/SettingsOptionSheet.kt')
-        for token in ['MaterialSharedAxis.Y', 'beginDelayedTransition', 'setDismissWithAnimation', 'SettingsMotion.enter', 'endTransitions']:
+        for token in ['MaterialSharedAxis.Y', 'beginDelayedTransition', 'setGravity(Gravity.CENTER)', 'SettingsMotion.enter', 'endTransitions']:
             self.assertIn(token, sheet)
         self.assertIn('SettingsDynamicColors.apply(this)', source('io/github/qauxv/activity/SettingsUiFragmentHostActivity.kt'))
         self.assertIn('setCheckedWithoutAnimation', source('io/github/qauxv/dsl/item/UiAgentItem.kt'))
         self.assertIn('areAnimatorsEnabled', source('sumicya/qself/ui/SettingsMotion.kt'))
+    def test_exact_count_is_registered_and_uses_current_badge_overloads(self):
+        catalog = (ROOT / 'config/feature-catalog.tsv').read_text()
+        self.assertEqual(catalog.count('cc.ioctl.hook.msg.ShowMsgCount'), 1)
+        hook = source('cc/ioctl/hook/msg/ShowMsgCount.kt')
+        for token in ['ExactCountCompat.updateMethods', 'hookAfterIfEnabled(method)', 'part("总消息数量")', 'return installed > 0']:
+            self.assertIn(token, hook)
+        self.assertNotIn('param.result = null', hook)
+        self.assertIn('if (!isEnabled) return@hookAfter', hook)
+    def test_errors_have_detail_copy_export_without_toggling_the_switch(self):
+        item = source('io/github/qauxv/dsl/item/UiAgentItem.kt')
+        self.assertIn('if (hasFailure()) { showFailure(v); return }', item)
+        self.assertIn('setNeutralButton("完整报告 / 导出")', item)
+        self.assertIn('setPositiveButton("复制错误")', item)
+        self.assertNotIn('v.context as Activity', item)
+    def test_small_window_has_one_translucent_surface_not_opaque_nested_cards(self):
+        sheet = source('sumicya/qself/ui/SettingsOptionSheet.kt')
+        self.assertIn('palette.copy(surface = android.graphics.Color.TRANSPARENT)', sheet)
+        self.assertNotIn('SettingsGlass.', sheet)
+        self.assertIn('WINDOW_TRANSPARENCY, 12', source('sumicya/qself/ui/SettingsAppearanceItem.kt'))
+    def test_bar_rim_is_removed_in_all_render_paths(self):
+        for file, name in [('LiquidGlassPanel.java', 'mHighlightPaint'), ('DropletPanel.java', 'mHighlight.'), ('LiquidGlassHostLayout.java', 'mBorderPaint')]:
+            self.assertNotIn(name, source('sumicya/qself/glass/' + file))
     def test_journal_bounded_epoch_guarded_and_no_messages(self):
         text = source('sumicya/qself/diagnostics/FeatureJournal.kt')
         self.assertIn('ArrayBlockingQueue(128)', text)

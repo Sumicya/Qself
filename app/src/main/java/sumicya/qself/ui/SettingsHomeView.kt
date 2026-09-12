@@ -2,10 +2,6 @@
 package sumicya.qself.ui
 
 import android.content.Context
-import android.content.res.ColorStateList
-import com.google.android.material.card.MaterialCardView
-import android.widget.ImageView
-import io.github.qauxv.R
 import android.graphics.Typeface
 import android.view.Gravity
 import android.view.View
@@ -19,6 +15,7 @@ import android.widget.TextView
 class SettingsHomeView(context: Context) : LinearLayout(context) {
     data class State(val hostLabel: String, val diagnosticEnabled: Boolean, val safeMode: Boolean = false)
     private lateinit var palette: SettingsVisuals.Palette
+    private val expandedSections = linkedSetOf<String>()
     private var boundState: State? = null
     private var boundMode: Int = -1
     private var availableWidth = 0
@@ -63,30 +60,28 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
 
         addView(text("功能", 14, palette.secondary, true), lp(top = 20, bottom = 12))
-        for (pair in HomeCatalog.sections.chunked(if (compact) 1 else 2)) {
-            val row = LinearLayout(context).apply { orientation = HORIZONTAL }
-            for ((index, section) in pair.withIndex()) {
-                val card = LinearLayout(context).apply {
+        for (section in HomeCatalog.sections) {
+            val accordion = SettingsAccordion(context, section.title, section.summary) {
+                LinearLayout(context).apply {
                     orientation = VERTICAL
-                    minimumHeight = dp(104)
-                    setPadding(dp(18), dp(19), dp(18), dp(17))
-                    addView(text(section.title, 20, palette.onContainer, true))
-                    addView(text(section.summary, 13, palette.onContainer), lp(top = 9))
+                    for (group in sumicya.qself.feature.consolidation.FeatureCatalog.groupsForHome(section.id)) {
+                        val row = io.github.qauxv.dsl.cell.TitleValueCell(context).apply {
+                            title = group.title
+                            summary = "${group.sections.sumOf { it.features.size }} 项独立设置"
+                            value = "›"; hasDivider = false
+                            titleView.setTextColor(palette.text); summaryView.setTextColor(palette.secondary)
+                        }
+                        button(row, "group:${group.id}", group.title)
+                        addView(row, LayoutParams(-1, -2).apply { topMargin = dp(2) })
+                    }
                 }
-                val container = MaterialCardView(context).apply {
-                    cardElevation = 0f
-                    radius = dp(28).toFloat()
-                    strokeWidth = 0
-                    setCardBackgroundColor(palette.container)
-                    rippleColor = ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(palette.accent, 31))
-                    addView(card, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-                }
-                button(container, section.id, "${section.title}，${section.summary}", filled = false)
-                row.addView(container, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
-                    if (index > 0) marginStart = dp(12)
-                })
             }
-            addView(row, lp(bottom = 12))
+            accordion.header.tag = section.id
+            accordion.onExpandedChanged = { expanded ->
+                if (expanded) expandedSections.add(section.id) else expandedSections.remove(section.id)
+            }
+            accordion.setExpanded(section.id in expandedSections)
+            addView(accordion, lp(bottom = 4))
         }
 
         addView(text("诊断", 14, palette.secondary, true), lp(top = 16, bottom = 12))
@@ -105,7 +100,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         addView(diagnostics)
 
         addView(text("管理", 14, palette.secondary, true), lp(top = 28, bottom = 12))
-        utility("主题与显示", "Material 3 Expressive · 局部弹窗玻璃", HomeCatalog.THEME)
+        utility("主题与显示", "Material 3 Expressive · 半透明小窗", HomeCatalog.THEME)
         utility("备份与恢复", "保留你的配置，放心调整", HomeCatalog.BACKUP)
         utility("功能与设置", "按场景合并，子项独立选择", HomeCatalog.CATALOG)
         addView(text("同类能力共用入口与处理；各子项保留原来的配置。", 12, palette.secondary), lp(top = 10))
@@ -150,7 +145,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         view.isFocusable = true
         view.isClickable = true
         view.minimumHeight = maxOf(view.minimumHeight, dp(48))
-        if (filled) view.background = SettingsVisuals.surface(context, palette, 24, true, view)
+        if (filled) view.background = SettingsVisuals.surface(context, palette, 12, true, view)
         view.setOnClickListener { dispatch(id) }
         view.accessibilityDelegate = object : AccessibilityDelegate() {
             override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
@@ -166,6 +161,30 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
             }
         }
         if (view is ViewGroup) hideDecorativeChildren(view)
+    }
+
+    override fun onSaveInstanceState(): android.os.Parcelable = SavedState(super.onSaveInstanceState()).apply {
+        opened = expandedSections.toTypedArray()
+    }
+    override fun onRestoreInstanceState(state: android.os.Parcelable?) {
+        if (state !is SavedState) { super.onRestoreInstanceState(state); return }
+        super.onRestoreInstanceState(state.superState)
+        expandedSections.clear(); expandedSections.addAll(state.opened)
+        val previous = boundState
+        boundState = null
+        previous?.let { bind(it, boundMode, dispatch) }
+    }
+    class SavedState : BaseSavedState {
+        var opened = emptyArray<String>()
+        constructor(state: android.os.Parcelable?) : super(state)
+        constructor(parcel: android.os.Parcel) : super(parcel) { opened = parcel.createStringArray() ?: emptyArray() }
+        override fun writeToParcel(out: android.os.Parcel, flags: Int) { super.writeToParcel(out, flags); out.writeStringArray(opened) }
+        companion object {
+            @JvmField val CREATOR = object : android.os.Parcelable.Creator<SavedState> {
+                override fun createFromParcel(parcel: android.os.Parcel) = SavedState(parcel)
+                override fun newArray(size: Int): Array<SavedState?> = arrayOfNulls(size)
+            }
+        }
     }
 
     private fun lp(top: Int = 0, bottom: Int = 0) = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {

@@ -9,7 +9,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
-import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -220,8 +219,6 @@ final class LiquidGlassHostLayout extends FrameLayout {
 
     private final Paint mBackdropPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mTintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint mGlossPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint mBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF mBounds = new RectF();
 
     private float mCornerRadius;
@@ -374,21 +371,12 @@ final class LiquidGlassHostLayout extends FrameLayout {
         if (!mUseAgsl) {
             if (mDarkMode) {
                 mTintPaint.setColor(0x33000000);
-                mBorderPaint.setColor(0x1FFFFFFF);
                 mBackdropPaint.setColor(0x40000000);
             } else {
                 mTintPaint.setColor(0x4DFFFFFF);
-                mBorderPaint.setColor(0x2EFFFFFF);
                 mBackdropPaint.setColor(0x8CFFFFFF);
             }
-            mBorderPaint.setStyle(Paint.Style.STROKE);
-            mBorderPaint.setStrokeWidth(Math.max(mDensity * 0.8f, 0.75f));
-            if (getWidth() > 0 && getHeight() > 0) {
-                mGlossPaint.setShader(new LinearGradient(
-                        0f, 0f, 0f, getHeight() * 0.45f,
-                        mDarkMode ? 0x14FFFFFF : 0x30FFFFFF,
-                        0x00FFFFFF, Shader.TileMode.CLAMP));
-            }
+
         }
     }
 
@@ -430,12 +418,7 @@ final class LiquidGlassHostLayout extends FrameLayout {
             mTuner.onSize(w - mShadowPad * 2, h - mShadowPad * 2, mCornerRadius);
             return;
         }
-        if (!mUseAgsl) {
-            mGlossPaint.setShader(new LinearGradient(
-                    0f, 0f, 0f, h * 0.45f,
-                    mDarkMode ? 0x1FFFFFFF : 0x40FFFFFF,
-                    0x00FFFFFF, Shader.TileMode.CLAMP));
-        }
+
     }
 
     private float sampleScale() {
@@ -589,12 +572,8 @@ final class LiquidGlassHostLayout extends FrameLayout {
         canvas.drawRoundRect(mBounds, r, r, mBackdropPaint);
 
         canvas.drawRoundRect(mBounds, r, r, mTintPaint);
-        canvas.drawRoundRect(mBounds, r, r, mGlossPaint);
 
-        float half = mBorderPaint.getStrokeWidth() * 0.5f;
-        RectF border = new RectF(half, half,
-                getWidth() - half, getHeight() - half);
-        canvas.drawRoundRect(border, r - half, r - half, mBorderPaint);
+
     }
 
     /* ---------------- liquid motion ---------------- */

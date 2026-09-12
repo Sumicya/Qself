@@ -161,7 +161,6 @@ final class LiquidGlassPanel extends View {
     private boolean mNight;
     private int mBaseColor;
     private final Paint mSurfacePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint mHighlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path mClip = new Path();
 
     private boolean mSupported;
@@ -199,9 +198,6 @@ final class LiquidGlassPanel extends View {
         mBaseColor = GlassConfig.backgroundColor(night);
         mSurfacePaint.setColor(night ? 0x662C2C2E : 0x66F2F2F7);
         // iosIndicatorSpecular: BloomStroke(white @ 0.12), width 1.dp, alpha 0.75.
-        mHighlightPaint.setStyle(Paint.Style.STROKE);
-        mHighlightPaint.setStrokeWidth(mDensity);
-        mHighlightPaint.setColor(night ? 0x1FFFFFFF : 0x2EFFFFFF);
         invalidate();
     }
 
@@ -271,15 +267,12 @@ final class LiquidGlassPanel extends View {
             }
         }
 
-        // Surface wash and rim highlight sit on top of the refracted backdrop —
+        // Surface wash sits on top of the refracted backdrop —
         // this is what carries legibility, not a heavy blur.
         mSurfacePaint.setColor(GlassConfig.background == 0
                 ? (mNight ? 0x662C2C2E : 0x66F2F2F7) : GlassConfig.backgroundColor(mNight));
         canvas.drawRoundRect(0, 0, w, h, radius, radius, mSurfacePaint);
         drawInteractiveHighlight(canvas, w, h, radius);
-        float half = mHighlightPaint.getStrokeWidth() * 0.5f;
-        canvas.drawRoundRect(half, half, w - half, h - half,
-                radius - half, radius - half, mHighlightPaint);
         canvas.restoreToCount(materialSave);
     }
 

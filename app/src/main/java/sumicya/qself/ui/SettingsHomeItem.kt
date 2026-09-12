@@ -19,6 +19,7 @@ class SettingsHomeItem(
     override val isVoidBackground = true
     override fun createViewHolder(context: Context, parent: ViewGroup): RecyclerView.ViewHolder =
         object : RecyclerView.ViewHolder(SettingsHomeView(context).apply {
+            id = io.github.qauxv.R.id.qself_settings_home
             layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }) { }
     override fun bindView(viewHolder: RecyclerView.ViewHolder, position: Int, context: Context) {

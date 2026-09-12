@@ -268,17 +268,17 @@ public class SettingsVisualTest {
         }
     }
 
-    @Test public void paneResizeReflowsColumnsAndKeepsRealItemActions() {
+    @Test public void paneResizeKeepsFullWidthAccordionsAndRealItemActions() {
         List<String> clicks = new ArrayList<>();
         NativePage page = page(context(false, 1f, 412, false), 412, 915, clicks);
-        assertSame(page.home().findViewWithTag("appearance").getParent(), page.home().findViewWithTag("chat").getParent());
+        assertNotSame(page.home().findViewWithTag("appearance").getParent(), page.home().findViewWithTag("chat").getParent());
         measurePage(page, 320, 915, View.MeasureSpec.EXACTLY);
         assertNotSame(page.home().findViewWithTag("appearance").getParent(), page.home().findViewWithTag("chat").getParent());
         verifyTextBounds(page.home()); verifyContainedChildren(page.home());
         page.home().findViewWithTag(HomeCatalog.CATALOG).performClick();
         assertEquals(java.util.Collections.singletonList(HomeCatalog.CATALOG), clicks);
         measurePage(page, 480, 915, View.MeasureSpec.EXACTLY);
-        assertSame(page.home().findViewWithTag("appearance").getParent(), page.home().findViewWithTag("chat").getParent());
+        assertNotSame(page.home().findViewWithTag("appearance").getParent(), page.home().findViewWithTag("chat").getParent());
         assertEquals(480, page.home().getWidth());
     }
 
@@ -432,7 +432,44 @@ public class SettingsVisualTest {
             assertNotNull(id, button.getContentDescription());
             assertTrue(id, button.performClick());
         }
+        expected.removeIf(id -> HomeCatalog.sections.stream().anyMatch(section -> section.getId().equals(id)));
         assertEquals(expected, clicked);
+    }
+
+    @Test public void homeExpansionDoesNotNavigateAndSurvivesRebindAndSavedState() {
+        List<String> clicks = new ArrayList<>();
+        SettingsHomeView view = home(context(false, 1f, 412, false), false, 2, clicks);
+        layout(view, 412);
+        SettingsAccordion accordion = (SettingsAccordion) view.findViewWithTag("chat").getParent();
+        assertFalse(accordion.getExpanded());
+        accordion.setExpanded(true, false);
+        layout(view, 412);
+        assertTrue(clicks.isEmpty());
+        assertNotNull(view.findViewWithTag("group:qself-messages"));
+        view.bind(new SettingsHomeView.State("QQ 9.2.10", true, false), 2, id -> { clicks.add(id); return Unit.INSTANCE; });
+        assertTrue(((SettingsAccordion) view.findViewWithTag("chat").getParent()).getExpanded());
+        android.os.Parcelable saved = view.onSaveInstanceState();
+        SettingsHomeView restored = home(view.getContext(), false, 2, clicks);
+        restored.onRestoreInstanceState(saved);
+        layout(restored, 412);
+        assertTrue(((SettingsAccordion) restored.findViewWithTag("chat").getParent()).getExpanded());
+        restored.findViewWithTag("group:qself-messages").performClick();
+        assertEquals(java.util.Collections.singletonList("group:qself-messages"), clicks);
+        verifyTextBounds(restored); verifyContainedChildren(restored);
+        render("home-expanded", restored);
+    }
+
+    @Test public void smallWindowActuallyCompositesWithBackgroundWithoutFadingText() {
+        for (boolean dark : new boolean[]{false, true}) {
+            Context context = context(dark, 1f, 412, false);
+            android.graphics.drawable.Drawable window = SettingsAppearanceItem.INSTANCE.windowMaterial(context, 12);
+            window.setBounds(0, 0, 200, 100);
+            Bitmap first = drawHardware(200, 100, c -> { c.drawColor(Color.BLUE); window.draw(c); });
+            Bitmap second = drawHardware(200, 100, c -> { c.drawColor(Color.RED); window.draw(c); });
+            assertNotEquals(first.getPixel(100, 50), second.getPixel(100, 50));
+            assertTrue(window.getAlpha() < 255);
+            first.recycle(); second.recycle();
+        }
     }
 
     @Test public void rebindReplacesClickHandlersAndStateWithoutDuplicatingViews() {
@@ -471,7 +508,8 @@ public class SettingsVisualTest {
         verifyTextBounds(cell);
         assertTrue(cell.getSummaryView().getTop() >= cell.getTitleView().getBottom());
         assertTrue(cell.isClickOnSwitch(cell.getSwitchView().getLeft()));
-        assertFalse(cell.isClickOnSwitch(0));
+        assertTrue(cell.isClickOnSwitch(0));
+        assertFalse(cell.isClickOnSwitch(cell.getSwitchView().getRight() + 1));
         assertEquals(cell.getTitle(), cell.getSwitchView().getContentDescription());
         cell.setHasError(true);
         cell.draw(new Canvas(Bitmap.createBitmap(288, cell.getHeight(), Bitmap.Config.ARGB_8888)));
@@ -493,6 +531,9 @@ public class SettingsVisualTest {
         layout(cell, 380);
         assertEquals(56, cell.getHeight());
         assertEquals(48, cell.getSwitchView().getWidth());
+        assertEquals(0, cell.getSwitchView().getLeft());
+        assertEquals(0, cell.getSwitchView().getTop());
+        assertEquals(cell.getHeight(), cell.getSwitchView().getHeight());
         assertTrue(cell.getSwitchView().getRight() < ((View) cell.getTitleView().getParent()).getLeft());
         final int[] changes = {0};
         cell.getSwitchView().setOnCheckedChangeListener((button, value) -> changes[0]++);
@@ -552,7 +593,7 @@ public class SettingsVisualTest {
             String[][] data = {{"底部导航栏液态玻璃", "左侧开关；点击说明配置文字、数量与玻璃"},
                 {"消息防撤回", "关闭这一项，不改变其他选项"}, {"版本不支持的功能", "当前不可用；保留原配置"},
                 {"出现错误的功能", "查看功能错误记录，其他开关不受影响"},
-                {"较长的说明自动换行", "左侧方形状态始终居中，说明按照系统字号展开；不压缩文字，也不增加无意义的行间空白。"}};
+                {"较长的说明自动换行", "左侧状态区贴边并铺满行高，说明按照系统字号展开；不压缩文字，也不增加无意义的行间空白。"}};
             page.list.getRecycler().setAdapter(new RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 @Override public int getItemCount() { return data.length; }
                 @Override public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int type) {
@@ -604,7 +645,7 @@ public class SettingsVisualTest {
             }
             SettingsHomeView view = home(context, false, 0, new ArrayList<>());
             layout(view, 412);
-            assertTrue(view.findViewWithTag("appearance") instanceof com.google.android.material.card.MaterialCardView);
+            assertTrue(view.findViewWithTag("appearance").getParent() instanceof SettingsAccordion);
             assertTrue(new TitleValueCell(context).getSwitchView() instanceof SquareStateControl);
         }
     }

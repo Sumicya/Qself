@@ -28,6 +28,8 @@ import android.widget.TextView
 import cc.ioctl.util.HookUtils.BeforeAndAfterHookedMethod
 import cc.ioctl.util.HookUtils.hookBeforeAndAfterIfEnabled
 import io.github.qauxv.util.LayoutHelper
+import cc.ioctl.util.hookAfterIfEnabled
+import sumicya.qself.glass.ExactCountCompat
 import cc.ioctl.util.hookBeforeIfEnabled
 import com.github.kyuubiran.ezxhelper.utils.findFieldObjectAs
 import com.github.kyuubiran.ezxhelper.utils.hookAfter
@@ -48,7 +50,6 @@ import io.github.qauxv.util.requireMinTimVersion
 import io.github.qauxv.util.xpcompat.XC_MethodHook.MethodHookParam
 import me.ketal.util.findViewByType
 import xyz.nextalone.util.get
-import xyz.nextalone.util.throwOrTrue
 
 /**
  * 显示具体消息数量
@@ -58,11 +59,12 @@ import xyz.nextalone.util.throwOrTrue
 @FunctionHookEntry
 @UiItemAgentEntry
 object ShowMsgCount : CommonSwitchFunctionHook(
-    targets = arrayOf(
-        CCustomWidgetUtil_updateCustomNoteTxt_NT,
-        AIOTitleVB_updateLeftTopBack_NT,
-        NCustomWidgetUtil_updateCustomNoteTxt,
-    ),
+    targets = when {
+        requireMinQQVersion(QQVersion.QQ_9_2_30) -> emptyArray()
+        requireMinQQVersion(QQVersion.QQ_9_0_8) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA) ->
+            arrayOf(NCustomWidgetUtil_updateCustomNoteTxt)
+        else -> arrayOf(CCustomWidgetUtil_updateCustomNoteTxt_NT, AIOTitleVB_updateLeftTopBack_NT, NCustomWidgetUtil_updateCustomNoteTxt)
+    },
     targetProc = SyncUtils.PROC_ANY
 ) {
 
@@ -75,24 +77,32 @@ object ShowMsgCount : CommonSwitchFunctionHook(
     """.trimIndent()
     override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.MESSAGE_CATEGORY
 
-    override fun initOnce() = throwOrTrue {
+    override fun initOnce(): Boolean {
+        var installed = 0
+        fun part(label: String, block: () -> Unit) {
+            try { block(); installed++ }
+            catch (e: Exception) { traceError(IllegalStateException("显示具体消息数量 · $label 适配失败", e)) }
+        }
+        part("会话列表 / 返回按钮") {
 
         if (requireMinQQVersion(QQVersion.QQ_9_0_8) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)) {
             // 群聊消息数量 + 群聊左上角返回
             val clz = Initiator.loadClass("com.tencent.mobileqq.quibadge.QUIBadge")
-            val (updateNumName, mNumName, mTextName) = if (requireMinQQVersion(QQVersion.QQ_9_0_15) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)) {
-                Triple("updateNum", "mNum", "mText")
-            } else {
-                Triple("w", "j", "n")
-            }
-            val updateNum = clz.getDeclaredMethod(updateNumName, Int::class.java)
-            val mNum = clz.getDeclaredField(mNumName).apply { isAccessible = true }
-            val mText = clz.getDeclaredField(mTextName).apply { isAccessible = true }
-            hookBeforeIfEnabled(updateNum) { param ->
-                val value = param.args[0] as Int
-                mNum.set(param.thisObject, value)
-                mText.set(param.thisObject, value.toString())
-                param.result = null
+            val modernNames = requireMinQQVersion(QQVersion.QQ_9_0_15) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)
+            val methods = ExactCountCompat.updateMethods(clz, if (modernNames) "updateNum" else "w")
+            check(methods.isNotEmpty()) { "未找到已知的数字徽标更新方法" }
+            val text = ExactCountCompat.textField(clz, if (modernNames) "mText" else "n")
+            methods.forEach { method ->
+                hookAfterIfEnabled(method) { param ->
+                    if (!param.hasThrowable()) {
+                        val count = param.args[0] as Int
+                        // Keep QQ's layout, visibility, zero/dot semantics and side effects.
+                        if (count > 0 && text.get(param.thisObject) != count.toString()) {
+                            text.set(param.thisObject, count.toString())
+                            (param.thisObject as? View)?.apply { requestLayout(); invalidate() }
+                        }
+                    }
+                }
             }
         } else {
             if (requireMinQQVersion(QQVersion.QQ_8_9_63_BETA_11345)) {
@@ -121,6 +131,7 @@ object ShowMsgCount : CommonSwitchFunctionHook(
                 })
                 // 群聊左上角返回
                 DexKit.requireMethodFromCache(AIOTitleVB_updateLeftTopBack_NT).hookAfter {
+                    if (!isEnabled) return@hookAfter
                     if (it.args[0] is Int) {
                         val count = it.args[0] as Int
                         if (count > 0) {
@@ -140,6 +151,8 @@ object ShowMsgCount : CommonSwitchFunctionHook(
             }
         }
 
+        }
+        part("总消息数量") {
         if (requireMinQQVersion(QQVersion.QQ_9_2_30)) {
             // 总消息数量 9.2.30 ~ 9.2.55
             val clz = Initiator.loadClass("com.tencent.mobileqq.activity.framebusiness.controllerinject.FrameControllerInjectImpl")
@@ -196,14 +209,18 @@ object ShowMsgCount : CommonSwitchFunctionHook(
             })
         }
 
+        }
         if (requireMinQQVersion(QQVersion.QQ_8_9_63_BETA_11345)) {
+            part("小程序菜单") {
             // 小程序菜单键
             Initiator.loadClass("com.tencent.qqmini.sdk.core.utils.CustomWidgetUtil")
                 .getDeclaredMethod("updateCustomNoteTxt", TextView::class.java, Int::class.java)
                 .hookAfter { param ->
+                    if (!isEnabled) return@hookAfter
                     (param.args[0] as TextView).text = "${param.args[1] as Int}"
                 }
 
+            }
             // 隐藏会话(右上角+悬浮消息列表)
             val (floatViewManagerClass, msgUnreadCallbackClass) = when {
                 requireMinQQVersion(QQVersion.QQ_9_2_30) -> Pair(// 9.2.30
@@ -230,23 +247,29 @@ object ShowMsgCount : CommonSwitchFunctionHook(
                     "com.tencent.mobileqq.activity.miniaio.i", "com.tencent.mobileqq.activity.miniaio.h"
                 )
             }
+            part("隐藏会话入口") {
             // 隐藏会话右上角
             Initiator.loadClass(floatViewManagerClass)
                 .getDeclaredMethod("updateUnreadCount", Int::class.java, Boolean::class.java)
                 .hookAfter { param ->
+                    if (!isEnabled) return@hookAfter
                     (param.thisObject.findFieldObjectAs<ViewGroup> {
                         type == View::class.java
                     }.findViewByType(TextView::class.java) as TextView).text = "${param.args[0] as Int}"
                 }
+            }
+            part("隐藏会话列表") {
             // 隐藏会话悬浮消息列表
             Initiator.loadClass(msgUnreadCallbackClass)
                 .getDeclaredMethod("updateUnreadCount", Int::class.java, Boolean::class.java)
                 .hookAfter { param ->
+                    if (!isEnabled) return@hookAfter
                     param.thisObject.findFieldObjectAs<TextView> {
                         type == TextView::class.java
                     }.text = "${param.args[0] as Int}"
                 }
+            }
         }
-
+        return installed > 0
     }
 }

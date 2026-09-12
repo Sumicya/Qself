@@ -149,7 +149,6 @@ final class DropletPanel extends View {
 
     private final Paint mWash = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mPressTint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint mHighlight = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mInnerShadow = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path mClip = new Path();
     private final Paint mPillSurface = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -407,9 +406,6 @@ final class DropletPanel extends View {
         }
         setTheme(night);
         mPressTint.setColor(0x08000000);
-        mHighlight.setStyle(Paint.Style.STROKE);
-        mHighlight.setStrokeWidth(density);
-        mHighlight.setColor(0x1FFFFFFF);
         mInnerShadow.setStyle(Paint.Style.FILL);
         setWillNotDraw(false);
     }
@@ -485,11 +481,6 @@ final class DropletPanel extends View {
             drawRestingTab(canvas);
         }
         if (p > 0f) {
-            mHighlight.setAlpha(Math.round(0x1F * p));
-            float half = mHighlight.getStrokeWidth() * 0.5f;
-            canvas.drawRoundRect(half, half, w - half, h - half,
-                    radius - half, radius - half, mHighlight);
-
             // InnerShadow(radius = 8dp * progress, black @ 0.15, alpha = progress)
             float inner = 8f * mDensity * p;
             if (inner > 0.5f && mInnerShader != null

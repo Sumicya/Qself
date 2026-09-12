@@ -30,7 +30,34 @@ object GlassAppearanceEditor {
         return SettingsVisuals.palette(themed, mode)
     }
 
+    private fun showWindow(activity: Activity) {
+        var draft = SettingsAppearanceItem.windowTransparency
+        val content = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = SettingsVisuals.dp(activity, 20); setPadding(pad, pad, pad, pad)
+        }
+        val label = TextView(activity).apply { text = "小窗背景透明度：$draft%\n仅改变背景，文字保持不透明。颜色跟随设置页。" }
+        content.addView(label)
+        val slider = Slider(activity).apply {
+            valueFrom = 0f; valueTo = 35f; stepSize = 1f; value = draft.toFloat(); contentDescription = "小窗背景透明度"
+        }
+        content.addView(slider)
+        val dialog = MaterialAlertDialogBuilder(activity).setTitle("MD3 小窗外观")
+            .setView(content).setPositiveButton("保存") { _, _ ->
+                ConfigManager.getDefaultConfig().putInt(SettingsAppearanceItem.WINDOW_TRANSPARENCY, draft)
+                SettingsAppearanceItem.refreshLabel()
+            }.setNegativeButton("取消", null).create()
+        dialog.setOnShowListener { dialog.window?.setBackgroundDrawable(SettingsAppearanceItem.windowMaterial(activity, draft)) }
+        slider.addOnChangeListener { _, value, _ ->
+            draft = value.toInt()
+            label.text = "小窗背景透明度：$draft%\n仅改变背景，文字保持不透明。颜色跟随设置页。"
+            dialog.window?.setBackgroundDrawable(SettingsAppearanceItem.windowMaterial(activity, draft))
+        }
+        dialog.show()
+    }
+
     fun show(activity: Activity, bar: Boolean) {
+        if (!bar) { showWindow(activity); return }
         val prefix = if (bar) GlassConfig.PREFIX else OVERLAY
         val draft = linkedMapOf(
             "transparency" to read(prefix, "transparency", 0, 0..100),
@@ -43,7 +70,7 @@ object GlassAppearanceEditor {
             "material" to SettingsAppearanceItem.overlayMode)
         val content = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 0, 24, 8) }
         val preview = TextView(activity).apply {
-            text = if (bar) "仅示意材质 · 非 QQ 截图\n文字和图标不随玻璃透明度变淡" else "等待实际背景取景\n常规页面仍使用不透明 MD3"
+            text = if (bar) "背景色 / 透明度示意，非 QQ 截图\n实际折射效果返回 QQ 查看 · 无边缘高光" else "等待实际背景取景\n常规页面仍使用不透明 MD3"
             gravity = Gravity.CENTER; textSize = 14f
         }
         val sample = FrameLayout(activity).apply { addView(preview, FrameLayout.LayoutParams(-1, -1)) }
@@ -57,11 +84,9 @@ object GlassAppearanceEditor {
             val p = palette(activity, draft.getValue("tone"), mode)
             val color = if (draft.getValue("background") == 2) { if (!bar) p.container else if (p.dark) 0xff18243f.toInt() else 0xffe3eaff.toInt() } else p.surface
             val flat = SettingsVisuals.surface(activity, p.copy(surface = color), 20)
-            SettingsGlass.dispose(preview.background)
-            preview.background = SettingsGlass.material(activity, p, 20, preview, flat).apply {
+            preview.background = flat.apply {
                 alpha = (255 * (100 - draft.getValue("transparency")) / 100f).toInt()
             }
-            if (!bar) SettingsGlass.observeStatus(preview.background) { preview.text = it }
             sample.setBackgroundColor(p.background)
             preview.setTextColor(p.text)
         }
@@ -114,6 +139,6 @@ object GlassAppearanceEditor {
                 if (bar) GlassConfig.load(activity)
                 SettingsAppearanceItem.refreshLabel()
                 Toast.makeText(activity, if (bar) "返回 QQ 首页后刷新；底栏总开关需重启" else "下次打开浮层生效", Toast.LENGTH_SHORT).show()
-            }.setNegativeButton("取消", null).show().setOnDismissListener { SettingsGlass.dispose(preview.background) }
+            }.setNegativeButton("取消", null).show()
     }
 }

@@ -39,6 +39,7 @@ qself-purify	appearance	统一净化	effects	动画与互动	sumicya.qself.featu
 qself-purify	appearance	统一净化	effects	动画与互动	sumicya.qself.feature.chat.DisableLightInteraction
 qself-purify	appearance	统一净化	effects	动画与互动	sumicya.qself.feature.ui.RemoveSuperQQShow
 # 消息工具
+qself-messages	chat	消息工具	counts	消息数量	cc.ioctl.hook.msg.ShowMsgCount
 qself-messages	chat	消息工具	actions	统一消息菜单	cc.hicore.hook.RepeaterPlus
 qself-messages	chat	消息工具	actions	统一消息菜单	cc.ioctl.hook.msg.CopyCardMsg
 qself-messages	chat	消息工具	actions	统一消息菜单	io.github.duzhaokun123.hook.MessageCopyHook

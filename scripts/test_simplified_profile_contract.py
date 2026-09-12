@@ -73,7 +73,7 @@ class ProfileContract(unittest.TestCase):
                      'sumicya/qself/ui/SettingsHomeView.kt','io/github/qauxv/activity/SettingsUiFragmentHostActivity.kt'):
             self.assertNotIn('SettingsGlass.', (SRC / file).read_text())
         self.assertIn('Theme.Material3Expressive.DayNight.NoActionBar', (ROOT / 'app/src/main/res/values/qself_expressive.xml').read_text())
-        self.assertIn('MaterialCardView(context)', (SRC / 'sumicya/qself/ui/SettingsHomeView.kt').read_text())
+        self.assertIn('SettingsAccordion(context', (SRC / 'sumicya/qself/ui/SettingsHomeView.kt').read_text())
     def test_generated_registries_filter_before_emitting_instances(self):
         for file in ('FunctionHookEntryItemProcessor.kt','UiItemAgentEntryProcessor.kt'):
             s = (ROOT / 'libs/ksp/src/main/kotlin/cn/lliiooll/processors' / file).read_text()

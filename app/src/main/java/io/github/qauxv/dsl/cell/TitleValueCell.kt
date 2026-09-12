@@ -103,6 +103,7 @@ class TitleValueCell(
         // switch view
         switchView = SquareStateControl(context).apply {
             visibility = GONE
+            edgeAttached = true
             // disable click for default because this behavior is managed by the recycler view,
             // but they can still set onCheckedChangeListener if they want
             isClickable = false
@@ -200,12 +201,14 @@ class TitleValueCell(
         if (control.visibility != GONE) {
             control.measure(MeasureSpec.makeMeasureSpec(if (isHasSwitch) 48.dp else (width * .30f).toInt(),
                 if (isHasSwitch) MeasureSpec.EXACTLY else MeasureSpec.AT_MOST), unspecified)
-            trailingWidth = control.measuredWidth + 12.dp
+            trailingWidth = control.measuredWidth + if (isHasSwitch) 0 else 12.dp
         }
         textColumn.measure(MeasureSpec.makeMeasureSpec((width - 32.dp - trailingWidth).coerceAtLeast(0), MeasureSpec.EXACTLY), unspecified)
         val height = maxOf(minimumHeight, textColumn.measuredHeight + 16.dp,
-            if (control.visibility == GONE) 0 else control.measuredHeight + 8.dp)
+            if (control.visibility == GONE || isHasSwitch) 0 else control.measuredHeight + 8.dp)
         setMeasuredDimension(width, resolveSize(height, heightMeasureSpec))
+        if (isHasSwitch) switchView.measure(MeasureSpec.makeMeasureSpec(48.dp, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(measuredHeight, MeasureSpec.EXACTLY))
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
@@ -217,7 +220,8 @@ class TitleValueCell(
         textColumn.layout(columnLeft, columnTop, columnLeft + textColumn.measuredWidth, columnTop + textColumn.measuredHeight)
         for (control in arrayOf(valueView, switchView)) if (control.visibility != GONE) {
             val atLeft = if (control === switchView) !rtl else rtl
-            val x = if (atLeft) 16.dp else measuredWidth - 16.dp - control.measuredWidth
+            val inset = if (control === switchView) 0 else 16.dp
+            val x = if (atLeft) inset else measuredWidth - inset - control.measuredWidth
             val y = (measuredHeight - control.measuredHeight) / 2
             control.layout(x, y, x + control.measuredWidth, y + control.measuredHeight)
         }

@@ -9,6 +9,8 @@ import androidx.appcompat.widget.AppCompatCheckBox
 
 /** Native checkable semantics, 48dp hit target, centered square visual: ✓ / × / −. */
 class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
+    var edgeAttached = false
+    private val shape = android.graphics.Path()
     var unavailable = false
         set(value) { field = value; refreshDrawableState(); invalidate() }
     var failed = false
@@ -46,8 +48,8 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
     override fun onDraw(canvas: Canvas) {
         val p = paletteOverride ?: SettingsVisuals.palette(context)
         val size = SettingsVisuals.dp(context, 32).toFloat()
-        val x = (width - size) / 2f
-        val y = (height - size) / 2f
+        val x = if (edgeAttached) 0f else (width - size) / 2f
+        val y = if (edgeAttached) 0f else (height - size) / 2f
         paint.style = Paint.Style.FILL
         val checkedFraction = if (progress == 1f) { if (isChecked) 1f else 0f }
             else if (isChecked) progress else 1f - progress
@@ -56,12 +58,20 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
             else androidx.core.graphics.ColorUtils.blendARGB(p.surface, p.container, .35f + .65f * checkedFraction)
         paint.color = background
         paint.alpha = 255
-        canvas.drawRoundRect(x, y, x + size, y + size, 4f, 4f, paint)
+        if (edgeAttached) {
+            val radius = SettingsVisuals.dp(context, 12).toFloat()
+            val left = layoutDirection != LAYOUT_DIRECTION_RTL
+            shape.reset()
+            shape.addRoundRect(0f, 0f, width.toFloat(), height.toFloat(),
+                if (left) floatArrayOf(radius, radius, 0f, 0f, 0f, 0f, radius, radius)
+                else floatArrayOf(0f, 0f, radius, radius, radius, radius, 0f, 0f), android.graphics.Path.Direction.CW)
+            canvas.drawPath(shape, paint)
+        } else canvas.drawRoundRect(x, y, x + size, y + size, 4f, 4f, paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = resources.displayMetrics.density
         paint.color = p.rim
         paint.alpha = ((1f - checkedFraction) * 255).toInt()
-        canvas.drawRoundRect(x, y, x + size, y + size, 4f, 4f, paint)
+        if (!edgeAttached) canvas.drawRoundRect(x, y, x + size, y + size, 4f, 4f, paint)
         paint.style = Paint.Style.FILL
         val foreground = if (failed) com.google.android.material.color.MaterialColors.getColor(context,
             com.google.android.material.R.attr.colorOnErrorContainer, p.text)

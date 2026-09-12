@@ -49,7 +49,7 @@ class UiAgentItem(
     var beforeOpenDetails: (() -> Unit)? = null
 
     override val isSearchable: Boolean = true
-    override val isClickable: Boolean get() = isEnabled
+    override val isClickable: Boolean get() = isEnabled || hasFailure()
     override val isEnabled: Boolean
         get() {
             val agent = agentProvider.uiItemAgent
@@ -130,16 +130,7 @@ class UiAgentItem(
         // value state observers are registered in the fragment, we only need to update the value
         val valueStateValue: String? = valueState?.value
         val switchAgent: ISwitchCellAgent? = agent.switchProvider
-        val hasError = if (agentProvider is IDynamicHook) {
-            val hook: IDynamicHook = agentProvider
-            (hook.isInitialized && !hook.isInitializationSuccessful) || run {
-                if (hook is RuntimeErrorTracer) {
-                    hook.hasRuntimeErrors
-                } else {
-                    hook.runtimeErrors.isNotEmpty()
-                }
-            }
-        } else false
+        val hasError = hasFailure()
         cell.hasError = hasError
         cell.isUnavailable = agentProvider is IDynamicHook && !agentProvider.isAvailable
         if (switchAgent != null) {
@@ -151,8 +142,8 @@ class UiAgentItem(
             cell.summary = if (toBeShownAtSummary.isNullOrEmpty()) null else toBeShownAtSummary
             cell.isHasSwitch = true
             cell.switchView.setCheckedWithoutAnimation(switchAgent.isChecked)
-            cell.switchView.isEnabled = switchAgent.isCheckable
-            cell.switchView.isClickable = switchAgent.isCheckable
+            cell.switchView.isEnabled = isEnabled && switchAgent.isCheckable
+            cell.switchView.isClickable = isEnabled && switchAgent.isCheckable
             cell.switchView.setOnCheckedChangeListener(mCheckChangedListener)
         } else {
             // simple case, as it is
@@ -165,13 +156,15 @@ class UiAgentItem(
                 cell.summary?.let { "\n$it" }.orEmpty()
         }
         cell.setOnClickListener(mOnClickListener)
+        cell.setOnLongClickListener { onLongClick(it, position, -1, -1) }
     }
 
     override fun onItemClick(v: View, position: Int, x: Int, y: Int) {
         val agent = agentProvider.uiItemAgent
         val cell = v as TitleValueCell
-        // TODO: 2022-02-09 if ClassCastException, it means the context is not Activity use base.context
-        val activity: Activity = v.context as Activity
+        if (hasFailure()) { showFailure(v); return }
+        if (!isEnabled) return
+        val activity = findActivity(v.context) ?: return
         val onClick = agent.onClickListener
         if (onClick != null) {
             beforeOpenDetails?.invoke()
@@ -184,10 +177,60 @@ class UiAgentItem(
         }
     }
 
-    override val isLongClickable: Boolean = false
+    override val isLongClickable: Boolean get() = agentProvider is IDynamicHook || agentProvider is RuntimeErrorTracer
 
     override fun onLongClick(v: View, position: Int, x: Int, y: Int): Boolean {
-        // nop
-        return false
+        if (!isLongClickable) return false
+        showFailure(v)
+        return true
+    }
+
+    private fun hasFailure(): Boolean =
+        (agentProvider is IDynamicHook && ((agentProvider.isInitialized && !agentProvider.isInitializationSuccessful) || agentProvider.runtimeErrors.isNotEmpty())) ||
+            (agentProvider is RuntimeErrorTracer && agentProvider.hasRuntimeErrors)
+
+    private fun showFailure(view: View) {
+        val activity = findActivity(view.context) ?: return
+        val report = buildString {
+            append(name).append("\n").append(agentProvider.javaClass.name).append("\n")
+            if (agentProvider is IDynamicHook) {
+                append("配置：").append(if (agentProvider.isEnabled) "开启" else "关闭")
+                append("；初始化：").append(if (!agentProvider.isInitialized) "尚未尝试" else if (agentProvider.isInitializationSuccessful) "已完成" else "失败").append("\n")
+            }
+            val errors = if (agentProvider is RuntimeErrorTracer)
+                io.github.qauxv.fragment.FuncStatListFragment.collectFunctionErrors(agentProvider).toList()
+                else (agentProvider as? IDynamicHook)?.runtimeErrors.orEmpty()
+            if (errors.isEmpty()) append("当前进程没有记录到异常堆栈；不代表其他进程没有错误。")
+            errors.takeLast(16).forEach { append("\n").append(android.util.Log.getStackTraceString(it).take(12000)) }
+            append("\n\n点击左侧开关仅修改配置；复制和导出不会修改开关。完整报告可能含异常上下文，分享前请检查。")
+        }
+        val text = android.widget.TextView(activity).apply {
+            this.text = report; textSize = 13f; setTextIsSelectable(true)
+            val pad = sumicya.qself.ui.SettingsVisuals.dp(activity, 20); setPadding(pad, pad, pad, pad)
+        }
+        val builder = com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+            .setTitle("功能详情 / 错误输出")
+            .setView(android.widget.ScrollView(activity).apply { addView(text) })
+            .setPositiveButton("复制错误") { _, _ -> xyz.nextalone.util.SystemServiceUtils.copyToClipboard(activity, report); Toasts.info(activity, "已复制") }
+            .setNegativeButton("关闭", null)
+        if (activity is io.github.qauxv.activity.SettingsUiFragmentHostActivity) {
+            builder.setNeutralButton("完整报告 / 导出") { _, _ ->
+                beforeOpenDetails?.invoke()
+                activity.presentFragment(io.github.qauxv.fragment.FuncStatusDetailsFragment.newInstance(identifier))
+            }
+        }
+        builder.show()
+    }
+
+    companion object {
+        fun findActivity(context: Context): Activity? {
+            var current = context
+            val visited = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Context, Boolean>())
+            while (visited.add(current)) {
+                if (current is Activity) return current
+                current = (current as? android.content.ContextWrapper)?.baseContext ?: return null
+            }
+            return null
+        }
     }
 }

@@ -341,8 +341,8 @@ class FuncStatusDetailsFragment : BaseRootLayoutFragment() {
         const val TARGET_INIT_EXCEPTION = "FuncStatusDetailsFragment.TARGET_FATAL_EXCEPTION"
 
         @JvmStatic
-        fun newInstance(targetUiAgentId: String): SettingsMainFragment {
-            val fragment = SettingsMainFragment()
+        fun newInstance(targetUiAgentId: String): FuncStatusDetailsFragment {
+            val fragment = FuncStatusDetailsFragment()
             val bundle = getBundleForLocation(targetUiAgentId)
             fragment.arguments = bundle
             return fragment
