@@ -1,6 +1,7 @@
-// Vendored from liuran001/WeChat-LiquidGlass (MIT): https://github.com/liuran001/WeChat-LiquidGlass
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 package sumicya.qself.glass;
 
+import android.os.SystemClock;
 import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.view.View;
@@ -10,204 +11,143 @@ import android.view.ViewGroup;
 import java.lang.ref.WeakReference;
 
 /**
- * Press/drag behaviour for the droplet, ported from KernelSU's
- * {@code DampedDragAnimation}.
- *
- * <p>Five independent springs drive everything, with KernelSU's exact
- * parameters:
- *
- * <pre>
- * value    spring(1.0, 1000)   position, in tab units
- * velocity spring(0.5,  300)   normalised speed, feeds the stretch
- * press    spring(1.0, 1000)   press progress
- * scaleX   spring(0.6,  250)
- * scaleY   spring(0.7,  250)
- * </pre>
- *
- * <p>Two details matter as much as the numbers. Position is tracked in
- * <em>tab units</em> (0..N-1) rather than pixels, so velocity normalises by the
- * tab count and feels identical on any screen. And release waits: the scale only
- * relaxes once the droplet has nearly arrived, which is what makes a flick read
- * as a single motion instead of a slide plus a separate shrink.
- *
- * <p>Taps still belong to WeChat — the gesture is only claimed once the finger
- * has moved horizontally past the touch slop.
+ * Press and horizontal-drag behaviour of the selected-tab droplet. Five
+ * independent springs carry position (measured in tab units so the feel is
+ * screen-independent), normalised drag velocity for the stretch, press
+ * progress, and the two press scales. The gesture is not claimed until the
+ * finger crosses the horizontal touch slop, so ordinary tab taps keep
+ * reaching the host.
  */
 final class DropletDragController implements LiquidGlassHostLayout.DragHandler {
 
-    /** KernelSU: pressedScale = 78dp / 56dp. */
-    private static final float PRESSED_SCALE = 78f / 56f;
-    /** KernelSU: LocalFloatingBottomBarTabScale = lerp(1f, 1.2f, pressProgress). */
-    private static final float FOCUS_SCALE = 1.2f;
-    private static final float STRETCH_LIMIT = 0.2f;
-    /** KernelSU: release() waits until within 2.5% of the range. */
-    private static final float SETTLE_FRACTION = 0.025f;
+    private static final float PRESSED_RATIO = 78f / 56f;
+    private static final float MAX_STRETCH = 0.2f;
+    private static final float SETTLE_TOLERANCE = 0.025f;
+    private static final float HOST_GROWTH_DP = 8f;
 
-    /**
-     * Bar growth while held.
-     *
-     * <p>KernelSU uses 16dp, but it grows the glass layer alone on a full-width
-     * bar. Here the tabs ride along and the pill hugs its content, so the same
-     * 16dp lands as a much larger fraction and reads as a lurch; half of it
-     * gives the same gentle breath.
-     */
-    private static final float PILL_GROWTH_DP = 8f;
+    private final WeakReference<View> dropletRef;
+    private WeakReference<ViewGroup> rowRef;
+    private WeakReference<View> pillRef = new WeakReference<>(null);
+    private WeakReference<View> growthRef = new WeakReference<>(null);
 
-    private WeakReference<View> mPillRef = new WeakReference<>(null);
-    private WeakReference<View> mHostRef = new WeakReference<>(null);
-    private final WeakReference<View> mDropletRef;
-    private WeakReference<ViewGroup> mTabRowRef;
-    private final int mTouchSlop;
-    private final float mDensity;
-    private final boolean mNight;
-    private final Spring mValue;
-    private final Spring mVelocity;
-    private final Spring mPress;
-    private final Spring mScaleX;
-    private final Spring mScaleY;
+    private final int touchSlop;
+    private final float density;
 
-    private float mDownX;
-    private float mDownY;
-    private float mDragStartValue;
-    private boolean mDragging;
-    private boolean mReleasePending;
+    private final Spring positionSpring;
+    private final Spring velocitySpring;
+    private final Spring pressSpring;
+    private final Spring scaleXSpring;
+    private final Spring scaleYSpring;
 
-    private long mLastFrameNs;
-    private boolean mFrameScheduled;
+    private float downX;
+    private float downY;
+    private float dragStartValue;
+    private boolean dragging;
+    private boolean releaseWaiting;
 
-    /** Velocity is tracked over the value (tab units), as KernelSU does. */
-    private long mLastSampleMs;
-    private float mLastSampleValue;
-
-    void setPill(View pill) {
-        mPillRef = new WeakReference<>(pill);
-    }
-
-    /**
-     * The container the growth is applied to.
-     *
-     * <p>KernelSU puts its 16dp growth on the glass layer alone, leaving the tab
-     * icons at their laid-out size. On a full-width bar that reads as the pill
-     * breathing; on WeChat's hugged, much narrower pill the same 16dp is a far
-     * larger fraction, and the tabs visibly fail to follow. Growing the host
-     * instead keeps glass, tabs and droplet locked together.
-     */
-    void setHost(View host) {
-        mHostRef = new WeakReference<>(host);
-    }
+    private boolean frameQueued;
+    private long lastFrameNs;
+    private long lastSampleMs;
+    private float lastSampleValue;
 
     DropletDragController(View droplet, ViewGroup tabRow, float density, boolean night) {
-        mDropletRef = new WeakReference<>(droplet);
-        mTabRowRef = new WeakReference<>(tabRow);
-        mTouchSlop = ViewConfiguration.get(droplet.getContext()).getScaledTouchSlop();
-        mDensity = density;
-        mNight = night;
-
-        float visibility = 0.001f;
-        mValue = new Spring(1f, 1000f, visibility, 0f);
-        mVelocity = new Spring(0.5f, 300f, visibility * 10f, 0f);
-        mPress = new Spring(1f, 1000f, 0.001f, 0f);
-        mScaleX = new Spring(0.6f, 250f, 0.001f, 1f);
-        mScaleY = new Spring(0.7f, 250f, 0.001f, 1f);
+        this.dropletRef = new WeakReference<>(droplet);
+        this.rowRef = new WeakReference<>(tabRow);
+        this.touchSlop = ViewConfiguration.get(droplet.getContext()).getScaledTouchSlop();
+        this.density = density;
+        this.positionSpring = new Spring(1f, 1000f, 0.001f, 0f);
+        this.velocitySpring = new Spring(0.5f, 300f, 0.01f, 0f);
+        this.pressSpring = new Spring(1f, 1000f, 0.001f, 0f);
+        this.scaleXSpring = new Spring(0.6f, 250f, 0.001f, 1f);
+        this.scaleYSpring = new Spring(0.7f, 250f, 0.001f, 1f);
     }
 
-    /**
-     * Rebinds to the row the app currently owns.
-     *
-     * <p>QQ can add/remove tabs, or replace Material's SlidingTabIndicator,
-     * while the Activity stays alive. Cancelling any in-flight gesture keeps a
-     * half-finished spring from continuing against the old geometry; the
-     * selection watcher snaps to the current tab after the new row lays out.
-     */
+    void setPill(View restingPill) {
+        pillRef = new WeakReference<>(restingPill);
+    }
+
+    /** Container that grows while the droplet is held; defaults to the pill. */
+    void setHost(View growthHost) {
+        growthRef = new WeakReference<>(growthHost);
+    }
+
+    /** Bind to a freshly laid-out tab row (the host may replace it at runtime). */
     void setTabRow(ViewGroup tabRow) {
-        mTabRowRef = new WeakReference<>(tabRow);
-        mDragging = false;
-        mReleasePending = false;
-        mLastSampleMs = 0L;
-        mLastFrameNs = 0L;
-        float max = tabCount(tabRow) - 1f;
-        mValue.snapTo(clamp(mValue.value(), 0f, max));
-        mVelocity.snapTo(0f);
-        mPress.snapTo(0f);
-        mScaleX.snapTo(1f);
-        mScaleY.snapTo(1f);
-        apply();
+        rowRef = new WeakReference<>(tabRow);
+        dragging = false;
+        releaseWaiting = false;
+        lastSampleMs = 0L;
+        lastFrameNs = 0L;
+        float top = tabCountUnits(tabRow) - 1f;
+        positionSpring.snapTo(clamp(positionSpring.value(), 0f, top));
+        velocitySpring.snapTo(0f);
+        pressSpring.snapTo(0f);
+        scaleXSpring.snapTo(1f);
+        scaleYSpring.snapTo(1f);
+        render();
     }
 
-    /* ---------------- external drive ---------------- */
-
-    /**
-     * The selection changed — the only thing allowed to move the droplet other
-     * than a finger. Ignored mid-drag so a mid-gesture page switch cannot yank
-     * the droplet out from under the finger.
-     */
+    /** External selection change; ignored while the finger owns the droplet. */
     void animateToIndex(int index, boolean immediate) {
-        if (mDragging) {
+        if (dragging) {
             return;
         }
-        ViewGroup tabRow = mTabRowRef.get();
-        float target = clamp(index, 0f, tabCount(tabRow) - 1f);
-        // Releasing a drag already aimed the spring here, and the resulting
-        // performClick() bounces the selection straight back at us. Without this
-        // the droplet pops a second time after it has settled — KernelSU avoids
-        // it with a MutatorMutex, which the View world has no equivalent of.
-        if (!immediate && Math.abs(mValue.target() - target) < 0.01f) {
+        ViewGroup row = rowRef.get();
+        float target = clamp(index, 0f, Math.max(0f, tabCountUnits(row) - 1f));
+        if (!immediate && Math.abs(positionSpring.target() - target) < 0.01f) {
+            // Our own release already drove the spring here; the bounced selection
+            // event must not animate it a second time.
             return;
         }
         if (immediate) {
-            mValue.snapTo(target);
-            mVelocity.snapTo(0f);
-            mPress.snapTo(0f);
-            mScaleX.snapTo(1f);
-            mScaleY.snapTo(1f);
-            apply();
+            positionSpring.snapTo(target);
+            velocitySpring.snapTo(0f);
+            pressSpring.snapTo(0f);
+            scaleXSpring.snapTo(1f);
+            scaleYSpring.snapTo(1f);
+            render();
             return;
         }
-        press();
-        mValue.animateTo(target);
-        mVelocity.animateTo(0f);
-        mReleasePending = true;
-        schedule();
+        beginPress();
+        positionSpring.animateTo(target);
+        velocitySpring.animateTo(0f);
+        releaseWaiting = true;
+        queueFrame();
     }
 
-    /* ---------------- gestures ---------------- */
-
     @Override
-    public boolean onIntercept(MotionEvent ev) {
-        switch (ev.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN: {
-                mDownX = ev.getX();
-                mDownY = ev.getY();
-                mDragging = false;
-                boolean over = overDroplet(ev);
-                if (over) {
-                    press();
-                    schedule();
+    public boolean onIntercept(MotionEvent event) {
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                downX = event.getX();
+                downY = event.getY();
+                dragging = false;
+                if (isOverDroplet(event)) {
+                    beginPress();
+                    queueFrame();
                 }
                 return false;
-            }
-            case MotionEvent.ACTION_MOVE: {
-                if (mDragging) {
+            case MotionEvent.ACTION_MOVE:
+                if (dragging) {
                     return true;
                 }
-                View droplet = mDropletRef.get();
+                View droplet = dropletRef.get();
                 if (droplet == null || droplet.getVisibility() != View.VISIBLE) {
                     return false;
                 }
-                float dx = ev.getX() - mDownX;
-                float dy = ev.getY() - mDownY;
-                if (Math.abs(dx) > mTouchSlop && Math.abs(dx) > Math.abs(dy)) {
-                    mDragging = true;
-                    mDragStartValue = mValue.target();
-                    press();
-                    schedule();
+                float dx = event.getX() - downX;
+                float dy = event.getY() - downY;
+                if (Math.abs(dx) > touchSlop && Math.abs(dx) > Math.abs(dy)) {
+                    dragging = true;
+                    dragStartValue = positionSpring.target();
+                    beginPress();
+                    queueFrame();
                     return true;
                 }
                 return false;
-            }
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
-                release();
+                finishPress();
                 return false;
             default:
                 return false;
@@ -215,33 +155,30 @@ final class DropletDragController implements LiquidGlassHostLayout.DragHandler {
     }
 
     @Override
-    public boolean onTouch(MotionEvent ev) {
-        ViewGroup tabRow = mTabRowRef.get();
-        if (!mDragging || tabRow == null) {
+    public boolean onTouch(MotionEvent event) {
+        ViewGroup row = rowRef.get();
+        if (!dragging || row == null) {
             return false;
         }
-        int tabCount = tabCount(tabRow);
-        switch (ev.getActionMasked()) {
+        float maxUnit = tabCountUnits(row) - 1f;
+        switch (event.getActionMasked()) {
             case MotionEvent.ACTION_MOVE: {
-                float tabWidth = tabWidth(tabRow);
-                if (tabWidth > 0f) {
-                    float v = mDragStartValue + (ev.getX() - mDownX) / tabWidth;
-                    mValue.animateTo(clamp(v, 0f, tabCount - 1f));
-                    schedule();
+                float width = tabWidth(row);
+                if (width > 0f) {
+                    float unit = dragStartValue + (event.getX() - downX) / width;
+                    positionSpring.animateTo(clamp(unit, 0f, maxUnit));
+                    queueFrame();
                 }
                 return true;
             }
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL: {
-                // KernelSU's onDragStopped: settle to the nearest index, then let
-                // that index flow back through the selection as the single source
-                // of truth. We only report it; the watcher drives the spring.
-                int index = Math.round(clamp(mValue.target(), 0f, tabCount - 1f));
-                mValue.animateTo(index);
-                mVelocity.animateTo(0f);
-                mDragging = false;
-                release();
-                View tab = TabBarBridge.tabAt(tabRow, index);
+                int nearest = Math.round(clamp(positionSpring.target(), 0f, maxUnit));
+                positionSpring.animateTo(nearest);
+                velocitySpring.animateTo(0f);
+                dragging = false;
+                finishPress();
+                View tab = TabBarBridge.tabAt(row, nearest);
                 if (tab != null && !tab.isSelected()) {
                     tab.performClick();
                 }
@@ -252,191 +189,155 @@ final class DropletDragController implements LiquidGlassHostLayout.DragHandler {
         }
     }
 
-    private boolean overDroplet(MotionEvent ev) {
-        View droplet = mDropletRef.get();
+    private boolean isOverDroplet(MotionEvent event) {
+        View droplet = dropletRef.get();
         if (droplet == null || droplet.getVisibility() != View.VISIBLE) {
             return false;
         }
-        // getTranslationX() is an offset from the laid-out position, and that
-        // position already carries the host's shadow padding — comparing it
-        // directly against a host-relative touch x missed by that padding, so
-        // pressing the droplet never registered.
-        float x = ev.getX();
         float left = droplet.getLeft() + droplet.getTranslationX();
         ViewGroup.LayoutParams lp = droplet.getLayoutParams();
         float width = lp != null && lp.width > 0 ? lp.width : droplet.getWidth();
+        float x = event.getX();
         return x >= left && x <= left + width;
     }
 
-    /* ---------------- press / release ---------------- */
-
-    private void press() {
-        mLastSampleMs = 0L;
-        mPress.animateTo(1f);
-        mScaleX.animateTo(PRESSED_SCALE);
-        mScaleY.animateTo(PRESSED_SCALE);
+    private void beginPress() {
+        lastSampleMs = 0L;
+        pressSpring.animateTo(1f);
+        scaleXSpring.animateTo(PRESSED_RATIO);
+        scaleYSpring.animateTo(PRESSED_RATIO);
     }
 
-    private void release() {
-        // KernelSU holds the pressed scale until the droplet has almost arrived.
-        mReleasePending = true;
-        schedule();
+    private void finishPress() {
+        releaseWaiting = true;
+        queueFrame();
     }
 
-    private void maybeFinishRelease() {
-        if (!mReleasePending || mDragging) {
+    /** Let the press scales relax only once the position has nearly settled. */
+    private void completeReleaseIfSettled() {
+        if (!releaseWaiting || dragging) {
             return;
         }
-        float threshold = Math.max((tabCount(mTabRowRef.get()) - 1f)
-                * SETTLE_FRACTION, 0.001f);
-        if (Math.abs(mValue.value() - mValue.target()) > threshold) {
+        float tolerance = Math.max((tabCountUnits(rowRef.get()) - 1f) * SETTLE_TOLERANCE, 0.001f);
+        if (Math.abs(positionSpring.value() - positionSpring.target()) > tolerance) {
             return;
         }
-        mReleasePending = false;
-        mPress.animateTo(0f);
-        mScaleX.animateTo(1f);
-        mScaleY.animateTo(1f);
+        releaseWaiting = false;
+        pressSpring.animateTo(0f);
+        scaleXSpring.animateTo(1f);
+        scaleYSpring.animateTo(1f);
     }
 
-    /* ---------------- frame loop ---------------- */
-
-    private void schedule() {
-        if (mFrameScheduled) {
+    private void queueFrame() {
+        if (frameQueued) {
             return;
         }
-        mFrameScheduled = true;
-        mLastFrameNs = 0L;
-        Choreographer.getInstance().postFrameCallback(this::onFrame);
+        frameQueued = true;
+        lastFrameNs = 0L;
+        Choreographer.getInstance().postFrameCallback(frameCallback);
     }
+
+    private final Choreographer.FrameCallback frameCallback = this::onFrame;
 
     private void onFrame(long frameNs) {
-        mFrameScheduled = false;
-        float dt = mLastFrameNs == 0L ? 1f / 60f : (frameNs - mLastFrameNs) / 1e9f;
-        mLastFrameNs = frameNs;
+        frameQueued = false;
+        float dt = lastFrameNs == 0L ? 1f / 60f : (frameNs - lastFrameNs) / 1e9f;
+        lastFrameNs = frameNs;
 
-        boolean running = mValue.update(dt);
+        boolean active = positionSpring.update(dt);
         sampleVelocity();
-        running |= mVelocity.update(dt);
-        running |= mPress.update(dt);
-        running |= mScaleX.update(dt);
-        running |= mScaleY.update(dt);
+        active |= velocitySpring.update(dt);
+        active |= pressSpring.update(dt);
+        active |= scaleXSpring.update(dt);
+        active |= scaleYSpring.update(dt);
 
-        apply();
-        maybeFinishRelease();
+        render();
+        completeReleaseIfSettled();
 
-        // Re-check after the release: it starts the press/scale springs going
-        // again, and testing the pre-release `running` would end the loop right
-        // then — leaving the droplet stuck at its pressed size.
-        running |= mPress.isRunning() || mScaleX.isRunning() || mScaleY.isRunning()
-                || mValue.isRunning() || mVelocity.isRunning();
-
-        if (running || mReleasePending || mDragging) {
-            mFrameScheduled = true;
-            Choreographer.getInstance().postFrameCallback(this::onFrame);
+        active |= positionSpring.isRunning() || velocitySpring.isRunning()
+                || pressSpring.isRunning() || scaleXSpring.isRunning() || scaleYSpring.isRunning();
+        if (active || releaseWaiting || dragging) {
+            frameQueued = true;
+            Choreographer.getInstance().postFrameCallback(frameCallback);
         }
     }
 
-    /**
-     * KernelSU samples velocity over the value itself and normalises it by the
-     * range, so the stretch is independent of tab width and screen density.
-     */
+    /** Velocity over tab units per second, divided by the unit range. */
     private void sampleVelocity() {
-        long now = android.os.SystemClock.uptimeMillis();
-        if (mLastSampleMs == 0L) {
-            mLastSampleMs = now;
-            mLastSampleValue = mValue.value();
+        long now = SystemClock.uptimeMillis();
+        if (lastSampleMs == 0L) {
+            lastSampleMs = now;
+            lastSampleValue = positionSpring.value();
             return;
         }
-        float dtMs = now - mLastSampleMs;
-        if (dtMs < 8f) {
+        float elapsed = now - lastSampleMs;
+        if (elapsed < 8f) {
             return;
         }
-        float perSecond = (mValue.value() - mLastSampleValue) * 1000f / dtMs;
-        mVelocity.animateTo(perSecond
-                / Math.max(1f, tabCount(mTabRowRef.get()) - 1f));
-        mLastSampleMs = now;
-        mLastSampleValue = mValue.value();
+        float perSecond = (positionSpring.value() - lastSampleValue) * 1000f / elapsed;
+        float range = Math.max(1f, tabCountUnits(rowRef.get()) - 1f);
+        velocitySpring.animateTo(perSecond / range);
+        lastSampleMs = now;
+        lastSampleValue = positionSpring.value();
     }
 
-    /* ---------------- apply ---------------- */
-
-    private void apply() {
-        View droplet = mDropletRef.get();
-        ViewGroup tabRow = mTabRowRef.get();
-        if (droplet == null || tabRow == null || TabBarBridge.tabCount(tabRow) == 0) {
+    private void render() {
+        View droplet = dropletRef.get();
+        ViewGroup row = rowRef.get();
+        if (droplet == null || row == null || TabBarBridge.tabCount(row) == 0) {
             return;
         }
-        float tabWidth = tabWidth(tabRow);
-        if (tabWidth <= 0f) {
+        float width = tabWidth(row);
+        if (width <= 0f) {
             return;
         }
-        // Centre using the laid-out width, not getWidth(): the droplet is sized
-        // through LayoutParams and getWidth() still reads 0 until the next layout
-        // pass, which parked it half a tab off on the first frame after launch.
-        View first = TabBarBridge.tabAt(tabRow, 0);
+        View first = TabBarBridge.tabAt(row, 0);
         if (first == null) {
             return;
         }
         ViewGroup.LayoutParams lp = droplet.getLayoutParams();
-        float dropletW = lp != null && lp.width > 0 ? lp.width : droplet.getWidth();
-        float originX = tabRow.getLeft() + first.getLeft()
-                + (first.getWidth() - dropletW) * 0.5f;
-        droplet.setTranslationX(originX + mValue.value() * tabWidth);
+        float dropletWidth = lp != null && lp.width > 0 ? lp.width : droplet.getWidth();
+        float startX = row.getLeft() + first.getLeft() + (first.getWidth() - dropletWidth) * 0.5f;
+        droplet.setTranslationX(startX + positionSpring.value() * width);
 
-        // KernelSU:
-        //   scaleX /= 1f - (velocity * 0.75f).coerceIn(-0.2f, 0.2f)
-        //   scaleY *= 1f - (velocity * 0.25f).coerceIn(-0.2f, 0.2f)
-        float v = mVelocity.value() / 10f;
-        float along = clamp(v * 0.75f, -STRETCH_LIMIT, STRETCH_LIMIT);
-        float across = clamp(v * 0.25f, -STRETCH_LIMIT, STRETCH_LIMIT);
-        droplet.setScaleX(mScaleX.value() / (1f - along));
-        droplet.setScaleY(mScaleY.value() * (1f - across));
+        float v = velocitySpring.value() / 10f;
+        float along = clamp(v * 0.75f, -MAX_STRETCH, MAX_STRETCH);
+        float across = clamp(v * 0.25f, -MAX_STRETCH, MAX_STRETCH);
+        droplet.setScaleX(scaleXSpring.value() / (1f - along));
+        droplet.setScaleY(scaleYSpring.value() * (1f - across));
 
-        // The lens, its wash and the inner shadow all ride on press progress.
-        float p = mPress.value();
+        float progress = pressSpring.value();
         if (droplet instanceof DropletPanel) {
-            DropletPanel panel = (DropletPanel) droplet;
-            panel.setProgress(p);
-            // The droplet slides via translationX, which does not redraw it —
-            // re-capture every frame so the refraction tracks what it passes over.
-            panel.refresh();
+            DropletPanel moving = (DropletPanel) droplet;
+            moving.setProgress(progress);
+            // translation alone does not invalidate, so refresh the capture.
+            moving.refresh();
         }
-        // KernelSU grows the whole pill a little while dragging, and rides a
-        // highlight that follows the droplet across it.
-        View pill = mPillRef.get();
+
+        View pill = pillRef.get();
         if (pill != null && pill.getWidth() > 0) {
-            float grow = 1f + (PILL_GROWTH_DP * mDensity / pill.getWidth()) * p;
-            View host = mHostRef.get();
-            View grown = host != null ? host : pill;
-            grown.setScaleX(grow);
-            grown.setScaleY(grow);
-            if (grown != pill && pill.getScaleX() != 1f) {
+            float grow = 1f + (HOST_GROWTH_DP * density / pill.getWidth()) * progress;
+            View grown = growthRef.get();
+            View target = grown != null ? grown : pill;
+            target.setScaleX(grow);
+            target.setScaleY(grow);
+            if (target != pill && pill.getScaleX() != 1f) {
                 pill.setScaleX(1f);
                 pill.setScaleY(1f);
             }
             if (pill instanceof LiquidGlassPanel) {
-                // Droplet centre in the pill's own coordinates. translationX is
-                // an offset from the laid-out left, and that left already carries
-                // the host's shadow padding, so both sides need it.
-                float centre = droplet.getLeft() + droplet.getTranslationX()
-                        + dropletW * 0.5f - pill.getLeft();
-                ((LiquidGlassPanel) pill).setInteraction(p, centre);
+                float centreX = droplet.getLeft() + droplet.getTranslationX()
+                        + dropletWidth * 0.5f - pill.getLeft();
+                ((LiquidGlassPanel) pill).setInteraction(progress, centreX);
             }
         }
-        applyFocusZoom(tabRow, p);
+        resetTabScales(row);
     }
 
-    /**
-     * Keeps each individual tab at its natural size.
-     *
-     * <p>KernelSU does not scale the tabs one by one — the enlarged icon you see
-     * while dragging is the separately drawn 1.2× copy that the droplet refracts
-     * (see {@link DropletPanel}). Scaling the real tabs as well would double it.
-     * The bar-wide growth is a different thing and rides on the host.
-     */
-    private void applyFocusZoom(ViewGroup tabRow, float p) {
-        for (int i = 0; i < tabRow.getChildCount(); i++) {
-            View tab = tabRow.getChildAt(i);
+    /** Real tabs are never scaled; the enlarged glyph is the droplet's own copy. */
+    private void resetTabScales(ViewGroup row) {
+        for (int i = 0; i < row.getChildCount(); i++) {
+            View tab = row.getChildAt(i);
             if (tab.getScaleX() != 1f) {
                 tab.setScaleX(1f);
                 tab.setScaleY(1f);
@@ -444,19 +345,19 @@ final class DropletDragController implements LiquidGlassHostLayout.DragHandler {
         }
     }
 
-    private static float tabWidth(ViewGroup tabRow) {
-        if (tabRow == null || TabBarBridge.tabCount(tabRow) == 0) {
+    private static float tabWidth(ViewGroup row) {
+        if (row == null || TabBarBridge.tabCount(row) == 0) {
             return 0f;
         }
-        View first = TabBarBridge.tabAt(tabRow, 0);
+        View first = TabBarBridge.tabAt(row, 0);
         return first == null ? 0f : first.getWidth();
     }
 
-    private static int tabCount(ViewGroup tabRow) {
-        return Math.max(1, TabBarBridge.tabCount(tabRow));
+    private static int tabCountUnits(ViewGroup row) {
+        return Math.max(1, TabBarBridge.tabCount(row));
     }
 
-    private static float clamp(float v, float lo, float hi) {
-        return v < lo ? lo : (v > hi ? hi : v);
+    private static float clamp(float value, float low, float high) {
+        return value < low ? low : Math.min(value, high);
     }
 }
