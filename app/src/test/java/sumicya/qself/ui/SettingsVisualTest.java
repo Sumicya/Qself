@@ -316,6 +316,11 @@ public class SettingsVisualTest {
         assertTrue("Source updates must reach the lens", Color.blue(next.getPixel(150, 55)) > Color.red(next.getPixel(150, 55)) + 100);
         assertEquals(0, Color.alpha(next.getPixel(0, 0)));
         assertTrue("Must not silently fall back", SettingsGlass.INSTANCE.isOptical(glass));
+        SettingsGlass.INSTANCE.deform(glass, 1f);
+        Bitmap deformed = drawHardware(300, 110, glass::draw);
+        assertTrue(Color.alpha(next.getPixel(8, 8)) > 0);
+        assertEquals("Dragging changes the actual lens contour", 0, Color.alpha(deformed.getPixel(8, 8)));
+        deformed.recycle();
         SettingsGlass.INSTANCE.dispose(glass); first.recycle(); next.recycle();
     }
 

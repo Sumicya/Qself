@@ -22,6 +22,7 @@ internal object SettingsGlass {
         uniform float radius;
         uniform float density;
         uniform float2 light;
+        uniform float deformation;
         half4 main(float2 pixel) {
             float2 p = pixel - float2(pad);
             float2 c = p-size*0.5;
@@ -32,7 +33,7 @@ internal object SettingsGlass {
             float2 n = length(corner)>0.001 ? sign(c)*normalize(corner) :
                 (q.x>q.y ? float2(sign(c.x),0.0) : float2(0.0,sign(c.y)));
             float edge = 1.0-smoothstep(0.0,18.0*density,inside);
-            float2 uv = pixel-n*edge*edge*11.0*density;
+            float2 uv = pixel-n*edge*edge*(11.0+4.0*deformation)*density;
             half4 col = content.eval(uv);
             col.r = mix(col.r,content.eval(uv+n*density).r,edge*0.65);
             col.b = mix(col.b,content.eval(uv-n*density).b,edge*0.65);
@@ -70,6 +71,9 @@ internal object SettingsGlass {
         if (Build.VERSION.SDK_INT >= 33 && drawable is LiveMaterial) drawable.statusListener = listener
         else listener("实色背景：当前未使用实时玻璃")
     }
+    fun deform(drawable: Drawable?, amount: Float) {
+        if (Build.VERSION.SDK_INT >= 33 && drawable is LiveMaterial) drawable.deform(amount)
+    }
     fun dispose(drawable: Drawable?) {
         if (Build.VERSION.SDK_INT >= 33 && drawable is LiveMaterial) drawable.release()
     }
@@ -91,6 +95,12 @@ internal object SettingsGlass {
         private var oldH = 0
         private var dirty = true
         private var opacity = 255
+        private var stretch = 0f
+        private var effectStretch = -1f
+        fun deform(amount: Float) {
+            val next = amount.coerceIn(0f, 1f)
+            if (kotlin.math.abs(stretch - next) > .001f) { stretch = next; invalidateSelf() }
+        }
         private var sourceObserver: ViewTreeObserver? = null
         private var ownerObserver: ViewTreeObserver? = null
         private var status = "等待实际背景首帧"
@@ -143,7 +153,8 @@ internal object SettingsGlass {
                 val moved = oldX != at[0] || oldY != at[1]
                 val w = bounds.width(); val h = bounds.height()
                 val pad = (24 * density).toInt()
-                val radius = minOf(corner * density, w / 2f, h / 2f)
+                val deformation = maxOf(stretch, (kotlin.math.abs(owner?.translationY ?: 0f) / (32 * density)).coerceIn(0f, 1f))
+                val radius = minOf(corner * density * (1f + .25f * deformation), w / 2f, h / 2f)
                 if (owner == null || dirty || oldX != at[0] || oldY != at[1] || oldW != w || oldH != h || !node.hasDisplayList()) {
                     node.setPosition(0, 0, w + 2 * pad, h + 2 * pad)
                     val capture = node.beginRecording(w + 2 * pad, h + 2 * pad)
@@ -156,7 +167,9 @@ internal object SettingsGlass {
                 }
                 lens.setFloatUniform("light", -.6f + at[0] / maxOf(source.width.toFloat(), 1f) * .25f,
                     -.8f + at[1] / maxOf(source.height.toFloat(), 1f) * .2f)
-                if (oldW != w || oldH != h || moved) {
+                if (oldW != w || oldH != h || moved || effectStretch != deformation) {
+                    effectStretch = deformation
+                    lens.setFloatUniform("deformation", deformation)
                     lens.setFloatUniform("size", w.toFloat(), h.toFloat())
                     lens.setFloatUniform("pad", pad.toFloat()); lens.setFloatUniform("radius", radius)
                     lens.setFloatUniform("density", density)

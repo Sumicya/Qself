@@ -66,6 +66,12 @@ class SettingsOptionSheet : BottomSheetDialogFragment() {
         it.onBackPressedDispatcher.addCallback(this, backCallback)
         it.setDismissWithAnimation(SettingsMotion.enabled())
         it.window?.setWindowAnimations(0)
+        it.behavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
+            override fun onStateChanged(sheet: View, state: Int) = Unit
+            override fun onSlide(sheet: View, offset: Float) {
+                SettingsGlass.deform(sheet.background, (1f - offset).coerceIn(0f, 1f))
+            }
+        })
     }
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, state: Bundle?): View {
         val context = requireActivity()
