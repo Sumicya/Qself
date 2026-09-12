@@ -85,7 +85,12 @@ class UiAgentItem(
                 val context = btn.context
                 if (hook.isEnabled && !hook.isInitialized) {
                     // we need to initialize the hook
-                    HookInstaller.initializeHookForeground(context, hook)
+                    val row = java.lang.ref.WeakReference(btn.parent as? TitleValueCell)
+                    HookInstaller.initializeHookForeground(context, hook) {
+                        row.get()?.takeIf { it.isAttachedToWindow && it.getTag(io.github.qauxv.R.id.qself_bound_agent) === this }?.let {
+                            bindCell(it, -1, it.context)
+                        }
+                    }
                 }
                 if (hook.isApplicationRestartRequired) {
                     Toasts.info(context, "重启 ${hostInfo.hostName} 生效")
@@ -119,8 +124,12 @@ class UiAgentItem(
     }
 
     override fun bindView(viewHolder: RecyclerView.ViewHolder, position: Int, context: Context) {
-        // remove the listener first to avoid mess up
-        val cell = viewHolder.itemView as TitleValueCell
+        bindCell(viewHolder.itemView as TitleValueCell, position, context)
+    }
+
+    private fun bindCell(cell: TitleValueCell, position: Int, context: Context) {
+        // Identity check prevents a late initialization callback rebinding a recycled row.
+        cell.setTag(io.github.qauxv.R.id.qself_bound_agent, this)
         cell.setOnClickListener(null)
         cell.switchView.setOnCheckedChangeListener(null)
         val agent = agentProvider.uiItemAgent

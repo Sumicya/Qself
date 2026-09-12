@@ -1,2 +1,2 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources><item name="qself_settings_home" type="id" /></resources>
+<resources><item name="qself_settings_home" type="id" /><item name="qself_bound_agent" type="id" /></resources>

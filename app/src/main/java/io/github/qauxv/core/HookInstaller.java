@@ -112,8 +112,16 @@ public class HookInstaller {
     }
 
     public static void initializeHookForeground(@NonNull Context context, @NonNull IDynamicHook hook) {
+        initializeHookForeground(context, hook, null);
+    }
+
+    public static void initializeHookForeground(@NonNull Context context, @NonNull IDynamicHook hook,
+                                                @Nullable Runnable completion) {
         if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(hook)) return;
-        SyncUtils.async(() -> doInitAndSetupHookForeground(context, hook));
+        SyncUtils.async(() -> {
+            try { doInitAndSetupHookForeground(context, hook); }
+            finally { if (completion != null) SyncUtils.runOnUiThread(completion); }
+        });
     }
 
     public static void doInitAndSetupHookForeground(@NonNull Context context, @NonNull IDynamicHook hook) {
@@ -151,6 +159,7 @@ public class HookInstaller {
                 try {
                     success = hook.initialize();
                 } catch (Throwable ex) {
+                    if (hook instanceof RuntimeErrorTracer) ((RuntimeErrorTracer) hook).traceError(ex);
                     err = ex;
                 }
                 if (!success) {
