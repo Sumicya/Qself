@@ -372,7 +372,7 @@ dependencies {
     implementation(libs.sealedEnum.runtime)
     ksp(libs.sealedEnum.ksp)
     testImplementation(libs.junit)
-    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("org.robolectric:robolectric:4.16.1")
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.runner)
 }

@@ -29,10 +29,14 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
+import org.robolectric.annotation.ResourcesMode;
 import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 35, application = Application.class, manifest = Config.NONE, qualifiers = "w412dp-h915dp-mdpi")
+// AOSP resource parsing preserves the production 0x39 resource package ID.
+// Robolectric's older Java ARSC parser crashes on its empty library chunk.
+@ResourcesMode(ResourcesMode.Mode.NATIVE)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 public class SettingsVisualTest {
     private Context context(boolean dark, float fontScale, int width, boolean rtl) {
