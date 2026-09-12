@@ -137,7 +137,9 @@ public class SettingsVisualTest {
         bitmap.recycle();
     }
 
-    private void renderPreviewPair(View light, View dark) throws Exception {
+    private void renderPreviewPair(View light, View dark) throws Exception { renderPreviewPair(light, dark, "home-pair"); }
+
+    private void renderPreviewPair(View light, View dark, String name) throws Exception {
         // CI permits ten notices per step and truncates each message at 4096 characters.
         // Keep one real-view contact sheet within nine small base64 chunks, plus test totals.
         float scale = 720f / (light.getWidth() + dark.getWidth());
@@ -160,7 +162,8 @@ public class SettingsVisualTest {
         }
         assertNotNull(result);
         assertTrue("CI contact sheet exceeds annotation budget", result.length <= 24000);
-        Files.write(Paths.get("build/reports/qself-visual/home-pair.webp"), result);
+        Files.createDirectories(Paths.get("build/reports/qself-visual"));
+        Files.write(Paths.get("build/reports/qself-visual/" + name + ".webp"), result);
         bitmap.recycle();
     }
 
@@ -449,26 +452,35 @@ public class SettingsVisualTest {
     }
 
     @Test public void actualFeatureCellsRenderWithNativeSwitches() throws Exception {
-        Context context = context(false, 1f, 412, false);
-        SettingsVisuals.Palette palette = SettingsVisuals.palette(context, 1);
-        android.widget.LinearLayout list = new android.widget.LinearLayout(context);
-        list.setOrientation(android.widget.LinearLayout.VERTICAL);
-        list.setPadding(16, 24, 16, 24);
-        list.setBackground(SettingsVisuals.backdrop(palette));
-        TextView heading = new TextView(context);
-        heading.setText("外观"); heading.setTextSize(24); heading.setTextColor(palette.getText());
-        list.addView(heading);
-        String[][] rows = {{"液态玻璃底栏", "底栏的通透效果与形态"}, {"头像圆角（聊天）", "按自己的习惯调整圆角"},
-            {"广告净化（总开关）", "只在需要时开启，不自动改变其他功能"}};
-        for (String[] row : rows) {
-            TitleValueCell cell = new TitleValueCell(context);
-            cell.setTitle(row[0]); cell.setSummary(row[1]); cell.setChecked(false); cell.setHasDivider(false);
-            cell.getTitleView().setTextColor(palette.getText()); cell.getSummaryView().setTextColor(palette.getSecondary());
-            cell.setBackground(SettingsVisuals.surface(context, palette, 20, true));
-            android.widget.LinearLayout.LayoutParams params = new android.widget.LinearLayout.LayoutParams(-1, -2);
-            params.topMargin = 12; list.addView(cell, params);
+        List<View> frames = new ArrayList<>();
+        for (boolean dark : new boolean[]{false, true}) {
+            Context context = context(dark, 1f, 412, false);
+            NativePage page = page(context, 412, 540, new ArrayList<>());
+            ((com.google.android.material.appbar.MaterialToolbar) page.host.findViewById(R.id.topAppBar)).setTitle("选项 · MD3");
+            String[][] data = {{"底部导航栏液态玻璃", "左侧开关；点击说明配置文字、数量与玻璃"},
+                {"消息防撤回", "关闭这一项，不改变其他选项"}, {"版本不支持的功能", "当前不可用；保留原配置"},
+                {"出现错误的功能", "查看功能错误记录，其他开关不受影响"},
+                {"较长的说明自动换行", "左侧方形状态始终居中，说明按照系统字号展开；不压缩文字，也不增加无意义的行间空白。"}};
+            page.list.getRecycler().setAdapter(new RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+                @Override public int getItemCount() { return data.length; }
+                @Override public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int type) {
+                    TitleValueCell cell = new TitleValueCell(context);
+                    SettingsVisuals.INSTANCE.decorateRow(cell, context, true);
+                    return new RecyclerView.ViewHolder(cell) {};
+                }
+                @Override public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
+                    TitleValueCell cell = (TitleValueCell) holder.itemView;
+                    cell.setTitle(data[position][0]); cell.setSummary(data[position][1]);
+                    cell.setChecked(position == 0 || position == 3 || position == 4);
+                    cell.setUnavailable(position == 2); cell.setHasError(position == 3);
+                }
+            });
+            measurePage(page, 412, 540, View.MeasureSpec.EXACTLY);
+            verifyTextBounds(page.host); verifyContainedChildren(page.host);
+            render(dark ? "options-dark" : "options-light", page.host);
+            frames.add(page.host);
         }
-        layout(list, 412); verifyTextBounds(list); render("feature-cells", list);
+        renderPreviewPair(frames.get(0), frames.get(1), "options-pair");
     }
 
     @Test public void catalogReferencesOnlyExistingAnnotatedProvidersAndNoDuplicates() throws Exception {
