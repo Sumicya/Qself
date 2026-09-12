@@ -226,7 +226,7 @@ object DumpTelegramStickers : CommonConfigFunctionHook() {
 
     @SuppressLint("SetTextI18n")
     override val onUiItemClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, ctx, _ ->
-        val builder = AlertDialog.Builder(ctx)
+        val builder = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
         val wrapper = LinearLayout(ctx)
         val layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT

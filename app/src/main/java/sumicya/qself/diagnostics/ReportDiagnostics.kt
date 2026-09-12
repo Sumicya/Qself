@@ -189,7 +189,7 @@ object ReportDiagnostics : CommonConfigFunctionHook(
             if (isEnabled) "停止记录（已装 Hook 在重启后卸除）" else "开启记录（需完整重启 QQ）",
             "查看 / 复制诊断摘要", "标记：刚刚实际掉线", "标记：刚刚收到风险提醒", "清空记录",
         )
-        AlertDialog.Builder(ctx).setTitle(name).setItems(options) { _, which ->
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).setTitle(name).setItems(options) { _, which ->
             when (which) {
                 0 -> if (isEnabled) {
                     io(activity, { isEnabled = false }) {
@@ -197,7 +197,7 @@ object ReportDiagnostics : CommonConfigFunctionHook(
                         Toasts.info(activity, "已停止采集；完整重启 QQ 后卸除观察 Hook。")
                     }
                 } else {
-                    AlertDialog.Builder(ctx).setTitle("开启只读诊断？")
+                    sumicya.qself.ui.InlineAlertDialogBuilder(ctx).setTitle("开启只读诊断？")
                         .setMessage("仅记录已知 O3 命令名、时间、进程、调用次数和异常类型；不读取请求正文或凭据。\n" +
                             "其他 Hook 可能改变结果；零记录不等于没有上报。每秒最多采集 20 次调用，每进程最多保留 128 行。\n" +
                             "开启后需完整重启 QQ。不会修改你现有的 O3 拦截开关。")
@@ -221,7 +221,7 @@ object ReportDiagnostics : CommonConfigFunctionHook(
                         Toasts.info(activity, "已提交本地时间标记；稍后在摘要中核对。")
                     }
                 }
-                4 -> AlertDialog.Builder(ctx).setTitle("清空诊断记录？")
+                4 -> sumicya.qself.ui.InlineAlertDialogBuilder(ctx).setTitle("清空诊断记录？")
                     .setMessage("清空主进程和 MSF 记录，并使旧窗口的排队记录失效。不改变 O3 拦截或 QQ 登录状态。")
                     .setPositiveButton("清空") { _, _ -> io(activity, { ReportDiagnosticsStore.clear() }) {
                         Toasts.info(activity, "已清空，开启中的诊断会继续记录新事件。")
@@ -251,7 +251,7 @@ object ReportDiagnostics : CommonConfigFunctionHook(
             val padding = (16 * resources.displayMetrics.density).toInt()
             setPadding(padding, padding, padding, padding)
         }
-        AlertDialog.Builder(ctx).setTitle("诊断摘要（本地）")
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).setTitle("诊断摘要（本地）")
             .setView(ScrollView(ctx).apply { addView(text) })
             .setPositiveButton("关闭", null)
             .setNeutralButton("复制摘要") { _, _ ->

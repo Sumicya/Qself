@@ -107,7 +107,6 @@ qself-safety	tools	维护与诊断	diagnostics	诊断	sumicya.qself.diagnostics.
 # 主题与显示
 cfg-theme		主题与显示	theme	界面	io.github.qauxv.fragment.ThemeColorStyleDialog
 cfg-theme		主题与显示	theme	界面	io.github.qauxv.fragment.ThemeModeStyleDialog
-cfg-theme		主题与显示	theme	界面	sumicya.qself.ui.SettingsAppearanceItem
 _core					cc.hicore.message.chat.SessionHooker
 _core					cc.ioctl.hook.DeletionObserver
 _core					cc.ioctl.hook.SettingEntryHook

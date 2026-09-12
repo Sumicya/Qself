@@ -140,7 +140,7 @@ object GroupAdminMenu : CommonSwitchFunctionHook(
             "移出群聊（未适配）",
             "查询共同群",
         )
-        AlertDialog.Builder(ctx)
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle("群管理菜单 · $uin")
             .setItems(items) { _, which ->
                 when (which) {

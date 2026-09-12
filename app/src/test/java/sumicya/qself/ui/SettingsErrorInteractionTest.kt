@@ -71,45 +71,41 @@ class SettingsErrorInteractionTest {
             assertEquals(0, provider.details)
         } finally { controller.pause().stop().destroy() }
     }
-    @Test fun realDialogIsCenteredBoundedAndItsRowsDoNotHideTransparency() {
-        val controller = Robolectric.buildActivity(androidx.fragment.app.FragmentActivity::class.java)
+    @Test fun inlineLegacyDialogKeepsSaveCancelAndCreatesNoWindow() {
+        val controller = Robolectric.buildActivity(Activity::class.java)
         val activity = controller.get()
         activity.setTheme(R.style.Theme_Qself_Expressive)
         controller.setup()
         try {
-            val provider = Provider()
-            val sheet = SettingsOptionSheet().apply {
-                arguments = android.os.Bundle().apply { putString("group", "qself-messages") }
-                providerLookup = { mapOf("cc.ioctl.hook.msg.ShowMsgCount" to provider) }
-            }
-            sheet.showNow(activity.supportFragmentManager, "fixture-window")
-            val window = sheet.requireDialog().window!!
-            assertEquals(android.view.Gravity.CENTER, window.attributes.gravity)
-            assertTrue(window.attributes.width < activity.resources.displayMetrics.widthPixels)
-            assertTrue(window.attributes.height < activity.resources.displayMetrics.heightPixels)
-            val root = sheet.requireView()
-            root.animate().cancel(); root.alpha = 1f; root.translationY = 0f
-            root.measure(android.view.View.MeasureSpec.makeMeasureSpec(window.attributes.width, android.view.View.MeasureSpec.EXACTLY),
-                android.view.View.MeasureSpec.makeMeasureSpec(window.attributes.height, android.view.View.MeasureSpec.EXACTLY))
-            root.layout(0, 0, window.attributes.width, window.attributes.height)
-            assertTrue(root.background.alpha < 255)
-            fun findCell(view: android.view.View): TitleValueCell? {
-                if (view is TitleValueCell && view.title == provider.title) return view
-                if (view is android.view.ViewGroup) for (i in 0 until view.childCount) findCell(view.getChildAt(i))?.let { return it }
-                return null
-            }
-            val cell = requireNotNull(findCell(root))
-            assertEquals(0, cell.switchView.left)
-            assertEquals(cell.height, cell.switchView.height)
-            val file = java.io.File("build/reports/qself-visual/small-window.png")
-            file.parentFile.mkdirs()
-            val image = android.graphics.Bitmap.createBitmap(root.width, root.height, android.graphics.Bitmap.Config.ARGB_8888)
-            val canvas = android.graphics.Canvas(image)
-            canvas.drawColor(android.graphics.Color.rgb(180, 195, 210)); root.draw(canvas)
-            file.outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-            image.recycle()
-            sheet.dismissNow()
-        } finally { controller.pause().stop().destroy() }
+            val root = android.widget.LinearLayout(activity).apply { orientation = android.widget.LinearLayout.VERTICAL }
+            activity.setContentView(root)
+            val row = TitleValueCell(activity).apply { title = "输入设置" }
+            root.addView(row)
+            InlineSettings.register(activity, root)
+            InlineSettings.anchor(row)
+            var saved = "old"
+            var cancelled = 0
+            val input = android.widget.EditText(activity).apply { setText("draft") }
+            val dialog = InlineAlertDialogBuilder(activity).setTitle("编辑")
+                .setView(input).setPositiveButton("保存") { _, _ -> saved = input.text.toString() }
+                .setNegativeButton("取消", null).setOnCancelListener { cancelled++ }.create()
+            dialog.show()
+            assertTrue(dialog.isShowing)
+            assertEquals(1, row.inlineContent.childCount)
+            assertNull(dialog.window!!.decorView.parent)
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            assertEquals("draft", saved)
+            assertFalse(dialog.isShowing)
+            assertEquals(0, row.inlineContent.childCount)
+            val second = InlineAlertDialogBuilder(activity).setTitle("第二项").setMessage("取消不写配置")
+                .setPositiveButton("保存") { _, _ -> saved = "wrong" }.setOnCancelListener { cancelled++ }.create()
+            second.show()
+            assertTrue(InlineSettings.closeLast(activity))
+            assertEquals(1, cancelled)
+            assertEquals("draft", saved)
+            assertFalse(second.isShowing)
+        } finally { InlineSettings.unregister(activity); controller.pause().stop().destroy() }
     }
 
     @Test fun reportFactoryCreatesTheActualErrorFragment() {

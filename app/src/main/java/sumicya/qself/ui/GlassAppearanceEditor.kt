@@ -30,34 +30,8 @@ object GlassAppearanceEditor {
         return SettingsVisuals.palette(themed, mode)
     }
 
-    private fun showWindow(activity: Activity) {
-        var draft = SettingsAppearanceItem.windowTransparency
-        val content = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            val pad = SettingsVisuals.dp(activity, 20); setPadding(pad, pad, pad, pad)
-        }
-        val label = TextView(activity).apply { text = "小窗背景透明度：$draft%\n仅改变背景，文字保持不透明。颜色跟随设置页。" }
-        content.addView(label)
-        val slider = Slider(activity).apply {
-            valueFrom = 0f; valueTo = 35f; stepSize = 1f; value = draft.toFloat(); contentDescription = "小窗背景透明度"
-        }
-        content.addView(slider)
-        val dialog = MaterialAlertDialogBuilder(activity).setTitle("MD3 小窗外观")
-            .setView(content).setPositiveButton("保存") { _, _ ->
-                ConfigManager.getDefaultConfig().putInt(SettingsAppearanceItem.WINDOW_TRANSPARENCY, draft)
-                SettingsAppearanceItem.refreshLabel()
-            }.setNegativeButton("取消", null).create()
-        dialog.setOnShowListener { dialog.window?.setBackgroundDrawable(SettingsAppearanceItem.windowMaterial(activity, draft)) }
-        slider.addOnChangeListener { _, value, _ ->
-            draft = value.toInt()
-            label.text = "小窗背景透明度：$draft%\n仅改变背景，文字保持不透明。颜色跟随设置页。"
-            dialog.window?.setBackgroundDrawable(SettingsAppearanceItem.windowMaterial(activity, draft))
-        }
-        dialog.show()
-    }
-
     fun show(activity: Activity, bar: Boolean) {
-        if (!bar) { showWindow(activity); return }
+        if (!bar) return // retired settings-window editor; QQ bar remains independent
         val prefix = if (bar) GlassConfig.PREFIX else OVERLAY
         val draft = linkedMapOf(
             "transparency" to read(prefix, "transparency", 0, 0..100),
@@ -130,7 +104,7 @@ object GlassAppearanceEditor {
             })
         }
         refresh()
-        MaterialAlertDialogBuilder(activity).setTitle(if (bar) "底栏文字、数量与玻璃" else "浮层玻璃外观")
+        sumicya.qself.ui.InlineAlertDialogBuilder(activity).setTitle(if (bar) "底栏文字、数量与玻璃" else "浮层玻璃外观")
             .setView(ScrollView(activity).apply { addView(content) })
             .setPositiveButton("保存") { _, _ ->
                 val config = ConfigManager.getDefaultConfig()

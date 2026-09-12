@@ -63,7 +63,7 @@ public class AddAccount extends CommonClickableStaticFunctionItem {
         editText.setTextSize(16);
         LinearLayout linearLayout = new LinearLayout(ctx);
         linearLayout.addView(editText, LayoutHelper.newLinearLayoutParams(MATCH_PARENT, WRAP_CONTENT));
-        AlertDialog alertDialog = new AlertDialog.Builder(ctx)
+        AlertDialog alertDialog = new sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle("输入要添加的QQ号")
             .setView(linearLayout)
             .setPositiveButton("添加", null)

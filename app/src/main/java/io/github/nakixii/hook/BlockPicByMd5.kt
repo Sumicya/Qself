@@ -301,7 +301,7 @@ object BlockPicByMd5 : CommonConfigFunctionHook(
     }
 
     private fun showHostOnlyDialog(context: Context) {
-        AlertDialog.Builder(CommonContextWrapper.createAppCompatContext(context))
+        sumicya.qself.ui.InlineAlertDialogBuilder(CommonContextWrapper.createAppCompatContext(context))
             .setTitle(name)
             .setMessage("规则和替换图片由 QQ 进程保存。请在 QQ 内打开 QAuxiliary 设置，或在图片 MD5 菜单中选择“屏蔽图片”后管理规则。")
             .setPositiveButton("关闭", null)
@@ -363,7 +363,7 @@ object BlockPicByMd5 : CommonConfigFunctionHook(
             }, itemParams)
         }
 
-        dialog = AlertDialog.Builder(dialogContext)
+        dialog = sumicya.qself.ui.InlineAlertDialogBuilder(dialogContext)
             .setTitle("图片 MD5 屏蔽规则")
             .setView(ScrollView(dialogContext).apply { addView(content) })
             .setPositiveButton("关闭", null)
@@ -383,7 +383,7 @@ object BlockPicByMd5 : CommonConfigFunctionHook(
             setPadding(margin, 0, margin, 0)
             addView(input, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         }
-        val dialog = AlertDialog.Builder(dialogContext)
+        val dialog = sumicya.qself.ui.InlineAlertDialogBuilder(dialogContext)
             .setTitle("添加 MD5 规则")
             .setView(wrapper)
             .setPositiveButton("添加", null)
@@ -413,7 +413,7 @@ object BlockPicByMd5 : CommonConfigFunctionHook(
             arrayOf("选择专属替换图片", "删除规则")
         }
         val dialogContext = CommonContextWrapper.createAppCompatContext(context)
-        AlertDialog.Builder(dialogContext)
+        sumicya.qself.ui.InlineAlertDialogBuilder(dialogContext)
             .setTitle(md5)
             .setItems(actions) { _, which ->
                 when {

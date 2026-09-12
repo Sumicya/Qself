@@ -108,7 +108,7 @@ object FileRecvRedirect : CommonConfigFunctionHook(SyncUtils.PROC_ANY and (SyncU
                 }
             }
 
-            MaterialAlertDialogBuilder(activity)
+            sumicya.qself.ui.InlineAlertDialogBuilder(activity)
                 .setTitle("下载文件重定向")
                 .setPositiveButton("保存") { _, _ ->
                     val path = et_path.text.toString()

@@ -100,7 +100,7 @@ class UiAgentItem(
         if (unsupported && isChecked) {
             val ctx = CommonContextWrapper.createAppCompatContext(btn.context)
             // confirm
-            AlertDialog.Builder(ctx)
+            sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setTitle("不支持的功能")
                 .setMessage("此功能（$funcName）暂不支持在 ${hostInfo.hostName} ${hostInfo.versionName}(${hostInfo.versionCode32}) 上使用，仍然要开启吗？")
                 .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -129,6 +129,7 @@ class UiAgentItem(
 
     private fun bindCell(cell: TitleValueCell, position: Int, context: Context) {
         // Identity check prevents a late initialization callback rebinding a recycled row.
+        if (cell.getTag(io.github.qauxv.R.id.qself_bound_agent) !== this) cell.inlineContent.removeAllViews()
         cell.setTag(io.github.qauxv.R.id.qself_bound_agent, this)
         cell.setOnClickListener(null)
         cell.switchView.setOnCheckedChangeListener(null)
@@ -169,6 +170,7 @@ class UiAgentItem(
     }
 
     override fun onItemClick(v: View, position: Int, x: Int, y: Int) {
+        sumicya.qself.ui.InlineSettings.anchor(v)
         val agent = agentProvider.uiItemAgent
         val cell = v as TitleValueCell
         if (hasFailure()) { showFailure(v); return }
@@ -190,6 +192,7 @@ class UiAgentItem(
 
     override fun onLongClick(v: View, position: Int, x: Int, y: Int): Boolean {
         if (!isLongClickable) return false
+        sumicya.qself.ui.InlineSettings.anchor(v)
         showFailure(v)
         return true
     }
@@ -217,7 +220,7 @@ class UiAgentItem(
             this.text = report; textSize = 13f; setTextIsSelectable(true)
             val pad = sumicya.qself.ui.SettingsVisuals.dp(activity, 20); setPadding(pad, pad, pad, pad)
         }
-        val builder = com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+        val builder = sumicya.qself.ui.InlineAlertDialogBuilder(activity)
             .setTitle("功能详情 / 错误输出")
             .setView(android.widget.ScrollView(activity).apply { addView(text) })
             .setPositiveButton("复制错误") { _, _ -> xyz.nextalone.util.SystemServiceUtils.copyToClipboard(activity, report); android.widget.Toast.makeText(activity, "已复制", android.widget.Toast.LENGTH_SHORT).show() }

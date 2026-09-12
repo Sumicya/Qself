@@ -189,7 +189,7 @@ object ImageCustomSummary : CommonConfigFunctionHook("ImageCustomSummary", array
             addView(summaryTextEdit, lp)
         }
 
-        AlertDialog.Builder(ctx).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
             setTitle("自定义外显内容")
             setView(rootLayout)
             setPositiveButton("确定") { _, _ ->

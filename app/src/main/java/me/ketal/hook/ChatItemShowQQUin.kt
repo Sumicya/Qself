@@ -250,7 +250,7 @@ object ChatItemShowQQUin : CommonConfigFunctionHook(), OnBubbleBuilder {
             addView(tvTimeFmt, lp)
             addView(tvClickToAppend, lp)
         }
-        AlertDialog.Builder(ctx).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
             setTitle("设置自定义格式")
             setView(layout)
             setCancelable(false)

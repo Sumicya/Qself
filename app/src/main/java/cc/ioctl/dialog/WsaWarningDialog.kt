@@ -61,7 +61,7 @@ object WsaWarningDialog {
         }
         mHasShownThisTime = true
         val ctx = CommonContextWrapper.createAppCompatContext(baseContext)
-        AlertDialog.Builder(ctx).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
             setTitle(R.string.wsa_warning_dialog_title)
             setMessage(R.string.wsa_warning_dialog_message)
             setPositiveButton(android.R.string.ok, null)

@@ -129,11 +129,11 @@ public abstract class BaseSettingFragment extends Fragment {
     }
 
     public int getLayoutPaddingTop() {
-        return mSettingsHostActivity.getLayoutPaddingTop();
+        return getArguments() != null && getArguments().getBoolean("qself.inline") ? 0 : mSettingsHostActivity.getLayoutPaddingTop();
     }
 
     public int getLayoutPaddingBottom() {
-        return mSettingsHostActivity.getLayoutPaddingBottom();
+        return getArguments() != null && getArguments().getBoolean("qself.inline") ? 0 : mSettingsHostActivity.getLayoutPaddingBottom();
     }
 
     public boolean isWrapContent() {

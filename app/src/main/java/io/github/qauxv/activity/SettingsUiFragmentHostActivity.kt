@@ -95,7 +95,7 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
         )
         mAppBarLayout = findViewById(R.id.topAppBarLayout)
         mAppToolBar = findViewById(R.id.topAppBar)
-        mAppBarLayout.background = SettingsVisuals.surface(this, visualPalette, 0, owner = mAppBarLayout)
+        mAppBarLayout.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         mAppToolBar.setTitleTextColor(visualPalette.text)
         mAppToolBar.setSubtitleTextColor(visualPalette.secondary)
         setSupportActionBar(mAppToolBar)
@@ -109,6 +109,15 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
             }
         }
         onBackPressedDispatcher.addCallback(this, mFragmentPopOnBackCallback)
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (!sumicya.qself.ui.InlineSettings.closeLast(this@SettingsUiFragmentHostActivity)) {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
         mAppBarLayout.doOnLayout {
             SyncUtils.postDelayed(0) {
                 runOnStart {
@@ -198,10 +207,12 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
     }
 
     fun presentFragment(fragment: BaseSettingFragment) {
+        if (sumicya.qself.ui.InlineSettings.presentFragment(this, fragment)) return
         rtlAddFragmentToTop(fragment)
     }
 
     fun finishFragment(fragment: BaseSettingFragment) {
+        if (sumicya.qself.ui.InlineSettings.finishFragment(fragment)) return
         rtlRemoveFragment(fragment)
     }
 
@@ -243,10 +254,6 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
 
     override fun doOnSaveInstanceState(outState: Bundle) {
         super.doOnSaveInstanceState(outState)
-        (supportFragmentManager.findFragmentByTag(sumicya.qself.ui.SettingsOptionSheet.TAG) as? sumicya.qself.ui.SettingsOptionSheet)
-            ?.takeIf { it.isAdded && it.dialog?.isShowing == true }?.let {
-                outState.putBundle(sumicya.qself.ui.SettingsOptionSheet.TAG, it.saveForHost())
-            }
         if (mFragmentStack.isNotEmpty()) {
             outState.putBundle(FRAGMENT_TAG, saveFragmentInstanceState())
         }

@@ -456,7 +456,7 @@ class TroubleshootFragment : BaseRootLayoutFragment() {
         action: () -> Unit
     ) = View.OnClickListener {
         val ctx = requireContext()
-        val builder = AlertDialog.Builder(ctx)
+        val builder = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
         builder.setPositiveButton(android.R.string.ok) { _, _ ->
             try {
                 action()
@@ -509,7 +509,7 @@ class TroubleshootFragment : BaseRootLayoutFragment() {
         action: (extraOptionChecked: Boolean) -> Unit
     ) = View.OnClickListener {
         val ctx = requireContext()
-        val builder = AlertDialog.Builder(ctx)
+        val builder = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
         val checkBoxStatus = AtomicBoolean(extraOptionCheckedByDefault)
         builder.setPositiveButton(android.R.string.ok) { _, _ ->
             try {
@@ -611,7 +611,7 @@ class TroubleshootFragment : BaseRootLayoutFragment() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setTextColor(ResourcesCompat.getColor(resources, R.color.firstTextColor, ctx.theme))
         }
-        AlertDialog.Builder(ctx).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
             setTitle("请输入 URL")
             setCancelable(true)
             setNeutralButton(android.R.string.paste, null) // set listener later
@@ -661,7 +661,7 @@ class TroubleshootFragment : BaseRootLayoutFragment() {
         return actionOrShowError {
             val ctx = requireContext()
             if (!mCrashActionWarned) {
-                AlertDialog.Builder(ctx).apply {
+                sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
                     setTitle("警告")
                     setMessage("此操作将会导致应用崩溃, 仅用于测试崩溃处理功能。\nPS: 经常崩溃容易造成聊天记录数据库损坏")
                     setCancelable(true)
@@ -702,7 +702,7 @@ class TroubleshootFragment : BaseRootLayoutFragment() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setTextColor(ResourcesCompat.getColor(resources, R.color.firstTextColor, ctx.theme))
         }
-        AlertDialog.Builder(ctx).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
             setTitle("请输入 Activity 类名")
             setCancelable(true)
             setNeutralButton(android.R.string.paste, null) // set listener later

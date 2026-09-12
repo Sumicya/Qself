@@ -155,7 +155,7 @@ class DatabaseListFragment : BaseRootLayoutFragment() {
 
     private fun confirmDeleteFile(file: File) {
         val ctx = requireContext()
-        AlertDialog.Builder(ctx).setTitle("确定要删除吗？").setMessage(file.absolutePath).setPositiveButton("确定") { _, _ ->
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).setTitle("确定要删除吗？").setMessage(file.absolutePath).setPositiveButton("确定") { _, _ ->
             try {
                 if (!file.isFile) {
                     Toasts.error(ctx, "不是文件：${file.absolutePath}")

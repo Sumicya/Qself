@@ -47,7 +47,7 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
     }
     override fun onDraw(canvas: Canvas) {
         val p = paletteOverride ?: SettingsVisuals.palette(context)
-        val size = SettingsVisuals.dp(context, 32).toFloat()
+        val size = SettingsVisuals.dp(context, 44).toFloat()
         val x = if (edgeAttached) 0f else (width - size) / 2f
         val y = if (edgeAttached) 0f else (height - size) / 2f
         paint.style = Paint.Style.FILL
@@ -66,12 +66,12 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
                 if (left) floatArrayOf(radius, radius, 0f, 0f, 0f, 0f, radius, radius)
                 else floatArrayOf(0f, 0f, radius, radius, radius, radius, 0f, 0f), android.graphics.Path.Direction.CW)
             canvas.drawPath(shape, paint)
-        } else canvas.drawRoundRect(x, y, x + size, y + size, 4f, 4f, paint)
+        } else canvas.drawRoundRect(x, y, x + size, y + size, SettingsVisuals.dp(context, 12).toFloat(), SettingsVisuals.dp(context, 12).toFloat(), paint)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = resources.displayMetrics.density
         paint.color = p.rim
         paint.alpha = ((1f - checkedFraction) * 255).toInt()
-        if (!edgeAttached) canvas.drawRoundRect(x, y, x + size, y + size, 4f, 4f, paint)
+        if (!edgeAttached) canvas.drawRoundRect(x, y, x + size, y + size, SettingsVisuals.dp(context, 12).toFloat(), SettingsVisuals.dp(context, 12).toFloat(), paint)
         paint.style = Paint.Style.FILL
         val foreground = if (failed) com.google.android.material.color.MaterialColors.getColor(context,
             com.google.android.material.R.attr.colorOnErrorContainer, p.text)

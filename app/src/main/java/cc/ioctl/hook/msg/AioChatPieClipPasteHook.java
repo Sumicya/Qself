@@ -290,7 +290,7 @@ public class AioChatPieClipPasteHook extends CommonSwitchFunctionHook implements
         binding.ivPicture.setImageBitmap(bitmap);
         binding.tvName.setText(uin);
         FaceImpl.getInstance().setImageOrRegister(uinType == 1 ? FaceImpl.TYPE_TROOP : FaceImpl.TYPE_USER, uin, binding.ivAvatar);
-        new AlertDialog.Builder(ctx)
+        new sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setTitle("发送给：")
                 .setView(binding.getRoot())
                 .setPositiveButton("发送", (dialog, which) -> executeSendMessage(context, session, data, aioRootView, rt))

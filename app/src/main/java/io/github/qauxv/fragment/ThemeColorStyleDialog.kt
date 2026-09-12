@@ -49,7 +49,7 @@ object ThemeColorStyleDialog : BasePlainUiAgentItem(title = "主题颜色") {
     }
 
     override val onClickListener: ((IUiItemAgent, Activity, View) -> Unit) = { _, activity, _ ->
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
             .setTitle("设置页配色来源")
             .setItems(arrayOf("系统壁纸动态配色", "手动主题色")) { _, which ->
                 if (which == 0 && android.os.Build.VERSION.SDK_INT >= 31) {
@@ -63,30 +63,12 @@ object ThemeColorStyleDialog : BasePlainUiAgentItem(title = "主题颜色") {
     }
 
     private fun showSelectDialog(activity: Activity) {
-        val dialog = ColorPickerDialog.newBuilder()
-            .setDialogType(ColorPickerDialog.TYPE_PRESETS)
-            .setDialogTitle(R.string.cpv_default_title)
-            .setColorShape(ColorShape.CIRCLE)
-            .setPresets(ModuleThemeManager.getThemeColors(activity))
-            .setAllowPresets(true)
-            .setAllowCustom(false)
-            .setShowAlphaSlider(false)
-            .setShowColorShades(false)
-            .setColor(ModuleThemeManager.getCurrentThemeColorId(activity))
-            .create()
-        dialog.setColorPickerDialogListener(object : ColorPickerDialogListener {
-            override fun onColorSelected(dialogId: Int, color: Int) {
-                updateThemeColor(activity, color)
-            }
-
-            override fun onDialogDismissed(dialogId: Int) {
-                // nothing to do
-            }
-        })
-        (activity as FragmentActivity).supportFragmentManager
-            .beginTransaction()
-            .add(dialog, "color_picker_dialog")
-            .commitAllowingStateLoss()
+        val colors = ModuleThemeManager.getThemeColors(activity)
+        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
+            .setTitle("手动主题色")
+            .setItems(colors.map { String.format("#%06X", it and 0xFFFFFF) }.toTypedArray()) { _, which ->
+                updateThemeColor(activity, colors[which])
+            }.setNegativeButton("取消", null).show()
     }
 
     private fun updateThemeColor(activity: Activity, color: Int) {

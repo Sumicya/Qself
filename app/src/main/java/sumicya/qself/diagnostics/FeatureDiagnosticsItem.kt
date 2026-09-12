@@ -31,7 +31,7 @@ object FeatureDiagnosticsItem : BasePlainUiAgentItem("功能开关与错误记�
     override val onClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, activity, _ ->
         (activity as? FragmentActivity)?.lifecycleScope?.launch {
             val report = withContext(Dispatchers.IO) { runCatching { FeatureJournal.report() }.getOrElse { "读取失败：${it.javaClass.simpleName}" } }
-            if (!activity.isFinishing && !activity.isDestroyed) MaterialAlertDialogBuilder(activity)
+            if (!activity.isFinishing && !activity.isDestroyed) sumicya.qself.ui.InlineAlertDialogBuilder(activity)
                 .setTitle("功能开关与错误记录").setMessage(report)
                 .setPositiveButton("复制") { _, _ -> (activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                     .setPrimaryClip(ClipData.newPlainText("Qself 功能记录", report)) }

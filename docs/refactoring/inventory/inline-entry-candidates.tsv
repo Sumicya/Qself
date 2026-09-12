@@ -1,0 +1,149 @@
+类型	源文件	候选调用数	可达性	处理状态
+Material/AppCompat 弹窗	app/src/main/java/cc/hicore/Utils/HttpUtils.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/hicore/hook/stickerPanel/PanelUtils.java	3	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/hicore/hook/stickerPanel/MainItemImpl/InputFromLocalImpl.java	5	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/hicore/hook/stickerPanel/MainItemImpl/LocalStickerImpl.java	4	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/dialog/WsaWarningDialog.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/fragment/CustomSplashConfigFragment.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/fragment/DatabaseListFragment.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/fragment/DatabaseShrinkFragment.kt	6	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/fragment/ExfriendListFragment.java	4	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/fragment/Pcm2SilkTestFragment.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/entertainment/AddAccount.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/experimental/FileRecvRedirect.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/friend/CheckCommonGroupMenu.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/friend/OpenFriendChatHistory.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/misc/QSecO3AddRiskRequestMitigation.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/msg/AioChatPieClipPasteHook.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/msg/OpenMultiFwdMsg.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/msg/PicMd5Hook.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/msg/PttForwardHook.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/profile/OpenProfileCard.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/troop/TroopFileRename.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/ui/main/ContactListSortHook.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/ui/misc/ChangeDpi.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/ioctl/hook/ui/misc/OptXListViewScrollBar.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/microblock/hook/DumpTelegramStickers.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/cc/microblock/hook/ImageCustomSummary.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/com/xiaoniu/hook/TroopGroupHook.kt	6	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/duzhaokun123/activity/PictureEditProxyActivity.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/duzhaokun123/hook/MessageCopyHook.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/duzhaokun123/hook/GalBgBlurHook.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/duzhaokun123/hook/InternalBrowserMenu.kt	3	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/duzhaokun123/hook/NotificationChannelManager.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/duzhaokun123/hook/PhotoShareHook.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/duzhaokun123/util/TTS.kt	10	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/duzhaokun123/util/CacheManager.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/duzhaokun123/util/FilePicker.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/huanxin996/hook/BlockListPlusHook.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/nakixii/hook/BlockPicByMd5.kt	4	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/activity/ConfigV2Activity.kt	7	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/activity/ShadowShareFileAgentActivity.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/chainloader/detail/ui/ExternalModuleConfigFragment.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/dsl/item/UiAgentItem.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/fragment/BackupRestoreConfigFragment.kt	5	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/fragment/FuncStatusDetailsFragment.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/fragment/HotUpdateConfigFragment.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/fragment/SearchOverlaySubFragment.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/fragment/ThemeColorStyleDialog.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/fragment/ThemeModeStyleDialog.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/fragment/TroubleshootFragment.kt	5	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/tips/newfeaturehint/NewFeatureIntroduceFragment.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/ui/CustomDialog.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/io/github/qauxv/util/ui/FaultyDialog.java	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/hd/hook/CustomPetHomeBg.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/hd/hook/HandleSendChatCount.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/hd/hook/auxiliary/chat/CustomEmotionPanelColumns.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/ketal/hook/ChangeQQIcon.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/ketal/hook/ChatItemShowQQUin.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/ketal/hook/ManageComponent.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/ketal/hook/ShowMsgAt.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/ketal/ui/activity/QFileShareToIpadActivity.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/qcuncle/hook/TranslateTextMsg.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/singleneuron/activity/ChooseAgentActivity.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/singleneuron/hook/ChangeDrawerWidth.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/singleneuron/hook/decorator/ForceSystemAlbum.kt	4	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/singleneuron/hook/decorator/ForceSystemFile.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/singleneuron/hook/decorator/RegexAntiMeg.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/me/singleneuron/util/EasterEggsForTheNonexistent.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/top/xunflash/hook/MiniAppDirectJump.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/xyz/nextalone/base/MultiItemDelayableHook.kt	3	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/xyz/nextalone/hook/ChatInputHint.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/xyz/nextalone/hook/ChatWordsCount.kt	3	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/sumicya/qself/diagnostics/ReportDiagnostics.kt	4	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/sumicya/qself/diagnostics/FeatureDiagnosticsItem.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/sumicya/qself/feature/chat/GroupAdminBridge.kt	4	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/sumicya/qself/feature/chat/GroupAdminMenu.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/sumicya/qself/feature/device/ModifyDeviceType.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/sumicya/qself/feature/ui/AvatarRounding.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+Material/AppCompat 弹窗	app/src/main/java/sumicya/qself/ui/GlassAppearanceEditor.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/cc/hicore/dialog/RepeaterPlusIconSettingDialog.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/cc/ioctl/dialog/RepeaterIconSettingDialog.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/cc/ioctl/dialog/RikkaBaseApkFormatDialog.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/cc/ioctl/dialog/RikkaCustomDeviceModelDialog.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/cc/ioctl/dialog/RikkaCustomMsgTimeFormatDialog.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/cc/ioctl/fragment/ExfriendListFragment.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/cc/ioctl/fragment/FakeBatteryConfigFragment.java	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/cc/ioctl/fragment/JefsRuleConfigFragment.java	4	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/cc/ioctl/hook/misc/JumpController.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/cc/ioctl/hook/msg/MultiForwardAvatarHook.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/cc/ioctl/hook/msg/PttForwardHook.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/io/github/qauxv/core/HookInstaller.java	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/io/github/qauxv/fragment/BackupRestoreConfigFragment.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/io/github/qauxv/fragment/TroubleshootFragment.kt	5	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/me/ketal/hook/ChatItemShowQQUin.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+CustomDialog	app/src/main/java/sumicya/qself/feature/dev/GrayTipCapture.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+旧 MaterialDialog	app/src/main/java/cc/ioctl/hook/qwallet/FakeBalance.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+旧 MaterialDialog	app/src/main/java/me/hd/hook/FakeLocation.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+旧 MaterialDialog	app/src/main/java/me/hd/hook/FakePhone.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+旧 MaterialDialog	app/src/main/java/me/hd/hook/FakePicSize.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+旧 MaterialDialog	app/src/main/java/me/hd/hook/FakeVoiceTime.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+旧 MaterialDialog	app/src/main/java/me/hd/hook/HandleClickGroupBotMsgBtnSend.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+旧 MaterialDialog	app/src/main/java/me/hd/hook/HandleClickPrivateBotRecMsgSend.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+旧 MaterialDialog	app/src/main/java/me/hd/hook/QuickReplayPaiYiPai.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+旧 MaterialDialog	app/src/main/java/me/ketal/hook/FakeQQLevel.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+旧 MaterialDialog	app/src/main/java/xyz/nextalone/hook/CleanRecentChat.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+XPopup	app/src/main/java/cc/hicore/Utils/Async.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+XPopup	app/src/main/java/cc/hicore/hook/stickerPanel/ICreator.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+XPopup	app/src/main/java/cc/hicore/hook/stickerPanel/MainItemImpl/RecentStickerImpl.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/cc/ioctl/fragment/DatabaseListFragment.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/cc/ioctl/hook/SettingEntryHook.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/cc/ioctl/hook/friend/CheckCommonGroupMenu.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/cc/ioctl/hook/friend/OpenFriendChatHistory.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/cc/ioctl/hook/msg/OpenMultiFwdMsg.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/cc/ioctl/hook/msg/PttForwardHook.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/cc/ioctl/hook/profile/OpenProfileCard.java	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/cc/microblock/hook/DumpTelegramStickers.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/com/xiaoniu/hook/TroopGroupHook.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/duzhaokun123/activity/PictureEditProxyActivity.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/duzhaokun123/hook/InternalBrowserMenu.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/duzhaokun123/hook/NotificationChannelManager.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/duzhaokun123/hook/PhotoShareHook.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/moonleeeaf/hook/AddEssenceViewerToGroupSettingsHook.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/activity/ConfigV2Activity.kt	4	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/activity/SettingsUiFragmentHostActivity.kt	4	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/activity/ShadowSafTransientActivity.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/activity/ShadowShareFileAgentActivity.java	4	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/dsl/item/UiAgentItem.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/fragment/AboutFragment.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/fragment/CheckAbiVariantFragment.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/fragment/EulaFragment.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/fragment/FuncStatListFragment.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/fragment/SearchOverlaySubFragment.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/fragment/SettingsMainFragment.kt	2	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/fragment/TroubleshootFragment.kt	4	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/lifecycle/JumpActivityEntryHook.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/tips/newfeaturehint/NewFeatureIntroduceFragment.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/util/consis/StartupDirectorBridge.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/io/github/qauxv/util/hookstatus/HookStatus.java	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/me/hd/hook/OpenIllegalityHistory.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/me/hd/hook/TimBarAddEssenceHook.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/me/hd/hook/TimMineAddPdFunc.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/me/ketal/hook/LeftSwipeReplyHook.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/me/ketal/hook/ManageComponent.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/me/ketal/ui/activity/QFileShareToIpadActivity.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/me/singleneuron/activity/ChooseAgentActivity.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/me/singleneuron/hook/decorator/ForceSystemAlbum.kt	3	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/me/singleneuron/hook/decorator/ForceSystemFile.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/top/xunflash/hook/MiniAppDirectJump.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由
+页面跳转	app/src/main/java/sumicya/qself/feature/chat/GroupAdminMenu.kt	1	待结合功能目录和调用链核实	待迁移或登记排除理由

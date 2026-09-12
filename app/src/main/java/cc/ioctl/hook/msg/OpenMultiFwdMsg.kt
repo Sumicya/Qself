@@ -67,7 +67,7 @@ object OpenMultiFwdMsg : IUiItemAgent, IUiItemAgentProvider {
         editText.textSize = 16f
         val linearLayout = LinearLayout(ctx)
         linearLayout.addView(editText, LayoutHelper.newLinearLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        val alertDialog = AlertDialog.Builder(ctx)
+        val alertDialog = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle("输入合并消息的 ResID (看起来像 base64 一样的东西)")
             .setView(linearLayout)
             .setCancelable(true)

@@ -147,7 +147,7 @@ public class PttForwardHook extends CommonSwitchFunctionHook implements OnMenuBu
         linearLayout.setOrientation(LinearLayout.VERTICAL);
         linearLayout.addView(tv, MATCH_PARENT, WRAP_CONTENT);
         linearLayout.addView(editText, newLinearLayoutParams(MATCH_PARENT, WRAP_CONTENT));
-        final AlertDialog alertDialog = new AlertDialog.Builder(ctx)
+        final AlertDialog alertDialog = new sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setTitle("输入保存路径(请自行转码)")
                 .setView(linearLayout)
                 .setPositiveButton("保存", null)

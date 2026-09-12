@@ -57,11 +57,14 @@ class TitleValueCell(
 
     private val textColumn = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     private var trailingWidth = 0
+    private var headerHeight = 0
+    val inlineContent = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; isClickable = true }
 
     init {
         minimumHeight = 56.dp
         setWillNotDraw(false)
         addView(textColumn)
+        addView(inlineContent)
         dividerColor = ResourcesCompat.getColor(resources, R.color.divideColor, context.theme)
         // title text view
         titleView = TextView(context).apply {
@@ -103,7 +106,7 @@ class TitleValueCell(
         // switch view
         switchView = SquareStateControl(context).apply {
             visibility = GONE
-            edgeAttached = true
+            edgeAttached = false
             // disable click for default because this behavior is managed by the recycler view,
             // but they can still set onCheckedChangeListener if they want
             isClickable = false
@@ -206,23 +209,26 @@ class TitleValueCell(
         textColumn.measure(MeasureSpec.makeMeasureSpec((width - 32.dp - trailingWidth).coerceAtLeast(0), MeasureSpec.EXACTLY), unspecified)
         val height = maxOf(minimumHeight, textColumn.measuredHeight + 16.dp,
             if (control.visibility == GONE || isHasSwitch) 0 else control.measuredHeight + 8.dp)
-        setMeasuredDimension(width, resolveSize(height, heightMeasureSpec))
+        headerHeight = height
+        inlineContent.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), unspecified)
+        setMeasuredDimension(width, resolveSize(height + inlineContent.measuredHeight, heightMeasureSpec))
         if (isHasSwitch) switchView.measure(MeasureSpec.makeMeasureSpec(48.dp, MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(measuredHeight, MeasureSpec.EXACTLY))
+            MeasureSpec.makeMeasureSpec(48.dp, MeasureSpec.EXACTLY))
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        inlineContent.layout(0, headerHeight, measuredWidth, headerHeight + inlineContent.measuredHeight)
         val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
         // State belongs at the leading edge; explanatory text follows it.
         val leadingControl = isHasSwitch
         val columnLeft = 16.dp + if (leadingControl != rtl) trailingWidth else 0
-        val columnTop = (measuredHeight - textColumn.measuredHeight) / 2
+        val columnTop = (headerHeight - textColumn.measuredHeight) / 2
         textColumn.layout(columnLeft, columnTop, columnLeft + textColumn.measuredWidth, columnTop + textColumn.measuredHeight)
         for (control in arrayOf(valueView, switchView)) if (control.visibility != GONE) {
             val atLeft = if (control === switchView) !rtl else rtl
             val inset = if (control === switchView) 0 else 16.dp
             val x = if (atLeft) inset else measuredWidth - inset - control.measuredWidth
-            val y = (measuredHeight - control.measuredHeight) / 2
+            val y = (headerHeight - control.measuredHeight) / 2
             control.layout(x, y, x + control.measuredWidth, y + control.measuredHeight)
         }
     }

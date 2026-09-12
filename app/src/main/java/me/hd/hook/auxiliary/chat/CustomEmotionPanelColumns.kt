@@ -102,7 +102,7 @@ object CustomEmotionPanelColumns : CommonConfigFunctionHook() {
             if (value == COLUMN_COUNT_DISABLED) "禁用" else "${value}列"
         }.toTypedArray()
         val checkedIndex = selectableColumnCounts.indexOf(columnCount).takeIf { it >= 0 } ?: 0
-        AlertDialog.Builder(activity)
+        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
             .setTitle("选择表情面板列数")
             .setSingleChoiceItems(labels, checkedIndex) { dialog, which ->
                 columnCount = selectableColumnCounts[which]

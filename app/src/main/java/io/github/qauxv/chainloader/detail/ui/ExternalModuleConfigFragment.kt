@@ -194,7 +194,7 @@ class ExternalModuleConfigFragment : BaseRootLayoutFragment() {
     private fun showConfigExternalModuleDialog(current: ExternalModuleManager.ExternalModuleInfo?) {
         val ctx = CommonContextWrapper.createAppCompatContext(requireContext())
         val vb = DialogExternalModuleInfoBinding.inflate(LayoutInflater.from(ctx))
-        val builder = AlertDialog.Builder(ctx)
+        val builder = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle(if (current == null) "添加外部模块" else "编辑外部模块")
             .setView(vb.root)
             .setPositiveButton(android.R.string.ok, null)

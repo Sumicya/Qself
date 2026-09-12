@@ -102,7 +102,7 @@ object RegexAntiMeg : CommonConfigFunctionHook(), MessageReceiver {
 
     override val onUiItemClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, activity, _ ->
         val dialogContext = CommonContextWrapper.createMaterialDesignContext(activity)
-        MaterialAlertDialogBuilder(dialogContext).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(dialogContext).apply {
             setTitle("设置正则表达式")
             setMessage("请输入正则表达式，以便屏蔽指定的卡片消息")
             val editTextPreference: EditText = EditText(dialogContext).apply {

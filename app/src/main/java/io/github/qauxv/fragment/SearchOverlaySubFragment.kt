@@ -505,7 +505,7 @@ class SearchOverlaySubFragment {
         }
         if (targetFragmentLocation == null) {
             // tell user we are lost
-            AlertDialog.Builder(requireContext()).apply {
+            sumicya.qself.ui.InlineAlertDialogBuilder(requireContext()).apply {
                 setTitle("Navigation Error")
                 setMessage("We are lost, can't find the target fragment: " + absFullLocation.joinToString("."))
                 setPositiveButton(android.R.string.ok) { _, _ -> }
@@ -549,7 +549,7 @@ class SearchOverlaySubFragment {
                 })
             }
             searchSettingClearHistory.setOnClickListener {
-                AlertDialog.Builder(requireContext()).apply {
+                sumicya.qself.ui.InlineAlertDialogBuilder(requireContext()).apply {
                     setTitle("清除历史记录")
                     setMessage("确定要清除所有历史记录吗？\n您也可以通过长按来删除单个历史记录。")
                     setPositiveButton(android.R.string.ok) { _, _ ->

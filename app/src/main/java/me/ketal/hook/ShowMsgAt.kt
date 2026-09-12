@@ -143,7 +143,7 @@ object ShowMsgAt : CommonSwitchFunctionHook(), OnBubbleBuilder, DexKitFinder {
     public fun createUnknownUidDialog(outerContext: Context, uid: String) {
         val ctx = CommonContextWrapper.createAppCompatContext(outerContext)
         // BTN: OK, COPY
-        AlertDialog.Builder(ctx)
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle("未知的 UID")
             .setMessage(uid + "\n如果您是第一次遇到此情况，建议您在右上角打开群资料卡后点开群聊成员列表，并等待其全部加载完成后返回重试。")
             .setPositiveButton("确认") { _, _ -> }

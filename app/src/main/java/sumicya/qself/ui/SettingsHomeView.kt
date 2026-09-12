@@ -41,7 +41,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
 
     init {
         orientation = VERTICAL
-        setPadding(dp(20), dp(22), dp(20), dp(28))
+        setPadding(dp(16), dp(8), dp(16), dp(24))
     }
 
     fun bind(state: State, mode: Int, action: (String) -> Unit) {
@@ -53,7 +53,6 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         boundMode = mode
         removeAllViews()
         palette = SettingsVisuals.palette(context, mode)
-        addView(text("Qself", 36, palette.text, true), lp(top = 7))
         addView(text("按需开启，保持简单。", 15, palette.secondary), lp(top = 6, bottom = 16))
         addView(text(state.hostLabel + if (state.safeMode) "  ·  安全模式" else "  ·  合并版", 12, palette.accent)
             .apply { setPadding(dp(12), dp(7), dp(12), dp(7)); background = SettingsVisuals.surface(context, palette, 12, owner = this) },
@@ -68,7 +67,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
                         val row = io.github.qauxv.dsl.cell.TitleValueCell(context).apply {
                             title = group.title
                             summary = "${group.sections.sumOf { it.features.size }} 项独立设置"
-                            value = "›"; hasDivider = false
+                            value = "⌄"; hasDivider = false
                             titleView.setTextColor(palette.text); summaryView.setTextColor(palette.secondary)
                         }
                         button(row, "group:${group.id}", group.title)
@@ -100,7 +99,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         addView(diagnostics)
 
         addView(text("管理", 14, palette.secondary, true), lp(top = 28, bottom = 12))
-        utility("主题与显示", "Material 3 Expressive · 半透明小窗", HomeCatalog.THEME)
+        utility("主题与显示", "Material 3 Expressive · 原地展开", HomeCatalog.THEME)
         utility("备份与恢复", "保留你的配置，放心调整", HomeCatalog.BACKUP)
         utility("功能与设置", "按场景合并，子项独立选择", HomeCatalog.CATALOG)
         addView(text("同类能力共用入口与处理；各子项保留原来的配置。", 12, palette.secondary), lp(top = 10))
@@ -110,6 +109,16 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         }
         button(about, HomeCatalog.ABOUT, "关于与隐私", filled = false)
         addView(about, lp(top = 16))
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        io.github.qauxv.dsl.item.UiAgentItem.findActivity(context)?.let { InlineSettings.register(it, this) }
+    }
+
+    override fun onDetachedFromWindow() {
+        io.github.qauxv.dsl.item.UiAgentItem.findActivity(context)?.let { InlineSettings.unregister(it) }
+        super.onDetachedFromWindow()
     }
 
     private fun utility(title: String, subtitle: String, id: String) {
@@ -146,7 +155,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         view.isClickable = true
         view.minimumHeight = maxOf(view.minimumHeight, dp(48))
         if (filled) view.background = SettingsVisuals.surface(context, palette, 12, true, view)
-        view.setOnClickListener { dispatch(id) }
+        view.setOnClickListener { InlineSettings.anchor(view); dispatch(id) }
         view.accessibilityDelegate = object : AccessibilityDelegate() {
             override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
                 super.onInitializeAccessibilityNodeInfo(host, info)

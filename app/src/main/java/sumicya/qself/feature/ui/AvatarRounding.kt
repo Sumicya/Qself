@@ -125,7 +125,7 @@ object AvatarRounding : CommonSwitchFunctionHook(
         fun save(dp: Int) {
             ConfigManager.getDefaultConfig().putString(CFG_RADIUS, dp.toString())
         }
-        AlertDialog.Builder(ctx)
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle("头像圆角设置")
             .setView(box)
             .setPositiveButton("保存") { _, _ ->

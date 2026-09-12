@@ -78,7 +78,7 @@ class FuncStatusDetailsFragment : BaseRootLayoutFragment() {
                     Toasts.show(ctx, "已复制到剪贴板")
                 }
                 if (it.length > 1024) {
-                    AlertDialog.Builder(ctx)
+                    sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                         .setTitle("日志较长")
                         .setMessage("日志较长，建议使用文件方式分享（点击右上角的以文件分享按钮，或者保存为文件）")
                         .setPositiveButton("仍然复制") { _, _ -> copy() }

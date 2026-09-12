@@ -68,7 +68,7 @@ object OpenFriendChatHistory : IUiItemAgent, IUiItemAgentProvider {
         editText.textSize = 16f
         val linearLayout = LinearLayout(ctx)
         linearLayout.addView(editText, LayoutHelper.newLinearLayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        val alertDialog = AlertDialog.Builder(ctx)
+        val alertDialog = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle("请输入对方 qq 或 uid ")
             .setView(linearLayout)
             .setCancelable(true)

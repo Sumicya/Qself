@@ -122,7 +122,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
                         addView(etName)
                         addView(etUin)
                     }
-                    AlertDialog.Builder(context())
+                    sumicya.qself.ui.InlineAlertDialogBuilder(context())
                         .setTitle("添加群至分组“${items[bindingAdapterPosition].name}”")
                         .setView(l)
                         .setNegativeButton("取消", null)
@@ -133,7 +133,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
                         .show()
                 }
                 btnDelete.setOnClickListener {
-                    AlertDialog.Builder(context())
+                    sumicya.qself.ui.InlineAlertDialogBuilder(context())
                         .setTitle("删除分组")
                         .setMessage("确定删除分组“${items[bindingAdapterPosition].name}”吗？")
                         .setCancelable(false)
@@ -193,7 +193,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
             text = "添加分组"
             setOnClickListener {
                 val et = EditText(context)
-                AlertDialog.Builder(context)
+                sumicya.qself.ui.InlineAlertDialogBuilder(context)
                     .setTitle("分组名称")
                     .setView(et)
                     .setCancelable(false)
@@ -223,7 +223,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
             addView(layoutManageBtns)
             addView(recyclerView)
         }
-        AlertDialog.Builder(context()).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(context()).apply {
             setTitle("群聊分组")
             setView(mainView)
             setPositiveButton("确定", null)
@@ -253,7 +253,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
                             context.startActivity(intent)
                         }
                         tv.setOnLongClickListener {
-                            AlertDialog.Builder(context)
+                            sumicya.qself.ui.InlineAlertDialogBuilder(context)
                                 .setTitle("删除")
                                 .setMessage("确定删除“${tv.text}”吗？")
                                 .setNegativeButton("取消", null)
@@ -276,7 +276,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
                 }
             }
         }
-        AlertDialog.Builder(context()).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(context()).apply {
             setTitle(group.name)
             setView(recyclerView)
             setPositiveButton("确定", null)

@@ -45,7 +45,7 @@ class Pcm2SilkTestFragment : BaseRootLayoutFragment() {
 
     private fun errorDialog(msg: String) {
         runOnUiThread {
-            AlertDialog.Builder(requireContext())
+            sumicya.qself.ui.InlineAlertDialogBuilder(requireContext())
                 .setTitle("错误")
                 .setMessage(msg)
                 .setPositiveButton("确定", null)
@@ -56,7 +56,7 @@ class Pcm2SilkTestFragment : BaseRootLayoutFragment() {
     private fun errorDialog(msg: String, e: Throwable) {
         Log.e(msg, e)
         runOnUiThread {
-            AlertDialog.Builder(requireContext())
+            sumicya.qself.ui.InlineAlertDialogBuilder(requireContext())
                 .setTitle("错误")
                 .setMessage(msg + "\n" + e.toString())
                 .setPositiveButton("确定", null)

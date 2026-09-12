@@ -28,3 +28,8 @@
 #         This may lead to incorrect behavior in some cases.
 #         e.g. "org.jf.util.Hex$$ExternalSyntheticBUOutline0"
 # End of AGP 9.0.0 R8 bug workaround
+
+# Inline settings mounts AppCompat content without opening a Window.
+-keepclassmembers class androidx.appcompat.app.AlertDialog { *** mAlert; }
+-keepclassmembers class androidx.appcompat.app.AlertDialog$Builder { *** P; }
+-keepclassmembers class androidx.appcompat.app.AlertController$AlertParams { <fields>; public void apply(...); }

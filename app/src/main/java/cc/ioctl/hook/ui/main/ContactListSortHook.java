@@ -227,7 +227,7 @@ public class ContactListSortHook extends BaseFunctionHook implements IUiItemAgen
     }
 
     private void showConfigDialog(@NonNull Activity ctx) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(ctx);
+        AlertDialog.Builder builder = new sumicya.qself.ui.InlineAlertDialogBuilder(ctx);
         LinearLayout root = new LinearLayout(ctx);
         root.setOrientation(LinearLayout.VERTICAL);
         CheckBox ignoreVipStatus = new CheckBox(ctx);

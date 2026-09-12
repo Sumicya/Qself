@@ -104,7 +104,7 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
         title = when {
             section != null -> section.title
             arguments?.getBoolean(SHOW_CATALOG) == true -> "功能与设置"
-            else -> mFragmentDescription.name ?: "设置"
+            else -> if (isHome()) "Qself" else mFragmentDescription.name ?: "设置"
         }
         mTargetUiAgentNavId = arguments?.getString(TARGET_UI_AGENT_IDENTIFIER)
     }

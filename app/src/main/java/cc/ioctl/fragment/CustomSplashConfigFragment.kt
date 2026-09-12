@@ -334,7 +334,7 @@ class CustomSplashConfigFragment : BaseRootLayoutFragment() {
             return
         } else {
             val ctx = requireContext()
-            AlertDialog.Builder(ctx)
+            sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setTitle("提示")
                 .setMessage("未保存的更改将会丢失，确定要退出吗？")
                 .setCancelable(true)

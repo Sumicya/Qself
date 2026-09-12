@@ -71,7 +71,7 @@ public class OpenProfileCard extends CommonClickableStaticFunctionItem {
         editText.setTextSize(16);
         LinearLayout linearLayout = new LinearLayout(ctx);
         linearLayout.addView(editText, newLinearLayoutParams(MATCH_PARENT, WRAP_CONTENT));
-        AlertDialog alertDialog = new AlertDialog.Builder(ctx)
+        AlertDialog alertDialog = new sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setTitle("输入对方QQ号")
                 .setView(linearLayout)
                 .setCancelable(true)

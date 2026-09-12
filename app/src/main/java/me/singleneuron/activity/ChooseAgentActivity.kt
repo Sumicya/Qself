@@ -81,7 +81,7 @@ class ChooseAgentActivity : AbstractChooseActivity() {
                     finish()
                 } catch (e: Exception) {
                     runOnUiThread {
-                        AlertDialog.Builder(this@ChooseAgentActivity)
+                        sumicya.qself.ui.InlineAlertDialogBuilder(this@ChooseAgentActivity)
                             .setTitle(Reflex.getShortClassName(e))
                             .setMessage(Log.getStackTraceString(e))
                             .setCancelable(false)

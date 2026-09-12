@@ -68,7 +68,7 @@ object CustomPetHomeBg : KuiklyDelayableHook(
     override val uiItemAgent = uiClickableItem {
         title = "自定义宠物首页背景"
         onClickListener = { _, activity, _ ->
-            AlertDialog.Builder(activity)
+            sumicya.qself.ui.InlineAlertDialogBuilder(activity)
                 .setTitle("更换背景")
                 .setItems(bgMap.keys.toTypedArray()) { dialog, which ->
                     val key = bgMap.keys.elementAt(which)

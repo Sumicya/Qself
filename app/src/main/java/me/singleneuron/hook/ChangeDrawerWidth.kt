@@ -108,7 +108,7 @@ object ChangeDrawerWidth : CommonConfigFunctionHook("changeDrawerWidth") {
 
     override val onUiItemClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, activity, _ ->
         val dialogContext = CommonContextWrapper.createMaterialDesignContext(activity)
-        MaterialAlertDialogBuilder(dialogContext).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(dialogContext).apply {
             val slider = Slider(dialogContext)
             slider.valueFrom = 0f
             slider.valueTo = getMaxWidth(dialogContext).toInt().toFloat()

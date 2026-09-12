@@ -459,15 +459,15 @@ public class SettingsVisualTest {
         render("home-expanded", restored);
     }
 
-    @Test public void smallWindowActuallyCompositesWithBackgroundWithoutFadingText() {
+    @Test public void retiredWindowMaterialIsOpaqueRegardlessOfOldPreference() {
         for (boolean dark : new boolean[]{false, true}) {
             Context context = context(dark, 1f, 412, false);
             android.graphics.drawable.Drawable window = SettingsAppearanceItem.INSTANCE.windowMaterial(context, 12);
             window.setBounds(0, 0, 200, 100);
             Bitmap first = drawHardware(200, 100, c -> { c.drawColor(Color.BLUE); window.draw(c); });
             Bitmap second = drawHardware(200, 100, c -> { c.drawColor(Color.RED); window.draw(c); });
-            assertNotEquals(first.getPixel(100, 50), second.getPixel(100, 50));
-            assertTrue(window.getAlpha() < 255);
+            assertEquals(first.getPixel(100, 50), second.getPixel(100, 50));
+            assertEquals(255, window.getAlpha());
             first.recycle(); second.recycle();
         }
     }
@@ -532,8 +532,8 @@ public class SettingsVisualTest {
         assertEquals(56, cell.getHeight());
         assertEquals(48, cell.getSwitchView().getWidth());
         assertEquals(0, cell.getSwitchView().getLeft());
-        assertEquals(0, cell.getSwitchView().getTop());
-        assertEquals(cell.getHeight(), cell.getSwitchView().getHeight());
+        assertEquals((cell.getHeight() - 48) / 2, cell.getSwitchView().getTop());
+        assertEquals(48, cell.getSwitchView().getHeight());
         assertTrue(cell.getSwitchView().getRight() < ((View) cell.getTitleView().getParent()).getLeft());
         final int[] changes = {0};
         cell.getSwitchView().setOnCheckedChangeListener((button, value) -> changes[0]++);
@@ -593,7 +593,7 @@ public class SettingsVisualTest {
             String[][] data = {{"底部导航栏液态玻璃", "左侧开关；点击说明配置文字、数量与玻璃"},
                 {"消息防撤回", "关闭这一项，不改变其他选项"}, {"版本不支持的功能", "当前不可用；保留原配置"},
                 {"出现错误的功能", "查看功能错误记录，其他开关不受影响"},
-                {"较长的说明自动换行", "左侧状态区贴边并铺满行高，说明按照系统字号展开；不压缩文字，也不增加无意义的行间空白。"}};
+                {"较长的说明自动换行", "左侧圆角方形状态区保持固定大小，说明按照系统字号展开；不压缩文字，也不增加无意义的行间空白。"}};
             page.list.getRecycler().setAdapter(new RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 @Override public int getItemCount() { return data.length; }
                 @Override public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int type) {

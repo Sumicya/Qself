@@ -205,7 +205,7 @@ class DatabaseShrinkFragment : BaseRootLayoutFragment() {
         if (!mIsCalcSize.compareAndSet(false, true)) {
             return
         }
-        val dialog = AlertDialog.Builder(ctx)
+        val dialog = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle("COUNT(*)")
             .setMessage("正在计算表的数据量，请稍候...")
             .setCancelable(false)
@@ -249,7 +249,7 @@ class DatabaseShrinkFragment : BaseRootLayoutFragment() {
             CATEGORY_FRIENDS, CATEGORY_TROOPS, CATEGORY_GUILDS,
             CATEGORY_TROOP_FILE_TRANSFER_ITEM, CATEGORY_QQ_CALL, CATEGORY_OTHERS
         )
-        AlertDialog.Builder(ctx).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
             setTitle("筛选")
             setMultiChoiceItems(
                 choicesNames, booleanArrayOf(
@@ -532,8 +532,8 @@ class DatabaseShrinkFragment : BaseRootLayoutFragment() {
 
     private fun confirmAndExecuteSql(db: SQLiteDatabase, sql: String) {
         val ctx = requireContext()
-        AlertDialog.Builder(ctx).setTitle("确定要执行该语句吗？").setMessage(sql).setPositiveButton("确定") { _, _ ->
-            val waitDialog = AlertDialog.Builder(ctx).setTitle("请稍候").setMessage(sql).setCancelable(false).show()
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).setTitle("确定要执行该语句吗？").setMessage(sql).setPositiveButton("确定") { _, _ ->
+            val waitDialog = sumicya.qself.ui.InlineAlertDialogBuilder(ctx).setTitle("请稍候").setMessage(sql).setCancelable(false).show()
             async {
                 try {
                     db.execSQL(sql)
@@ -588,7 +588,7 @@ class DatabaseShrinkFragment : BaseRootLayoutFragment() {
                 return@lambda
             }
             val ctx = requireContext()
-            val waitDialog = AlertDialog.Builder(ctx)
+            val waitDialog = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setTitle("正在查询")
                 .setMessage("$md5\n通常不会超过一分钟")
                 .setCancelable(false)
@@ -633,7 +633,7 @@ class DatabaseShrinkFragment : BaseRootLayoutFragment() {
                         mMd5ToUinLut[md5] = plain
                     } else {
                         runOnUiThread {
-                            AlertDialog.Builder(ctx).apply {
+                            sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
                                 setTitle("查询失败")
                                 setMessage("$md5\n$resp")
                                 setNeutralButton("复制 MD5") { _, _ ->

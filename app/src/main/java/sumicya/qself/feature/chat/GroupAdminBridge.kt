@@ -123,7 +123,7 @@ object GroupAdminBridge {
     fun muteDialog(activity: android.content.Context, peerUid: String, memberUid: String, uin: Long) {
         val durations = arrayOf("10 分钟", "1 小时", "12 小时", "1 天", "解除禁言")
         val seconds = longArrayOf(600, 3600, 43200, 86400, 0)
-        AlertDialog.Builder(activity)
+        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
             .setTitle("禁言 $uin")
             .setItems(durations) { _: DialogInterface, which: Int ->
                 val r = muteMember(peerUid, memberUid, seconds[which])
@@ -135,7 +135,7 @@ object GroupAdminBridge {
     }
 
     fun kickDialog(activity: android.content.Context, peerUid: String, memberUid: String, uin: Long) {
-        AlertDialog.Builder(activity)
+        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
             .setTitle("移出群聊")
             .setMessage("确定将 $uin 移出本群？")
             .setPositiveButton("移出") { _: DialogInterface, _: Int ->
@@ -155,7 +155,7 @@ object GroupAdminBridge {
             setPadding(pad, pad / 2, pad, 0)
             addView(edit)
         }
-        AlertDialog.Builder(activity)
+        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
             .setTitle("设置 $uin 的群名片")
             .setView(box)
             .setPositiveButton("保存") { _: DialogInterface, _: Int ->
@@ -168,7 +168,7 @@ object GroupAdminBridge {
     }
 
     fun revokeDialog(activity: android.content.Context, msgId: Long, msgSeq: Long, uin: Long) {
-        AlertDialog.Builder(activity)
+        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
             .setTitle("撤回本条消息")
             .setMessage("确定撤回 $uin 的这条消息？")
             .setPositiveButton("撤回") { _: DialogInterface, _: Int ->

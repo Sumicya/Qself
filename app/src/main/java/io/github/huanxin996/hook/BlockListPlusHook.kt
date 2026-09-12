@@ -164,7 +164,7 @@ object BlockListPlusHook : CommonSwitchFunctionHook("block_list_plus_hook") {
     private fun showItemsDialog(activity: Activity) {
         val context = CommonContextWrapper.createMaterialDesignContext(activity)
         val cache = activeItems.toMutableSet()
-        val builder = MaterialAlertDialogBuilder(context)
+        val builder = sumicya.qself.ui.InlineAlertDialogBuilder(context)
             .setTitle("选择要屏蔽的项目")
             .setMultiChoiceItems(
                 ALL_ITEMS.toTypedArray(),

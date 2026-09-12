@@ -66,7 +66,7 @@ public class FaultyDialog {
     private static void showImpl(@NonNull Context ctx, @NonNull String title, @NonNull Throwable e, boolean cancelable) {
         Context c = CommonContextWrapper.createAppCompatContext(ctx);
         String msg = Log.getStackTraceString(e);
-        new AlertDialog.Builder(c)
+        new sumicya.qself.ui.InlineAlertDialogBuilder(c)
                 .setTitle(title)
                 .setMessage(msg)
                 .setCancelable(cancelable)
@@ -81,7 +81,7 @@ public class FaultyDialog {
 
     private static void showImpl(@NonNull Context ctx, @NonNull String title, @NonNull CharSequence msg, boolean cancelable) {
         Context c = CommonContextWrapper.createAppCompatContext(ctx);
-        new AlertDialog.Builder(c)
+        new sumicya.qself.ui.InlineAlertDialogBuilder(c)
                 .setTitle(title)
                 .setMessage(msg)
                 .setCancelable(cancelable)

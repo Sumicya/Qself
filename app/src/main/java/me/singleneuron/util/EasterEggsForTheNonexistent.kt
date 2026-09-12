@@ -30,7 +30,7 @@ fun processSearchEasterEgg(text: String, context: Context) {
     for (pair in easterEggsMap) {
         for (key in pair.key) {
             if (text.contains(key, true)) {
-                AlertDialog.Builder(context)
+                sumicya.qself.ui.InlineAlertDialogBuilder(context)
                     .setTitle(pair.value.first)
                     .setMessage(pair.value.second)
                     .setPositiveButton("OK", null)

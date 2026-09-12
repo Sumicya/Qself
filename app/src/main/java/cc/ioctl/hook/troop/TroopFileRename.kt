@@ -150,7 +150,7 @@ object TroopFileRename : PluginDelayableHook("ketal_TroopFileRename"), View.OnCl
         fileInfo: group_file_common.FileInfo,
         tv: TextView
     ) {
-        MaterialAlertDialogBuilder(ctx).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
             setTitle("请输入文件名称")
             val editTextPreference: EditText = EditText(ctx).apply {
                 setText(fileInfo.str_file_name.get())

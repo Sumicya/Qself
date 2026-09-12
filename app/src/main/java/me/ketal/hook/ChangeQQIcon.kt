@@ -104,7 +104,7 @@ object ChangeQQIcon : CommonConfigFunctionHook("Ketal_ManageComponent") {
         }
         val current = pm.getLaunchIntentForPackage(hostInfo.packageName)!!.component!!
 
-        AlertDialog.Builder(CommonContextWrapper.createAppCompatContext(ctx))
+        sumicya.qself.ui.InlineAlertDialogBuilder(CommonContextWrapper.createAppCompatContext(ctx))
             .setTitle("请选择一个图标")
             .setSingleChoiceItems(items, list.indexOfFirst { it.name == current.className }) { dialog, which ->
                 val selected = list[which]

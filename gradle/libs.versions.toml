@@ -1,10 +1,9 @@
 [versions]
-# AGP 9.? no longer supports `android.enableResourceOptimizations=false`, so do not use AGP 9.? for now.
+# AGP 9.3: keep the module resource-package compatibility switches in gradle.properties.
 # AGP 10.0 no longer supports `android.newDsl=false`, so do not use AGP 10.0 for now.
 agp = "9.3.1"
 kotlin = "2.4.10"
 ksp = "2.3.11"
-appCenter = "5.0.6"
 lifecycle = "2.11.0"
 materialDialog = "3.3.0"
 protobuf = "4.35.1"
@@ -12,8 +11,6 @@ sealedEnum = "0.7.0"
 
 [libraries]
 hiddenapibypass = { module = "org.lsposed.hiddenapibypass:hiddenapibypass", version = "6.1" }
-appcenter-analytics = { module = "com.microsoft.appcenter:appcenter-analytics", version.ref = "appCenter" }
-appcenter-crashes = { module = "com.microsoft.appcenter:appcenter-crashes", version.ref = "appCenter" }
 androidx-annotation = { module = "androidx.annotation:annotation", version = "1.10.0" }
 androidx-appcompat = { module = "androidx.appcompat:appcompat", version = "1.8.0" }
 # Dependency 'androidx.browser:browser:1.9.0' requires Android Gradle plugin 8.9.1 or higher.

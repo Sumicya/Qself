@@ -100,7 +100,7 @@ public class OptXListViewScrollBar extends CommonConfigFunctionHook {
 
     private void showDialog(Activity ctx) {
         int current = getCurrentValue();
-        new AlertDialog.Builder(ctx)
+        new sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setTitle("修改滑条样式")
                 .setSingleChoiceItems(SWITCH_ITEMS_DETAIL, current, (dialog, which) -> {
                     setCurrentValue(which);
