@@ -1,10 +1,14 @@
 # 上报诊断 v1：只读观察，不是反检测保证
 
-状态：源码初版，尚未完成 Android 构建或真机验收。仅面向 QQ Android 9.2.10（11310）。
+状态：已完成整合、完整 Gradle 测试、APK 构建及实际产物审计。下载与校验信息见 [交付记录](02-diagnostics-delivery.md)。仅面向 QQ Android 9.2.10（11310），真机验收未执行。
 
 ## 本批边界
 
-- 当前会话分支上的增量功能，没有整合第一分支的玻璃/群日志等功能。
+- 已在当前分支整合第一分支的基础迁移、测试、玻璃/群日志等既有实现，避免诊断构建丢失日常功能。未复制历史设备日志、APK 样本或过时需求文档。
+- 这是诊断交付批次，不是新的完整版产品线；尚未宣称完成全部功能裁剪或设置页视觉重做。
+- 已引入第二分支的 API 接口/入口补全，修正生命周期重放不刷新新代缓存的问题。本构建关闭自动热重载，安装更新后需要完整重启 QQ。
+- 群管理的猜测式写操作与身份伪装停用；原生 QQ 的群管理不变。旧 ChannelProxy 拦截在 QQ 9.1.30 及以上增加强制安装阻止。
+- 移除 AppCenter SDK 和自动遥测。关闭发行 APK 的 Android debuggable 标志，但现有 CI 任务与签名仍属于测试构建。
 - 不改 QQ 的登录、退出登录、设备身份、请求参数、返回值或异常。
 - 不改变旧功能 `rq_risk_report_interceptor.enabled`，只展示它的配置值。配置开启不等于 Hook 安装成功。
 - 不请求任何网络接口、不解析消息体、不访问 UIN、cookie、token，不记录异常消息、堆栈或任意对象的 `toString()`。
@@ -47,15 +51,15 @@
 ## 实现约束
 
 - 仅主进程和 MSF 进程。
-- 只对 `MsfCore.sendMessage/sendMessageInner` 与 `ChannelManager.sendMessage` 的非抽象方法做形状检查。
-- 参数的**声明类型**必须提供公开、非静态、无参且返回 String 的 `getServiceCmd()`。Object 类型参数、私有字段、模糊猜测均不扩展。
+- 只对 `MsfCore.sendMessage/sendMessageInner` 与 `ChannelManager.sendMessage` 的非抽象方法做形状检查；另覆盖 `ChannelProxyExt` 已知的 `void sendMessage(String, byte[], long)` 精确签名，只读取第一个 String 命令参数，不读取 byte[] 内容。
+- 除上述精确直传命令签名外，参数的**声明类型**必须提供公开、非静态、无参且返回 String 的 `getServiceCmd()`。Object 类型参数、私有字段、模糊猜测均不扩展。
 - 对所有符合形状的重载逐一安装，而非只取第一个同名方法。
 - 限定命令长度/标识符语法，剔除 URL 参数、换行和明显不合法文本；长数字串脱敏。命令名仍是宿主提供的元数据，分享前应复核。
 - 每进程每秒最多采集 20 次匹配调用，在途关联最多 128 条，异步写队列最多 128 项。
 - 网络调用线程不写日志快照，也不等待写队列；满队列丢弃并计数，不使用 CallerRunsPolicy。
 - 每个进程保存最多 128 行，每行最多 480 字符。固定两个 MMKV 快照键，不生成无界文件/按 PID 无限增殖的键。
 - 存储复用 QQ 进程内 ConfigManager cache，命名空间 `qself.report_diagnostics.*`。不会上传到日志平台。
-- 清空采用观察窗口 epoch；启停另有 generation，避免快速停启时旧队列/旧回调混进恢复后的采集。
+- 清空采用观察窗口 epoch；启停另有 generation。状态切换、清空、读取与快照写入均通过跨进程文件锁序列化，避免旧队列/旧回调覆盖新记录。发送回调不获取文件锁。错误计数为各写入代次累计，不随清空归零。
 - 统计持久化是尽力而为；进程突然退出可能损失排队记录，采样/错误计数也可能未及时刷新。摘要额外展示当前查看进程的即时错误计数。
 - INSTALL/START 是历史记录，不保证该 PID 目前仍存活。
 
@@ -69,14 +73,25 @@ scripts/test-report-diagnostics.sh
 
 包含：命令匹配与脱敏、非法文本排除、getter 形状、异常消息排除、记录上限与旧记录淘汰，以及 Python 静态只读/限流/窗口隔离守卫。
 
-新增 `.github/workflows/report_diagnostics.yml` 执行上述轻量检查，**不是 APK 构建工作流**。
+实际 CI 原样复用第一分支的 `.github/workflows/test.yml` 和 `apk.yml`（当前 GitHub 连接不能新建/修改工作流）。
+轻量独立工作流仅存档于 `docs/refactoring/ci/report_diagnostics.yml`，没有部署。
+完整 Gradle 测试通过 JUnit 包装器执行元数据测试和 Python 静态守卫，另包含两个 JVM 子进程并发锁测试及异常释放测试。
 
-本轮本地验证：
-- JVM 元数据测试通过：因沙箱没有完整 JDK，使用缓存的 Eclipse Java 编译器、Android API stub 编译同一份 Java 源码，再在 Java 25 运行时执行测试。
-- Python 静态守卫通过。
-- 新增 Java/Kotlin 文件的 tree-sitter 语法解析通过；这不是 Kotlin 类型检查。
-- `git diff --check` 通过。
-- 未完成 Kotlin/Android 编译、完整 APK 构建、CI 远端执行或真机验证。未生成 APK，不建议拿当前分支覆盖第一分支日常版本。
+验证记录：
+- 第一轮 `f7617cf4`：完整 JVM 测试及 APK 构建通过。
+- 第二轮 `94a56d2b`：完整 JVM 测试（含跨进程锁、静态守卫）及 APK 构建通过。
+- 最终 `d7845430`：完整 JVM 测试、APK 构建及签名/内容审计通过。
+- 最终构建增加 `scripts/verify_diagnostic_apk.py`：在 CI 内验证实际 APK 签名、SHA-256、包名/版本号、不可调试标志、arm64 原生库、诊断/玻璃类、AppCenter 移除和 Xposed 配置。输出为 GitHub 构建检查的 notice 注解。
+- 沙箱可以查询 Actions，但其网络无法下载 Azure 托管的 Actions artifact。交付以 GitHub artifact 下载链接为准，不把下载失败误报成未构建。
+- 真机登录保持、后台待机及主/MSF 实际覆盖仍未验证，任何 CI 通过都不是防检测保证。
+
+## 安装与回退注意
+
+- 应先保存现有模块配置；安装后完整重启 QQ，不依赖自动热重载。不要求清除 QQ 数据或重新登录。
+- 包名保留 `io.github.qauxv`；版本号增加 fork 偏移，避免选择性引入旧分支源码后版本计数较低导致降级安装。
+- CI 使用测试签名，可能与手机已装版本不同。若系统提示签名不兼容，不要卸载 QQ 或清除其数据；先备份模块配置，再决定是否更换模块安装。此构建没有承诺签名兼容。
+- 诊断仍默认关闭；开启后，从 QQ 内模块设置搜索“上报诊断”，完整重启后查看主进程/MSF 的 INSTALL 与 COVERAGE 记录。
+- 观察期不要同时开启其他 QQ 模块/自动任务；若再次发生真实安全处置，停止试验，不反复登录触发挑战。
 
 ## 真机验收清单（未执行）
 
