@@ -295,22 +295,46 @@ public class SettingsVisualTest {
         assertEquals(recycler.getPaddingTop(), page.home().getTop());
     }
 
-    @Test public void opticalGlassCompilesAndProducesRefractionNotFlatTransparency() throws Exception {
-        for (String fieldName : new String[]{"BACKGROUND", "LENS"}) {
-            java.lang.reflect.Field field = SettingsGlass.class.getDeclaredField(fieldName);
-            field.setAccessible(true);
-            new android.graphics.RuntimeShader((String) field.get(null));
-        }
+    @Test public void liveGlassRespondsToActualSourcePixels() throws Exception {
+        java.lang.reflect.Field field = SettingsGlass.class.getDeclaredField("LENS");
+        field.setAccessible(true);
+        new android.graphics.RuntimeShader((String) field.get(null));
         Context context = context(false, 1f, 412, false);
-        android.graphics.drawable.Drawable glass = SettingsGlass.INSTANCE.material(context, SettingsVisuals.palette(context, 1), 24, null, new android.graphics.drawable.ColorDrawable(Color.WHITE));
+        View source = new View(context);
+        source.setBackgroundColor(Color.RED);
+        source.measure(View.MeasureSpec.makeMeasureSpec(300, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(110, View.MeasureSpec.EXACTLY));
+        source.layout(0, 0, 300, 110);
+        android.graphics.drawable.Drawable glass = SettingsGlass.INSTANCE.material(context, SettingsVisuals.palette(context, 0), 24, null,
+            new android.graphics.drawable.ColorDrawable(Color.WHITE), source);
         assertTrue(SettingsGlass.INSTANCE.isOptical(glass));
         glass.setBounds(0, 0, 300, 110);
-        Bitmap bitmap = drawHardware(300, 110, glass::draw);
-        assertNotEquals(bitmap.getPixel(150, 1), bitmap.getPixel(150, 20));
-        assertNotEquals(bitmap.getPixel(30, 55), bitmap.getPixel(270, 55));
-        android.graphics.drawable.Drawable solid = SettingsVisuals.surface(context, SettingsVisuals.palette(context, 2), 24, false);
-        assertFalse(SettingsGlass.INSTANCE.isOptical(solid));
-        bitmap.recycle();
+        Bitmap first = drawHardware(300, 110, glass::draw);
+        assertTrue("Real source must be red", Color.red(first.getPixel(150, 55)) > Color.blue(first.getPixel(150, 55)) + 100);
+        source.setBackgroundColor(Color.BLUE);
+        Bitmap next = drawHardware(300, 110, glass::draw);
+        assertTrue("Source updates must reach the lens", Color.blue(next.getPixel(150, 55)) > Color.red(next.getPixel(150, 55)) + 100);
+        assertEquals(0, Color.alpha(next.getPixel(0, 0)));
+        assertTrue("Must not silently fall back", SettingsGlass.INSTANCE.isOptical(glass));
+        SettingsGlass.INSTANCE.dispose(glass); first.recycle(); next.recycle();
+    }
+
+    @Test public void noSourceAndRecursiveSourceUseHonestSolidFallback() {
+        Context context = context(false, 1f, 412, false);
+        View source = new View(context);
+        android.graphics.drawable.Drawable flat = SettingsVisuals.surface(context, SettingsVisuals.palette(context, 2), 24, false);
+        assertSame(flat, SettingsGlass.INSTANCE.material(context, SettingsVisuals.palette(context, 0), 24, null, flat, null));
+        assertSame(flat, SettingsGlass.INSTANCE.material(context, SettingsVisuals.palette(context, 0), 24, source, flat, source));
+        assertFalse(SettingsGlass.INSTANCE.isOptical(flat));
+    }
+
+    @Test public void settingsPrimaryUsesTheFrameworkWallpaperPalette() {
+        for (boolean dark : new boolean[]{false, true}) {
+            Context context = context(dark, 1f, 412, false);
+            assertTrue(SettingsDynamicColors.apply(context));
+            int expected = context.getColor(dark ? android.R.color.system_accent1_200 : android.R.color.system_accent1_600);
+            assertEquals(expected, com.google.android.material.color.MaterialColors.getColor(context, com.google.android.material.R.attr.colorPrimary, 0));
+            assertEquals(expected, SettingsVisuals.palette(context, 2).getAccent());
+        }
     }
 
     @Test public void narrowLargeTextUsesOneColumnAndRemainsScrollable() throws Exception {

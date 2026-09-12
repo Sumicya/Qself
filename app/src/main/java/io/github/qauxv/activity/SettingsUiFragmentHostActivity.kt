@@ -68,6 +68,7 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
         super.doOnEarlyCreate(savedInstanceState, isInitializing)
         setTheme(ModuleThemeManager.getCurrentThemeColorStyleId())
         theme.applyStyle(R.style.Theme_Qself_Expressive, true)
+        sumicya.qself.ui.SettingsDynamicColors.apply(this)
     }
 
     /**

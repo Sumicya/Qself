@@ -15,6 +15,27 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
         set(value) { field = value; refreshDrawableState(); invalidate() }
     var paletteOverride: SettingsVisuals.Palette? = null
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var animator: android.animation.ValueAnimator? = null
+    private var progress = 1f
+    private var previousChecked = false
+    fun setCheckedWithoutAnimation(checked: Boolean) {
+        animator?.cancel(); progress = 1f; super.setChecked(checked); invalidate()
+    }
+    override fun setChecked(checked: Boolean) {
+        if (isChecked == checked) return
+        val before = isChecked
+        super.setChecked(checked)
+        animator?.cancel()
+        if (!isLaidOut || !isAttachedToWindow || !SettingsMotion.enabled()) { progress = 1f; invalidate(); return }
+        previousChecked = before
+        animator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = SettingsMotion.duration(context, true)
+            interpolator = SettingsMotion.easing(context)
+            addUpdateListener { progress = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+    override fun onDetachedFromWindow() { animator?.cancel(); progress = 1f; super.onDetachedFromWindow() }
     init {
         buttonDrawable = null
         text = ""
@@ -28,14 +49,27 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
         val x = (width - size) / 2f
         val y = (height - size) / 2f
         paint.style = Paint.Style.FILL
-        paint.color = p.container
+        val checkedFraction = if (progress == 1f) { if (isChecked) 1f else 0f }
+            else if (isChecked) progress else 1f - progress
+        paint.color = androidx.core.graphics.ColorUtils.blendARGB(p.surface, p.container, checkedFraction)
+        paint.alpha = 255
         canvas.drawRoundRect(x, y, x + size, y + size, 4f, 4f, paint)
         paint.color = if (failed) { if (p.dark) 0xfff2b8b5.toInt() else 0xffb3261e.toInt() } else p.onContainer
         paint.textAlign = Paint.Align.CENTER
         paint.textSize = SettingsVisuals.dp(context, 22).toFloat()
         val glyph = if (unavailable || failed) "−" else if (isChecked) "✓" else "×"
         val fm = paint.fontMetrics
-        canvas.drawText(glyph, width / 2f, height / 2f - (fm.ascent + fm.descent) / 2f, paint)
+        val baseline = height / 2f - (fm.ascent + fm.descent) / 2f
+        if (progress < 1f && !unavailable && !failed) {
+            paint.alpha = ((1f - progress) * 255).toInt()
+            canvas.drawText(if (previousChecked) "✓" else "×", width / 2f, baseline, paint)
+        }
+        paint.alpha = if (unavailable || failed) 255 else (progress * 255).toInt()
+        val save = canvas.save()
+        val scale = .85f + .15f * progress
+        canvas.scale(scale, scale, width / 2f, height / 2f)
+        canvas.drawText(glyph, width / 2f, baseline, paint)
+        canvas.restoreToCount(save)
     }
 
     override fun onInitializeAccessibilityNodeInfo(info: android.view.accessibility.AccessibilityNodeInfo) {

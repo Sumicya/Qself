@@ -39,6 +39,19 @@ class SettingsInteractionContract(unittest.TestCase):
         self.assertIn('check(methods.isNotEmpty())', text)
         self.assertIn('method.parameterTypes', text.replace('it.parameterTypes', 'method.parameterTypes'))
         self.assertIn('//"消息"', text)
+    def test_real_backdrop_has_no_synthetic_scene(self):
+        text = source('sumicya/qself/ui/SettingsGlass.kt')
+        for token in ['source.draw(capture)', 'uniform shader content', 'content.eval', 'getLocationOnScreen', 'discardDisplayList', 'removeOnPreDrawListener']:
+            self.assertIn(token, text)
+        self.assertNotIn('float3 scene', text)
+        self.assertNotIn('Bitmap.createBitmap', text)
+    def test_motion_and_system_palette_are_wired_to_production(self):
+        sheet = source('sumicya/qself/ui/SettingsOptionSheet.kt')
+        for token in ['MaterialSharedAxis.Y', 'beginDelayedTransition', 'setDismissWithAnimation', 'SettingsMotion.enter', 'endTransitions']:
+            self.assertIn(token, sheet)
+        self.assertIn('SettingsDynamicColors.apply(this)', source('io/github/qauxv/activity/SettingsUiFragmentHostActivity.kt'))
+        self.assertIn('setCheckedWithoutAnimation', source('io/github/qauxv/dsl/item/UiAgentItem.kt'))
+        self.assertIn('areAnimatorsEnabled', source('sumicya/qself/ui/SettingsMotion.kt'))
     def test_journal_bounded_epoch_guarded_and_no_messages(self):
         text = source('sumicya/qself/diagnostics/FeatureJournal.kt')
         self.assertIn('ArrayBlockingQueue(128)', text)

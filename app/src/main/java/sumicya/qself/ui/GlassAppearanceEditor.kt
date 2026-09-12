@@ -21,14 +21,13 @@ object GlassAppearanceEditor {
     fun palette(context: android.content.Context, tone: Int, mode: Int): SettingsVisuals.Palette {
         val p = SettingsVisuals.palette(context, mode)
         if (tone == 0 || (tone == 2) == p.dark) return p
-        val dark = tone == 2
-        return p.copy(dark = dark, background = if (dark) 0xff141218.toInt() else 0xfffef7ff.toInt(),
-            surface = if (dark) 0xff211f26.toInt() else 0xfff3edf7.toInt(),
-            text = if (dark) 0xffe6e0e9.toInt() else 0xff1d1b20.toInt(),
-            secondary = if (dark) 0xffcac4d0.toInt() else 0xff49454f.toInt(),
-            container = if (dark) 0xff4a4458.toInt() else 0xffe8def8.toInt(),
-            onContainer = if (dark) 0xffe8def8.toInt() else 0xff1d192b.toInt(),
-            accent = SettingsVisuals.readableAccent(p.accent, dark))
+        val config = android.content.res.Configuration(context.resources.configuration).apply {
+            uiMode = (uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK.inv()) or
+                if (tone == 2) android.content.res.Configuration.UI_MODE_NIGHT_YES else android.content.res.Configuration.UI_MODE_NIGHT_NO
+        }
+        val themed = android.view.ContextThemeWrapper(context.createConfigurationContext(config), io.github.qauxv.R.style.Theme_Qself_Expressive)
+        SettingsDynamicColors.apply(themed)
+        return SettingsVisuals.palette(themed, mode)
     }
 
     fun show(activity: Activity, bar: Boolean) {
@@ -44,7 +43,7 @@ object GlassAppearanceEditor {
             "material" to SettingsAppearanceItem.overlayMode)
         val content = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 0, 24, 8) }
         val preview = TextView(activity).apply {
-            text = if (bar) "仅示意材质 · 非 QQ 截图\n文字和图标不随玻璃透明度变淡" else "浮层材质预览\n常规页面仍使用不透明 MD3"
+            text = if (bar) "仅示意材质 · 非 QQ 截图\n文字和图标不随玻璃透明度变淡" else "等待实际背景取景\n常规页面仍使用不透明 MD3"
             gravity = Gravity.CENTER; textSize = 14f
         }
         val sample = FrameLayout(activity).apply { addView(preview, FrameLayout.LayoutParams(-1, -1)) }
@@ -52,11 +51,13 @@ object GlassAppearanceEditor {
         fun refresh() {
             val mode = if (draft.getValue("background") == 0) draft.getValue("material") else 2
             val p = palette(activity, draft.getValue("tone"), mode)
-            val color = if (draft.getValue("background") == 2) { if (p.dark) 0xff18243f.toInt() else 0xffe3eaff.toInt() } else p.surface
+            val color = if (draft.getValue("background") == 2) { if (!bar) p.container else if (p.dark) 0xff18243f.toInt() else 0xffe3eaff.toInt() } else p.surface
             val flat = SettingsVisuals.surface(activity, p.copy(surface = color), 20)
+            SettingsGlass.dispose(preview.background)
             preview.background = SettingsGlass.material(activity, p, 20, preview, flat).apply {
                 alpha = (255 * (100 - draft.getValue("transparency")) / 100f).toInt()
             }
+            if (!bar) SettingsGlass.observeStatus(preview.background) { preview.text = it }
             sample.setBackgroundColor(p.background)
             preview.setTextColor(p.text)
         }
@@ -83,9 +84,9 @@ object GlassAppearanceEditor {
         }
         slider("transparency", "玻璃背景透明度", 0..100, "%")
         label("0% 保留完整材质，100% 隐去材质；不改变文字/图标。")
-        choice("background", "背景", arrayOf(if (bar) "实时取景与折射" else "光学纹理（非实时取景）", "纯色底", "蓝灰色底"))
+        choice("background", "背景", arrayOf("实际背景取景与折射", "纯色底", if (bar) "蓝灰色底" else "系统强调色底"))
         choice("tone", "明暗", arrayOf(if (bar) "跟随 QQ" else "跟随设置主题", "浅色", "深色"))
-        if (!bar) choice("material", "纹理材质", arrayOf("通透", "柔和", "实色"))
+        if (!bar) choice("material", "玻璃效果", arrayOf("清透折射", "柔和折射", "实色（不取景）"))
         else {
             choice("labels", "标签文字", arrayOf("显示 QQ 原标签", "隐藏文字，图标居中"))
             slider("labelSize", "标签字号", 9..18, "sp")
@@ -109,6 +110,6 @@ object GlassAppearanceEditor {
                 if (bar) GlassConfig.load(activity)
                 SettingsAppearanceItem.refreshLabel()
                 Toast.makeText(activity, if (bar) "返回 QQ 首页后刷新；底栏总开关需重启" else "下次打开浮层生效", Toast.LENGTH_SHORT).show()
-            }.setNegativeButton("取消", null).show()
+            }.setNegativeButton("取消", null).show().setOnDismissListener { SettingsGlass.dispose(preview.background) }
     }
 }

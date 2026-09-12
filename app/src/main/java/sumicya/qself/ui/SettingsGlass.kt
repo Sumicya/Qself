@@ -1,50 +1,29 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 package sumicya.qself.ui
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.*
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.view.View
-import android.view.ViewGroup
-import android.graphics.drawable.RippleDrawable
+import android.view.ViewTreeObserver
+import android.view.WindowManager
 import androidx.annotation.RequiresApi
 import java.lang.ref.WeakReference
 
-/**
- * Optical material for module settings, not a window/screen capture API.
- * The scene is the settings background itself. Glass samples that same scene at
- * its actual scrolled position, with a blur kernel, SDF edge refraction and specular rim.
- * Text and controls are drawn afterwards, never blurred. No timers or background work.
- */
+/** Captures only the module Activity's actual View tree, in GPU memory. No generated scene or disk image. */
 internal object SettingsGlass {
-    private const val SCENE = """
-        uniform float2 viewport;
-        uniform float dark;
-        float3 scene(float2 point) {
-            float2 p = point / max(viewport.x, 1.0);
-            float3 base = mix(float3(0.91,0.94,0.97), float3(0.025,0.042,0.069), dark);
-            float a = exp(-dot(p-float2(0.92,0.22),p-float2(0.92,0.22))*3.4);
-            float b = exp(-dot(p-float2(0.08,1.12),p-float2(0.08,1.12))*4.1);
-            base = mix(base, mix(float3(0.65,0.80,0.94),float3(0.10,0.22,0.34),dark), a*0.65);
-            base = mix(base, mix(float3(0.73,0.86,0.83),float3(0.07,0.22,0.23),dark), b*0.55);
-            // A restrained curved light ribbon gives the lens something to refract.
-            float curve = 0.88 + 0.24*sin(p.x*3.6 + 0.2);
-            float ribbon = exp(-pow((p.y-curve)/0.055, 2.0));
-            base += ribbon * mix(float3(0.07,0.065,0.045),float3(0.025,0.055,0.065),dark);
-            return clamp(base,0.0,1.0);
-        }
-    """
-    private const val BACKGROUND = SCENE + """
-        half4 main(float2 p) { return half4(scene(p),1.0); }
-    """
-    private const val LENS = SCENE + """
+    private const val LENS = """
+        uniform shader content;
         uniform float2 size;
-        uniform float2 origin;
+        uniform float pad;
         uniform float radius;
         uniform float density;
-        uniform float softness;
-        half4 main(float2 p) {
+        uniform float2 light;
+        half4 main(float2 pixel) {
+            float2 p = pixel - float2(pad);
             float2 c = p-size*0.5;
             float2 q = abs(c)-size*0.5+radius;
             float sd = length(max(q,0.0))+min(max(q.x,q.y),0.0)-radius;
@@ -52,130 +31,158 @@ internal object SettingsGlass {
             float2 corner = max(q,0.0);
             float2 n = length(corner)>0.001 ? sign(c)*normalize(corner) :
                 (q.x>q.y ? float2(sign(c.x),0.0) : float2(0.0,sign(c.y)));
-            float band = min(18.0*density,min(size.x,size.y)*0.22);
-            float edge = 1.0-smoothstep(0.0,max(band,1.0),inside);
-            float2 uv = origin+p-n*edge*edge*12.0*density;
-            float spread = mix(2.3,4.5,softness)*density;
-            float3 col = scene(uv)*4.0;
-            col += scene(uv+float2(spread,0.0))*2.0 + scene(uv-float2(spread,0.0))*2.0;
-            col += scene(uv+float2(0.0,spread))*2.0 + scene(uv-float2(0.0,spread))*2.0;
-            col += scene(uv+float2(spread,spread)) + scene(uv-float2(spread,spread));
-            col += scene(uv+float2(spread,-spread)) + scene(uv+float2(-spread,spread));
-            col /= 16.0;
-            // Small chromatic separation at the rim, not across body text.
-            col.r += (scene(uv+n*density).r-scene(uv).r)*edge;
-            col.b += (scene(uv-n*density).b-scene(uv).b)*edge;
-            col = mix(col,mix(float3(1.0),float3(0.055,0.073,0.095),dark),mix(0.16,0.29,softness));
-            float spec = pow(max(dot(n,normalize(float2(-0.6,-0.8))),0.0),2.0);
-            float rim = 1.0-smoothstep(0.2*density,1.35*density,inside);
-            col = mix(col,float3(1.0),rim*(0.16+0.65*spec));
-            float inner = exp(-pow((inside-2.3*density)/(1.1*density),2.0));
-            col *= 1.0-inner*0.10;
-            return half4(clamp(col,0.0,1.0),1.0);
+            float edge = 1.0-smoothstep(0.0,18.0*density,inside);
+            float2 uv = pixel-n*edge*edge*11.0*density;
+            half4 col = content.eval(uv);
+            col.r = mix(col.r,content.eval(uv+n*density).r,edge*0.65);
+            col.b = mix(col.b,content.eval(uv-n*density).b,edge*0.65);
+            float rim = 1.0-smoothstep(0.2*density,1.4*density,inside);
+            float spec = pow(max(dot(n,normalize(light)),0.0),2.0);
+            col.rgb = mix(col.rgb,half3(1.0),rim*(0.12+0.48*spec));
+            col.rgb *= 1.0-exp(-pow((inside-2.6*density)/(1.2*density),2.0))*0.07;
+            return col;
         }
     """
-
-    private interface Program {
-        val shader: Shader
-        fun scene(width: Float, height: Float, dark: Boolean)
-        fun lens(w: Float, h: Float, x: Float, y: Float, radius: Float, density: Float, softness: Float)
+    private fun activity(context: Context): Activity? {
+        var current = context
+        repeat(12) {
+            if (current is Activity) return current as Activity
+            val next = (current as? ContextWrapper)?.baseContext ?: return null
+            if (next === current) return null
+            current = next
+        }
+        return null
+    }
+    @JvmOverloads
+    fun material(context: Context, p: SettingsVisuals.Palette, radius: Int, owner: View?, fallback: Drawable,
+                 source: View? = activity(context)?.window?.decorView): Drawable {
+        if (p.mode == 2) return fallback
+        if (Build.VERSION.SDK_INT < 33) return fallback
+        if (activity(context)?.window?.attributes?.flags?.and(WindowManager.LayoutParams.FLAG_SECURE) != 0
+            && activity(context) != null) return fallback
+        if (source == null || (owner != null && owner.rootView === source.rootView)) return fallback
+        return try { LiveMaterial(context.resources.displayMetrics.density, p, radius, owner, source, fallback) }
+        catch (error: Throwable) { sumicya.qself.diagnostics.FeatureJournal.error("SettingsGlass", error); fallback }
+    }
+    fun backdrop(p: SettingsVisuals.Palette, fallback: Drawable): Drawable = fallback
+    fun isOptical(drawable: Drawable): Boolean = Build.VERSION.SDK_INT >= 33 && drawable is LiveMaterial && !drawable.failed
+    fun observeStatus(drawable: Drawable, listener: (String) -> Unit) {
+        if (Build.VERSION.SDK_INT >= 33 && drawable is LiveMaterial) drawable.statusListener = listener
+        else listener("实色背景：当前未使用实时玻璃")
+    }
+    fun dispose(drawable: Drawable?) {
+        if (Build.VERSION.SDK_INT >= 33 && drawable is LiveMaterial) drawable.release()
     }
 
     @RequiresApi(33)
-    private class OpticalProgram(lens: Boolean) : Program {
-        private val runtime = RuntimeShader(if (lens) LENS else BACKGROUND)
-        override val shader: Shader get() = runtime
-        override fun scene(width: Float, height: Float, dark: Boolean) {
-            runtime.setFloatUniform("viewport", width, height)
-            runtime.setFloatUniform("dark", if (dark) 1f else 0f)
-        }
-        override fun lens(w: Float, h: Float, x: Float, y: Float, radius: Float, density: Float, softness: Float) {
-            runtime.setFloatUniform("size", w, h)
-            runtime.setFloatUniform("origin", x, y)
-            runtime.setFloatUniform("radius", radius)
-            runtime.setFloatUniform("density", density)
-            runtime.setFloatUniform("softness", softness)
-        }
-    }
-
-    private fun program(lens: Boolean): Program? = if (Build.VERSION.SDK_INT >= 33) {
-        try { OpticalProgram(lens) } catch (_: RuntimeException) { null }
-    } else null
-
-    fun backdrop(p: SettingsVisuals.Palette, fallback: Drawable): Drawable = Backdrop(p, fallback)
-    fun material(context: Context, p: SettingsVisuals.Palette, radius: Int, owner: View?, fallback: Drawable): Drawable =
-        Material(context.resources.displayMetrics.density, p, radius, owner, fallback)
-
-    /** Moving a cached RenderNode does not redraw its background. Refresh only on actual scrolling. */
-    fun invalidateMaterials(view: View) {
-        val background = view.background
-        if (background is Material || background is RippleDrawable) background.invalidateSelf()
-        if (view is ViewGroup) for (i in 0 until view.childCount) invalidateMaterials(view.getChildAt(i))
-    }
-
-    // Public to tests in the same module: a supported renderer must not silently fall back.
-    fun isOptical(drawable: Drawable): Boolean = when (drawable) {
-        is Material -> drawable.program != null
-        is Backdrop -> drawable.program != null
-        else -> false
-    }
-
-    private class Backdrop(val p: SettingsVisuals.Palette, val fallback: Drawable) : Drawable() {
-        val program = if (p.mode == 2) null else SettingsGlass.program(false)
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        override fun draw(canvas: Canvas) {
-            val effect = program
-            if (effect == null || bounds.isEmpty || !canvas.isHardwareAccelerated()) { fallback.bounds = bounds; fallback.draw(canvas); return }
-            effect.scene(bounds.width().toFloat(), bounds.height().toFloat(), p.dark)
-            paint.shader = effect.shader
-            val save = canvas.save()
-            canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
-            canvas.drawRect(0f, 0f, bounds.width().toFloat(), bounds.height().toFloat(), paint)
-            canvas.restoreToCount(save)
-        }
-        override fun setAlpha(alpha: Int) { paint.alpha = alpha; fallback.alpha = alpha; invalidateSelf() }
-        override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter; invalidateSelf() }
-        @Deprecated("Drawable API") override fun getOpacity() = PixelFormat.OPAQUE
-    }
-
-    private class Material(val density: Float, val p: SettingsVisuals.Palette, val corner: Int,
-                           owner: View?, val fallback: Drawable) : Drawable() {
-        val program = if (p.mode == 2) null else SettingsGlass.program(true)
+    private class LiveMaterial(private val density: Float, private val p: SettingsVisuals.Palette, private val corner: Int,
+                               owner: View?, source: View, private val fallback: Drawable) : Drawable(), View.OnAttachStateChangeListener {
         private val ownerRef = WeakReference(owner)
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        override fun draw(canvas: Canvas) {
-            val effect = program
-            if (effect == null || bounds.isEmpty || !canvas.isHardwareAccelerated()) { fallback.bounds = bounds; fallback.draw(canvas); return }
-            val w = bounds.width().toFloat()
-            val h = bounds.height().toFloat()
-            var x = 0f; var y = 0f
-            var view = ownerRef.get()
-            var sceneW = maxOf(w, 360f*density)
-            var sceneH = maxOf(h, 800f*density)
-            while (view != null) {
-                if (view.background is Backdrop) {
-                    sceneW = view.width.toFloat().coerceAtLeast(1f)
-                    sceneH = view.height.toFloat().coerceAtLeast(1f)
-                    break
-                }
-                val parent = view.parent as? View ?: break
-                x += view.x-parent.scrollX
-                y += view.y-parent.scrollY
-                sceneW = parent.width.toFloat().coerceAtLeast(1f)
-                sceneH = parent.height.toFloat().coerceAtLeast(1f)
-                view = parent
+        private val sourceRef = WeakReference(source)
+        private val node = RenderNode("Qself real overlay backdrop")
+        private val lens = RuntimeShader(LENS)
+        private val tint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = p.surface; alpha = if (p.mode == 0) 24 else 48 }
+        private val clip = Path()
+        private val at = IntArray(2)
+        private val from = IntArray(2)
+        private var oldX = Int.MIN_VALUE
+        private var oldY = Int.MIN_VALUE
+        private var oldW = 0
+        private var oldH = 0
+        private var dirty = true
+        private var opacity = 255
+        private var sourceObserver: ViewTreeObserver? = null
+        private var ownerObserver: ViewTreeObserver? = null
+        private var status = "等待实际背景首帧"
+        var statusListener: ((String) -> Unit)? = null
+            set(value) { field = value; value?.invoke(status) }
+        var failed = false
+            private set
+        private val sourceFrame = ViewTreeObserver.OnPreDrawListener { dirty = true; invalidateSelf(); true }
+        private val ownerFrame = ViewTreeObserver.OnPreDrawListener {
+            ownerRef.get()?.let {
+                it.getLocationOnScreen(at)
+                if (oldX != at[0] || oldY != at[1]) invalidateSelf()
             }
-            val r = minOf(corner*density, w/2f, h/2f)
-            effect.scene(sceneW, sceneH, p.dark)
-            effect.lens(w, h, x+bounds.left, y+bounds.top, r, density, if (p.mode == 0) 0f else 1f)
-            paint.shader = effect.shader
-            val save = canvas.save()
-            canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
-            canvas.drawRoundRect(0f, 0f, w, h, r, r, paint)
-            canvas.restoreToCount(save)
+            true
         }
-        override fun setAlpha(alpha: Int) { paint.alpha = alpha; fallback.alpha = alpha; invalidateSelf() }
-        override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter; invalidateSelf() }
+        init {
+            owner?.addOnAttachStateChangeListener(this)
+            if (owner?.isAttachedToWindow == true) observe()
+        }
+        private fun report(value: String) {
+            if (status == value) return
+            status = value
+            ownerRef.get()?.post { statusListener?.invoke(value) }
+        }
+        private fun observe() {
+            unobserve()
+            sourceObserver = sourceRef.get()?.viewTreeObserver?.also { it.addOnPreDrawListener(sourceFrame) }
+            ownerObserver = ownerRef.get()?.viewTreeObserver?.also { it.addOnPreDrawListener(ownerFrame) }
+        }
+        private fun unobserve() {
+            sourceObserver?.takeIf { it.isAlive }?.removeOnPreDrawListener(sourceFrame)
+            ownerObserver?.takeIf { it.isAlive }?.removeOnPreDrawListener(ownerFrame)
+            sourceObserver = null; ownerObserver = null
+        }
+        fun release() { unobserve(); ownerRef.get()?.removeOnAttachStateChangeListener(this); node.discardDisplayList(); statusListener = null }
+        override fun onViewAttachedToWindow(view: View) { dirty = true; observe(); invalidateSelf() }
+        override fun onViewDetachedFromWindow(view: View) { unobserve(); node.discardDisplayList(); dirty = true }
+        override fun draw(canvas: Canvas) {
+            val source = sourceRef.get()
+            if (failed || !canvas.isHardwareAccelerated || source == null || source.width == 0 || source.height == 0) {
+                fallback.bounds = bounds; fallback.draw(canvas)
+                report("实色回退：背景或硬件渲染当前不可用")
+                return
+            }
+            if (bounds.isEmpty || opacity == 0) return
+            try {
+                val owner = ownerRef.get()
+                owner?.getLocationOnScreen(at) ?: run { at[0] = 0; at[1] = 0 }
+                source.getLocationOnScreen(from)
+                val w = bounds.width(); val h = bounds.height()
+                val pad = (24 * density).toInt()
+                val radius = minOf(corner * density, w / 2f, h / 2f)
+                if (owner == null || dirty || oldX != at[0] || oldY != at[1] || oldW != w || oldH != h || !node.hasDisplayList()) {
+                    node.setPosition(0, 0, w + 2 * pad, h + 2 * pad)
+                    val capture = node.beginRecording(w + 2 * pad, h + 2 * pad)
+                    try {
+                        capture.drawColor(p.background)
+                        capture.translate((pad - at[0] + from[0] - bounds.left).toFloat(), (pad - at[1] + from[1] - bounds.top).toFloat())
+                        source.draw(capture)
+                    } finally { node.endRecording() }
+                    oldX = at[0]; oldY = at[1]; dirty = false
+                }
+                lens.setFloatUniform("light", -.6f + at[0] / maxOf(source.width.toFloat(), 1f) * .25f,
+                    -.8f + at[1] / maxOf(source.height.toFloat(), 1f) * .2f)
+                if (oldW != w || oldH != h || owner == null || owner?.translationY != 0f) {
+                    lens.setFloatUniform("size", w.toFloat(), h.toFloat())
+                    lens.setFloatUniform("pad", pad.toFloat()); lens.setFloatUniform("radius", radius)
+                    lens.setFloatUniform("density", density)
+                    val blur = (if (p.mode == 0) 2f else 5f) * density
+                    node.setRenderEffect(RenderEffect.createChainEffect(RenderEffect.createRuntimeShaderEffect(lens, "content"),
+                        RenderEffect.createBlurEffect(blur, blur, Shader.TileMode.CLAMP)))
+                    oldW = w; oldH = h
+                }
+                clip.reset(); clip.addRoundRect(RectF(bounds), radius, radius, Path.Direction.CW)
+                val save = canvas.saveLayerAlpha(RectF(bounds), opacity)
+                try {
+                canvas.clipPath(clip)
+                canvas.translate(bounds.left - pad.toFloat(), bounds.top - pad.toFloat())
+                canvas.drawRenderNode(node)
+                canvas.translate(pad.toFloat(), pad.toFloat())
+                canvas.drawRoundRect(0f, 0f, w.toFloat(), h.toFloat(), radius, radius, tint)
+                } finally { canvas.restoreToCount(save) }
+                report("实际背景取景 · 折射与模糊")
+            } catch (error: Throwable) {
+                failed = true; unobserve(); node.discardDisplayList()
+                sumicya.qself.diagnostics.FeatureJournal.error("SettingsGlass", error)
+                fallback.bounds = bounds; fallback.draw(canvas)
+                report("实色回退：实际玻璃渲染失败")
+            }
+        }
+        override fun setAlpha(alpha: Int) { opacity = alpha.coerceIn(0, 255); invalidateSelf() }
+        override fun setColorFilter(filter: ColorFilter?) { tint.colorFilter = filter; invalidateSelf() }
         @Deprecated("Drawable API") override fun getOpacity() = PixelFormat.TRANSLUCENT
     }
 }

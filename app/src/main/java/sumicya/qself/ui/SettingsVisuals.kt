@@ -37,7 +37,7 @@ object SettingsVisuals {
         val themeAccent = if (context.theme.resolveAttribute(android.R.attr.colorAccent, attr, true) &&
             attr.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT) attr.data else fallback
         // Blend theme color into a legible foreground, not an arbitrary pastel as body text.
-        val accent = readableAccent(themeAccent, dark)
+        val accent = MaterialColors.getColor(context, com.google.android.material.R.attr.colorPrimary, readableAccent(themeAccent, dark))
         fun role(attr: Int, fallback: Int) = MaterialColors.getColor(context, attr, fallback)
         return Palette(dark, mode,
             role(com.google.android.material.R.attr.colorSurface, if (dark) 0xff141218.toInt() else 0xfffef7ff.toInt()),

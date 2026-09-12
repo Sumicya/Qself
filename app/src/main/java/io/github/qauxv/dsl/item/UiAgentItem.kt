@@ -150,7 +150,7 @@ class UiAgentItem(
             }
             cell.summary = if (toBeShownAtSummary.isNullOrEmpty()) null else toBeShownAtSummary
             cell.isHasSwitch = true
-            cell.isChecked = switchAgent.isChecked
+            cell.switchView.setCheckedWithoutAnimation(switchAgent.isChecked)
             cell.switchView.isEnabled = switchAgent.isCheckable
             cell.switchView.isClickable = switchAgent.isCheckable
             cell.switchView.setOnCheckedChangeListener(mCheckChangedListener)

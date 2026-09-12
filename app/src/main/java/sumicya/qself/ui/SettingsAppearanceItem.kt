@@ -15,8 +15,8 @@ import sumicya.qself.profile.ProfileMigration
 
 @UiItemAgentEntry
 object SettingsAppearanceItem : BasePlainUiAgentItem("浮层玻璃外观",
-    "透明度、背景、明暗与纹理。用于分类浮层；常规页面和选项保持 MD3，QQ 底栏单独配置。") {
-    private val labels = arrayOf("通透", "柔和", "实色")
+    "真实背景取景、折射、透明度与明暗。用于分类浮层；常规页面和选项保持 MD3，QQ 底栏单独配置。") {
+    private val labels = arrayOf("清透折射", "柔和折射", "实色（不取景）")
     const val mode: Int = 2
     val overlayMode: Int get() = runCatching { ConfigManager.getDefaultConfig().getIntOrDefault(ProfileMigration.OVERLAY_GLASS, 1) }.getOrDefault(1).coerceIn(0, 2)
     override val uiItemLocation = FunctionEntryRouter.Locations.ConfigCategory.THEME_CATEGORY
@@ -27,7 +27,7 @@ object SettingsAppearanceItem : BasePlainUiAgentItem("浮层玻璃外观",
     fun material(context: Context, owner: View): Drawable {
         val background = GlassAppearanceEditor.read(GlassAppearanceEditor.OVERLAY, "background", 0, 0..2)
         val p = overlayPalette(context).let { if (background == 0) it else it.copy(mode = 2) }
-        val color = if (background == 2) { if (p.dark) 0xff18243f.toInt() else 0xffe3eaff.toInt() } else p.surface
+        val color = if (background == 2) p.container else p.surface
         val fallback = SettingsVisuals.surface(context, p.copy(surface = color), 28)
         return SettingsGlass.material(context, p, 28, owner, fallback).apply {
             alpha = (255 * (100 - GlassAppearanceEditor.read(GlassAppearanceEditor.OVERLAY, "transparency", 0, 0..100)) / 100f).toInt()
