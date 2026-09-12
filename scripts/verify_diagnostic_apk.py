@@ -48,7 +48,10 @@ def audit(apk, build_tools):
                            b"Lsumicya/qself/ui/SettingsHomeItem;",
                            b"Lsumicya/qself/ui/SettingsListLayout;",
                            b"Lsumicya/qself/profile/SimplifiedProfile;",
-                           b"Lsumicya/qself/profile/ProfileMigration;"):
+                           b"Lsumicya/qself/profile/ProfileMigration;",
+                           b"Lsumicya/qself/feature/consolidation/FeatureCatalog;",
+                           b"Lsumicya/qself/feature/consolidation/HookInstallRegistry;",
+                           b"Lsumicya/qself/feature/consolidation/MessageTailPolicy;"):
             if descriptor not in dex:
                 raise RuntimeError("Diagnostics, glass or native settings implementation missing")
         if b"Lcom/microsoft/appcenter/" in dex:
@@ -62,7 +65,7 @@ def audit(apk, build_tools):
         "package": package[1], "versionCode": int(package[2]), "versionName": package[3],
         "signerSha256": certificate[1], "debuggable": False,
         "targetApiVersion": 102, "autoHotReload": False,
-        "arm64NativeLoader": True, "diagnosticsAndGlassPresent": True, "nativeSettingsPresent": True, "appCenterAbsent": True,
+        "arm64NativeLoader": True, "diagnosticsAndGlassPresent": True, "nativeSettingsPresent": True, "capabilityConsolidationPresent": True, "appCenterAbsent": True,
     }
 
 

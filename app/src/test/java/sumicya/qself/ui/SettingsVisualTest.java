@@ -544,12 +544,20 @@ public class SettingsVisualTest {
                 String text = Files.readString(source);
                 boolean annotated = text.contains("@" + annotation) || java.util.regex.Pattern
                     .compile("@\\[[^\\]]*\\b" + annotation + "\\b").matcher(text).find();
-                if (annotated) assertTrue(name, generated.contains("import " + name.replace('$', '.') + "\n"));
+                if (annotated) {
+                    String canonical = name.replace('$', '.');
+                    String outer = name.split("\\$")[0];
+                    // KotlinPoet may import the enclosing class and qualify its nested entry.
+                    boolean imported = generated.contains("import " + canonical + "\n") ||
+                        (name.contains("$") && generated.contains("import " + outer + "\n") &&
+                            generated.contains("." + name.substring(name.indexOf('$') + 1).replace('$', '.') + ".INSTANCE"));
+                    assertTrue(name, imported);
+                }
             }
             java.util.regex.Matcher imports = java.util.regex.Pattern.compile("(?m)^import ([a-zA-Z0-9_.]+)$").matcher(generated);
             while (imports.find()) {
                 String name = imports.group(1);
-                if (!name.startsWith("kotlin.") && !name.startsWith("io.github.qauxv.base.")) assertTrue(name, allowed.stream().anyMatch(id -> id.replace('$', '.').equals(name)));
+                if (!name.startsWith("kotlin.") && !name.startsWith("io.github.qauxv.base.")) assertTrue(name, allowed.stream().anyMatch(id -> id.replace('$', '.').equals(name) || id.startsWith(name + "$")));
             }
         }
     }

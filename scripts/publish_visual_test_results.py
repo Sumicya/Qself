@@ -13,7 +13,9 @@ root = Path(sys.argv[1])
 xml = root.parent.parent / "test-results/testDebugUnitTest/TEST-sumicya.qself.ui.SettingsVisualTest.xml"
 results = ET.parse(xml).getroot() if xml.is_file() else None
 if results is not None:
-    print(f"::notice title=Qself native view tests::tests={results.get('tests')} failures={results.get('failures')} errors={results.get('errors')}")
+    merged = [ET.parse(p).getroot() for p in xml.parent.glob("TEST-sumicya.qself.feature.consolidation.*.xml")]
+    totals = {key: sum(int(report.get(key, 0)) for report in merged) for key in ("tests", "failures", "errors")}
+    print(f"::notice title=Qself native view tests::tests={results.get('tests')} failures={results.get('failures')} errors={results.get('errors')} mergeTests={totals['tests']} mergeFailures={totals['failures']} mergeErrors={totals['errors']}")
 path = root / "home-pair.webp"
 if path.is_file():
     image = path.read_bytes()
