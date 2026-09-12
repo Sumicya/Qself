@@ -7,7 +7,6 @@ qself-purify	appearance	统一净化	ads	广告	me.hd.hook.simplify.main.ui.misc
 qself-purify	appearance	统一净化	ads	广告	io.github.relimus.hook.HideQZoneAD
 qself-purify	appearance	统一净化	ads	广告	cc.ioctl.hook.mini.HideMiniAppLoadingAd
 qself-purify	appearance	统一净化	ads	广告	cc.ioctl.hook.ui.title.RemoveQbossAD
-qself-purify	appearance	统一净化	ads	广告	cc.ioctl.hook.qwallet.QWalletNoAD
 qself-purify	appearance	统一净化	entries	界面入口	cc.ioctl.hook.ui.main.HideMiniAppPullEntry
 qself-purify	appearance	统一净化	entries	界面入口	cc.ioctl.hook.ui.title.RemoveDailySign
 qself-purify	appearance	统一净化	entries	界面入口	sumicya.qself.feature.ui.RemoveCameraButton

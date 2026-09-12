@@ -11,7 +11,8 @@ class ProfileContract(unittest.TestCase):
     def test_inventory_is_explicit_and_resolves(self):
         for name in ALLOWED:
             files = [SRC / (name.split('$')[0].replace('.', '/') + e) for e in ('.kt', '.java')]
-            self.assertTrue(any(p.exists() and ('FunctionHookEntry' in p.read_text() or 'UiItemAgentEntry' in p.read_text()) for p in files), name)
+            annotation = r'(?m)^\s*@(?:FunctionHookEntry|UiItemAgentEntry|\[[^\]]*\b(?:FunctionHookEntry|UiItemAgentEntry)\b)'
+            self.assertTrue(any(p.exists() and re.search(annotation, p.read_text()) for p in files), name)
         self.assertIn('sumicya.qself.feature.device.RiskReportInterceptor', ALLOWED)
         self.assertIn('sumicya.qself.diagnostics.ReportDiagnostics', ALLOWED)
         self.assertIn('cc.ioctl.hook.misc.CleanUpMitigation', ALLOWED)
