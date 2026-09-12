@@ -45,6 +45,13 @@ public final class ReportMetadata {
         }
     }
 
+    /** A queued event must belong to both the observation window and the enabled generation. */
+    public static boolean acceptsWindow(boolean enabled, String epoch, String generation,
+            String expectedEpoch, String expectedGeneration) {
+        return enabled && epoch != null && !epoch.isEmpty() && generation != null && !generation.isEmpty()
+                && epoch.equals(expectedEpoch) && generation.equals(expectedGeneration);
+    }
+
     /** Bounded newest-first eviction; strips malformed persisted lines instead of echoing them. */
     public static List<String> append(List<String> previous, String next) {
         ArrayDeque<String> result = new ArrayDeque<String>();

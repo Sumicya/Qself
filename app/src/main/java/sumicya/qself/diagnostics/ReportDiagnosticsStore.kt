@@ -5,6 +5,7 @@ import android.os.Process
 import io.github.qauxv.config.ConfigManager
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -39,10 +40,12 @@ internal object ReportDiagnosticsStore {
     var enabled: Boolean
         get() = ConfigManager.getDefaultConfig().getBooleanOrDefault(ENABLED, false)
         set(value) {
+            withJournalLock {
             val config = ConfigManager.getDefaultConfig()
             config.putBoolean(ENABLED, false)
             config.putString(GENERATION, UUID.randomUUID().toString())
             if (value) config.putBoolean(ENABLED, true)
+            }
         }
 
     fun generation(): String = ConfigManager.getDefaultConfig().getStringOrDefault(GENERATION, "")
@@ -51,15 +54,11 @@ internal object ReportDiagnosticsStore {
 
     /** Call on an IO worker. A new epoch hides old data and invalidates queued/in-flight events. */
     @Synchronized
-    fun clear(): String {
+    fun clear(): String = withJournalLock {
         val epoch = UUID.randomUUID().toString()
         ConfigManager.getDefaultConfig().putString(EPOCH, epoch)
         for (source in sources) ConfigManager.getCache().remove(PREFIX + source)
-        dropped.set(0)
-        failures.set(0)
-        skipped.set(0)
-        observerFailures.set(0)
-        return epoch
+        epoch
     }
 
     fun record(source: String, phase: String, details: String, expectedEpoch: String = epoch(),
@@ -71,7 +70,7 @@ internal object ReportDiagnosticsStore {
         try {
             worker.execute {
                 try {
-                    if (!enabled || epoch() != expectedEpoch || generation() != expectedGeneration) return@execute
+                    if (!isCurrentWindow(expectedEpoch, expectedGeneration)) return@execute
                     persist(source, expectedEpoch, timestamp, pid, phase, details, observedCall, expectedGeneration)
                 } catch (_: Throwable) {
                     failures.incrementAndGet() // Never forward failures/messages to host or AppCenter.
@@ -84,8 +83,8 @@ internal object ReportDiagnosticsStore {
 
     @Synchronized
     private fun persist(source: String, expectedEpoch: String, timestamp: Long, pid: Int, phase: String,
-                        details: String, observedCall: Boolean, expectedGeneration: String) {
-        if (!enabled || epoch() != expectedEpoch || generation() != expectedGeneration) return
+                        details: String, observedCall: Boolean, expectedGeneration: String) = withJournalLock {
+        if (!isCurrentWindow(expectedEpoch, expectedGeneration)) return@withJournalLock
         val store = ConfigManager.getCache()
         val snapshot = readSnapshot(source, expectedEpoch)
         val array = snapshot.optJSONArray("lines") ?: JSONArray()
@@ -103,9 +102,18 @@ internal object ReportDiagnosticsStore {
         snapshot.put("skippedCalls", skipped.get())
         snapshot.put("observerFailures", observerFailures.get())
         if (phase == "INSTALL") snapshot.put("installation", line)
-        // An old writer may race another process clearing the epoch. Its snapshot is tagged
-        // with the old epoch and is never presented as part of the new observation window.
-        if (enabled && epoch() == expectedEpoch && generation() == expectedGeneration) store.putString(PREFIX + source, snapshot.toString())
+        // Epoch check and snapshot write are one cross-process transaction. Clear/stop cannot
+        // interleave here and an old generation cannot overwrite a newer snapshot after clear.
+        store.putString(PREFIX + source, snapshot.toString())
+        Unit
+    }
+
+    private fun isCurrentWindow(expectedEpoch: String, expectedGeneration: String): Boolean =
+        ReportMetadata.acceptsWindow(enabled, epoch(), generation(), expectedEpoch, expectedGeneration)
+
+    private fun <T> withJournalLock(transaction: () -> T): T {
+        val parent = requireNotNull(ConfigManager.getCache().file?.parentFile)
+        return ReportFileLock.withLock(File(parent, "qself_report_diagnostics.lock")) { transaction() }
     }
 
     private fun readSnapshot(source: String, epoch: String): JSONObject {
@@ -116,14 +124,14 @@ internal object ReportDiagnosticsStore {
     }
 
     /** Read off the UI thread. The result contains no payload, credentials or exception messages. */
-    fun report(): String {
+    fun report(): String = withJournalLock {
         val epoch = epoch()
-        return buildString {
+        buildString {
             appendLine("当前查看进程即时诊断：队列丢弃=${dropped.get()} 写入异常=${failures.get()} 跳过=${skipped.get()} 观察异常=${observerFailures.get()}")
             for (source in sources) {
                 val snapshot = readSnapshot(source, epoch)
                 appendLine("\n[$source] 已记录入口（采样后）=${snapshot.optLong("observed")}")
-                appendLine("队列丢弃=${snapshot.optLong("droppedInWriter")} 写入异常=${snapshot.optLong("writerFailures")}")
+                appendLine("写入代次累计队列丢弃=${snapshot.optLong("droppedInWriter")} 写入异常=${snapshot.optLong("writerFailures")}")
                 appendLine("限流/在途上限跳过=${snapshot.optLong("skippedCalls")} 观察异常=${snapshot.optLong("observerFailures")}")
                 appendLine(snapshot.optString("installation", "本观察窗口无安装记录：未初始化、未覆盖或尚未运行；不代表没有上报。"))
                 val lines = snapshot.optJSONArray("lines") ?: JSONArray()

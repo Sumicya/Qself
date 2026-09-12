@@ -51,7 +51,7 @@ class ReportDiagnosticsContract(unittest.TestCase):
         store = code("ReportDiagnosticsStore.kt")
         self.assertIn("UUID.randomUUID().toString()", store)
         self.assertIn("putString(EPOCH, epoch)", store)
-        self.assertIn("epoch() != expectedEpoch", store)
+        self.assertIn("isCurrentWindow(expectedEpoch, expectedGeneration)", store)
         self.assertIn('snapshot.put("epoch", expectedEpoch)', store)
         self.assertIn('it.optString("epoch") == epoch', store)
 
@@ -59,9 +59,21 @@ class ReportDiagnosticsContract(unittest.TestCase):
         store = code("ReportDiagnosticsStore.kt")
         hook = code("ReportDiagnostics.kt")
         self.assertIn('putString(GENERATION, UUID.randomUUID().toString())', store)
-        self.assertIn('generation() != expectedGeneration', store)
-        self.assertIn('generation() == expectedGeneration', store)
+        self.assertIn('ReportMetadata.acceptsWindow(enabled, epoch(), generation(), expectedEpoch, expectedGeneration)', store)
+        self.assertIn('ReportFileLock.withLock(', store)
         self.assertEqual(hook.count('expectedGeneration = call.generation'), 2)
+
+    def test_new_qq_legacy_interceptor_is_guarded(self):
+        text = (ROOT / "app/src/main/java/awoo/linwenxuan04/hook/ChannelProxyHook.kt").read_text()
+        self.assertIn("!requireMinQQVersion(QQVersion.QQ_9_1_30)", text)
+        self.assertIn("if (!isAvailable) return false", text)
+        prop = (ROOT / "loader/sbl/src/main/resources/META-INF/xposed/module.prop").read_text()
+        self.assertIn("autoHotReload=false", prop)
+
+    def test_telemetry_sdk_removed(self):
+        gradle = (ROOT / "app/build.gradle.kts").read_text()
+        self.assertNotIn("implementation(libs.appcenter", gradle)
+        self.assertNotIn("Analytics.trackEvent", (ROOT / "app/src/main/java/io/github/qauxv/util/CliOper.java").read_text())
 
     def test_no_active_network_or_account_access(self):
         for path in SRC.iterdir():

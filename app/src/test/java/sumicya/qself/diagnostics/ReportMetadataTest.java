@@ -34,6 +34,13 @@ public final class ReportMetadataTest {
         check("none".equals(ReportMetadata.exceptionType(null)), "no error metadata");
         check("java.lang.IllegalStateException".equals(ReportMetadata.exceptionType(
                 new IllegalStateException("secret-token-account-body"))), "exception message excluded");
+        check(ReportMetadata.acceptsWindow(true, "window", "generation", "window", "generation"), "current event accepted");
+        check(!ReportMetadata.acceptsWindow(false, "window", "generation", "window", "generation"), "disabled rejected");
+        check(!ReportMetadata.acceptsWindow(true, "new", "generation", "old", "generation"), "cleared event rejected");
+        check(!ReportMetadata.acceptsWindow(true, "window", "new", "window", "old"), "stopped/restarted event rejected");
+        check(!ReportMetadata.acceptsWindow(true, "", "generation", "", "generation"), "missing window rejected");
+        check(!ReportMetadata.acceptsWindow(true, "window", "", "window", ""), "missing generation rejected");
+        check(!ReportMetadata.acceptsWindow(true, null, "generation", null, "generation"), "null window rejected");
         List<String> lines = new ArrayList<String>();
         for (int i = 0; i < 1000; i++) lines = ReportMetadata.append(lines, "event " + i);
         check(lines.size() == 128, "bounded ring");

@@ -184,9 +184,10 @@ object ReportDiagnostics : CommonConfigFunctionHook(
         AlertDialog.Builder(ctx).setTitle(name).setItems(options) { _, which ->
             when (which) {
                 0 -> if (isEnabled) {
-                    isEnabled = false
-                    valueState.value = "已停止"
-                    Toasts.info(activity, "已停止采集；完整重启 QQ 后卸除观察 Hook。")
+                    io(activity, { isEnabled = false }) {
+                        valueState.value = "已停止"
+                        Toasts.info(activity, "已停止采集；完整重启 QQ 后卸除观察 Hook。")
+                    }
                 } else {
                     AlertDialog.Builder(ctx).setTitle("开启只读诊断？")
                         .setMessage("仅记录已知 O3 命令名、时间、进程、调用次数和异常类型；不读取请求正文或凭据。\n" +
@@ -230,7 +231,7 @@ object ReportDiagnostics : CommonConfigFunctionHook(
             "范围：含 ChannelProxyExt 的已知精确签名，以及 MsfCore / ChannelManager 上具有公开 String getServiceCmd() 参数的发送方法，且仅两类 O3 命令。\n" +
             "时间为 UTC；ENTRY=观察到调用，AFTER_CALLBACK=观察到回调结束，不代表真正发送。服务器接收状态未知。\n" +
             "同一次请求可能经过多层方法，次数不能当作唯一网络请求数；其他模块/拦截、限流和未覆盖路径都可能造成漏记。\n" +
-            "本地记录可跨进程重启保留。INSTALL/START 是历史记录，不保证进程仍存活；清空后须等待新事件。\n"
+            "本地记录可跨进程重启保留。丢弃/异常计数为各写入代次累计，不随清空归零。INSTALL/START 是历史记录，不保证进程仍存活；清空后须等待新事件。\n"
     }
 
     private fun showReport(activity: Activity, report: String) {
