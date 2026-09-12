@@ -436,7 +436,7 @@ public class SettingsVisualTest {
         assertEquals(expected, clicked);
     }
 
-    @Test public void homeExpansionDoesNotNavigateAndSurvivesRebindAndSavedState() {
+    @Test public void homeExpansionDoesNotNavigateAndSurvivesRebindAndSavedState() throws Exception {
         List<String> clicks = new ArrayList<>();
         SettingsHomeView view = home(context(false, 1f, 412, false), false, 2, clicks);
         layout(view, 412);
