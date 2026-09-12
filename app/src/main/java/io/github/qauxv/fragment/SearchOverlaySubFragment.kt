@@ -577,6 +577,7 @@ class SearchOverlaySubFragment {
     }
 
     fun onDestroyView() {
+        mSearchView?.setOnQueryTextListener(null)
         binding = null
         mView = null
         mSearchView = null

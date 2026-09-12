@@ -37,9 +37,20 @@ class SettingsOptionSheet : BottomSheetDialogFragment() {
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        groupId = if (state != null) state.getString("currentGroup") else arguments?.getString("group")
+        groupId = when {
+            state != null -> state.getString("currentGroup")
+            arguments?.getBoolean("hostRestore") == true -> arguments?.getString("currentGroup")
+            else -> arguments?.getString("group")
+        }
     }
-    override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); out.putString("currentGroup", groupId) }
+    override fun onSaveInstanceState(out: Bundle) {
+        super.onSaveInstanceState(out); out.putString("currentGroup", groupId)
+        if (::recycler.isInitialized) out.putParcelable("scroll", recycler.layoutManager?.onSaveInstanceState())
+    }
+    fun saveForHost(): Bundle = Bundle(arguments ?: Bundle()).apply {
+        putBoolean("hostRestore", true); putString("currentGroup", groupId)
+        if (::recycler.isInitialized) putParcelable("scroll", recycler.layoutManager?.onSaveInstanceState())
+    }
     override fun onCreateDialog(state: Bundle?): Dialog = BottomSheetDialog(requireContext(), theme).also {
         it.onBackPressedDispatcher.addCallback(this, backCallback)
     }
@@ -78,7 +89,10 @@ class SettingsOptionSheet : BottomSheetDialogFragment() {
         }
         val focus = arguments?.getString("focus")
         val index = rows.indexOfFirst { it is UiAgentItem && it.identifier == focus }
-        if (index >= 0) recycler.post { recycler.scrollToPosition(index) }
+        val scroll = state?.getParcelable<android.os.Parcelable>("scroll")
+            ?: arguments?.getParcelable<android.os.Parcelable>("scroll")
+        if (scroll != null) recycler.layoutManager?.onRestoreInstanceState(scroll)
+        else if (index >= 0) recycler.post { recycler.scrollToPosition(index) }
     }
     override fun onStart() {
         super.onStart()
@@ -129,10 +143,15 @@ class SettingsOptionSheet : BottomSheetDialogFragment() {
         }
     }
     companion object {
+        const val TAG = "qself-options"
+        fun restore(activity: FragmentActivity, args: Bundle) {
+            if (!activity.supportFragmentManager.isStateSaved && activity.supportFragmentManager.findFragmentByTag(TAG) == null)
+                SettingsOptionSheet().apply { arguments = args }.showNow(activity.supportFragmentManager, TAG)
+        }
         fun show(activity: FragmentActivity, home: String? = null, group: String? = null, focus: String? = null) {
-            if (activity.supportFragmentManager.isStateSaved || activity.supportFragmentManager.findFragmentByTag("qself-options") != null) return
+            if (activity.supportFragmentManager.isStateSaved || activity.supportFragmentManager.findFragmentByTag(TAG) != null) return
             SettingsOptionSheet().apply { arguments = Bundle().apply { putString("home", home); putString("group", group); putString("focus", focus) } }
-                .show(activity.supportFragmentManager, "qself-options")
+                .showNow(activity.supportFragmentManager, TAG)
         }
     }
 }

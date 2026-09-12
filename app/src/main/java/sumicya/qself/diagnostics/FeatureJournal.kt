@@ -68,9 +68,9 @@ object FeatureJournal {
     fun report(): String = locked {
         buildString {
             appendLine("功能记录 v1 · 本地元数据 · 毫秒时间戳（UTC epoch）")
-            appendLine("记录=$enabled 当前进程队列丢弃=${dropped.get()} 写入异常=${errors.get()}")
+            appendLine("记录=$enabled 当前进程排队=${worker.queue.size} 队列丢弃=${dropped.get()} 写入异常=${errors.get()}")
             appendLine("INIT_END=true 仅代表初始化返回成功；不代表功能执行或网络送达。缺失 END 也不能单独证明崩溃。")
-            appendLine("范围：通用功能基类初始化/错误、设置开关；不捕获原生崩溃或所有自定义实现。每进程类别最多96条。")
+            appendLine("范围：START 启动、INIT 初始化、CONFIG 基类配置、SWITCH 设置开关、OPTIONS 选择数量、ERROR 错误；不捕获原生崩溃或所有自定义实现。每进程类别最多96条。")
             sources.forEach { process ->
                 appendLine("\n[$process]")
                 val raw = ConfigManager.getCache().getStringOrDefault(PREFIX + process, "[]")

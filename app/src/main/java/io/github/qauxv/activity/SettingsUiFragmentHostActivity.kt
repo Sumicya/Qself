@@ -109,6 +109,9 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
             SyncUtils.postDelayed(0) {
                 runOnStart {
                     initFragments(savedInstanceState)
+                    savedInstanceState?.getBundle(sumicya.qself.ui.SettingsOptionSheet.TAG)?.let {
+                        sumicya.qself.ui.SettingsOptionSheet.restore(this, it)
+                    }
                 }
             }
         }
@@ -236,6 +239,10 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
 
     override fun doOnSaveInstanceState(outState: Bundle) {
         super.doOnSaveInstanceState(outState)
+        (supportFragmentManager.findFragmentByTag(sumicya.qself.ui.SettingsOptionSheet.TAG) as? sumicya.qself.ui.SettingsOptionSheet)
+            ?.takeIf { it.isAdded && it.dialog?.isShowing == true }?.let {
+                outState.putBundle(sumicya.qself.ui.SettingsOptionSheet.TAG, it.saveForHost())
+            }
         if (mFragmentStack.isNotEmpty()) {
             outState.putBundle(FRAGMENT_TAG, saveFragmentInstanceState())
         }
@@ -272,7 +279,7 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
         } else {
             // replace the top fragment
             supportFragmentManager.beginTransaction()
-                .setCustomAnimations(R.anim.enter_from_right, R.anim.exit_to_left, R.anim.enter_from_left, R.anim.exit_to_right)
+                .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out, android.R.anim.fade_in, android.R.anim.fade_out)
                 .hide(mTopVisibleFragment!!)
                 .add(R.id.fragment_container, fragment)
                 .commit()
@@ -289,7 +296,7 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
         if (fragment == mTopVisibleFragment) {
             // this is the visible fragment, so we need to show the previous one
             val transaction = supportFragmentManager.beginTransaction()
-                .setCustomAnimations(R.anim.enter_from_left, R.anim.exit_to_right, R.anim.enter_from_right, R.anim.exit_to_left)
+                .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out, android.R.anim.fade_in, android.R.anim.fade_out)
                 .hide(fragment)
             mFragmentStack.remove(fragment)
             mTopVisibleFragment = mFragmentStack.lastOrNull()

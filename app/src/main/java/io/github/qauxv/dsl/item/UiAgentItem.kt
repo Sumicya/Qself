@@ -78,7 +78,7 @@ class UiAgentItem(
         val previous = switchCellAgent?.isChecked ?: false
         val action = {
             switchCellAgent?.isChecked = isChecked
-            sumicya.qself.diagnostics.FeatureJournal.toggle(agentProvider.javaClass.name, previous, isChecked)
+            sumicya.qself.diagnostics.FeatureJournal.toggle(agentProvider.javaClass.name, previous, switchCellAgent?.isChecked ?: previous)
             // if the function is enabled but not initialized, initialize it
             if (agentProvider is IDynamicHook) {
                 val hook: IDynamicHook = agentProvider

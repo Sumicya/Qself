@@ -112,7 +112,9 @@ abstract class BaseFunctionHook(
                 mDefaultEnabled && isAvailable
             )
         set(value) {
+            val previous = isEnabled
             ConfigManager.getDefaultConfig().putBoolean(mHookEnableConfigKey, value)
+            if (previous != value) sumicya.qself.diagnostics.FeatureJournal.record("CONFIG", javaClass.name, "$previous->$value")
         }
 
     override val dependentComponents: List<ITraceableDynamicHook>? = null

@@ -671,7 +671,7 @@ if (System.getenv("CI") == "true") {
     tasks.withType<Test>().configureEach {
         finalizedBy(publishNativeVisualEvidence)
         doLast {
-            for (script in listOf("test_settings_ui_contract.py", "test_report_diagnostics_contract.py", "test_simplified_profile_contract.py")) {
+            for (script in listOf("test_settings_ui_contract.py", "test_settings_interaction_contract.py", "test_report_diagnostics_contract.py", "test_simplified_profile_contract.py")) {
                 val guard = providers.exec { commandLine("python3", rootProject.file("scripts/$script").absolutePath) }
                 println(guard.standardOutput.asText.get())
                 guard.result.get().assertNormalExitValue()

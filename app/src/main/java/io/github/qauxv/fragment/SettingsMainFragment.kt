@@ -305,7 +305,11 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             return UiAgentItem(endNode.identifier, endNode.name, endNode.itemAgentProvider)
         } else if (endNode is IDslFragmentNode) {
             return SimpleListItem(endNode.identifier, endNode.name ?: endNode.toString(), null).apply {
-                onClickListener = {
+                onClickListener = click@{
+                    sumicya.qself.feature.consolidation.FeatureCatalog.groupPath(endNode.identifier)?.let {
+                        sumicya.qself.ui.SettingsOptionSheet.show(requireSettingsHostActivity(), group = endNode.identifier)
+                        return@click
+                    }
                     val targetLocation = FunctionEntryRouter.resolveUiItemAnycastLocation(
                         arrayOf(
                             FunctionEntryRouter.Locations.ANY_CAST_PREFIX, endNode.identifier
@@ -354,7 +358,7 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             val provider = FunctionEntryRouter.queryAnnotatedUiItemAgentEntries()
                 .firstOrNull { it.itemAgentProviderUniqueIdentifier == action } ?: return
             val location = FunctionEntryRouter.locationForProvider(provider).dropLast(1).toTypedArray()
-            requireSettingsHostActivity().presentFragment(newInstance(location, action))
+            sumicya.qself.ui.SettingsOptionSheet.show(requireSettingsHostActivity(), group = location.lastOrNull(), focus = action)
             return
         }
         val id = when (action) {
@@ -449,6 +453,7 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
     }
 
     fun onNavigateToOtherFragment() {
+        mSearchMenuItem?.collapseActionView()
         abortSearchMode()
     }
 

@@ -263,6 +263,7 @@ me/singleneuron/hook/decorator/SimpleReceiptMessage.kt	回执消息文本化	Sim
 me/teble/hook/CancelPicCompress.kt	分享图片不压缩	Auxiliary
 moe/zapic/hook/MessagingStyleNotification.kt	MessagingStyle通知	Auxiliary
 nep/timeline/PromptForNoSeqMessage.kt	提示 NoSeq 消息	Auxiliary
+sumicya/qself/diagnostics/FeatureDiagnosticsItem.kt	-	Auxiliary
 sumicya/qself/diagnostics/ReportDiagnostics.kt	上报诊断（只读）	Auxiliary
 sumicya/qself/feature/chat/DisableEnterEffect.kt	屏蔽所有进场特效	-
 sumicya/qself/feature/chat/DisableLightInteraction.kt	禁用轻互动	Simplify
@@ -306,7 +307,7 @@ xyz/nextalone/hook/HideTroopAddTips.kt	隐藏群聊共同好友提醒	Simplify
 xyz/nextalone/hook/HideTroopLevel.kt	隐藏群聊群成员头衔	Simplify
 xyz/nextalone/hook/RemoveIntimateDrawer.kt	隐藏亲密抽屉	Simplify
 xyz/nextalone/hook/RemoveShortCutBar.kt	隐藏文本框上方快捷方式	Simplify
-xyz/nextalone/hook/SimplifyBottomTab.kt	精简底栏	Simplify
+xyz/nextalone/hook/SimplifyBottomTab.kt	底栏页面与按钮数量	Simplify
 xyz/nextalone/hook/SimplifyChatLongItem.kt	精简聊天气泡长按菜单	Simplify
 xyz/nextalone/hook/SimplifyContactTabs.kt	精简联系人页面	Simplify
 xyz/nextalone/hook/SimplifyEmoPanel.kt	精简表情菜单	Simplify
