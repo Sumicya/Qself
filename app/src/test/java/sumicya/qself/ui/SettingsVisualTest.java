@@ -357,7 +357,7 @@ public class SettingsVisualTest {
             Context context = context(dark, 1f, 412, false);
             assertTrue(SettingsDynamicColors.apply(context));
             int expected = context.getColor(dark ? android.R.color.system_accent1_200 : android.R.color.system_accent1_600);
-            assertEquals(expected, com.google.android.material.color.MaterialColors.getColor(context, com.google.android.material.R.attr.colorPrimary, 0));
+            assertEquals(expected, com.google.android.material.color.MaterialColors.getColor(context, androidx.appcompat.R.attr.colorPrimary, 0));
             assertEquals(expected, SettingsVisuals.palette(context, 2).getAccent());
         }
     }

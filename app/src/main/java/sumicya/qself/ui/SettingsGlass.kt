@@ -140,6 +140,7 @@ internal object SettingsGlass {
                 val owner = ownerRef.get()
                 owner?.getLocationOnScreen(at) ?: run { at[0] = 0; at[1] = 0 }
                 source.getLocationOnScreen(from)
+                val moved = oldX != at[0] || oldY != at[1]
                 val w = bounds.width(); val h = bounds.height()
                 val pad = (24 * density).toInt()
                 val radius = minOf(corner * density, w / 2f, h / 2f)
@@ -155,7 +156,7 @@ internal object SettingsGlass {
                 }
                 lens.setFloatUniform("light", -.6f + at[0] / maxOf(source.width.toFloat(), 1f) * .25f,
                     -.8f + at[1] / maxOf(source.height.toFloat(), 1f) * .2f)
-                if (oldW != w || oldH != h || owner == null || owner?.translationY != 0f) {
+                if (oldW != w || oldH != h || moved) {
                     lens.setFloatUniform("size", w.toFloat(), h.toFloat())
                     lens.setFloatUniform("pad", pad.toFloat()); lens.setFloatUniform("radius", radius)
                     lens.setFloatUniform("density", density)

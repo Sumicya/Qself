@@ -48,7 +48,11 @@ object GlassAppearanceEditor {
         }
         val sample = FrameLayout(activity).apply { addView(preview, FrameLayout.LayoutParams(-1, -1)) }
         content.addView(sample, LinearLayout.LayoutParams(-1, SettingsVisuals.dp(activity, 100)))
-        fun refresh() {
+        fun refresh(onlyOpacity: Boolean = false) {
+            if (onlyOpacity && preview.background != null) {
+                preview.background.alpha = (255 * (100 - draft.getValue("transparency")) / 100f).toInt()
+                return
+            }
             val mode = if (draft.getValue("background") == 0) draft.getValue("material") else 2
             val p = palette(activity, draft.getValue("tone"), mode)
             val color = if (draft.getValue("background") == 2) { if (!bar) p.container else if (p.dark) 0xff18243f.toInt() else 0xffe3eaff.toInt() } else p.surface
@@ -70,7 +74,7 @@ object GlassAppearanceEditor {
                 minimumHeight = SettingsVisuals.dp(activity, 48)
                 onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                     override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-                    override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { draft[key] = position; refresh() }
+                    override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { if (draft[key] != position) { draft[key] = position; refresh() } }
                 }
             })
         }
@@ -79,7 +83,7 @@ object GlassAppearanceEditor {
             content.addView(Slider(activity).apply {
                 valueFrom = range.first.toFloat(); valueTo = range.last.toFloat(); stepSize = 1f; value = draft.getValue(key).toFloat()
                 contentDescription = title
-                addOnChangeListener { _, value, _ -> draft[key] = value.toInt(); titleView.text = "$title：${value.toInt()}$suffix"; refresh() }
+                addOnChangeListener { _, value, _ -> draft[key] = value.toInt(); titleView.text = "$title：${value.toInt()}$suffix"; if (key == "transparency") refresh(true) }
             })
         }
         slider("transparency", "玻璃背景透明度", 0..100, "%")
