@@ -62,6 +62,7 @@ class SettingsErrorInteractionTest {
             assertFalse(provider.switchProvider.isChecked)
             assertEquals(0, provider.details)
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            org.robolectric.shadows.ShadowLooper.idleMainLooper()
             val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             assertTrue(clipboard.primaryClip!!.getItemAt(0).text.contains("fixture failure"))
             assertFalse(provider.switchProvider.isChecked)

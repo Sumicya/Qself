@@ -12,7 +12,7 @@ import android.widget.TextView
 class SettingsAccordion(context: Context, title: String, summary: String,
                         private val contentFactory: () -> View) : LinearLayout(context) {
     private val body = LinearLayout(context).apply { orientation = VERTICAL; visibility = GONE }
-    private val arrow = TextView(context).apply { text = "⌄"; textSize = 22f; gravity = Gravity.CENTER }
+    private val arrow = android.widget.ImageView(context).apply { setImageResource(io.github.qauxv.R.drawable.qself_expand_more); scaleType = android.widget.ImageView.ScaleType.CENTER }
     val header = LinearLayout(context)
     private var animation: ValueAnimator? = null
     var onExpandedChanged: ((Boolean) -> Unit)? = null
@@ -49,7 +49,7 @@ class SettingsAccordion(context: Context, title: String, summary: String,
             labels.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
             arrow.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             addView(labels, LayoutParams(0, -2, 1f))
-            arrow.setTextColor(p.secondary)
+            arrow.setColorFilter(p.secondary)
             addView(arrow, LayoutParams(SettingsVisuals.dp(context, 32), SettingsVisuals.dp(context, 40)))
             setOnClickListener { setExpanded(!expanded, true) }
         }
