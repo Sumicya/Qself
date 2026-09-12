@@ -45,6 +45,13 @@ class ProfileContract(unittest.TestCase):
             self.assertLess(s.index('SimplifiedProfile.isAllowed(this)'), s.index('if (mInitialized)'))
         installer = (SRC / 'io/github/qauxv/core/HookInstaller.java').read_text()
         self.assertEqual(installer.count('if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(hook)) return;'), 3)
+    def test_cache_override_cannot_delete_before_reaching_the_base_guard(self):
+        s = (SRC / 'io/github/duzhaokun123/util/CacheManager.kt').read_text().split('override fun initialize(): Boolean {')[1]
+        self.assertLess(s.index('SimplifiedProfile.isAllowed(this)'), s.index('ConfigManager.getDefaultConfig()'))
+        base = (SRC / 'io/github/qauxv/hook/BaseFunctionHook.kt').read_text()
+        self.assertNotIn('enableAllHook()', base)
+        self.assertNotIn('EnableAllHook.enabled', base)
+
     def test_ipc_never_transmits_or_consumes_legacy_numeric_indices(self):
         s = (SRC / 'io/github/qauxv/util/SyncUtils.java').read_text()
         self.assertIn('HOOK_DO_INIT_SIMPLIFIED_V1', s)

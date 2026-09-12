@@ -78,6 +78,7 @@ object CacheManager : CommonConfigFunctionHook(defaultEnabled = true) {
         }
 
     override fun initialize(): Boolean {
+        if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(this)) return false
         ConfigManager.getDefaultConfig().getStringSetOrDefault("CacaheManager.deleteOnStartupFiles", setOf<String>()).forEach {
             val f = File(it)
             if (f.exists()) {

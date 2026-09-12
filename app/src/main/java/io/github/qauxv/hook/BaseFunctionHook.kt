@@ -22,7 +22,6 @@
 
 package io.github.qauxv.hook
 
-import io.github.qauxv.BuildConfig
 import io.github.qauxv.base.ITraceableDynamicHook
 import io.github.qauxv.base.IUiItemAgentProvider
 import io.github.qauxv.config.ConfigManager
@@ -105,11 +104,11 @@ abstract class BaseFunctionHook(
     override val isApplicationRestartRequired = false
 
     override var isEnabled: Boolean
-        get() = sumicya.qself.profile.SimplifiedProfile.isAllowed(this) && (enableAllHook() ||
+        get() = sumicya.qself.profile.SimplifiedProfile.isAllowed(this) &&
             ConfigManager.getDefaultConfig().getBooleanOrDefault(
                 mHookEnableConfigKey,
                 mDefaultEnabled && isAvailable
-            ))
+            )
         set(value) {
             ConfigManager.getDefaultConfig().putBoolean(mHookEnableConfigKey, value)
         }
@@ -136,7 +135,4 @@ abstract class BaseFunctionHook(
         Log.e(e)
     }
 
-    private fun enableAllHook(): Boolean {
-        return BuildConfig.DEBUG && ConfigManager.getDefaultConfig().getBooleanOrDefault("EnableAllHook.enabled", false)
-    }
 }
