@@ -223,8 +223,16 @@ final class DropletPanel extends View {
         float radius = h * 0.5f;
         float p = mProgress;
 
+        // At rest the droplet paints nothing: the outer pill is the only
+        // capsule surface and the real tab views already draw over it. A
+        // resting wash would read as a faint inner contour between the glass
+        // edge and the glyphs (the "thin separation layer" artifact).
+        if (p <= 0.01f) {
+            return;
+        }
+
         boolean lensDrawn = false;
-        if (mSupported && p > 0.01f && canvas.isHardwareAccelerated()) {
+        if (mSupported && canvas.isHardwareAccelerated()) {
             try {
                 lensDrawn = drawLens(canvas, w, h, radius, p);
             } catch (Throwable t) {
@@ -234,7 +242,6 @@ final class DropletPanel extends View {
         }
         if (!lensDrawn) {
             drawSurfaceTints(canvas, 0f, 0f, w, h, radius, p);
-            drawRestingTab(canvas);
         }
         if (p > 0f && mInnerShadow != null && canvas.isHardwareAccelerated()) {
             float blur = 8f * mDensity * p;
@@ -269,22 +276,6 @@ final class DropletPanel extends View {
             canvas.drawRoundRect(left, top, right, bottom, radius, radius,
                     mPressTint);
         }
-    }
-
-    /** Repaints the selected tab above the resting capsule. */
-    private void drawRestingTab(Canvas canvas) {
-        ViewGroup row = mTabRowRef.get();
-        View tab = TabBarBridge.tabAt(row, TabBarBridge.selectedIndex(row));
-        if (tab == null || tab.getVisibility() != VISIBLE
-                || !ViewGeom.unscaledScreenPos(this, mSelfPos)
-                || !ViewGeom.unscaledScreenPos(tab, mSrcPos)) {
-            return;
-        }
-        int save = canvas.save();
-        canvas.translate(mSrcPos[0] - mSelfPos[0],
-                mSrcPos[1] - mSelfPos[1]);
-        tab.draw(canvas);
-        canvas.restoreToCount(save);
     }
 
     /* ------------------------------------------------------------ capture */

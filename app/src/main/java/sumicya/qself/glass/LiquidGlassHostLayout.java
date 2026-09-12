@@ -36,9 +36,9 @@ final class LiquidGlassHostLayout extends FrameLayout {
 
     static final Object GLASS_TAG = new Object();
 
-    private static final float SHADOW_PAD_DP = 8f;
-    private static final float SHADOW_BLUR_DP = 8f;
-    private static final float SHADOW_OFFSET_DP = 1.5f;
+    private static final float SHADOW_PAD_DP = 14f;
+    private static final float SHADOW_BLUR_DP = 10f;
+    private static final float SHADOW_OFFSET_DP = 2f;
     private static final float LEGACY_SAMPLE_SCALE = 0.4f;
     private static final int LEGACY_BLUR_RADIUS = 3;
     private static final float SATURATION_BOOST = 1.08f;

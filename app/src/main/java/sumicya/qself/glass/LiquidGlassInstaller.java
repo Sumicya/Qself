@@ -67,6 +67,7 @@ public final class LiquidGlassInstaller {
     private static WeakReference<View> sNavBgRef = new WeakReference<>(null);
     private static int sNavBgId = -1;
     private static boolean sBlurRelit;
+    private static boolean sSeparatorLogged;
     private static float sDropletBaseY;
     private static boolean sRimTrimDone;
 
@@ -555,22 +556,34 @@ public final class LiquidGlassInstaller {
      * horizontal rules (one pixel and nearly bar-width).
      */
     private static void suppressTabSeparators(View tabView, ViewGroup row) {
+        ArrayList<String> branches = new ArrayList<>();
         if (tabView instanceof android.widget.TabWidget) {
             android.widget.TabWidget tw = (android.widget.TabWidget) tabView;
             tw.setStripEnabled(false);
             tw.setDividerDrawable(null);
+            branches.add("tabwidget");
         }
         if (tabView instanceof LinearLayout) {
             LinearLayout ll = (LinearLayout) tabView;
             ll.setShowDividers(LinearLayout.SHOW_DIVIDER_NONE);
             ll.setDividerDrawable(null);
+            branches.add("bar-divider");
         }
         if (row instanceof LinearLayout && row != tabView) {
             LinearLayout rowLayout = (LinearLayout) row;
             rowLayout.setShowDividers(LinearLayout.SHOW_DIVIDER_NONE);
             rowLayout.setDividerDrawable(null);
+            branches.add("row-divider");
         }
+        int before = sHiddenLines.size();
         hideSubtreeLines(tabView, 0);
+        int newlyHidden = sHiddenLines.size() - before;
+        if (!sSeparatorLogged || newlyHidden > 0) {
+            sSeparatorLogged = true;
+            LiquidGlassModule.log(android.util.Log.INFO,
+                    "separator suppression: " + branches
+                            + " shape-matched lines=" + newlyHidden);
+        }
     }
 
     private static void hideSubtreeLines(View v, int depth) {
