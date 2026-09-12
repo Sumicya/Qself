@@ -1,12 +1,14 @@
-// Vendored from liuran001/WeChat-LiquidGlass (MIT): https://github.com/liuran001/WeChat-LiquidGlass
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 package sumicya.qself.glass;
 
 import android.content.Context;
+import android.graphics.BlendMode;
 import android.graphics.Canvas;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RecordingCanvas;
 import android.graphics.RenderEffect;
 import android.graphics.RenderNode;
@@ -19,63 +21,49 @@ import android.view.ViewGroup;
 import java.lang.ref.WeakReference;
 
 /**
- * The liquid-glass surface, reproducing KernelSU's floating bar effect stack.
- *
- * <p>KernelSU composes it through miuix-blur as:
- *
- * <pre>
- * vibrancy()                       // colorControls(saturation = 1.5)
- * blur(4.dp, 4.dp)
- * lens(refractionHeight = 24.dp, refractionAmount = 24.dp)
- * highlight = baseHighlight.copy(alpha = 0.75f)
- * onDrawSurface = { drawRect(surfaceContainer.copy(0.4f)) }
- * </pre>
- *
- * <p>The same three effects map directly onto {@link RenderEffect}'s chaining
- * API, so the backdrop is captured into a {@link RenderNode} and run through
- * saturation → blur → refraction, then the surface wash and edge highlight are
- * painted over it.
- *
- * <p>The refraction shader is Kyant0's rounded-rect SDF lens (Apache-2.0), the
- * same one KernelSU vendors. Its defining property is the early-out: anything
- * further than {@code refractionHeight} from the edge is passed through
- * untouched, so only a band around the rim bends — the middle stays a plain
- * blurred, saturated view of what is behind it.
+ * The resting glass pill. It captures whatever pager pages pass behind it
+ * into a display list, runs the capture through a saturation lift, a blur
+ * and a rim-only refraction lens, then covers it with a faint wash plus a
+ * press highlight. Without hardware AGSL it paints a flat tinted material.
  */
 final class LiquidGlassPanel extends View {
 
-    /** KernelSU: lens(refractionHeight = 24.dp, refractionAmount = 24.dp). */
-    private static final float REFRACTION_DP = 24f;
-    /** KernelSU: blur(4.dp, 4.dp). */
+    /** Rim band, in dp, inside which the lens bends samples; the centre passes through. */
+    private static final float RIM_DP = 24f;
+    /** Hardware blur radius in dp. */
     private static final float BLUR_DP = 4f;
-    /** KernelSU: vibrancy() -> colorControls(saturation = 1.5f). */
-    private static final float SATURATION = 1.5f;
+    /** Saturation multiplier applied to the blurred backdrop. */
+    private static final float VIBRANCY = 1.5f;
+    private static final int WASH_LIGHT = 0x66F2F2F7;
+    private static final int WASH_DARK = 0x662C2C2E;
+    private static final float PRESS_WASH = 0.06f;
+    private static final float PRESS_BLOOM = 0.12f;
 
+    /**
+     * Signed-distance helpers reused by the droplet's own programs; the
+     * function names are therefore the renderer-internal contract.
+     */
     static final String SDF_SOURCE = ""
-            + "float radiusAt(float2 coord, float4 radii) {\n"
-            + "    if (coord.x >= 0.0) {\n"
-            + "        if (coord.y <= 0.0) return radii.y; else return radii.z;\n"
-            + "    } else {\n"
-            + "        if (coord.y <= 0.0) return radii.x; else return radii.w;\n"
-            + "    }\n"
+            + "float radiusAt(float2 p, float4 radii) {\n"
+            + "    if (p.x < 0.0) return p.y > 0.0 ? radii.w : radii.x;\n"
+            + "    return p.y > 0.0 ? radii.z : radii.y;\n"
             + "}\n"
-            + "float sdRoundedRect(float2 coord, float2 halfSize, float radius) {\n"
-            + "    float2 cornerCoord = abs(coord) - (halfSize - float2(radius));\n"
-            + "    float outside = length(max(cornerCoord, 0.0)) - radius;\n"
-            + "    float inside = min(max(cornerCoord.x, cornerCoord.y), 0.0);\n"
+            + "float sdRoundedRect(float2 p, float2 halfExtent, float radius) {\n"
+            + "    float2 q = abs(p) - halfExtent + radius;\n"
+            + "    float outside = length(max(q, 0.0)) - radius;\n"
+            + "    float inside = min(max(q.x, q.y), 0.0);\n"
             + "    return outside + inside;\n"
             + "}\n"
-            + "float2 gradSdRoundedRect(float2 coord, float2 halfSize, float radius) {\n"
-            + "    float2 cornerCoord = abs(coord) - (halfSize - float2(radius));\n"
-            + "    if (cornerCoord.x >= 0.0 || cornerCoord.y >= 0.0) {\n"
-            + "        return sign(coord) * normalize(max(cornerCoord, 0.0));\n"
-            + "    } else {\n"
-            + "        float gradX = step(cornerCoord.y, cornerCoord.x);\n"
-            + "        return sign(coord) * float2(gradX, 1.0 - gradX);\n"
-            + "    }\n"
+            + "float2 gradSdRoundedRect(float2 p, float2 halfExtent, float radius) {\n"
+            + "    float2 q = abs(p) - halfExtent + radius;\n"
+            + "    float2 corner = max(q, 0.0);\n"
+            + "    if (dot(corner, corner) > 0.0) return sign(p) * normalize(corner);\n"
+            + "    float2 g = sign(p);\n"
+            + "    if (q.x >= q.y) { g.y = 0.0; } else { g.x = 0.0; }\n"
+            + "    return g;\n"
             + "}\n";
 
-    private static final String LENS_SHADER = ""
+    private static final String LENS_PROGRAM = ""
             + "uniform shader content;\n"
             + "uniform float2 size;\n"
             + "uniform float2 offset;\n"
@@ -84,150 +72,114 @@ final class LiquidGlassPanel extends View {
             + "uniform float refractionAmount;\n"
             + "uniform float depthEffect;\n"
             + SDF_SOURCE
-            + "float circleMap(float x) { return 1.0 - sqrt(1.0 - x * x); }\n"
             + "half4 main(float2 coord) {\n"
-            + "    float2 halfSize = size * 0.5;\n"
-            + "    float2 centeredCoord = (coord + offset) - halfSize;\n"
+            + "    float2 halfExtent = size * 0.5;\n"
+            + "    float2 local = (coord + offset) - halfExtent;\n"
             + "    float radius = radiusAt(coord, cornerRadii);\n"
-            + "    float sd = sdRoundedRect(centeredCoord, halfSize, radius);\n"
-            + "    if (-sd >= refractionHeight) { return content.eval(coord); }\n"
-            + "    sd = min(sd, 0.0);\n"
-            + "    float d = circleMap(1.0 - -sd / refractionHeight) * refractionAmount;\n"
-            + "    float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));\n"
-            + "    float2 grad = normalize(gradSdRoundedRect(centeredCoord, halfSize,"
-            + "            gradRadius) + depthEffect * normalize(centeredCoord));\n"
-            + "    float2 refractedCoord = coord + d * grad;\n"
-            + "    return content.eval(refractedCoord);\n"
+            + "    float dist = sdRoundedRect(local, halfExtent, radius);\n"
+            + "    if (-dist >= refractionHeight) return content.eval(coord);\n"
+            + "    float rim = clamp(-dist / refractionHeight, 0.0, 1.0);\n"
+            + "    float bend = 1.0 - sqrt(max(0.0, 1.0 - rim * rim));\n"
+            + "    float gradLimit = min(radius * 1.5, min(halfExtent.x, halfExtent.y));\n"
+            + "    float2 normal = normalize(gradSdRoundedRect(local, halfExtent, gradLimit)\n"
+            + "                             + depthEffect * normalize(local));\n"
+            + "    return content.eval(coord + bend * refractionAmount * normal);\n"
             + "}\n";
 
-    private final WeakReference<ViewGroup> mBackdropRef;
-    private final float mDensity;
-    private final int mPad;
-
-    private final RenderNode mNode = new RenderNode("wxLiquidGlass");
-    /** Separate display list used when the droplet reuses this blurred surface. */
-    private final RenderNode mEmbeddedNode = new RenderNode("wxLiquidGlassEmbedded");
-    // Reused every frame: onDraw runs on each traversal, and allocating here
-    // would churn the heap for nothing.
-    private final int[] mSelf = new int[2];
-    private final int[] mSrc = new int[2];
-    private final android.graphics.Rect mVisible = new android.graphics.Rect();
-    private RuntimeShader mLens;
-    private RenderEffect mChain;
-    private int mChainW;
-    private int mChainH;
-    private final RenderEffect mSaturate;
-
-    /**
-     * KernelSU's InteractiveHighlight: a white wash plus a radial bloom that
-     * tracks the droplet, both in Plus blend, fading in with press progress.
-     *
-     * <p>KernelSU writes this as {@code return color * intensity} over a
-     * {@code layout(color)} uniform. That uniform arrives <em>un</em>premultiplied
-     * — {@code (1, 1, 1, 0.12)} for white at 12% — while an AGSL shader has to
-     * return a premultiplied colour, so the peak really adds rgb 1.0: solid
-     * white. KernelSU gets away with it because its droplet covers the blown-out
-     * core; WeChat's pill is shorter and narrower, so the core spills across the
-     * whole bar and the highlight reads as a blowout. Carrying the alpha as a
-     * plain float and returning premultiplied white gives the intended 12%.
-     */
-    private static final String HIGHLIGHT_SHADER = ""
-            + "uniform float2 size;\n"
-            + "uniform float alpha;\n"
-            + "uniform float radius;\n"
-            + "uniform float2 position;\n"
+    private static final String BLOOM_PROGRAM = ""
+            + "uniform float2 bounds;\n"
+            + "uniform float2 center;\n"
+            + "uniform float reach;\n"
+            + "uniform float strength;\n"
             + "half4 main(float2 coord) {\n"
-            + "    float dist = distance(coord, position);\n"
-            + "    float intensity = smoothstep(radius, radius * 0.5, dist);\n"
-            + "    half a = half(alpha * intensity);\n"
+            + "    float near = smoothstep(reach, reach * 0.5, distance(coord, center));\n"
+            + "    half a = half(strength * near);\n"
             + "    return half4(a, a, a, a);\n"
             + "}\n";
 
-    private RuntimeShader mHighlightShader;
-    private final Paint mBloom = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint mWashPlus = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private float mInteraction;
-    private float mInteractionX;
+    private final WeakReference<ViewGroup> backdropRef;
+    private final float density;
+    private final int samplePad;
 
-    /** Press progress and the droplet's centre, in this view's coordinates. */
-    void setInteraction(float progress, float centreX) {
-        if (mInteraction != progress || mInteractionX != centreX) {
-            mInteraction = progress;
-            mInteractionX = centreX;
-            invalidate();
-        }
-    }
+    private final Paint materialWash = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint edgeWash = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint bloomPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path outline = new Path();
+    private final Rect visibleRect = new Rect();
+    private final int[] selfPos = new int[2];
+    private final int[] childPos = new int[2];
 
-    private boolean mNight;
-    private int mBaseColor;
-    private final Paint mSurfacePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Path mClip = new Path();
+    private final RenderNode captureNode = new RenderNode("qselfGlassCapture");
+    private final RenderNode embeddedNode = new RenderNode("qselfGlassEmbedded");
+    private final RenderEffect vibrancy;
+    private RuntimeShader lens;
+    private RuntimeShader bloom;
+    private RenderEffect chain;
+    private int chainW = -1;
+    private int chainH = -1;
+    private boolean usable;
 
-    private boolean mSupported;
+    private boolean night;
+    private int pageColor;
+    private float press;
+    private float pressX;
 
-    LiquidGlassPanel(Context ctx, ViewGroup backdrop, float density, boolean night) {
-        super(ctx);
-        mBackdropRef = new WeakReference<>(backdrop);
-        mDensity = density;
-        // The lens samples outside its own bounds, so the captured backdrop is
-        // grown by the refraction amount on every side.
-        mPad = Math.round(REFRACTION_DP * density);
-
-        ColorMatrix cm = new ColorMatrix();
-        cm.setSaturation(SATURATION);
-        mSaturate = RenderEffect.createColorFilterEffect(new ColorMatrixColorFilter(cm));
-
-        mSupported = Build.VERSION.SDK_INT >= 33;
-        if (mSupported) {
+    LiquidGlassPanel(Context context, ViewGroup backdrop, float density, boolean night) {
+        super(context);
+        this.backdropRef = new WeakReference<>(backdrop);
+        this.density = density;
+        this.samplePad = Math.round(RIM_DP * density);
+        ColorMatrix lift = new ColorMatrix();
+        lift.setSaturation(VIBRANCY);
+        this.vibrancy = RenderEffect.createColorFilterEffect(new ColorMatrixColorFilter(lift));
+        if (Build.VERSION.SDK_INT >= 33) {
             try {
-                mLens = new RuntimeShader(LENS_SHADER);
-                mHighlightShader = new RuntimeShader(HIGHLIGHT_SHADER);
+                lens = new RuntimeShader(LENS_PROGRAM);
+                bloom = new RuntimeShader(BLOOM_PROGRAM);
+                usable = true;
             } catch (Throwable t) {
-                mSupported = false;
-                LiquidGlassModule.logErr("lens shader rejected", t);
+                usable = false;
+                LiquidGlassModule.logErr("lens program rejected", t);
             }
         }
         setTheme(night);
         setWillNotDraw(false);
     }
 
-    /** KernelSU: containerColor = surfaceContainer.copy(0.4f). */
-    void setTheme(boolean night) {
-        night = GlassConfig.resolveNight(night);
-        mNight = night;
-        mBaseColor = GlassConfig.backgroundColor(night);
-        mSurfacePaint.setColor(night ? 0x662C2C2E : 0x66F2F2F7);
-        // iosIndicatorSpecular: BloomStroke(white @ 0.12), width 1.dp, alpha 0.75.
+    void setTheme(boolean detectedNight) {
+        night = GlassConfig.resolveNight(detectedNight);
+        pageColor = GlassConfig.backgroundColor(night);
         invalidate();
     }
 
     boolean isSupported() {
-        return mSupported;
+        return usable;
     }
 
-    /**
-     * Contributes nothing to a WRAP_CONTENT parent.
-     *
-     * <p>The host sizes itself to the tab bar. A plain View measured MATCH_PARENT
-     * against an AT_MOST spec would report the full parent height and stretch the
-     * host to the whole screen; FrameLayout re-measures MATCH_PARENT children
-     * with an EXACTLY spec afterwards, which is when the real size arrives.
-     */
+    /** Press bloom strength and focal x, in local coordinates. */
+    void setInteraction(float progress, float centreX) {
+        if (press != progress || pressX != centreX) {
+            press = progress;
+            pressX = centreX;
+            invalidate();
+        }
+    }
+
     @Override
     protected void onMeasure(int widthSpec, int heightSpec) {
+        // Zero contribution to WRAP_CONTENT; the host sizes this view once
+        // the real EXACTLY spec arrives.
         setMeasuredDimension(
-                MeasureSpec.getMode(widthSpec) == MeasureSpec.EXACTLY
-                        ? MeasureSpec.getSize(widthSpec) : 0,
-                MeasureSpec.getMode(heightSpec) == MeasureSpec.EXACTLY
-                        ? MeasureSpec.getSize(heightSpec) : 0);
+                MeasureSpec.getMode(widthSpec) == MeasureSpec.EXACTLY ? MeasureSpec.getSize(widthSpec) : 0,
+                MeasureSpec.getMode(heightSpec) == MeasureSpec.EXACTLY ? MeasureSpec.getSize(heightSpec) : 0);
     }
 
     @Override
-    protected void onSizeChanged(int w, int h, int ow, int oh) {
-        super.onSizeChanged(w, h, ow, oh);
-        mClip.reset();
-        float r = h * 0.5f;
-        mClip.addRoundRect(0, 0, w, h, r, r, Path.Direction.CW);
+    protected void onSizeChanged(int w, int h, int oldW, int oldH) {
+        super.onSizeChanged(w, h, oldW, oldH);
+        outline.reset();
+        float radius = h * 0.5f;
+        outline.addRoundRect(0, 0, w, h, radius, radius, Path.Direction.CW);
     }
 
     @Override
@@ -237,168 +189,129 @@ final class LiquidGlassPanel extends View {
         if (w <= 0 || h <= 0) {
             return;
         }
-        float radius = h * 0.5f;
-
-        drawPanel(canvas, w, h, radius, mNode,
-                ViewGeom.cumulativeScale(this));
+        render(canvas, w, h, h * 0.5f, captureNode, ViewGeom.cumulativeScale(this));
     }
 
-    /** Draws the resting pill material into the droplet's combined backdrop. */
+    /** Paint the resting material into the droplet's captured surface. */
     void drawEmbedded(Canvas canvas) {
         int w = getWidth();
         int h = getHeight();
         if (w <= 0 || h <= 0) {
             return;
         }
-        drawPanel(canvas, w, h, h * 0.5f, mEmbeddedNode, 1f);
+        render(canvas, w, h, h * 0.5f, embeddedNode, 1f);
     }
 
-    private void drawPanel(Canvas canvas, int w, int h, float radius,
-                           RenderNode node, float captureScale) {
+    private void render(Canvas canvas, int w, int h, float radius,
+                        RenderNode node, float drawScale) {
         int alpha = GlassConfig.materialAlpha();
-        if (alpha == 0) return;
-        int materialSave = alpha == 255 ? canvas.save() : canvas.saveLayerAlpha(0, 0, w, h, alpha);
-        if (GlassConfig.background == 0 && mSupported && canvas.isHardwareAccelerated()) {
+        if (alpha == 0) {
+            return;
+        }
+        int layer = alpha == 255 ? canvas.save() : canvas.saveLayerAlpha(0, 0, w, h, alpha);
+        boolean live = GlassConfig.background == 0 && usable && canvas.isHardwareAccelerated();
+        if (live) {
             try {
-                drawGlass(canvas, w, h, radius, node, captureScale);
+                renderLiveBackdrop(canvas, w, h, radius, node, drawScale);
             } catch (Throwable t) {
-                mSupported = false;
-                LiquidGlassModule.logErr("glass draw failed, flat fallback", t);
+                usable = false;
+                LiquidGlassModule.logErr("live glass failed, flat fallback", t);
             }
         }
-
-        // Surface wash sits on top of the refracted backdrop —
-        // this is what carries legibility, not a heavy blur.
-        mSurfacePaint.setColor(GlassConfig.background == 0
-                ? (mNight ? 0x662C2C2E : 0x66F2F2F7) : GlassConfig.backgroundColor(mNight));
-        canvas.drawRoundRect(0, 0, w, h, radius, radius, mSurfacePaint);
-        drawInteractiveHighlight(canvas, w, h, radius);
-        canvas.restoreToCount(materialSave);
+        materialWash.setColor(GlassConfig.background == 0
+                ? (night ? WASH_DARK : WASH_LIGHT) : GlassConfig.backgroundColor(night));
+        canvas.drawRoundRect(0, 0, w, h, radius, radius, materialWash);
+        paintPressHighlight(canvas, w, h);
+        canvas.restoreToCount(layer);
     }
 
-    /** KernelSU's InteractiveHighlight, drawn over the pill while dragging. */
-    private void drawInteractiveHighlight(Canvas canvas, int w, int h, float radius) {
-        float p = mInteraction;
-        if (p <= 0.01f || mHighlightShader == null) {
+    private void paintPressHighlight(Canvas canvas, int w, int h) {
+        if (press <= 0.01f || bloom == null) {
             return;
         }
         int save = canvas.save();
-        canvas.clipPath(mClip);
-        // drawRect(White.copy(0.06f * progress), blendMode = Plus). Paint colours
-        // are premultiplied by Skia, so this one already lands at the 6% KernelSU
-        // asks for and needs no correction.
-        mWashPlus.setColor(0xFFFFFFFF);
-        mWashPlus.setAlpha(Math.round(0x0F * p));
-        mWashPlus.setBlendMode(android.graphics.BlendMode.PLUS);
-        canvas.drawRect(0, 0, w, h, mWashPlus);
-
-        // KernelSU: White.copy(0.12f * progress), radius = size.minDimension * 1.2
-        mHighlightShader.setFloatUniform("size", w, h);
-        mHighlightShader.setFloatUniform("alpha", 0.12f * p);
-        mHighlightShader.setFloatUniform("radius", Math.min(w, h) * 1.2f);
-        mHighlightShader.setFloatUniform("position",
-                Math.max(0f, Math.min(mInteractionX, w)), h * 0.5f);
-        mBloom.setShader(mHighlightShader);
-        mBloom.setBlendMode(android.graphics.BlendMode.PLUS);
-        canvas.drawRect(0, 0, w, h, mBloom);
+        canvas.clipPath(outline);
+        edgeWash.setColor(0xFFFFFFFF);
+        edgeWash.setAlpha(Math.round(0xFF * PRESS_WASH * press));
+        edgeWash.setBlendMode(BlendMode.PLUS);
+        canvas.drawRect(0, 0, w, h, edgeWash);
+        bloom.setFloatUniform("bounds", (float) w, (float) h);
+        bloom.setFloatUniform("center", Math.max(0f, Math.min(pressX, w)), h * 0.5f);
+        bloom.setFloatUniform("reach", Math.min(w, h) * 1.2f);
+        bloom.setFloatUniform("strength", PRESS_BLOOM * press);
+        bloomPaint.setShader(bloom);
+        bloomPaint.setBlendMode(BlendMode.PLUS);
+        canvas.drawRect(0, 0, w, h, bloomPaint);
         canvas.restoreToCount(save);
     }
 
-    private void drawGlass(Canvas canvas, int w, int h, float radius,
-                           RenderNode node, float captureScale) {
-        ViewGroup pager = mBackdropRef.get();
+    private void renderLiveBackdrop(Canvas canvas, int w, int h, float radius,
+                                    RenderNode node, float drawScale) {
+        ViewGroup pager = backdropRef.get();
         if (pager == null || pager.getWidth() <= 0) {
             return;
         }
+        int captureW = w + samplePad * 2;
+        int captureH = h + samplePad * 2;
+        node.setPosition(0, 0, captureW, captureH);
 
-        int nw = w + mPad * 2;
-        int nh = h + mPad * 2;
-        node.setPosition(0, 0, nw, nh);
-
-        // Positions have to be scale-free: while dragging, the whole bar grows
-        // (KernelSU's layerBlock), so getLocationOnScreen would report where this
-        // view lands *after* that transform, not where its layout puts it.
-        int[] self = mSelf;
-        int[] src = mSrc;
-        if (!ViewGeom.unscaledScreenPos(this, self)) {
-            getLocationOnScreen(self);
+        if (!ViewGeom.unscaledScreenPos(this, selfPos)) {
+            getLocationOnScreen(selfPos);
         }
 
-        RecordingCanvas rc = node.beginRecording(nw, nh);
+        RecordingCanvas rc = node.beginRecording(captureW, captureH);
         try {
-            // Undo the scale this view is drawn at — its own and every ancestor's
-            // — or the sampled backdrop comes out stretched instead of revealing
-            // more of what sits behind.
-            if (Math.abs(captureScale - 1f) > 0.001f) {
-                rc.scale(1f / captureScale, 1f / captureScale,
-                        nw * 0.5f, nh * 0.5f);
+            if (Math.abs(drawScale - 1f) > 0.001f) {
+                rc.scale(1f / drawScale, 1f / drawScale, captureW * 0.5f, captureH * 0.5f);
             }
-            // Lay down the page colour first. Any part of the node the pages do
-            // not cover — which happens as soon as WeChat slides the bar past the
-            // bottom of the content — is otherwise never drawn, and transparent
-            // black turns into solid black once it goes through the blur.
-            rc.drawColor(mBaseColor);
-            // Every page that is on screen, positioned by its own screen
-            // coordinates. Drawing only the "current" page leaves the other half
-            // of the bar with nothing to refract mid-swipe — it renders black.
-            // Drawing the pager instead is no good either: it reports scrollX 0
-            // regardless of the page shown, so it would always yield page 0.
-            android.graphics.Rect visible = mVisible;
-            boolean drewAny = false;
+            // Gaps the pages do not cover must not blur into transparent black.
+            rc.drawColor(pageColor);
+            boolean captured = false;
             for (int i = 0; i < pager.getChildCount(); i++) {
                 View page = pager.getChildAt(i);
                 if (page.getVisibility() != VISIBLE
-                        || !page.getGlobalVisibleRect(visible)
-                        || visible.isEmpty()) {
+                        || !page.getGlobalVisibleRect(visibleRect) || visibleRect.isEmpty()) {
                     continue;
                 }
-                page.getLocationOnScreen(src);
-                float dx = mPad - (self[0] - src[0]);
-                float dy = mPad - (self[1] - src[1]);
+                page.getLocationOnScreen(childPos);
+                float dx = samplePad - (selfPos[0] - childPos[0]);
+                float dy = samplePad - (selfPos[1] - childPos[1]);
                 int save = rc.save();
                 rc.translate(dx, dy);
-                // Clip after translating, i.e. in the page's own coordinates, so
-                // ViewGroup can reject non-intersecting children early. Clipping
-                // before the translate would reject everything.
-                rc.clipRect(-dx, -dy, -dx + nw, -dy + nh);
+                rc.clipRect(-dx, -dy, -dx + captureW, -dy + captureH);
                 page.draw(rc);
                 rc.restoreToCount(save);
-                drewAny = true;
+                captured = true;
             }
-            if (!drewAny) {
-                pager.getLocationOnScreen(src);
-                rc.translate(mPad - (self[0] - src[0]), mPad - (self[1] - src[1]));
+            if (!captured) {
+                pager.getLocationOnScreen(childPos);
+                rc.translate(samplePad - (selfPos[0] - childPos[0]),
+                        samplePad - (selfPos[1] - childPos[1]));
                 pager.draw(rc);
             }
         } finally {
             node.endRecording();
         }
 
-        // Every uniform here is a function of the pill's size, so the whole
-        // chain only has to be rebuilt when that changes. Building it per frame
-        // meant three native effect objects churned on every single frame.
-        if (mChain == null || mChainW != w || mChainH != h) {
-            mLens.setFloatUniform("size", w, h);
-            mLens.setFloatUniform("offset", -mPad, -mPad);
-            mLens.setFloatUniform("cornerRadii", radius, radius, radius, radius);
-            mLens.setFloatUniform("refractionHeight", REFRACTION_DP * mDensity);
-            // KernelSU passes the amount negated.
-            mLens.setFloatUniform("refractionAmount", -REFRACTION_DP * mDensity);
-            mLens.setFloatUniform("depthEffect", 0f);
-
-            float blur = BLUR_DP * mDensity;
-            mChain = RenderEffect.createChainEffect(
-                    RenderEffect.createRuntimeShaderEffect(mLens, "content"),
-                    RenderEffect.createBlurEffect(blur, blur, mSaturate,
-                            Shader.TileMode.CLAMP));
-            mChainW = w;
-            mChainH = h;
+        if (chain == null || chainW != w || chainH != h) {
+            lens.setFloatUniform("size", (float) w, (float) h);
+            lens.setFloatUniform("offset", (float) -samplePad, (float) -samplePad);
+            lens.setFloatUniform("cornerRadii", radius, radius, radius, radius);
+            lens.setFloatUniform("refractionHeight", RIM_DP * density);
+            lens.setFloatUniform("refractionAmount", -RIM_DP * density);
+            lens.setFloatUniform("depthEffect", 0f);
+            float blurRadius = BLUR_DP * density;
+            chain = RenderEffect.createChainEffect(
+                    RenderEffect.createRuntimeShaderEffect(lens, "content"),
+                    RenderEffect.createBlurEffect(blurRadius, blurRadius, vibrancy, Shader.TileMode.CLAMP));
+            chainW = w;
+            chainH = h;
         }
-        node.setRenderEffect(mChain);
+        node.setRenderEffect(chain);
 
         canvas.save();
-        canvas.clipPath(mClip);
-        canvas.translate(-mPad, -mPad);
+        canvas.clipPath(outline);
+        canvas.translate(-samplePad, -samplePad);
         canvas.drawRenderNode(node);
         canvas.restore();
     }
