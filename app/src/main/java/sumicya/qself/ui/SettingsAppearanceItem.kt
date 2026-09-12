@@ -3,7 +3,6 @@ package sumicya.qself.ui
 
 import android.app.Activity
 import android.content.Context
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.view.View
 import io.github.qauxv.base.IUiItemAgent
@@ -28,7 +27,8 @@ object SettingsAppearanceItem : BasePlainUiAgentItem("浮层玻璃外观",
     fun material(context: Context, owner: View): Drawable {
         val background = GlassAppearanceEditor.read(GlassAppearanceEditor.OVERLAY, "background", 0, 0..2)
         val p = overlayPalette(context).let { if (background == 0) it else it.copy(mode = 2) }
-        val fallback = ColorDrawable(if (background == 2) { if (p.dark) 0xff18243f.toInt() else 0xffe3eaff.toInt() } else p.surface)
+        val color = if (background == 2) { if (p.dark) 0xff18243f.toInt() else 0xffe3eaff.toInt() } else p.surface
+        val fallback = SettingsVisuals.surface(context, p.copy(surface = color), 28)
         return SettingsGlass.material(context, p, 28, owner, fallback).apply {
             alpha = (255 * (100 - GlassAppearanceEditor.read(GlassAppearanceEditor.OVERLAY, "transparency", 0, 0..100)) / 100f).toInt()
         }

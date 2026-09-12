@@ -2,7 +2,6 @@
 package sumicya.qself.ui
 
 import android.app.Activity
-import android.graphics.drawable.ColorDrawable
 import android.view.Gravity
 import android.view.View
 import android.widget.*
@@ -53,7 +52,8 @@ object GlassAppearanceEditor {
         fun refresh() {
             val mode = if (draft.getValue("background") == 0) draft.getValue("material") else 2
             val p = palette(activity, draft.getValue("tone"), mode)
-            val flat = ColorDrawable(if (draft.getValue("background") == 2) { if (p.dark) 0xff18243f.toInt() else 0xffe3eaff.toInt() } else p.surface)
+            val color = if (draft.getValue("background") == 2) { if (p.dark) 0xff18243f.toInt() else 0xffe3eaff.toInt() } else p.surface
+            val flat = SettingsVisuals.surface(activity, p.copy(surface = color), 20)
             preview.background = SettingsGlass.material(activity, p, 20, preview, flat).apply {
                 alpha = (255 * (100 - draft.getValue("transparency")) / 100f).toInt()
             }
