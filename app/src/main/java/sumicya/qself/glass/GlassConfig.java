@@ -26,7 +26,7 @@ public final class GlassConfig {
 
     // ---- geometry, dp ----
     public static volatile int barOffsetDp = 12;
-    public static volatile int hugPaddingDp = 32;
+    public static volatile int hugPaddingDp = 8;
 
     private GlassConfig() {
     }
@@ -60,7 +60,7 @@ public final class GlassConfig {
         badgeMode = intKnob(c, "badges", 0, 0, 3);
         badgeSize = intKnob(c, "badgeSize", 10, 8, 18);
         barOffsetDp = intKnob(c, "barOffsetDp", 12, 0, 48);
-        hugPaddingDp = intKnob(c, "hugPaddingDp", 32, 4, 96);
+        hugPaddingDp = intKnob(c, "hugPaddingDp", 8, 0, 96);
     }
 
     private static int intKnob(ConfigManager c, String key, int fallback, int low, int high) {
