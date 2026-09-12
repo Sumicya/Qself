@@ -45,6 +45,8 @@ import io.github.qauxv.util.UiThread
 import io.github.qauxv.util.hostInfo
 import io.github.qauxv.util.isInHostProcess
 import sumicya.qself.ui.HomeCatalog
+import sumicya.qself.ui.SettingsListLayout
+import sumicya.qself.ui.SettingsHomeItem
 import sumicya.qself.ui.SettingsHomeView
 import sumicya.qself.ui.SettingsVisuals
 import sumicya.qself.ui.SettingsAppearanceItem
@@ -102,11 +104,16 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
 
     override fun doOnCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val context = layoutInflater.context
-        val rootView = FrameLayout(context).apply {
+        val rootView = SettingsListLayout(context).apply {
             background = SettingsVisuals.backdrop(SettingsVisuals.palette(context, SettingsAppearanceItem.mode))
         }
         rootFrameLayout = rootView
-        val tmsgDslTree = if (isHome()) arrayListOf<DslTMsgListItemInflatable>(HomeItem())
+        val tmsgDslTree = if (isHome()) arrayListOf<DslTMsgListItemInflatable>(SettingsHomeItem(
+            { SettingsHomeView.State(
+                if (isInHostProcess) "${hostInfo.hostName} ${hostInfo.versionName}" else "模块管理",
+                ReportDiagnostics.isEnabled, SafeModeManager.getManager().isEnabledForThisTime
+            ) }, { SettingsAppearanceItem.mode }, ::openHomeAction
+        ))
             else convertFragmentDslToTMsgDslItemTree(context, mFragmentDescription)
         // inflate DSL tree, the most awful code in the world
         itemList = ArrayList()
@@ -124,14 +131,9 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
         itemTypeDelegate = Array(typeList.size) {
             itemList[itemTypeIds.indexOf(it)]
         }
-        this@SettingsMainFragment.listLayoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-        // init view
-        recyclerListView = RecyclerView(context).apply {
-            id = R.id.fragmentMainRecyclerView // id is used to allow saving state
-            layoutManager = this@SettingsMainFragment.listLayoutManager
-            clipToPadding = false
-            if (!isHome()) SettingsVisuals.addListSpacing(this)
-        }
+        recyclerListView = rootView.recycler
+        listLayoutManager = rootView.recycler.layoutManager as LinearLayoutManager
+        if (!isHome()) SettingsVisuals.addListSpacing(rootView.recycler)
         // init adapter
         adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             override fun onCreateViewHolder(
@@ -157,7 +159,6 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
         recyclerListView!!.adapter = adapter
 
         rootLayoutView = recyclerListView
-        rootView.addView(recyclerListView!!, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         if (isInHostProcess) {
             WsaWarningDialog.showWsaWarningDialogIfNecessary(requireContext())
         }
@@ -329,25 +330,6 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
     private fun isHome(): Boolean = isRootFragmentDescription() &&
         arguments?.getString(HOME_SECTION) == null && arguments?.getBoolean(SHOW_CATALOG) != true &&
         arguments?.getString(TARGET_UI_AGENT_IDENTIFIER) == null
-
-    private inner class HomeItem : TMsgListItem {
-        override val isEnabled = true
-        override val isClickable = false
-        override val isLongClickable = false
-        override val isVoidBackground = true
-        override fun createViewHolder(context: Context, parent: ViewGroup): RecyclerView.ViewHolder =
-            object : RecyclerView.ViewHolder(SettingsHomeView(context)) { }
-        override fun bindView(viewHolder: RecyclerView.ViewHolder, position: Int, context: Context) {
-            (viewHolder.itemView as SettingsHomeView).bind(
-                SettingsHomeView.State(
-                    if (isInHostProcess) "${hostInfo.hostName} ${hostInfo.versionName}" else "模块管理",
-                    ReportDiagnostics.isEnabled,
-                    SafeModeManager.getManager().isEnabledForThisTime
-                ), SettingsAppearanceItem.mode, ::openHomeAction
-            )
-        }
-        override fun onItemClick(v: View, position: Int, x: Int, y: Int) = Unit
-    }
 
     private fun openHomeAction(action: String) {
         if (action == HomeCatalog.SEARCH) {

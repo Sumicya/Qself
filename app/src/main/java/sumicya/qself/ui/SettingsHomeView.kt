@@ -20,6 +20,24 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
     private lateinit var palette: SettingsVisuals.Palette
     private var boundState: State? = null
     private var boundMode: Int = -1
+    private var availableWidth = 0
+    private var boundCompact: Boolean? = null
+
+    private fun compact(): Boolean =
+        (if (availableWidth > 0) availableWidth / resources.displayMetrics.density else resources.configuration.screenWidthDp.toFloat()) < 360 ||
+            resources.configuration.fontScale >= 1.35f
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val bounded = MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED
+        if (bounded) {
+            availableWidth = MeasureSpec.getSize(widthMeasureSpec)
+            // The fragment host can first measure with AT_MOST. Letting LinearLayout
+            // shrink-wrap that pass collapses weighted cards and freezes short heights.
+            boundState?.let { if (boundCompact != compact()) bind(it, boundMode, dispatch) }
+        }
+        super.onMeasure(if (bounded) MeasureSpec.makeMeasureSpec(availableWidth, MeasureSpec.EXACTLY) else widthMeasureSpec,
+            heightMeasureSpec)
+    }
     private var dispatch: (String) -> Unit = { }
     private fun dp(value: Int) = SettingsVisuals.dp(context, value)
 
@@ -30,16 +48,17 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
 
     fun bind(state: State, mode: Int, action: (String) -> Unit) {
         dispatch = action
-        if (boundState == state && boundMode == mode) return
+        val compact = compact()
+        if (boundState == state && boundMode == mode && boundCompact == compact) return
+        boundCompact = compact
         boundState = state
         boundMode = mode
         removeAllViews()
         palette = SettingsVisuals.palette(context, mode)
-        addView(text("为你而设", 11, palette.secondary, true).apply { letterSpacing = .16f })
-        addView(text("Qself", 38, palette.text, true), lp(top = 7))
-        addView(text("少一点干扰，多一点自由。", 15, palette.secondary), lp(top = 6, bottom = 16))
+        addView(text("Qself", 32, palette.text, true), lp(top = 7))
+        addView(text("按需开启，保持简单。", 15, palette.secondary), lp(top = 6, bottom = 16))
         addView(text(state.hostLabel + if (state.safeMode) "  ·  安全模式" else "  ·  个人设置", 12, palette.accent)
-            .apply { setPadding(dp(12), dp(7), dp(12), dp(7)); background = SettingsVisuals.surface(context, palette, 12) },
+            .apply { setPadding(dp(12), dp(7), dp(12), dp(7)); background = SettingsVisuals.surface(context, palette, 12, owner = this) },
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
 
         val search = LinearLayout(context).apply {
@@ -56,17 +75,16 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         button(search, HomeCatalog.SEARCH, "搜索功能与设置")
         addView(search, lp(top = 22, bottom = 25))
 
-        addView(text("按你的习惯", 19, palette.text, true), lp(bottom = 12))
-        val compact = resources.configuration.screenWidthDp < 360 || resources.configuration.fontScale >= 1.35f
+        addView(text("功能", 14, palette.secondary, true), lp(bottom = 12))
         for (pair in HomeCatalog.sections.chunked(if (compact) 1 else 2)) {
             val row = LinearLayout(context).apply { orientation = HORIZONTAL }
             for ((index, section) in pair.withIndex()) {
                 val card = LinearLayout(context).apply {
                     orientation = VERTICAL
-                    minimumHeight = dp(116)
+                    minimumHeight = dp(104)
                     setPadding(dp(18), dp(19), dp(18), dp(17))
-                    addView(text(section.title, 19, palette.text, true))
-                    addView(text(section.summary.replace(" · ", if (compact) " · " else "\n"), 12, palette.secondary), lp(top = 9))
+                    addView(text(section.title, 18, palette.text, true))
+                    addView(text(section.summary, 13, palette.secondary), lp(top = 9))
                 }
                 button(card, section.id, "${section.title}，${section.summary}")
                 row.addView(card, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -76,14 +94,14 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
             addView(row, lp(bottom = 12))
         }
 
-        addView(text("观察，而不是猜测", 19, palette.text, true), lp(top = 16, bottom = 12))
+        addView(text("诊断", 14, palette.secondary, true), lp(top = 16, bottom = 12))
         val diagnostics = LinearLayout(context).apply {
             orientation = VERTICAL
             setPadding(dp(18), dp(18), dp(18), dp(18))
             val heading = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
             heading.addView(text("上报诊断", 17, palette.text, true), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             heading.addView(text(if (state.diagnosticEnabled) "记录开关已开" else "记录开关已关", 11, palette.accent)
-                .apply { setPadding(dp(9), dp(6), dp(9), dp(6)); background = SettingsVisuals.surface(context, palette, 9) })
+                .apply { setPadding(dp(9), dp(6), dp(9), dp(6)); background = SettingsVisuals.surface(context, palette, 9, owner = this) })
             addView(heading)
             addView(text("只读 · 本地保存 · 按需开启", 13, palette.secondary), lp(top = 8))
             addView(text("观察到调用，不等于服务器已接收。", 12, palette.secondary), lp(top = 5))
@@ -91,7 +109,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         button(diagnostics, HomeCatalog.DIAGNOSTICS, "上报诊断，${if (state.diagnosticEnabled) "记录开关已开" else "记录开关已关"}，仅本地观察")
         addView(diagnostics)
 
-        addView(text("管理你的设置", 19, palette.text, true), lp(top = 28, bottom = 12))
+        addView(text("管理", 14, palette.secondary, true), lp(top = 28, bottom = 12))
         utility("主题与玻璃", "深浅色、主题色与通透程度", HomeCatalog.THEME)
         utility("备份与恢复", "保留你的配置，放心调整", HomeCatalog.BACKUP)
         utility("更多设置", "原有分类、故障排查与其他项目", HomeCatalog.CATALOG)
@@ -136,7 +154,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         view.isFocusable = true
         view.isClickable = true
         view.minimumHeight = maxOf(view.minimumHeight, dp(48))
-        if (glass) view.background = SettingsVisuals.surface(context, palette, 22, true)
+        if (glass) view.background = SettingsVisuals.surface(context, palette, 24, true, view)
         view.setOnClickListener { dispatch(id) }
         view.accessibilityDelegate = object : AccessibilityDelegate() {
             override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {

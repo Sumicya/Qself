@@ -87,7 +87,7 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
         )
         mAppBarLayout = findViewById(R.id.topAppBarLayout)
         mAppToolBar = findViewById(R.id.topAppBar)
-        mAppBarLayout.background = SettingsVisuals.surface(this, visualPalette, 0)
+        mAppBarLayout.background = SettingsVisuals.surface(this, visualPalette, 0, owner = mAppBarLayout)
         mAppToolBar.setTitleTextColor(visualPalette.text)
         mAppToolBar.setSubtitleTextColor(visualPalette.secondary)
         setSupportActionBar(mAppToolBar)

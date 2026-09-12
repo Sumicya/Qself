@@ -18,7 +18,7 @@ import io.github.qauxv.dsl.cell.HeaderCell
 import io.github.qauxv.dsl.cell.SpacerCell
 import io.github.qauxv.dsl.cell.TitleValueCell
 
-/** Static glass surfaces: no screenshot sampling, endless animations or host-window blur. */
+/** Native optical glass over the settings scene; no host captures or background animation. */
 object SettingsVisuals {
     data class Palette(val dark: Boolean, val mode: Int, val background: Int, val text: Int,
                        val secondary: Int, val accent: Int, val surface: Int, val rim: Int)
@@ -58,7 +58,9 @@ object SettingsVisuals {
         (Color.blue(a) * (1 - fraction) + Color.blue(b) * fraction).toInt())
 
     @JvmStatic
-    fun backdrop(p: Palette): Drawable = object : Drawable() {
+    fun backdrop(p: Palette): Drawable = SettingsGlass.backdrop(p, flatBackdrop(p))
+
+    private fun flatBackdrop(p: Palette): Drawable = object : Drawable() {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         override fun draw(canvas: Canvas) {
             // A Drawable must never clear its parent's canvas outside its own bounds.
@@ -82,16 +84,18 @@ object SettingsVisuals {
     }
 
     @JvmStatic
-    fun surface(context: Context, p: Palette, radius: Int = 24, clickable: Boolean = false): Drawable {
+    @JvmOverloads
+    fun surface(context: Context, p: Palette, radius: Int = 24, clickable: Boolean = false, owner: View? = null): Drawable {
         val alpha = when (p.mode) { 0 -> if (p.dark) 190 else 140; 2 -> 255; else -> if (p.dark) 235 else 210 }
         val base = GradientDrawable(GradientDrawable.Orientation.TL_BR,
             intArrayOf(Color.argb(alpha, Color.red(p.surface), Color.green(p.surface), Color.blue(p.surface)),
                 Color.argb(if (p.mode == 2) 255 else (alpha - 20).coerceAtLeast(0), Color.red(p.surface), Color.green(p.surface), Color.blue(p.surface))))
         base.cornerRadius = dp(context, radius).toFloat()
         base.setStroke(dp(context, 1), p.rim)
-        if (!clickable) return base
+        val material = SettingsGlass.material(context, p, radius, owner, base)
+        if (!clickable) return material
         val mask = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(context, radius).toFloat() }
-        return RippleDrawable(ColorStateList.valueOf(Color.argb(32, Color.red(p.accent), Color.green(p.accent), Color.blue(p.accent))), base, mask)
+        return RippleDrawable(ColorStateList.valueOf(Color.argb(32, Color.red(p.accent), Color.green(p.accent), Color.blue(p.accent))), material, mask)
     }
 
     fun addListSpacing(recycler: RecyclerView) {
@@ -117,7 +121,7 @@ object SettingsVisuals {
         params.marginEnd = dp(context, 16)
         params.bottomMargin = dp(context, 7)
         view.layoutParams = params
-        view.background = surface(context, p, 20, clickable)
+        view.background = surface(context, p, 24, clickable, view)
         view.isFocusable = clickable
         if (view is TextInfoCell) {
             view.textColor = p.secondary

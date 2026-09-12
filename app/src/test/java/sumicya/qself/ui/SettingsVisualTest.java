@@ -12,6 +12,11 @@ import android.view.ContextThemeWrapper;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.view.LayoutInflater;
+import androidx.recyclerview.widget.RecyclerView;
+import io.github.qauxv.R;
 import io.github.qauxv.dsl.cell.TitleValueCell;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -126,16 +131,148 @@ public class SettingsVisualTest {
         bitmap.recycle();
     }
 
+    /** Inflate the actual host XML and use the SAME item factory and list container as production. */
+    private static class NativePage {
+        FrameLayout host;
+        SettingsListLayout list;
+        SettingsHomeItem item;
+        SettingsHomeView home() { return (SettingsHomeView) list.getRecycler().getChildAt(0); }
+    }
+
+    private NativePage page(Context context, int width, int height, List<String> clicks) {
+        NativePage page = new NativePage();
+        page.host = (FrameLayout) LayoutInflater.from(context).inflate(R.layout.activity_settings_ui_host, null, false);
+        page.host.setBackground(SettingsVisuals.backdrop(SettingsVisuals.palette(context, 1)));
+        com.google.android.material.appbar.MaterialToolbar toolbar = page.host.findViewById(R.id.topAppBar);
+        toolbar.setTitle("设置");
+        page.list = new SettingsListLayout(context);
+        page.list.setBackground(SettingsVisuals.backdrop(SettingsVisuals.palette(context, 1)));
+        ((FrameLayout) page.host.findViewById(R.id.fragment_container)).addView(page.list);
+        page.item = new SettingsHomeItem(() -> new SettingsHomeView.State("QQ 9.2.10", false, false),
+            () -> 1, id -> { clicks.add(id); return Unit.INSTANCE; });
+        page.list.getRecycler().setAdapter(new RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            @Override public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int type) {
+                return page.item.createViewHolder(context, parent);
+            }
+            @Override public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
+                page.item.bindView(holder, position, context);
+            }
+            @Override public int getItemCount() { return 1; }
+        });
+        page.list.getRecycler().setPadding(0, SettingsVisuals.INSTANCE.dp(context, 64), 0, SettingsVisuals.INSTANCE.dp(context, 24));
+        measurePage(page, width, height, View.MeasureSpec.EXACTLY);
+        return page;
+    }
+
+    private void measurePage(NativePage page, int width, int height, int mode) {
+        page.host.measure(View.MeasureSpec.makeMeasureSpec(width, mode), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+        page.host.layout(0, 0, page.host.getMeasuredWidth(), height);
+    }
+
+    private void verifyContainedChildren(View view) {
+        if (!(view instanceof ViewGroup)) return;
+        ViewGroup parent = (ViewGroup) view;
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            View child = parent.getChildAt(i);
+            if (child.getVisibility() == View.GONE) continue;
+            assertTrue("child outside horizontal bounds: " + child, child.getLeft() >= 0 && child.getRight() <= parent.getWidth());
+            assertTrue("child outside vertical bounds: " + child, child.getTop() >= 0 && child.getBottom() <= parent.getHeight());
+            verifyContainedChildren(child);
+        }
+    }
+
     @Test public void homeLightAndDarkRenderWithoutClippedLabels() throws Exception {
         List<View> frames = new ArrayList<>();
         for (boolean dark : new boolean[]{false, true}) {
-            SettingsHomeView view = home(context(dark, 1f, 412, false), dark, 1, new ArrayList<>());
-            layout(view, 412);
-            verifyTextBounds(view);
-            render(dark ? "home-dark" : "home-light", view);
-            frames.add(view);
+            NativePage page = page(context(dark, 1f, 412, false), 412, 915, new ArrayList<>());
+            assertEquals(412, page.home().getWidth());
+            verifyTextBounds(page.home()); verifyContainedChildren(page.home());
+            render(dark ? "home-dark" : "home-light", page.host);
+            frames.add(page.host);
         }
         renderPreviewPair(frames.get(0), frames.get(1));
+    }
+
+    @Test public void atMostPassReproducesOldShrinkWrapAndFixedHomeFillsConstraint() {
+        Context context = context(false, 1f, 412, false);
+        SettingsHomeView oldContent = home(context, false, 1, new ArrayList<>());
+        LinearLayout legacy = new LinearLayout(context);
+        legacy.setOrientation(LinearLayout.VERTICAL);
+        legacy.setPadding(oldContent.getPaddingLeft(), oldContent.getPaddingTop(), oldContent.getPaddingRight(), oldContent.getPaddingBottom());
+        // Same children, same layout params, original LinearLayout.onMeasure behaviour.
+        while (oldContent.getChildCount() > 0) {
+            View child = oldContent.getChildAt(0); oldContent.removeView(child); legacy.addView(child);
+        }
+        int widthSpec = View.MeasureSpec.makeMeasureSpec(412, View.MeasureSpec.AT_MOST);
+        int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        legacy.measure(widthSpec, heightSpec);
+        assertTrue("old AT_MOST shrink-wrap must be reproduced", legacy.getMeasuredWidth() < 412);
+        SettingsHomeView fixed = home(context, false, 1, new ArrayList<>());
+        fixed.measure(widthSpec, heightSpec); fixed.layout(0, 0, fixed.getMeasuredWidth(), fixed.getMeasuredHeight());
+        assertEquals(412, fixed.getMeasuredWidth());
+        verifyTextBounds(fixed); verifyContainedChildren(fixed);
+    }
+
+    @Test public void realRecyclerMeasurementHandlesWidthsFontsAndRepeatPasses() {
+        for (int width : new int[]{320, 360, 412, 480}) for (float font : new float[]{1f, 1.3f, 2f}) {
+            // Deliberately keep screenWidthDp=412: the actual pane, not device metrics, decides columns.
+            NativePage page = page(context(false, font, 412, false), width, 915, new ArrayList<>());
+            for (int mode : new int[]{View.MeasureSpec.AT_MOST, View.MeasureSpec.EXACTLY}) {
+                measurePage(page, width, 915, mode);
+                assertEquals(width, page.list.getWidth());
+                assertEquals(width, page.list.getRecycler().getWidth());
+                assertEquals(width, page.home().getWidth());
+                View search = page.home().findViewWithTag(HomeCatalog.SEARCH);
+                assertEquals(width-page.home().getPaddingLeft()-page.home().getPaddingRight(), search.getWidth());
+                verifyTextBounds(page.home()); verifyContainedChildren(page.home());
+            }
+        }
+    }
+
+    @Test public void paneResizeReflowsColumnsAndKeepsRealItemActions() {
+        List<String> clicks = new ArrayList<>();
+        NativePage page = page(context(false, 1f, 412, false), 412, 915, clicks);
+        assertSame(page.home().findViewWithTag("appearance").getParent(), page.home().findViewWithTag("chat").getParent());
+        measurePage(page, 320, 915, View.MeasureSpec.EXACTLY);
+        assertNotSame(page.home().findViewWithTag("appearance").getParent(), page.home().findViewWithTag("chat").getParent());
+        verifyTextBounds(page.home()); verifyContainedChildren(page.home());
+        page.home().findViewWithTag(HomeCatalog.SEARCH).performClick();
+        assertEquals(java.util.Collections.singletonList(HomeCatalog.SEARCH), clicks);
+        measurePage(page, 480, 915, View.MeasureSpec.EXACTLY);
+        assertSame(page.home().findViewWithTag("appearance").getParent(), page.home().findViewWithTag("chat").getParent());
+        assertEquals(480, page.home().getWidth());
+    }
+
+    @Test public void realRecyclerCanReachFooterWithoutClippingAndRestoreTop() {
+        NativePage page = page(context(false, 2f, 412, false), 320, 915, new ArrayList<>());
+        RecyclerView recycler = page.list.getRecycler();
+        recycler.scrollBy(0, 100000);
+        assertFalse(recycler.canScrollVertically(1));
+        View about = page.home().findViewWithTag(HomeCatalog.ABOUT);
+        android.graphics.Rect rect = new android.graphics.Rect(0, 0, about.getWidth(), about.getHeight());
+        recycler.offsetDescendantRectToMyCoords(about, rect);
+        assertTrue(rect.bottom <= recycler.getHeight()-recycler.getPaddingBottom());
+        assertTrue(rect.top >= recycler.getPaddingTop());
+        recycler.scrollBy(0, -100000);
+        assertEquals(recycler.getPaddingTop(), page.home().getTop());
+    }
+
+    @Test public void opticalGlassCompilesAndProducesRefractionNotFlatTransparency() throws Exception {
+        for (String fieldName : new String[]{"BACKGROUND", "LENS"}) {
+            java.lang.reflect.Field field = SettingsGlass.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            new android.graphics.RuntimeShader((String) field.get(null));
+        }
+        Context context = context(false, 1f, 412, false);
+        android.graphics.drawable.Drawable glass = SettingsVisuals.surface(context, SettingsVisuals.palette(context, 1), 24, false);
+        assertTrue(SettingsGlass.INSTANCE.isOptical(glass));
+        Bitmap bitmap = Bitmap.createBitmap(300, 110, Bitmap.Config.ARGB_8888);
+        glass.setBounds(0, 0, 300, 110); glass.draw(new Canvas(bitmap));
+        assertNotEquals(bitmap.getPixel(150, 1), bitmap.getPixel(150, 20));
+        assertNotEquals(bitmap.getPixel(30, 55), bitmap.getPixel(270, 55));
+        android.graphics.drawable.Drawable solid = SettingsVisuals.surface(context, SettingsVisuals.palette(context, 2), 24, false);
+        assertFalse(SettingsGlass.INSTANCE.isOptical(solid));
+        bitmap.recycle();
     }
 
     @Test public void narrowLargeTextUsesOneColumnAndRemainsScrollable() throws Exception {

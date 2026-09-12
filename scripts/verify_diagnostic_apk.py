@@ -43,7 +43,10 @@ def audit(apk, build_tools):
         for descriptor in (b"Lsumicya/qself/diagnostics/ReportDiagnostics;",
                            b"Lsumicya/qself/glass/LiquidGlassInstaller;",
                            b"Lsumicya/qself/ui/SettingsHomeView;",
-                           b"Lsumicya/qself/ui/SettingsAppearanceItem;"):
+                           b"Lsumicya/qself/ui/SettingsAppearanceItem;",
+                           b"Lsumicya/qself/ui/SettingsGlass;",
+                           b"Lsumicya/qself/ui/SettingsHomeItem;",
+                           b"Lsumicya/qself/ui/SettingsListLayout;"):
             if descriptor not in dex:
                 raise RuntimeError("Diagnostics, glass or native settings implementation missing")
         if b"Lcom/microsoft/appcenter/" in dex:

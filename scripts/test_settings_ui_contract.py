@@ -16,6 +16,16 @@ class SettingsUiContract(unittest.TestCase):
         self.assertIn('mSearchMenuItem = menu.findItem(R.id.menu_item_action_search)', MAIN)
         self.assertIn('item.expandActionView()', MAIN)
 
+    def test_production_uses_the_tested_list_and_item_factories(self):
+        self.assertIn('SettingsListLayout(context)', MAIN)
+        self.assertIn('SettingsHomeItem(', MAIN)
+        item = (ROOT / 'app/src/main/java/sumicya/qself/ui/SettingsHomeItem.kt').read_text()
+        self.assertIn('RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)', item)
+        home = (ROOT / 'app/src/main/java/sumicya/qself/ui/SettingsHomeView.kt').read_text()
+        self.assertIn('override fun onMeasure', home)
+        self.assertIn('availableWidth, MeasureSpec.EXACTLY', home)
+        self.assertIn('boundCompact != compact()', home)
+
     def test_catalog_shortcuts_have_real_registered_sources(self):
         ids = re.findall(r'"([a-z][a-z0-9_.]+\.[A-Z][A-Za-z0-9]+)"', CATALOG)
         self.assertEqual(len(ids), len(set(ids)))
