@@ -29,6 +29,17 @@ object InlineSettings {
         }
     }
     @JvmStatic fun resetAnchor(activity: Activity) { anchors.remove(activity) }
+    @JvmStatic fun collapseRow(view: View): Boolean {
+        val row = view as? TitleValueCell ?: return false
+        if (row.inlineContent.childCount == 0) return false
+        fun blocked(view: View): Boolean {
+            if (view.getTag(io.github.qauxv.R.id.qself_inline_cancelable) == false) return true
+            return view is ViewGroup && (0 until view.childCount).any { blocked(view.getChildAt(it)) }
+        }
+        if (!blocked(row.inlineContent)) row.inlineContent.removeAllViews()
+        return true
+    }
+    fun collapseAnchor(activity: Activity): Boolean = anchors[activity]?.get()?.let { collapseRow(it) } ?: false
     @JvmStatic fun available(context: Context): Boolean = UiAgentItem.findActivity(context)?.let { fallbacks[it]?.get()?.isAttachedToWindow == true } == true
     @JvmStatic fun closeLast(activity: Activity): Boolean {
         val list = closers[activity] ?: return false
@@ -74,6 +85,7 @@ object InlineSettings {
         }
         val box = LinearLayout(content.context).apply {
             orientation = LinearLayout.VERTICAL
+            setTag(io.github.qauxv.R.id.qself_inline_cancelable, cancelable)
             val p = SettingsVisuals.palette(context, 2)
             background = SettingsVisuals.surface(context, p, 20)
             setPadding(0, SettingsVisuals.dp(context, 8), 0, SettingsVisuals.dp(context, 8))

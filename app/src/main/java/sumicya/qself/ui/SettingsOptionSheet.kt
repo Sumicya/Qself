@@ -11,6 +11,7 @@ object SettingsOptionSheet {
         show(activity, args.getString("home"), args.getString("currentGroup") ?: args.getString("group"), args.getString("focus"))
     }
     fun show(activity: FragmentActivity, home: String? = null, group: String? = null, focus: String? = null) {
+        if (focus == null && InlineSettings.collapseAnchor(activity)) return
         InlineSettings.show(activity, InlineFeatureList(activity, group, home, focus))
     }
 }

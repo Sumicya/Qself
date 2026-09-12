@@ -172,6 +172,7 @@ class UiAgentItem(
 
     override fun onItemClick(v: View, position: Int, x: Int, y: Int) {
         sumicya.qself.ui.InlineSettings.anchor(v)
+        if (sumicya.qself.ui.InlineSettings.collapseRow(v)) return
         val agent = agentProvider.uiItemAgent
         val cell = v as TitleValueCell
         if (hasFailure()) { showFailure(v); return }

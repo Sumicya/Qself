@@ -105,6 +105,14 @@ class SettingsErrorInteractionTest {
             assertEquals(1, cancelled)
             assertEquals("draft", saved)
             assertFalse(second.isShowing)
+            val locked = InlineAlertDialogBuilder(activity).setMessage("初始化中").setCancelable(false).create()
+            locked.show()
+            assertTrue(InlineSettings.closeLast(activity))
+            assertTrue(locked.isShowing)
+            assertTrue(InlineSettings.collapseRow(row))
+            assertTrue(locked.isShowing)
+            locked.dismiss()
+            assertEquals(0, row.inlineContent.childCount)
         } finally { InlineSettings.unregister(activity); controller.pause().stop().destroy() }
     }
 
