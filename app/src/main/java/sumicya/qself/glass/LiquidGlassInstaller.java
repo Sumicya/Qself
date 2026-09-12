@@ -565,9 +565,10 @@ public final class LiquidGlassInstaller {
             ll.setShowDividers(LinearLayout.SHOW_DIVIDER_NONE);
             ll.setDividerDrawable(null);
         }
-        if (row != null && row != tabView) {
-            row.setShowDividers(LinearLayout.SHOW_DIVIDER_NONE);
-            row.setDividerDrawable(null);
+        if (row instanceof LinearLayout && row != tabView) {
+            LinearLayout rowLayout = (LinearLayout) row;
+            rowLayout.setShowDividers(LinearLayout.SHOW_DIVIDER_NONE);
+            rowLayout.setDividerDrawable(null);
         }
         hideSubtreeLines(tabView, 0);
     }
