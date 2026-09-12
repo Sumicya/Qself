@@ -23,8 +23,12 @@ object InlineSettings {
         anchors.remove(activity); fallbacks.remove(activity); closers.remove(activity)
     }
     @JvmStatic fun anchor(view: View) {
-        UiAgentItem.findActivity(view.context)?.let { anchors[it] = WeakReference(view) }
+        UiAgentItem.findActivity(view.context)?.let {
+            anchors[it] = WeakReference(view)
+            if (it is io.github.qauxv.activity.SettingsUiFragmentHostActivity && !available(it)) fallbacks[it] = WeakReference(view)
+        }
     }
+    @JvmStatic fun resetAnchor(activity: Activity) { anchors.remove(activity) }
     @JvmStatic fun available(context: Context): Boolean = UiAgentItem.findActivity(context)?.let { fallbacks[it]?.get()?.isAttachedToWindow == true } == true
     @JvmStatic fun closeLast(activity: Activity): Boolean {
         val list = closers[activity] ?: return false
@@ -64,7 +68,7 @@ object InlineSettings {
         var target = anchors[activity]?.get()?.takeIf { it.isAttachedToWindow } ?: fallback
         // A text/icon inside a row anchors to that row, not to its internal label column.
         var ancestor: View? = target
-        while (ancestor != null && ancestor !== fallback) {
+        while (ancestor != null) {
             if (ancestor is TitleValueCell) { target = ancestor; break }
             ancestor = ancestor.parent as? View
         }
@@ -100,9 +104,9 @@ object InlineSettings {
             fallback is LinearLayout -> fallback.addView(box, LinearLayout.LayoutParams(-1, -2))
             else -> return null
         }
-        if (cancelable) {
+        run {
             lateinit var backAction: () -> Unit
-            backAction = { closers[activity]?.remove(backAction); cancel() }
+            backAction = { if (cancelable) { closers[activity]?.remove(backAction); cancel() } }
             closers.getOrPut(activity) { mutableListOf() }.add(backAction)
             box.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
                 override fun onViewAttachedToWindow(v: View) = Unit

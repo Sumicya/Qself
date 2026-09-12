@@ -57,7 +57,7 @@ object ForceSystemAlbum : BaseConfigFunctionDecorator(), IStartActivityHookDecor
 
     override val onUiItemClickListener: (IUiItemAgent, Activity, View) -> Unit
         get() = { _, activity, _ ->
-            AlertDialog.Builder(activity)
+            sumicya.qself.ui.InlineAlertDialogBuilder(activity)
                 .setTitle("选择相册类型")
                 .setSingleChoiceItems(albumTypes, ConfigManager.getDefaultConfig().getInt(ALBUM_TYPE, ALBUM_TYPE_DEFAULT)) { dialog, which ->
                     ConfigManager.getDefaultConfig().putInt(ALBUM_TYPE, which)

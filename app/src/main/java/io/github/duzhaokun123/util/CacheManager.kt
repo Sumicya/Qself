@@ -61,7 +61,7 @@ object CacheManager : CommonConfigFunctionHook(defaultEnabled = true) {
                 "(${formatSize(it.length())}) ${it.name}"
             }
 
-            AlertDialog.Builder(activity)
+            sumicya.qself.ui.InlineAlertDialogBuilder(activity)
                 .setTitle("缓存文件列表")
                 .setMessage(fileNames.joinToString("\n"))
                 .setPositiveButton("清空缓存") { _, _ ->

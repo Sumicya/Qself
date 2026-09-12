@@ -114,7 +114,7 @@ object MessageCopyHook : CommonSwitchFunctionHook(targets = arrayOf(AIOMsgItem_i
         get() = FunctionEntryRouter.Locations.Auxiliary.MESSAGE_CATEGORY
 
     fun showDialog(context: Context, text: CharSequence) {
-        AlertDialog.Builder(context)
+        sumicya.qself.ui.InlineAlertDialogBuilder(context)
             .setMessage(text)
             .setNegativeButton(android.R.string.cancel, null)
             .show()

@@ -104,6 +104,10 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
         mFlingLayout.onFlingHandler = this
         mAppBarLayout.addOnLayoutChangeListener { _, _, top, _, bottom, _, _, _, _ ->
             mAppBarLayoutHeight = bottom - top
+            (mFlingLayout.layoutParams as android.widget.FrameLayout.LayoutParams).apply {
+                topMargin = max(mAppBarLayoutHeight, statusBarLayoutInsect)
+                mFlingLayout.layoutParams = this
+            }
             for (fragment in mFragmentStack) {
                 fragment.notifyLayoutPaddingsChanged()
             }
@@ -331,7 +335,7 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
     }
 
     open val layoutPaddingTop: Int
-        get() = max(mAppBarLayoutHeight, statusBarLayoutInsect)
+        get() = 0 // Content is laid out below the toolbar, not scrolled behind a transparent strip.
 
     open val layoutPaddingBottom: Int
         get() = navigationBarLayoutInsect
@@ -345,6 +349,7 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
     }
 
     override fun doOnDestroy() {
+        sumicya.qself.ui.InlineSettings.unregister(this)
         super.doOnDestroy()
         synchronized(mPendingActionsLock) {
             mPendingOnStartActions.clear()

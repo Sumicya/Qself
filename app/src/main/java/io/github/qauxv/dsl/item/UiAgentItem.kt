@@ -71,6 +71,7 @@ class UiAgentItem(
     }
 
     private val mCheckChangedListener = CompoundButton.OnCheckedChangeListener { btn, isChecked ->
+        sumicya.qself.ui.InlineSettings.anchor(btn)
         val agent = agentProvider.uiItemAgent
         val funcName = agent.titleProvider.invoke(agent)
         val switchCellAgent = agent.switchProvider

@@ -8,7 +8,7 @@ import androidx.appcompat.app.AlertDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 /** Preserves existing list/input/button callbacks, but mounts their content below the active row. */
-class InlineAlertDialogBuilder @JvmOverloads constructor(context: Context, theme: Int = 0) : AlertDialog.Builder(context, theme) {
+class InlineAlertDialogBuilder @JvmOverloads constructor(context: Context, theme: Int = 0) : AlertDialog.Builder(io.github.qauxv.ui.CommonContextWrapper.createAppCompatContext(context), theme) {
     override fun create(): AlertDialog {
         if (!InlineSettings.available(context)) return super.create()
         // This is our bundled AppCompat implementation, not a hidden Android API.

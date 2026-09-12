@@ -8,13 +8,13 @@ class SettingsInteractionContract(unittest.TestCase):
     def test_one_search_entry(self):
         self.assertNotIn('button(search, HomeCatalog.SEARCH', source('sumicya/qself/ui/SettingsHomeView.kt'))
         self.assertIn('mSearchMenuItem?.collapseActionView()', source('io/github/qauxv/fragment/SettingsMainFragment.kt'))
-    def test_actual_modal_and_manual_host_restore(self):
+    def test_legacy_route_is_inline_and_never_creates_a_window(self):
         sheet = source('sumicya/qself/ui/SettingsOptionSheet.kt')
         host = source('io/github/qauxv/activity/SettingsUiFragmentHostActivity.kt')
-        for token in ['DialogFragment()', 'onBackPressedDispatcher', 'onSaveInstanceState()', 'showNow(', 'repeatOnLifecycle']:
-            self.assertIn(token, sheet)
-        self.assertIn('SettingsOptionSheet.restore(this, it)', host)
-        self.assertIn('it.saveForHost()', host)
+        self.assertIn('InlineSettings.show', sheet)
+        self.assertNotIn('DialogFragment', sheet)
+        self.assertNotIn('showNow', sheet)
+        self.assertIn('InlineSettings.presentFragment(this, fragment)', host)
         self.assertNotIn('R.anim.enter_from_right', host)
     def test_switch_save_occurs_in_confirmed_action(self):
         text = source('io/github/qauxv/dsl/item/UiAgentItem.kt')
@@ -46,9 +46,9 @@ class SettingsInteractionContract(unittest.TestCase):
         self.assertNotIn('float3 scene', text)
         self.assertNotIn('Bitmap.createBitmap', text)
     def test_motion_and_system_palette_are_wired_to_production(self):
-        sheet = source('sumicya/qself/ui/SettingsOptionSheet.kt')
-        for token in ['MaterialSharedAxis.Y', 'beginDelayedTransition', 'setGravity(Gravity.CENTER)', 'SettingsMotion.enter', 'endTransitions']:
-            self.assertIn(token, sheet)
+        accordion = source('sumicya/qself/ui/SettingsAccordion.kt')
+        self.assertIn('ValueAnimator.ofInt', accordion)
+        self.assertIn('SettingsMotion.enter', source('sumicya/qself/ui/InlineSettings.kt'))
         self.assertIn('SettingsDynamicColors.apply(this)', source('io/github/qauxv/activity/SettingsUiFragmentHostActivity.kt'))
         self.assertIn('setCheckedWithoutAnimation', source('io/github/qauxv/dsl/item/UiAgentItem.kt'))
         self.assertIn('areAnimatorsEnabled', source('sumicya/qself/ui/SettingsMotion.kt'))
@@ -66,11 +66,12 @@ class SettingsInteractionContract(unittest.TestCase):
         self.assertIn('setNeutralButton("完整报告 / 导出")', item)
         self.assertIn('setPositiveButton("复制错误")', item)
         self.assertNotIn('v.context as Activity', item)
-    def test_small_window_has_one_translucent_surface_not_opaque_nested_cards(self):
-        sheet = source('sumicya/qself/ui/SettingsOptionSheet.kt')
-        self.assertIn('palette.copy(surface = android.graphics.Color.TRANSPARENT)', sheet)
-        self.assertNotIn('SettingsGlass.', sheet)
-        self.assertIn('WINDOW_TRANSPARENCY, 12', source('sumicya/qself/ui/SettingsAppearanceItem.kt'))
+    def test_settings_transparency_is_retired_not_just_hidden(self):
+        self.assertNotIn('sumicya.qself.ui.SettingsAppearanceItem', (ROOT / 'config/feature-catalog.tsv').read_text())
+        appearance = source('sumicya/qself/ui/SettingsAppearanceItem.kt')
+        self.assertIn('alpha = 255', appearance)
+        self.assertNotIn('WINDOW_TRANSPARENCY, 12', appearance)
+        self.assertNotIn('SettingsGlass.', source('sumicya/qself/ui/SettingsOptionSheet.kt'))
     def test_bar_rim_is_removed_in_all_render_paths(self):
         for file, name in [('LiquidGlassPanel.java', 'mHighlightPaint'), ('DropletPanel.java', 'mHighlight.'), ('LiquidGlassHostLayout.java', 'mBorderPaint')]:
             self.assertNotIn(name, source('sumicya/qself/glass/' + file))
