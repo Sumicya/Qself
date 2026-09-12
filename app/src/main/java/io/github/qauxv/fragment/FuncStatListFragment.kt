@@ -197,8 +197,7 @@ class FuncStatListFragment : BaseRootLayoutFragment() {
             val hostActivity = activity as? SettingsUiFragmentHostActivity ?: return@OnLongClickListener false
 
             val identifier = itemAgentProvider.itemAgentProviderUniqueIdentifier
-            val baseContainerLocation = FunctionEntryRouter.resolveUiItemAnycastLocation(itemAgentProvider.uiItemLocation)
-                ?: itemAgentProvider.uiItemLocation
+            val baseContainerLocation = FunctionEntryRouter.locationForProvider(itemAgentProvider)
 
             val absFullLocation = arrayOf(*baseContainerLocation, identifier)
             var containerForFragmentLookup = absFullLocation.dropLast(1).toTypedArray()

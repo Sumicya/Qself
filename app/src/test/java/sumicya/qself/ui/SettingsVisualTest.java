@@ -459,7 +459,7 @@ public class SettingsVisualTest {
                 Path file = root.resolve(feature.replace('.', '/') + ".kt");
                 if (!Files.exists(file)) file = root.resolve(feature.replace('.', '/') + ".java");
                 assertTrue("missing " + feature, Files.exists(file));
-                assertTrue("not registered " + feature, new String(Files.readAllBytes(file), java.nio.charset.StandardCharsets.UTF_8).contains("@UiItemAgentEntry"));
+                assertTrue("not registered " + feature, new String(Files.readAllBytes(file), java.nio.charset.StandardCharsets.UTF_8).contains("UiItemAgentEntry"));
             }
         }
     }
@@ -530,18 +530,21 @@ public class SettingsVisualTest {
     @Test public void actualGeneratedRegistriesOnlyImportInventoryMembers() throws Exception {
         Path project = Paths.get(".");
         if (!Files.isDirectory(project.resolve("src/main/java"))) project = project.resolve("app");
-        Path inventory = project.resolve("../config/simplified-features.txt");
+        Path inventory = project.resolve("../config/feature-catalog.tsv");
         Set<String> allowed = new HashSet<>();
-        for (String line : Files.readAllLines(inventory)) if (!line.startsWith("#") && !line.trim().isEmpty()) allowed.add(line.trim());
+        for (String line : Files.readAllLines(inventory)) if (!line.startsWith("#") && !line.trim().isEmpty()) allowed.add(line.split("\t", -1)[5]);
         for (String registry : new String[]{"AnnotatedFunctionHookEntryList", "AnnotatedUiItemAgentEntryList"}) {
             String generated = Files.readString(project.resolve("build/generated/ksp/debug/kotlin/io/github/qauxv/gen/" + registry + ".kt"));
             assertFalse(generated.contains("ForcePadMode"));
             assertFalse(generated.contains("ExternalModuleConfigHook"));
-            String annotation = registry.contains("FunctionHook") ? "@FunctionHookEntry" : "@UiItemAgentEntry";
+            String annotation = registry.contains("FunctionHook") ? "FunctionHookEntry" : "UiItemAgentEntry";
             for (String name : allowed) {
                 Path source = project.resolve("src/main/java/" + name.replace('.', '/') + ".kt");
                 if (!Files.exists(source)) source = project.resolve("src/main/java/" + name.replace('.', '/') + ".java");
-                if (Files.readString(source).contains(annotation)) assertTrue(name, generated.contains("import " + name + "\n"));
+                String text = Files.readString(source);
+                boolean annotated = text.contains("@" + annotation) || java.util.regex.Pattern
+                    .compile("@\\[[^\\]]*\\b" + annotation + "\\b").matcher(text).find();
+                if (annotated) assertTrue(name, generated.contains("import " + name + "\n"));
             }
             java.util.regex.Matcher imports = java.util.regex.Pattern.compile("(?m)^import ([a-zA-Z0-9_.]+)$").matcher(generated);
             while (imports.find()) {

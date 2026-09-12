@@ -36,8 +36,6 @@ import io.github.qauxv.util.xpcompat.XC_MethodHook
 import io.github.qauxv.util.xpcompat.XposedBridge
 import me.singleneuron.hook.decorator.CardMsgToText
 import me.singleneuron.hook.decorator.MiniAppToStruckMsg
-import me.singleneuron.hook.decorator.SimpleCheckIn
-import me.singleneuron.hook.decorator.SimpleReceiptMessage
 import java.lang.reflect.Method
 
 @FunctionHookEntry
@@ -51,10 +49,9 @@ object ItemBuilderFactoryHook : BaseHookDispatcher<IItemBuilderFactoryHookDecora
     // OPTIMIZE YOUR CODE, CACHE YOUR REFLECTION FIELDS AND METHODS FOR BETTER PERFORMANCE
     // *** Peak frequency: ~412 invocations per second
     override val decorators: Array<IItemBuilderFactoryHookDecorator> = arrayOf(
-        CardMsgToText,
+        // Specific transformation first; generic card-to-text is the fallback.
         MiniAppToStruckMsg,
-        SimpleCheckIn,
-        SimpleReceiptMessage,
+        CardMsgToText,
     )
 
     private var msgRecordParamIndex = -1

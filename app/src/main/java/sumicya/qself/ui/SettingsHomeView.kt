@@ -58,7 +58,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         palette = SettingsVisuals.palette(context, mode)
         addView(text("Qself", 36, palette.text, true), lp(top = 7))
         addView(text("按需开启，保持简单。", 15, palette.secondary), lp(top = 6, bottom = 16))
-        addView(text(state.hostLabel + if (state.safeMode) "  ·  安全模式" else "  ·  单一精简版", 12, palette.accent)
+        addView(text(state.hostLabel + if (state.safeMode) "  ·  安全模式" else "  ·  合并版", 12, palette.accent)
             .apply { setPadding(dp(12), dp(7), dp(12), dp(7)); background = SettingsVisuals.surface(context, palette, 12, owner = this) },
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
 
@@ -121,8 +121,8 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         addView(text("管理", 14, palette.secondary, true), lp(top = 28, bottom = 12))
         utility("主题与显示", "Material 3 Expressive · 局部弹窗玻璃", HomeCatalog.THEME)
         utility("备份与恢复", "保留你的配置，放心调整", HomeCatalog.BACKUP)
-        utility("精简功能清单", "保留功能、安全选项与故障排查", HomeCatalog.CATALOG)
-        addView(text("旧功能配置原位保留；未纳入本版的功能不会因恢复备份而重新加载。", 12, palette.secondary), lp(top = 10))
+        utility("功能与设置", "按场景合并，子项独立选择", HomeCatalog.CATALOG)
+        addView(text("同类能力共用入口与处理；各子项保留原来的配置。", 12, palette.secondary), lp(top = 10))
         val about = text("QSELF  ·  关于与隐私", 11, palette.secondary).apply {
             gravity = Gravity.CENTER
             minimumHeight = dp(48)

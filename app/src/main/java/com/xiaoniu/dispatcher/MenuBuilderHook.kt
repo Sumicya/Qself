@@ -23,6 +23,8 @@
 package com.xiaoniu.dispatcher
 
 import cc.hicore.QApp.QAppUtils
+import sumicya.qself.feature.consolidation.HookInstallRegistry
+import io.github.qauxv.base.IDynamicHook
 import cc.hicore.hook.RepeaterPlus
 import cc.ioctl.util.HookUtils
 import com.github.kyuubiran.ezxhelper.utils.isAbstract
@@ -39,7 +41,13 @@ import java.lang.reflect.Method
 object MenuBuilderHook : BasePersistBackgroundHook() {
     // These hooks are called when the menu is being built.
     private val decorators: Array<OnMenuBuilder> = arrayOf(
-        RepeaterPlus.INSTANCE
+        RepeaterPlus.INSTANCE,
+        cc.ioctl.hook.msg.CopyCardMsg,
+        io.github.duzhaokun123.hook.MessageCopyHook,
+        cc.ioctl.hook.msg.PttForwardHook.INSTANCE,
+        cc.ioctl.hook.msg.PicMd5Hook.INSTANCE,
+        me.ketal.hook.PicCopyToClipboard,
+        me.hd.hook.menu.CopyMarkdown
     )
 
     override fun initOnce(): Boolean {
@@ -52,18 +60,20 @@ object MenuBuilderHook : BasePersistBackgroundHook() {
             val listMethodName: String = baseComponentClass.declaredMethods.first {
                 it.isAbstract && it.returnType == MutableList::class.java && it.parameterTypes.isEmpty()
             }.name
-            val hookedClasses = mutableSetOf<Class<*>>()
+            val hookedMethods = HookInstallRegistry<Method>()
             baseComponentClass.hookAfterAllConstructors {
-                val componentClass = it.thisObject.javaClass
-                if (componentClass in hookedClasses) return@hookAfterAllConstructors
-                hookedClasses.add(componentClass)
-                val target = componentClass.name
-                HookUtils.hookAfterAlways(this, componentClass.getMethod(listMethodName), 48) { param ->
-                    val msg = getMsgMethod.invoke(param.thisObject)!!
-                    for (decorator in decorators) {
-                        if (decorator.targetComponentTypes == null || target in decorator.targetComponentTypes!!) {
+                val menuMethod = it.thisObject.javaClass.getMethod(listMethodName)
+                hookedMethods.install(menuMethod) {
+                    HookUtils.hookAfterAlways(this, menuMethod, 48) { param ->
+                        val target = param.thisObject.javaClass.name
+                        val msg = getMsgMethod.invoke(param.thisObject)!!
+                        for (decorator in decorators) {
                             try {
-                                decorator.onGetMenuNt(msg, target, param)
+                                val hook = decorator as? IDynamicHook ?: continue
+                                if (!hook.isEnabled || !hook.isAvailable) continue
+                                if (decorator.targetComponentTypes == null || target in decorator.targetComponentTypes!!) {
+                                    decorator.onGetMenuNt(msg, target, param)
+                                }
                             } catch (e: Exception) {
                                 traceError(e)
                             }

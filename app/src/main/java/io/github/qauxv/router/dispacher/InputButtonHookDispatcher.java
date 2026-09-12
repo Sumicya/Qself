@@ -90,7 +90,9 @@ public class InputButtonHookDispatcher extends BaseHookDispatcher<IBaseChatPieDe
     }
 
     private static final IBaseChatPieDecorator[] DECORATORS = {
-            ReplyMsgWithImg.INSTANCE
+            ReplyMsgWithImg.INSTANCE,
+            cc.ioctl.hook.msg.AioChatPieClipPasteHook.INSTANCE,
+            com.xiaoniu.hook.CtrlEnterToSend.INSTANCE
     };
 
     @NonNull

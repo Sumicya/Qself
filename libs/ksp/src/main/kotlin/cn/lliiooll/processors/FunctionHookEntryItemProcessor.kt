@@ -50,6 +50,17 @@ class FunctionHookEntryItemProcessor(
                 }.build()).build())
             .build().writeTo(codeGenerator, Dependencies(true, *known.mapNotNull { it.containingFile }.toTypedArray()))
 
+        val catalogRows = requireNotNull(options["qself.catalogRows"]).split("|")
+        FileSpec.builder("io.github.qauxv.gen", "FeatureCatalogRows")
+            .addFunction(FunSpec.builder("getFeatureCatalogRows")
+                .returns(ClassName("kotlin", "Array").parameterizedBy(ClassName("kotlin", "String")))
+                .addCode(CodeBlock.builder().apply {
+                    add("return arrayOf(\n")
+                    catalogRows.forEach { add("%S,\n", it) }
+                    add(")\n")
+                }.build()).build())
+            .build().writeTo(codeGenerator, Dependencies(true, *known.mapNotNull { it.containingFile }.toTypedArray()))
+
         logger.info("FunctionHookEntryProcessor start.")
         val simpleNameMap = HashMap<String, String>(symbols.size)
         val array = ClassName("kotlin", "Array")

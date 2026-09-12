@@ -77,26 +77,31 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
-        val location: Array<String> = arguments?.getStringArray(TARGET_FRAGMENT_LOCATION)
+        var location: Array<String> = arguments?.getStringArray(TARGET_FRAGMENT_LOCATION)
             ?: throw IllegalArgumentException("target fragment location is null")
-        // fault, why start SettingsMainFragment but not no location?
-        mFragmentLocations = location
-        // find fragment description
-        val desc = FunctionEntryRouter.findDescriptionByLocation(location)
-            ?: throw IllegalArgumentException("unable to find fragment description by location: " + location.contentToString())
-        if (desc !is FragmentDescription) {
-            throw IllegalArgumentException("fragment description is not FragmentDescription, got: " + desc.javaClass.name)
+        // Migrate a saved search/deep link by capability ID, not by its old category.
+        arguments?.getString(TARGET_UI_AGENT_IDENTIFIER)?.let { id ->
+            FunctionEntryRouter.locationForFeature(id)?.let { location = it.dropLast(1).toTypedArray() }
         }
+        var desc = FunctionEntryRouter.findDescriptionByLocation(location)
+        if (desc !is FragmentDescription) {
+            // Old category-only saved state: show the consolidated catalog rather than crash.
+            location = emptyArray()
+            desc = FunctionEntryRouter.settingsUiItemDslTree
+            arguments?.putBoolean(SHOW_CATALOG, true)
+        }
+        mFragmentLocations = location
         val section = HomeCatalog.sections.firstOrNull { it.id == arguments?.getString(HOME_SECTION) }
         mFragmentDescription = if (section != null) {
-            val providers = FunctionEntryRouter.queryAnnotatedUiItemAgentEntries().associateBy { it.itemAgentProviderUniqueIdentifier }
             FragmentDescription(section.id, section.title, false) {
-                for (id in section.features) providers[id]?.let { agentItem(it) }
+                for (group in sumicya.qself.feature.consolidation.FeatureCatalog.groupsForHome(section.id)) {
+                    FunctionEntryRouter.findDescriptionByLocation(group.path)?.let { addChild(it) }
+                }
             }
         } else desc
         title = when {
             section != null -> section.title
-            arguments?.getBoolean(SHOW_CATALOG) == true -> "更多设置"
+            arguments?.getBoolean(SHOW_CATALOG) == true -> "功能与设置"
             else -> mFragmentDescription.name ?: "设置"
         }
         mTargetUiAgentNavId = arguments?.getString(TARGET_UI_AGENT_IDENTIFIER)
@@ -350,7 +355,7 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             // Open the existing agent's real page and highlight it; never bypass its interaction contract.
             val provider = FunctionEntryRouter.queryAnnotatedUiItemAgentEntries()
                 .firstOrNull { it.itemAgentProviderUniqueIdentifier == action } ?: return
-            val location = FunctionEntryRouter.resolveUiItemAnycastLocation(provider.uiItemLocation) ?: return
+            val location = FunctionEntryRouter.locationForProvider(provider).dropLast(1).toTypedArray()
             requireSettingsHostActivity().presentFragment(newInstance(location, action))
             return
         }

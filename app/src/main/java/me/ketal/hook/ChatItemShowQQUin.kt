@@ -57,6 +57,8 @@ import com.github.kyuubiran.ezxhelper.utils.invokeMethod
 import com.github.kyuubiran.ezxhelper.utils.newInstance
 import com.lxj.xpopup.util.XPopupUtils
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord
+import nep.timeline.PromptForNoSeqMessage
+import sumicya.qself.feature.consolidation.MessageTailPolicy
 import io.github.qauxv.R
 import io.github.qauxv.base.IUiItemAgent
 import io.github.qauxv.base.annotation.UiItemAgentEntry
@@ -370,8 +372,17 @@ object ChatItemShowQQUin : CommonConfigFunctionHook(), OnBubbleBuilder {
 
     @SuppressLint("ResourceType", "SetTextI18n")
     override fun onGetViewNt(rootView: ViewGroup, chatMessage: MsgRecord, param: XC_MethodHook.MethodHookParam) {
-        // Excluded decorators must not be instantiated through the retained tail renderer.
-        if (!isEnabled) return
+        val kind = MessageTailPolicy.resolve(isEnabled, PromptForNoSeqMessage.isEnabled,
+            PromptForNoSeqMessage.shouldShowTailMsgForMsgRecord(chatMessage),
+            chatMessage.msgType == MsgConstants.MSG_TYPE_GRAY_TIPS)
+        if (kind == MessageTailPolicy.Kind.NONE) {
+            // RecyclerView reuses bubbles: clear OUR previous tail, not the host's other labels.
+            rootView.findViewById<View>(ID_ADD_LAYOUT)?.visibility = View.GONE
+            rootView.findViewById<TextView>(ID_ADD_TEXTVIEW)?.apply { text = ""; tag = null; isClickable = false }
+            return
+        }
+        val tailText = if (kind == MessageTailPolicy.Kind.DELIVERY_WARNING) "这条消息可能未成功发送！"
+            else formatTailMessageNt(chatMessage)
 
         if (requireMinQQVersion(QQVersion.QQ_8_9_63_BETA_11345) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)) {
             if (!rootView.children.map { it.id }.contains(ID_ADD_LAYOUT)) {
@@ -404,7 +415,7 @@ object ChatItemShowQQUin : CommonConfigFunctionHook(), OnBubbleBuilder {
                     )
                     if (mEnableGrayBg) setTextColor(Color.WHITE)
                     setOnClickListener {
-                        if (!mEnableDetailInfo) return@setOnClickListener
+                        if (!isEnabled || !mEnableDetailInfo) return@setOnClickListener
                         val msgRecord = it.tag as MsgRecord
                         showDetailInfoDialog(rootView.context, Reflex.getShortClassName(msgRecord), msgRecord.toString())
                     }
@@ -469,7 +480,8 @@ object ChatItemShowQQUin : CommonConfigFunctionHook(), OnBubbleBuilder {
                 textView.visibility = View.VISIBLE
                 textView.let {
                     it.tag = chatMessage
-                    it.text = formatTailMessageNt(chatMessage)
+                    it.text = tailText
+                    it.isClickable = kind == MessageTailPolicy.Kind.DETAILS && mEnableDetailInfo
                 }
             } else {
                 layout.visibility = View.GONE
@@ -521,7 +533,7 @@ object ChatItemShowQQUin : CommonConfigFunctionHook(), OnBubbleBuilder {
                 setOnClickListener {
                     // 或者不用tag，像上面mOnTailMessageClickListener一样通过view获取message
                     // Dialog细节没有考虑，MsgRecord里面的冗余内容很多，可考虑格式化/选择性展示
-                    if (!mEnableDetailInfo) return@setOnClickListener
+                    if (!isEnabled || !mEnableDetailInfo) return@setOnClickListener
                     val msgRecord = it.tag as MsgRecord
                     showDetailInfoDialog(rootView.context, Reflex.getShortClassName(msgRecord), msgRecord.toString())
                 }
@@ -530,9 +542,11 @@ object ChatItemShowQQUin : CommonConfigFunctionHook(), OnBubbleBuilder {
             tailLayout.addView(layout)
         }
 
+        rootView.findViewById<View>(ID_ADD_LAYOUT)?.visibility = View.VISIBLE
         rootView.findViewById<TextView>(ID_ADD_TEXTVIEW).let {
             it.tag = chatMessage
-            it.text = formatTailMessageNt(chatMessage)
+            it.text = tailText
+            it.isClickable = kind == MessageTailPolicy.Kind.DETAILS && mEnableDetailInfo
         }
     }
 

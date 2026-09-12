@@ -269,7 +269,6 @@ sumicya/qself/feature/chat/DisableLightInteraction.kt	禁用轻互动	Simplify
 sumicya/qself/feature/chat/GagInfoDisclosure.kt	显示设置禁言的管理	Auxiliary
 sumicya/qself/feature/chat/GroupAdminMenu.kt	群管理菜单	Auxiliary
 sumicya/qself/feature/chat/RevokeWrapHint.kt	防撤回消息标记	Auxiliary
-sumicya/qself/feature/consolidation/AdPurifySuite.kt	广告净化（总开关）	Auxiliary
 sumicya/qself/feature/dev/GrayTipCapture.kt	群日志记录（灰字）	Auxiliary
 sumicya/qself/feature/device/ForcePadMode.kt	强制平板模式	Auxiliary
 sumicya/qself/feature/device/ModifyDeviceType.kt	设备类型修改	Auxiliary

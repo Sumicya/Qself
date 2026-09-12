@@ -680,9 +680,14 @@ if (System.getenv("CI") == "true") {
     }
 }
 
-// The value is a KSP task input: changing the inventory invalidates generated registries.
+// A single capability catalog drives both registry generation and grouped navigation.
+// KSP options are task inputs, so a catalog edit invalidates both generated models.
 ksp {
-    arg("qself.allowedEntries", providers.fileContents(rootProject.layout.projectDirectory.file(
-        "config/simplified-features.txt")).asText.get().lineSequence()
-        .map { it.substringBefore('#').trim() }.filter { it.isNotEmpty() }.sorted().joinToString("|"))
+    val rows = providers.fileContents(rootProject.layout.projectDirectory.file("config/feature-catalog.tsv"))
+        .asText.get().lineSequence().filter { it.isNotBlank() && !it.startsWith('#') }.toList()
+    require(rows.all { it.split('\t').size == 6 }) { "Invalid feature catalog row" }
+    val entries = rows.map { it.split('\t')[5] }
+    require(entries.distinct().size == entries.size) { "Duplicate capability in catalog" }
+    arg("qself.allowedEntries", entries.sorted().joinToString("|"))
+    arg("qself.catalogRows", rows.filterNot { it.startsWith("_core\t") }.joinToString("|"))
 }

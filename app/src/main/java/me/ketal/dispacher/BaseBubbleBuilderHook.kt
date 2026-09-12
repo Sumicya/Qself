@@ -50,6 +50,9 @@ object BaseBubbleBuilderHook : BasePersistBackgroundHook() {
     // Peak frequency: ~68 invocations per second
     private val decorators = arrayOf<OnBubbleBuilder>(
         ChatItemShowQQUin,
+        me.ketal.hook.ShowMsgAt,
+        xyz.nextalone.hook.HideTroopLevel,
+        cc.ioctl.hook.msg.MultiForwardAvatarHook,
         sumicya.qself.feature.chat.RevokeWrapHint,
         sumicya.qself.feature.chat.GroupAdminMenu,
         sumicya.qself.feature.ui.AvatarRounding

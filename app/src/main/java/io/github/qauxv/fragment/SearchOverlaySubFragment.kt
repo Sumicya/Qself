@@ -430,8 +430,7 @@ class SearchOverlaySubFragment {
 
     private fun updateUiItemAgentLocation(item: SearchResult) {
         val agent = item.agent
-        val containerLocation: Array<String> = FunctionEntryRouter.resolveUiItemAnycastLocation(agent.uiItemLocation)
-            ?: agent.uiItemLocation
+        val containerLocation: Array<String> = FunctionEntryRouter.locationForProvider(agent)
         val fullLocation = arrayOf(*containerLocation, agent.itemAgentProviderUniqueIdentifier)
         item.location = fullLocation
         // translate the container location to human readable string

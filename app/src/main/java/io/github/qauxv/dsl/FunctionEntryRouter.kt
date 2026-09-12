@@ -22,6 +22,7 @@
 
 package io.github.qauxv.dsl
 
+import sumicya.qself.feature.consolidation.FeatureCatalog
 import io.github.qauxv.base.IUiItemAgentProvider
 import io.github.qauxv.dsl.func.FragmentImplDescription
 import io.github.qauxv.dsl.func.FragmentDescription
@@ -81,7 +82,7 @@ object FunctionEntryRouter {
             // wtf?
             return arrayOf()
         }
-        return settingsUiItemDslTreeSkeleton.findLocationByIdentifier(tag)
+        return FeatureCatalog.groupPath(tag) ?: settingsUiItemDslTreeSkeleton.findLocationByIdentifier(tag)
     }
 
     /**
@@ -148,45 +149,48 @@ object FunctionEntryRouter {
         return baseTree
     }
 
-    private fun zwBuildUiItemDslTree(): RootFragmentDescription {
-        val baseTree: RootFragmentDescription = zwCreateBaseDslTree()
-        val lostAndFoundItems = mutableListOf<IUiItemAgentProvider>()
-        val annotatedUiItemAgentEntries = queryAnnotatedUiItemAgentEntries()
-        for (uiItemAgentEntry in annotatedUiItemAgentEntries) {
-            var location = uiItemAgentEntry.uiItemLocation
-            location = resolveUiItemAnycastLocation(location) ?: location
-            // find the parent node
-            val parentNode = baseTree.lookupHierarchy(location)
-            if (parentNode is IDslParentNode) {
-                parentNode.addChild(UiItemAgentDescription(uiItemAgentEntry))
-            } else {
-                // not found, add to lost and found
-                lostAndFoundItems.add(uiItemAgentEntry)
-            }
-        }
-        if (lostAndFoundItems.isNotEmpty()) {
-            // create a lost and found node
-            val lostAndFoundFragmentDescription = FragmentDescription("lost-and-found", "Lost & Found") {
-                lostAndFoundItems.forEach {
-                    addChild(UiItemAgentDescription(it))
-                }
-            }
-            // add to the top of the tree to make it the first node
-            baseTree.addChild(lostAndFoundFragmentDescription, 0)
-            // sync with the skeleton
-            settingsUiItemDslTreeSkeleton.addChild(FragmentDescription("lost-and-found", "Lost & Found", false, null), 0)
-        }
-        // Keep the routing skeleton stable, but do not expose empty legacy categories.
-        fun pruneEmpty(parent: IDslParentNode) {
-            for (child in parent.children.toList()) {
-                if (child is IDslParentNode && child !is FragmentImplDescription) {
-                    pruneEmpty(child)
-                    if (child.children.isEmpty()) parent.removeChild(child)
+    /** The original provider is kept: wrapping it would break IDynamicHook initialization and switches. */
+    @JvmStatic
+    fun locationForProvider(provider: IUiItemAgentProvider): Array<String> =
+        FeatureCatalog.locationFor(provider.itemAgentProviderUniqueIdentifier)
+            ?: resolveUiItemAnycastLocation(provider.uiItemLocation) ?: provider.uiItemLocation
+
+    @JvmStatic
+    fun locationForFeature(identifier: String): Array<String>? = FeatureCatalog.locationFor(identifier)
+
+    private fun zwBuildUiItemDslTree(): RootFragmentDescription = buildCatalogTree(queryAnnotatedUiItemAgentEntries())
+
+    @JvmStatic
+    fun buildCatalogTree(entries: Array<IUiItemAgentProvider>): RootFragmentDescription {
+        val providers = entries.associateBy { it.itemAgentProviderUniqueIdentifier }
+        fun populate(fragment: FragmentDescription, group: FeatureCatalog.Group) {
+            for (section in group.sections) {
+                fragment.category(section.id, section.title) {
+                    for (id in section.features) {
+                        val provider = checkNotNull(providers[id]) { "Missing catalog provider: $id" }
+                        agentItem(provider)
+                    }
                 }
             }
         }
-        pruneEmpty(baseTree)
-        return baseTree
+        return RootFragmentDescription {
+            category("features", "功能") {
+                for (group in FeatureCatalog.groups.filter { it.id != "cfg-theme" }) {
+                    fragment(group.id, group.title) { populate(this, group) }
+                }
+            }
+            category("module-config", "设置", false) {
+                val theme = FeatureCatalog.groups.single { it.id == "cfg-theme" }
+                fragment("cfg-theme", theme.title) { populate(this, theme) }
+                fragmentImpl("cfg-backup-restore", "备份与恢复", BackupRestoreConfigFragment::class.java)
+            }
+            category("debug-category", "维护", false) {
+                fragmentImpl("debug-impl", "故障排查", TroubleshootFragment::class.java)
+            }
+            category("other-config", "其他", false) {
+                fragmentImpl("other-about", "关于", AboutFragment::class.java, false)
+            }
+        }
     }
 
     /**
