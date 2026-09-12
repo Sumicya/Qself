@@ -47,6 +47,7 @@ cc/ioctl/hook/guild/RevokeGuildMsg.kt	频道防撤回消息	Auxiliary
 cc/ioctl/hook/mini/HideMiniAppLoadingAd.kt	隐藏小程序开屏广告	Simplify
 cc/ioctl/hook/misc/BrowserRestrictMitigation.java	禁用内置浏览器网页拦截	MISC_CATEGORY
 cc/ioctl/hook/misc/CustomDeviceModel.java	自定义机型	MISC_CATEGORY
+cc/ioctl/hook/misc/CustomSplash.java	自定义启动图	MAIN_UI_MISC
 cc/ioctl/hook/misc/DisableHotPatch.kt	-	Auxiliary
 cc/ioctl/hook/misc/DisableQQCrashReportManager.kt	禁用崩溃日志上报	DebugCategory
 cc/ioctl/hook/misc/FixTroopRefuseDarkText.java	修复拒绝加群原因文本背景	MISC_CATEGORY
