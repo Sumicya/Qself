@@ -29,7 +29,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.fragment.CustomSplashConfigFragment;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity;
 import io.github.qauxv.base.IUiItemAgent;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
@@ -185,7 +185,7 @@ public class CustomSplash extends CommonConfigFunctionHook {
 
     @Nullable
     public InputStream openSplashInputStream(@NonNull String which) throws IOException {
-        File f = new File(HostInfo.getApplication().getFilesDir(), DIR_NANE_CONFIG_MISC + File.separator + which);
+        File f = new File(HostInfo.getHostInfo().getApplication().getFilesDir(), DIR_NANE_CONFIG_MISC + File.separator + which);
         if (f.exists() && f.isFile()) {
             return new FileInputStream(f);
         }
@@ -216,13 +216,13 @@ public class CustomSplash extends CommonConfigFunctionHook {
 
     @NonNull
     public File getDarkSplashFile() {
-        File dir = new File(HostInfo.getApplication().getFilesDir(), DIR_NANE_CONFIG_MISC);
+        File dir = new File(HostInfo.getHostInfo().getApplication().getFilesDir(), DIR_NANE_CONFIG_MISC);
         return new File(IoUtils.mkdirsOrThrow(dir), FILE_NAME_SPLASH_DARK);
     }
 
     @NonNull
     public File getLightSplashFile() {
-        File dir = new File(HostInfo.getApplication().getFilesDir(), DIR_NANE_CONFIG_MISC);
+        File dir = new File(HostInfo.getHostInfo().getApplication().getFilesDir(), DIR_NANE_CONFIG_MISC);
         return new File(IoUtils.mkdirsOrThrow(dir), FILE_NAME_SPLASH_LIGHT);
     }
 
