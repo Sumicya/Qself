@@ -26,6 +26,11 @@ class SettingsUiContract(unittest.TestCase):
         self.assertIn('availableWidth, MeasureSpec.EXACTLY', home)
         self.assertIn('boundCompact != compact()', home)
 
+    def test_settings_window_requests_hardware_before_content_attachment(self):
+        activity = (ROOT / 'app/src/main/java/io/github/qauxv/activity/SettingsUiFragmentHostActivity.kt').read_text()
+        self.assertLess(activity.index('window.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)'),
+                        activity.index('setContentView(R.layout.activity_settings_ui_host)'))
+
     def test_catalog_shortcuts_have_real_registered_sources(self):
         ids = re.findall(r'"([a-z][a-z0-9_.]+\.[A-Z][A-Za-z0-9]+)"', CATALOG)
         self.assertEqual(len(ids), len(set(ids)))
