@@ -28,7 +28,7 @@ class SettingsUiContract(unittest.TestCase):
         for route in ('cfg-theme', 'cfg-backup-restore', 'other-about'):
             self.assertIn('"' + route + '"', ROUTER)
             self.assertIn('"' + route + '"', body)
-        for mutation in ('isEnabled =', 'putBoolean(', 'putInt(', 'switchProvider'):
+        for mutation in ('isEnabled =', 'ConfigManager', 'getDefaultConfig(', 'switchProvider'):
             self.assertNotIn(mutation, body)
         self.assertIn('UiAgentItem(endNode.identifier, endNode.name, endNode.itemAgentProvider)', MAIN)
 

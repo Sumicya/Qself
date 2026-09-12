@@ -660,9 +660,16 @@ if (System.getenv("GITHUB_ACTIONS") == "true") {
 if (System.getenv("CI") == "true") {
     tasks.withType<Test>().configureEach {
         doLast {
-            exec {
+            val report = providers.exec {
                 commandLine("python3", rootProject.file("scripts/publish_visual_test_results.py").absolutePath,
                     layout.buildDirectory.dir("reports/qself-visual").get().asFile.absolutePath)
+            }
+            println(report.standardOutput.asText.get())
+            report.result.get().assertNormalExitValue()
+            for (script in listOf("test_settings_ui_contract.py", "test_report_diagnostics_contract.py")) {
+                val guard = providers.exec { commandLine("python3", rootProject.file("scripts/$script").absolutePath) }
+                println(guard.standardOutput.asText.get())
+                guard.result.get().assertNormalExitValue()
             }
         }
     }
