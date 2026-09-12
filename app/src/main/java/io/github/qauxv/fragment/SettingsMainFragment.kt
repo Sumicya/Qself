@@ -22,13 +22,10 @@
 
 package io.github.qauxv.fragment
 
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
 import android.content.Context
 import android.graphics.Rect
 import android.os.Bundle
 import android.view.*
-import android.view.animation.AlphaAnimation
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.widget.SearchView
@@ -44,12 +41,9 @@ import io.github.qauxv.dsl.FunctionEntryRouter
 import io.github.qauxv.dsl.func.*
 import io.github.qauxv.dsl.item.*
 import io.github.qauxv.util.SyncUtils
-import io.github.qauxv.util.SyncUtils.async
-import io.github.qauxv.util.SyncUtils.runOnUiThread
 import io.github.qauxv.util.UiThread
 import io.github.qauxv.util.hostInfo
 import io.github.qauxv.util.isInHostProcess
-import kotlinx.coroutines.flow.StateFlow
 import sumicya.qself.ui.HomeCatalog
 import sumicya.qself.ui.SettingsHomeView
 import sumicya.qself.ui.SettingsVisuals
@@ -161,26 +155,32 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
 
         recyclerListView!!.adapter = adapter
 
-        // collect all StateFlow and observe them in case of state change
-        for (i in itemList.indices) {
-            val item = itemList[i]
-            if (item is UiAgentItem) {
-                val valueStateFlow: StateFlow<String?>? = item.agentProvider.uiItemAgent.valueState
-                if (valueStateFlow != null) {
-                    lifecycleScope.launchWhenResumed {
-                        valueStateFlow.collect {
-                            runOnUiThread { adapter?.notifyItemChanged(i) }
-                        }
-                    }
-                }
-            }
-        }
         rootLayoutView = recyclerListView
         rootView.addView(recyclerListView!!, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         if (isInHostProcess) {
             WsaWarningDialog.showWsaWarningDialogIfNecessary(requireContext())
         }
         return rootView
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setHasOptionsMenu(true)
+        requireActivity().onBackPressedDispatcher.addCallback(this, mSearchModeOnBackPressedCallback)
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        // A view recreation must not keep observers pointing at a discarded row index.
+        for ((index, item) in itemList.withIndex()) {
+            val state = (item as? UiAgentItem)?.agentProvider?.uiItemAgent?.valueState ?: continue
+            viewLifecycleOwner.lifecycleScope.launchWhenResumed {
+                state.collect { adapter?.notifyItemChanged(index) }
+            }
+        }
+        if (isHome()) viewLifecycleOwner.lifecycleScope.launchWhenResumed {
+            ReportDiagnostics.valueState.collect { adapter?.notifyItemChanged(0) }
+        }
     }
 
     override fun onResume() {
@@ -206,7 +206,9 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             return
         }
         // wait for the view to be created and animation to finish
+        val recycler = recyclerListView ?: return
         SyncUtils.postDelayed(300) {
+            if (!isResumed || recyclerListView !== recycler) return@postDelayed
             var index = -1
             // find the UI agent index
             for (i in itemList.indices) {
@@ -217,34 +219,15 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
                 }
             }
             if (index >= 0) {
-                // scroll it to the center
-                val layoutManager = recyclerListView!!.layoutManager as LinearLayoutManager
-                val firstVisibleItemPosition: Int = layoutManager.findFirstVisibleItemPosition()
-                val lastVisibleItemPosition: Int = layoutManager.findLastVisibleItemPosition()
-                val centerPosition = (firstVisibleItemPosition + lastVisibleItemPosition) / 2
-                var scrollTargetIndex = index
-                if (scrollTargetIndex > centerPosition) {
-                    scrollTargetIndex++
-                } else if (scrollTargetIndex < centerPosition) {
-                    scrollTargetIndex--
-                }
-                if (scrollTargetIndex < 0) {
-                    scrollTargetIndex = 0
-                }
-                if (scrollTargetIndex > itemList.size - 1) {
-                    scrollTargetIndex = itemList.size - 1
-                }
-                recyclerListView!!.scrollToPosition(scrollTargetIndex)
-                SyncUtils.postDelayed(100) {
-                    // wait for scrolling to finish
-                    val itemView = layoutManager.findViewByPosition(index)!!
-                    // calculate the position of the item, startY and endY of the recyclerView
-                    val startY = itemView.top
-                    val endY = itemView.bottom
-                    val width = itemView.width
-                    val rect = Rect(0, startY, width, endY)
-                    highlightRect(rect)
-                }
+                val layoutManager = recycler.layoutManager as LinearLayoutManager
+                layoutManager.scrollToPositionWithOffset(index, recycler.paddingTop + SettingsVisuals.dp(requireContext(), 12))
+                recycler.postDelayed({
+                    if (isResumed && recyclerListView === recycler) {
+                        layoutManager.findViewByPosition(index)?.let { itemView ->
+                            highlightRect(Rect(itemView.left, itemView.top, itemView.right, itemView.bottom))
+                        }
+                    }
+                }, 100)
                 mTargetUiAgentNavigated = true
             }
         }
@@ -256,50 +239,22 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             return
         }
         val context = requireContext()
-        val fadeIn = AlphaAnimation(0f, 1f).apply {
-            duration = 300
-            fillAfter = true
-        }
-        val fadeOut = AlphaAnimation(1f, 0f).apply {
-            duration = 300
-            fillAfter = true
-        }
-        val view = View(context).apply {
-            isFocusable = false
-            isFocusableInTouchMode = false
-            isClickable = false
-            isLongClickable = false
+        val parent = rootFrameLayout ?: return
+        val highlight = View(context).apply {
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             setBackgroundColor(ResourcesCompat.getColor(context.resources, R.color.rippleColor, context.theme))
         }
-        val layoutParams = FrameLayout.LayoutParams(rect.width(), rect.height()).apply {
+        parent.addView(highlight, FrameLayout.LayoutParams(rect.width(), rect.height()).apply {
             setMargins(rect.left, rect.top, 0, 0)
-        }
-        val parent = rootFrameLayout ?: return
-        async {
-            var isAddedToParent = false
-            // in out and repeat
-            for (i in 0..3) {
-                val animation = if (i % 2 == 0) {
-                    fadeIn
-                } else {
-                    fadeOut
-                }
-                runOnUiThread {
-                    if (!isAddedToParent) {
-                        parent.addView(view, layoutParams)
-                        isAddedToParent = true
-                    }
-                    view.startAnimation(animation)
-                }
-                Thread.sleep(300)
-            }
-            runOnUiThread {
-                rootFrameLayout?.removeView(view)
-            }
-        }
+        })
+        // Native property animator respects the system animation scale, including animations off.
+        highlight.animate().alpha(0f).setDuration(900).withEndAction { parent.removeView(highlight) }.start()
     }
 
     override fun onDestroyView() {
+        abortSearchMode()
+        mSearchMenuItem = null
+        adapter = null
         super.onDestroyView()
         recyclerListView?.let {
             it.adapter = null
@@ -464,88 +419,43 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
         }
     }
 
-    /**
-     * Enter search mode with animation
-     */
+    /** Toolbar expansion is native. The overlay itself has no race-prone delayed transitions. */
     private fun enterSearchMode(searchView: SearchView) {
+        val recycler = recyclerListView ?: return
+        val root = rootFrameLayout ?: return
         if (mSearchSubFragment == null) {
-            mSearchSubFragment = SearchOverlaySubFragment().also {
+            val fragment = SearchOverlaySubFragment().also {
                 it.parent = this
-                it.context = this.requireContext()
-                it.settingsHostActivity = settingsHostActivity!!
-
-                mSearchRootLayout = it.onCreateView(requireActivity().layoutInflater, mSearchRootLayout, null) as ViewGroup
-                it.onResume()
-                // hide the recycler view and show the search view
-                recyclerListView!!.animate().alpha(0f).setDuration(300).setListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: Animator) {
-                        recyclerListView!!.visibility = View.GONE
-                    }
-                }).start()
-                rootFrameLayout!!.addView(mSearchRootLayout)
-                mSearchRootLayout!!.alpha = 0f
-                mSearchRootLayout!!.animate().alpha(1f).setDuration(300).setListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: Animator) {
-                        mSearchRootLayout!!.visibility = View.VISIBLE
-                    }
-                }).start()
-                searchView.setOnCloseListener {
-                    exitSearchMode()
-                    true
-                }
-                rootLayoutView = mSearchRootLayout
-                applyRootLayoutPaddingFor(mSearchRootLayout!!)
+                it.context = requireContext()
+                it.settingsHostActivity = requireSettingsHostActivity()
             }
+            val overlay = fragment.onCreateView(requireActivity().layoutInflater, root, null) as ViewGroup
+            mSearchSubFragment = fragment
+            mSearchRootLayout = overlay
+            root.addView(overlay)
+            recycler.visibility = View.GONE
+            rootLayoutView = overlay
+            applyRootLayoutPaddingFor(overlay)
+            fragment.onResume()
+            searchView.setOnCloseListener { exitSearchMode(); true }
         }
         mSearchSubFragment!!.initForSearchView(searchView)
         mSearchModeOnBackPressedCallback.isEnabled = true
     }
 
-    /**
-     * Exit search mode with animation
-     */
-    private fun exitSearchMode() {
-        mSearchSubFragment?.let { fragment ->
-            mSearchRootLayout!!.animate().alpha(0f).setDuration(300).setListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) {
-                    rootFrameLayout!!.removeView(mSearchRootLayout)
-                    fragment.onDestroyView()
-                    mSearchRootLayout = null
-                    mSearchSubFragment = null
-                }
-            }).start()
-            recyclerListView!!.visibility = View.VISIBLE
-            recyclerListView!!.alpha = 0f
-            recyclerListView!!.animate().alpha(1f).setDuration(300).setListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) {
-                    recyclerListView?.let { v ->
-                        v.alpha = 1f
-                    }
-                }
-            }).start()
-        }
-        rootLayoutView = recyclerListView
-        applyRootLayoutPaddingFor(recyclerListView!!)
-        mSearchModeOnBackPressedCallback.isEnabled = false
-    }
+    private fun exitSearchMode() = abortSearchMode()
 
-    /**
-     * Abort search mode without animation
-     */
     private fun abortSearchMode() {
-        mSearchSubFragment?.let {
-            rootFrameLayout!!.removeView(mSearchRootLayout)
-            it.onDestroyView()
-            mSearchRootLayout = null
-            mSearchSubFragment = null
-            mSearchModeOnBackPressedCallback.isEnabled = false
+        mSearchRootLayout?.let { rootFrameLayout?.removeView(it) }
+        mSearchSubFragment?.onDestroyView()
+        mSearchRootLayout = null
+        mSearchSubFragment = null
+        mSearchModeOnBackPressedCallback.isEnabled = false
+        recyclerListView?.let { recycler ->
+            recycler.visibility = View.VISIBLE
+            rootLayoutView = recycler
+            applyRootLayoutPaddingFor(recycler)
         }
-        recyclerListView!!.apply {
-            alpha = 1f
-            visibility = View.VISIBLE
-        }
-        rootLayoutView = recyclerListView
-        applyRootLayoutPaddingFor(recyclerListView!!)
     }
 
     fun onNavigateToOtherFragment() {
