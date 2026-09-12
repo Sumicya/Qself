@@ -3,7 +3,7 @@ package sumicya.qself.feature.chat
 
 import io.github.qauxv.bridge.AppRuntimeHelper
 import io.github.qauxv.util.Log
-import hostInfo
+import io.github.qauxv.util.hostInfo
 import java.lang.reflect.Method
 
 /** Group-management inventory only. Unverified write operations are deliberately disabled. */
