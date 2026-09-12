@@ -14,12 +14,22 @@ def run(*command):
                           stderr=subprocess.STDOUT, text=True, timeout=90).stdout
 
 
+def validate_package(badging):
+    package = re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'", badging)
+    if not package or package[1] != "io.github.qauxv" or not package[2].isdigit():
+        raise RuntimeError("Unexpected package or invalid versionCode")
+    # Keep the repository's ordinary commit-count rule. A deliberate lower versionCode
+    # than the old branch is allowed; never invent an upgrade offset on the user's behalf.
+    revision = re.search(r"\.r([0-9]+)\.", package[3])
+    if not revision or int(package[2]) <= 0 or int(package[2]) != int(revision[1]):
+        raise RuntimeError("versionCode must equal the commit count in versionName")
+    return package
+
+
 def audit(apk, build_tools):
     signature = run(str(build_tools / "apksigner"), "verify", "--verbose", "--print-certs", str(apk))
     badging = run(str(build_tools / "aapt2"), "dump", "badging", str(apk))
-    package = re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'", badging)
-    if not package or package[1] != "io.github.qauxv" or int(package[2]) <= 3171:
-        raise RuntimeError("Unexpected package or versionCode does not supersede the old branch")
+    package = validate_package(badging)
     if "application-debuggable" in badging:
         raise RuntimeError("Distribution APK must not be debuggable")
     with zipfile.ZipFile(apk) as archive:

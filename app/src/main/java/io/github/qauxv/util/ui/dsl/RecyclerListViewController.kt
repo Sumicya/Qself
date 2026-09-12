@@ -25,12 +25,11 @@ package io.github.qauxv.util.ui.dsl
 import android.annotation.SuppressLint
 import android.content.Context
 import android.view.ViewGroup
-import androidx.core.content.res.ResourcesCompat
 import androidx.lifecycle.LifecycleCoroutineScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import io.github.qauxv.util.ui.drawable.BackgroundDrawableUtils
-import io.github.qauxv.R
+import sumicya.qself.ui.SettingsVisuals
+import sumicya.qself.ui.SettingsAppearanceItem
 import io.github.qauxv.util.SyncUtils
 import io.github.qauxv.dsl.item.DslTMsgListItemInflatable
 import io.github.qauxv.dsl.item.TMsgListItem
@@ -124,17 +123,13 @@ class RecyclerListViewController(
                 override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
                     val delegate = itemTypeDelegate[viewType]
                     val vh = delegate.createViewHolder(context, parent)
-                    if (!delegate.isVoidBackground && delegate.isClickable) {
-                        // add ripple effect
-                        val rippleColor: Int = ResourcesCompat.getColor(context.resources, R.color.rippleColor, parent.context.theme)
-                        vh.itemView.background = BackgroundDrawableUtils.getRoundRectSelectorDrawable(parent.context, rippleColor)
-                    }
                     return vh
                 }
 
                 override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
                     val item = itemList[position]
                     item.bindView(holder, position, context)
+                    if (!item.isVoidBackground) SettingsVisuals.decorateRow(holder.itemView, context, item.isClickable)
                 }
 
                 override fun getItemCount() = itemList.size
@@ -151,6 +146,7 @@ class RecyclerListViewController(
                 layoutManager = this@RecyclerListViewController.layoutManager
                 adapter = this@RecyclerListViewController.adapter
                 clipToPadding = false
+                background = SettingsVisuals.backdrop(SettingsVisuals.palette(context, SettingsAppearanceItem.mode))
             }
         }
     }

@@ -30,6 +30,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.TextView
+import android.widget.LinearLayout
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.res.ResourcesCompat
 import io.github.qauxv.util.LayoutHelper
@@ -54,48 +55,42 @@ class TitleValueCell(
 
     private val dividerPaint by lazy { Paint() }
 
-    private val mCenterVertical = LayoutHelper.newFrameLayoutParamsRel(
-        MATCH_PARENT, WRAP_CONTENT,
-        Gravity.CENTER_VERTICAL or Gravity.START, 21.dp, 0, 21.dp, 0
-    )
-    private val mCenterTop = LayoutHelper.newFrameLayoutParamsRel(
-        MATCH_PARENT, WRAP_CONTENT,
-        Gravity.TOP or Gravity.START, 21.dp, 10.dp, 21.dp, 0
-    )
+    private val textColumn = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+    private var trailingWidth = 0
 
     init {
-        minimumHeight = 50.dp
+        minimumHeight = 64.dp
+        setWillNotDraw(false)
+        addView(textColumn)
         dividerColor = ResourcesCompat.getColor(resources, R.color.divideColor, context.theme)
         // title text view
         titleView = TextView(context).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setTextColor(ResourcesCompat.getColor(resources, R.color.firstTextColor, context.theme))
             gravity = Gravity.CENTER_VERTICAL or Gravity.START
-            maxLines = 1
+            maxLines = 3
             ellipsize = TextUtils.TruncateAt.END
         }.also {
-            addView(it, mCenterVertical)
+            textColumn.addView(it)
         }
         // summary text view
         summaryView = TextView(context).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTextColor(ResourcesCompat.getColor(resources, R.color.thirdTextColor, context.theme))
             gravity = Gravity.START
             visibility = GONE
         }.also {
-            addView(
-                it, LayoutHelper.newFrameLayoutParamsRel(
-                    WRAP_CONTENT, WRAP_CONTENT,
-                    Gravity.TOP or Gravity.START, 21.dp, 34.dp, 70.dp, 6.dp
-                )
-            )
+            textColumn.addView(it, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = 6.dp })
         }
         val valueTextColor = ThemeAttrUtils.resolveColorOrDefaultColorRes(context, androidx.appcompat.R.attr.colorAccent, R.color.colorAccent)
         errorLineColor = ThemeAttrUtils.resolveColorOrDefaultColorInt(context, R.attr.unusableColor, valueTextColor)
         // value text view
         valueView = TextView(context).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTextColor(valueTextColor)
+            maxLines = 3
+            ellipsize = TextUtils.TruncateAt.END
+            gravity = Gravity.END
             visibility = GONE
         }.also {
             addView(
@@ -127,6 +122,7 @@ class TitleValueCell(
         get() = titleView.text?.toString() ?: ""
         set(value) {
             titleView.text = value
+            switchView.contentDescription = value
             invalidate()
         }
 
@@ -135,7 +131,6 @@ class TitleValueCell(
         set(value) {
             summaryView.text = value
             summaryView.visibility = if (value.isNullOrEmpty()) GONE else VISIBLE
-            titleView.layoutParams = if (value.isNullOrEmpty()) mCenterVertical else mCenterTop
             requestLayout()
         }
 
@@ -196,10 +191,30 @@ class TitleValueCell(
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        super.onMeasure(
-            MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-        )
+        val width = MeasureSpec.getSize(widthMeasureSpec)
+        val unspecified = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        val trailing = if (isHasSwitch) switchView else valueView
+        trailingWidth = 0
+        if (trailing.visibility != GONE) {
+            trailing.measure(MeasureSpec.makeMeasureSpec((width * .36f).toInt(), MeasureSpec.AT_MOST), unspecified)
+            trailingWidth = trailing.measuredWidth + 12.dp
+        }
+        textColumn.measure(MeasureSpec.makeMeasureSpec((width - 36.dp - trailingWidth).coerceAtLeast(0), MeasureSpec.EXACTLY), unspecified)
+        val height = maxOf(minimumHeight, textColumn.measuredHeight + 28.dp,
+            if (trailing.visibility == GONE) 0 else trailing.measuredHeight + 24.dp)
+        setMeasuredDimension(width, resolveSize(height, heightMeasureSpec))
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
+        val columnLeft = 18.dp + if (rtl) trailingWidth else 0
+        val columnTop = (measuredHeight - textColumn.measuredHeight) / 2
+        textColumn.layout(columnLeft, columnTop, columnLeft + textColumn.measuredWidth, columnTop + textColumn.measuredHeight)
+        for (trailing in arrayOf(valueView, switchView)) if (trailing.visibility != GONE) {
+            val x = if (rtl) 18.dp else measuredWidth - 18.dp - trailing.measuredWidth
+            val y = (measuredHeight - trailing.measuredHeight) / 2
+            trailing.layout(x, y, x + trailing.measuredWidth, y + trailing.measuredHeight)
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -213,10 +228,10 @@ class TitleValueCell(
             dividerPaint.strokeWidth = dip1 * 2f
             dividerPaint.color = errorLineColor
             val textWidth = titleView.paint.measureText(titleView.text.toString())
-            val startX = titleView.left
+            val startX = textColumn.left + titleView.left
             // startY is baseline
-            val startY = titleView.baseline + titleView.top + dip1 * 2f
-            val endX = startX + textWidth
+            val startY = titleView.baseline + textColumn.top + titleView.top + dip1 * 2f
+            val endX = startX + minOf(textWidth, titleView.width.toFloat())
             canvas.drawLine(startX.toFloat(), startY, endX, startY, dividerPaint)
         }
     }

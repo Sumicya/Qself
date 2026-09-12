@@ -31,7 +31,6 @@ import android.view.*
 import android.view.animation.AlphaAnimation
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
 import androidx.core.content.res.ResourcesCompat
 import androidx.lifecycle.lifecycleScope
@@ -39,17 +38,11 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import cc.ioctl.dialog.WsaWarningDialog
 import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
-import io.github.qauxv.util.ui.drawable.BackgroundDrawableUtils
 import io.github.qauxv.R
-import io.github.qauxv.bridge.AppRuntimeHelper
-import io.github.qauxv.bridge.ContactUtils
-import io.github.qauxv.config.ConfigManager
 import io.github.qauxv.config.SafeModeManager
 import io.github.qauxv.dsl.FunctionEntryRouter
 import io.github.qauxv.dsl.func.*
 import io.github.qauxv.dsl.item.*
-import io.github.qauxv.tips.newfeaturehint.NewFeatureIntroduceFragment
-import io.github.qauxv.tips.newfeaturehint.NewFeatureManager
 import io.github.qauxv.util.SyncUtils
 import io.github.qauxv.util.SyncUtils.async
 import io.github.qauxv.util.SyncUtils.runOnUiThread
@@ -57,7 +50,11 @@ import io.github.qauxv.util.UiThread
 import io.github.qauxv.util.hostInfo
 import io.github.qauxv.util.isInHostProcess
 import kotlinx.coroutines.flow.StateFlow
-import me.singleneuron.util.forSuBanXia
+import sumicya.qself.ui.HomeCatalog
+import sumicya.qself.ui.SettingsHomeView
+import sumicya.qself.ui.SettingsVisuals
+import sumicya.qself.ui.SettingsAppearanceItem
+import sumicya.qself.diagnostics.ReportDiagnostics
 
 class SettingsMainFragment : BaseRootLayoutFragment() {
 
@@ -94,19 +91,29 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
         if (desc !is FragmentDescription) {
             throw IllegalArgumentException("fragment description is not FragmentDescription, got: " + desc.javaClass.name)
         }
-        mFragmentDescription = desc
-        title = mFragmentDescription.name ?: "QAuxiliary"
+        val section = HomeCatalog.sections.firstOrNull { it.id == arguments?.getString(HOME_SECTION) }
+        mFragmentDescription = if (section != null) {
+            val providers = FunctionEntryRouter.queryAnnotatedUiItemAgentEntries().associateBy { it.itemAgentProviderUniqueIdentifier }
+            FragmentDescription(section.id, section.title, false) {
+                for (id in section.features) providers[id]?.let { agentItem(it) }
+            }
+        } else desc
+        title = when {
+            section != null -> section.title
+            arguments?.getBoolean(SHOW_CATALOG) == true -> "更多设置"
+            else -> mFragmentDescription.name ?: "设置"
+        }
         mTargetUiAgentNavId = arguments?.getString(TARGET_UI_AGENT_IDENTIFIER)
     }
 
     override fun doOnCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val context = layoutInflater.context
-        val rootView = FrameLayout(context)
-        rootFrameLayout = rootView
-        val tmsgDslTree = convertFragmentDslToTMsgDslItemTree(context, mFragmentDescription)
-        if (isRootFragmentDescription()) {
-            addHeaderItemToRootDslTree(tmsgDslTree)
+        val rootView = FrameLayout(context).apply {
+            background = SettingsVisuals.backdrop(SettingsVisuals.palette(context, SettingsAppearanceItem.mode))
         }
+        rootFrameLayout = rootView
+        val tmsgDslTree = if (isHome()) arrayListOf<DslTMsgListItemInflatable>(HomeItem())
+            else convertFragmentDslToTMsgDslItemTree(context, mFragmentDescription)
         // inflate DSL tree, the most awful code in the world
         itemList = ArrayList()
         // inflate hierarchy recycler list view items, each item will have its own view holder type
@@ -138,17 +145,13 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             ): RecyclerView.ViewHolder {
                 val delegate = itemTypeDelegate[viewType]
                 val vh = delegate.createViewHolder(context, parent)
-                if (!delegate.isVoidBackground && delegate.isClickable) {
-                    // add ripple effect
-                    val rippleColor: Int = ResourcesCompat.getColor(context.resources, R.color.rippleColor, parent.context.theme)
-                    vh.itemView.background = BackgroundDrawableUtils.getRoundRectSelectorDrawable(parent.context, rippleColor)
-                }
                 return vh
             }
 
             override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
                 val item = itemList[position]
                 item.bindView(holder, position, context)
+                if (!item.isVoidBackground) SettingsVisuals.decorateRow(holder.itemView, context, item.isClickable)
             }
 
             override fun getItemCount() = itemList.size
@@ -182,22 +185,7 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
 
     override fun onResume() {
         super.onResume()
-        try {
-            val buddyName = ContactUtils.getBuddyName(AppRuntimeHelper.getAppRuntime()!!, AppRuntimeHelper.getAccount())
-            if ((buddyName?.contains("\u26A7\uFE0F") == true || buddyName?.contains("\uD83C\uDF65") == true) &&
-                ConfigManager.forAccount(AppRuntimeHelper.getLongAccountUin()).getBoolean("ForSuBanXia", true)
-            ) {
-                AlertDialog.Builder(requireContext())
-                    .setTitle(forSuBanXia.first)
-                    .setMessage(forSuBanXia.second + "\n\n当你心情低落的时候，就在QA的搜索里输入MtF/FtM回来看看我吧！ ^_^")
-                    .setPositiveButton("OK", null)
-                    .create()
-                    .show()
-                ConfigManager.forAccount(AppRuntimeHelper.getLongAccountUin()).putBoolean("ForSuBanXia", false)
-            }
-        } catch (e: Exception) {
-            //ignored
-        }
+        if (isHome()) adapter?.notifyItemChanged(0)
         if (!mTargetUiAgentNavId.isNullOrEmpty() && !mTargetUiAgentNavigated) {
             navigateToTargetUiAgentItem()
         }
@@ -382,34 +370,69 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
         return mFragmentLocations.isEmpty() || mFragmentLocations.size == 1 && mFragmentLocations[0].isEmpty()
     }
 
-    private fun addHeaderItemToRootDslTree(dslTree: ArrayList<DslTMsgListItemInflatable>) {
-        // TODO: 2022-02-22 add flavor to root dsl tree
-        if (NewFeatureManager.newFeatureTipEnabled) {
-            val newFeatureCount = NewFeatureManager.queryNewFeatures()?.size ?: 0
-            if (newFeatureCount > 0) {
-                val newFeatureBanner = TextBannerItem(
-                    text = "本次更新增加了 $newFeatureCount 项新功能，点击查看",
-                    isCloseable = true,
-                    onClick = {
-                        val fragment = NewFeatureIntroduceFragment()
-                        requireSettingsHostActivity().presentFragment(fragment)
-                    }
-                )
-                // add to the beginning
-                dslTree.add(0, newFeatureBanner)
-            }
+    private fun isHome(): Boolean = isRootFragmentDescription() &&
+        arguments?.getString(HOME_SECTION) == null && arguments?.getBoolean(SHOW_CATALOG) != true &&
+        arguments?.getString(TARGET_UI_AGENT_IDENTIFIER) == null
+
+    private inner class HomeItem : TMsgListItem {
+        override val isEnabled = true
+        override val isClickable = false
+        override val isLongClickable = false
+        override val isVoidBackground = true
+        override fun createViewHolder(context: Context, parent: ViewGroup): RecyclerView.ViewHolder =
+            object : RecyclerView.ViewHolder(SettingsHomeView(context)) { }
+        override fun bindView(viewHolder: RecyclerView.ViewHolder, position: Int, context: Context) {
+            (viewHolder.itemView as SettingsHomeView).bind(
+                SettingsHomeView.State(
+                    if (isInHostProcess) "${hostInfo.hostName} ${hostInfo.versionName}" else "模块管理",
+                    ReportDiagnostics.isEnabled,
+                    SafeModeManager.getManager().isEnabledForThisTime
+                ), SettingsAppearanceItem.mode, ::openHomeAction
+            )
         }
+        override fun onItemClick(v: View, position: Int, x: Int, y: Int) = Unit
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setHasOptionsMenu(true)
-        requireActivity().onBackPressedDispatcher.addCallback(this, mSearchModeOnBackPressedCallback)
+    private fun openHomeAction(action: String) {
+        if (action == HomeCatalog.SEARCH) {
+            mSearchMenuItem?.let { item ->
+                item.expandActionView()
+                enterSearchMode(item.actionView as SearchView)
+            }
+            return
+        }
+        if (HomeCatalog.sections.any { it.id == action } || action == HomeCatalog.CATALOG) {
+            val fragment = newInstance(emptyArray())
+            if (action == HomeCatalog.CATALOG) fragment.arguments!!.putBoolean(SHOW_CATALOG, true)
+            else fragment.arguments!!.putString(HOME_SECTION, action)
+            requireSettingsHostActivity().presentFragment(fragment)
+            return
+        }
+        if (action == HomeCatalog.DIAGNOSTICS) {
+            // Open the existing agent's real page and highlight it; never bypass its interaction contract.
+            val provider = FunctionEntryRouter.queryAnnotatedUiItemAgentEntries()
+                .firstOrNull { it.itemAgentProviderUniqueIdentifier == action } ?: return
+            val location = FunctionEntryRouter.resolveAnycastLocation(provider.uiItemLocation) ?: return
+            requireSettingsHostActivity().presentFragment(newInstance(location, action))
+            return
+        }
+        val id = when (action) {
+            HomeCatalog.THEME -> "cfg-theme"
+            HomeCatalog.BACKUP -> "cfg-backup-restore"
+            HomeCatalog.ABOUT -> "other-about"
+            else -> return
+        }
+        val location = FunctionEntryRouter.resolveAnycastLocation(arrayOf(FunctionEntryRouter.Locations.ANY_CAST_PREFIX, id)) ?: return
+        val desc = FunctionEntryRouter.findDescriptionByLocation(location) as? IDslFragmentNode ?: return
+        val fragment = desc.getTargetFragmentClass(location).newInstance()
+        fragment.arguments = desc.getTargetFragmentArguments(location)
+        requireSettingsHostActivity().presentFragment(fragment)
     }
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         super.onCreateOptionsMenu(menu, inflater)
         inflater.inflate(R.menu.main_settings_toolbar, menu)
+        mSearchMenuItem = menu.findItem(R.id.menu_item_action_search)
         menu.findItem(R.id.menu_item_action_search)?.setOnActionExpandListener(object : MenuItem.OnActionExpandListener {
             override fun onMenuItemActionExpand(item: MenuItem): Boolean {
                 return true
@@ -530,6 +553,8 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
     }
 
     companion object {
+        private const val HOME_SECTION = "qself.settings.section"
+        private const val SHOW_CATALOG = "qself.settings.catalog"
         const val TARGET_FRAGMENT_LOCATION = "SettingsMainFragment.TARGET_FRAGMENT_LOCATION"
         const val TARGET_UI_AGENT_IDENTIFIER = "SettingsMainFragment.TARGET_UI_AGENT_IDENTIFIER"
 

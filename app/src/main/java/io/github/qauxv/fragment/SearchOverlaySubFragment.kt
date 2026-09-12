@@ -57,7 +57,8 @@ import io.github.qauxv.util.NonUiThread
 import io.github.qauxv.util.SyncUtils
 import io.github.qauxv.util.Toasts
 import io.github.qauxv.util.UiThread
-import me.singleneuron.util.processSearchEasterEgg
+import sumicya.qself.ui.SettingsVisuals
+import sumicya.qself.ui.SettingsAppearanceItem
 import xyz.nextalone.util.SystemServiceUtils
 
 /**
@@ -112,7 +113,6 @@ class SearchOverlaySubFragment {
                 override fun onQueryTextSubmit(query: String) = false
 
                 override fun onQueryTextChange(newText: String): Boolean {
-                    processSearchEasterEgg(newText, requireContext())
                     search(newText)
                     return false
                 }
@@ -203,7 +203,13 @@ class SearchOverlaySubFragment {
 
     private val mRecyclerAdapter = object : RecyclerView.Adapter<SearchResultViewHolder>() {
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SearchResultViewHolder {
-            return SearchResultViewHolder(SearchResultItemBinding.inflate(LayoutInflater.from(parent.context), parent, false))
+            val binding = SearchResultItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+            SettingsVisuals.decorateRow(binding.root, parent.context, true)
+            val palette = SettingsVisuals.palette(parent.context, SettingsAppearanceItem.mode)
+            binding.title.setTextColor(palette.text)
+            binding.summary.setTextColor(palette.secondary)
+            binding.description.setTextColor(palette.secondary)
+            return SearchResultViewHolder(binding)
         }
 
         override fun onBindViewHolder(holder: SearchResultViewHolder, position: Int) {
@@ -519,6 +525,7 @@ class SearchOverlaySubFragment {
 
     private fun doOnCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         binding = FragmentSettingSearchBinding.inflate(inflater, container, false).apply {
+            root.background = SettingsVisuals.backdrop(SettingsVisuals.palette(inflater.context, SettingsAppearanceItem.mode))
             searchSettingSearchResultRecyclerView.apply {
                 adapter = mRecyclerAdapter
                 layoutManager = LinearLayoutManager(inflater.context).apply {

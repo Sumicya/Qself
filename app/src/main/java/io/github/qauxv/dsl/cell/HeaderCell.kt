@@ -41,13 +41,15 @@ class HeaderCell(context: Context) : FrameLayout(context), LayoutHelperViewScope
 
     init {
         cellHeight = 40.dp
-        topMargin = 15.dp
-        paddings = 21.dp
+        topMargin = 20.dp
+        paddings = 28.dp
         titleTextView = TextView(context).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             gravity = Gravity.CENTER_VERTICAL or Gravity.START
             setTextColor(ThemeAttrUtils.resolveColorOrDefaultColorRes(context, androidx.appcompat.R.attr.colorAccent, R.color.colorAccent))
             minHeight = cellHeight - topMargin
+            setPadding(0, 0, 0, 10.dp)
+            androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
         }
         addView(titleTextView, LayoutHelper.newFrameLayoutParamsRel(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT,
             Gravity.TOP or Gravity.START, paddings, topMargin, paddings, 0))

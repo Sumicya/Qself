@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Static guardrails, not a substitute for Kotlin compilation or on-device integration tests."""
+import importlib.util
 import re
 import unittest
 from pathlib import Path
@@ -74,6 +75,23 @@ class ReportDiagnosticsContract(unittest.TestCase):
         gradle = (ROOT / "app/build.gradle.kts").read_text()
         self.assertNotIn("implementation(libs.appcenter", gradle)
         self.assertNotIn("Analytics.trackEvent", (ROOT / "app/src/main/java/io/github/qauxv/util/CliOper.java").read_text())
+
+    def test_version_code_uses_commit_count_without_upgrade_offset(self):
+        gradle = (ROOT / "app/build.gradle.kts").read_text()
+        self.assertRegex(gradle, r"(?m)^\s*versionCode = Common\.getBuildVersionCode\(rootProject\)\s*$")
+        spec = importlib.util.spec_from_file_location("apk_version_audit", ROOT / "scripts/verify_diagnostic_apk.py")
+        audit = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(audit)
+        # Below the old branch is intentional. A naturally large future count is valid too.
+        for count in (3052, 3171, 11000):
+            text = f"package: name='io.github.qauxv' versionCode='{count}' versionName='1.6.1.r{count}.abcdef0'"
+            self.assertEqual(int(audit.validate_package(text)[2]), count)
+        for code, name in ((13050, "1.6.1.r3050.abcdef0"), (0, "1.6.1.r0.abcdef0"),
+                           (-1, "1.6.1.r1.abcdef0"), (3052, "standalone")):
+            with self.assertRaises(RuntimeError):
+                audit.validate_package(f"package: name='io.github.qauxv' versionCode='{code}' versionName='{name}'")
+        with self.assertRaises(RuntimeError):
+            audit.validate_package("package: name='wrong.package' versionCode='3052' versionName='1.6.1.r3052.abcdef0'")
 
     def test_no_active_network_or_account_access(self):
         for path in SRC.iterdir():

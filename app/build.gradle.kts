@@ -30,6 +30,7 @@ import com.android.tools.build.apkzlib.zip.AlignmentRule
 import com.android.tools.build.apkzlib.zip.CompressionMethod
 import com.android.tools.build.apkzlib.zip.ZFile
 import com.android.tools.build.apkzlib.zip.ZFileOptions
+import org.gradle.api.tasks.testing.Test
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -108,7 +109,7 @@ android {
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
 
         targetSdk = Version.targetSdk
-        versionCode = 10_000 + Common.getBuildVersionCode(rootProject)
+        versionCode = Common.getBuildVersionCode(rootProject)
         versionName = Common.getBuildVersionName(rootProject)
         resourceConfigurations += listOf("zh", "en")
 
@@ -312,6 +313,7 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
+            isIncludeAndroidResources = true
         }
     }
 }
@@ -370,6 +372,7 @@ dependencies {
     implementation(libs.sealedEnum.runtime)
     ksp(libs.sealedEnum.ksp)
     testImplementation(libs.junit)
+    testImplementation("org.robolectric:robolectric:4.14.1")
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.runner)
 }
@@ -648,6 +651,18 @@ if (System.getenv("GITHUB_ACTIONS") == "true") {
                 }
                 println(audit.standardOutput.asText.get())
                 audit.result.get().assertNormalExitValue()
+            }
+        }
+    }
+}
+
+// Preserve native-view render evidence in CI annotations; no APK, account data or secrets.
+if (System.getenv("CI") == "true") {
+    tasks.withType<Test>().configureEach {
+        doLast {
+            exec {
+                commandLine("python3", rootProject.file("scripts/publish_visual_test_results.py").absolutePath,
+                    layout.buildDirectory.dir("reports/qself-visual").get().asFile.absolutePath)
             }
         }
     }

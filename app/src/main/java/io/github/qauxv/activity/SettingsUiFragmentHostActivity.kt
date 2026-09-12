@@ -24,7 +24,6 @@ package io.github.qauxv.activity
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
@@ -44,7 +43,8 @@ import io.github.qauxv.fragment.SettingsMainFragment
 import io.github.qauxv.ui.ModuleThemeManager
 import io.github.qauxv.util.SyncUtils
 import io.github.qauxv.util.isInHostProcess
-import name.mikanoshi.customiuizer.holidays.HolidayHelper
+import sumicya.qself.ui.SettingsVisuals
+import sumicya.qself.ui.SettingsAppearanceItem
 import java.lang.Integer.max
 
 open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingInterceptLayout.SimpleOnFlingHandler {
@@ -80,18 +80,19 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
         super.doOnCreate(null)
         setContentView(R.layout.activity_settings_ui_host)
         // update window background, I don't know why, but it's necessary
-        val bgColor = ThemeAttrUtils.resolveColorOrDefaultColorInt(this, android.R.attr.windowBackground, 0)
-        window.setBackgroundDrawable(ColorDrawable(bgColor))
+        val visualPalette = SettingsVisuals.palette(this, SettingsAppearanceItem.mode)
+        window.setBackgroundDrawable(SettingsVisuals.backdrop(visualPalette))
         window.setSoftInputMode(
             WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
                 or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
         )
         mAppBarLayout = findViewById(R.id.topAppBarLayout)
         mAppToolBar = findViewById(R.id.topAppBar)
-        mAppBarLayout.background = mAppToolBar.background
+        mAppBarLayout.background = SettingsVisuals.surface(this, visualPalette, 0)
+        mAppToolBar.setTitleTextColor(visualPalette.text)
+        mAppToolBar.setSubtitleTextColor(visualPalette.secondary)
         setSupportActionBar(mAppToolBar)
         requestTranslucentStatusBar()
-        HolidayHelper.setup(this)
         mFlingLayout = findViewById(R.id.fragment_container)
         mFlingLayout.onFlingHandler = this
         mAppBarLayout.addOnLayoutChangeListener { _, _, top, _, bottom, _, _, _, _ ->
@@ -322,19 +323,8 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
         }
     }
 
-    override fun doOnPostResume() {
-        super.doOnPostResume()
-        HolidayHelper.onResume()
-    }
-
-    override fun doOnPause() {
-        super.doOnPause()
-        HolidayHelper.onPause()
-    }
-
     override fun doOnDestroy() {
         super.doOnDestroy()
-        HolidayHelper.onDestroy()
         synchronized(mPendingActionsLock) {
             mPendingOnStartActions.clear()
             mPendingOnResumeActions.clear()

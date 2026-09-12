@@ -281,6 +281,7 @@ sumicya/qself/feature/ui/CustomSplash.kt	自定义启动图	-
 sumicya/qself/feature/ui/LiquidGlassBottomBar.kt	底部导航栏液态玻璃	Auxiliary
 sumicya/qself/feature/ui/RemoveCameraButton.kt	屏蔽消息界面标题栏相机/小世界图标	Simplify
 sumicya/qself/feature/ui/RemoveSuperQQShow.kt	屏蔽消息界面标题栏超级QQ秀图标	Simplify
+sumicya/qself/ui/SettingsAppearanceItem.kt	-	ConfigCategory
 top/linl/hook/OffRelationshipIdentification.java	精简陌生人资料卡你们的关系标识	Simplify
 top/linl/hook/SortTroopSettingAppListView.java	将群应用卡片(群文件)移动到正常位置	Auxiliary
 top/linl/hook/TurnOffFriendInteractionLogoView.java	关闭好友互动标识	Simplify
