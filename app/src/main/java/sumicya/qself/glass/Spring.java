@@ -1,88 +1,88 @@
-// Vendored from liuran001/WeChat-LiquidGlass (MIT): https://github.com/liuran001/WeChat-LiquidGlass
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 package sumicya.qself.glass;
 
 /**
- * A single critically-parameterised spring, matching Compose's
- * {@code spring(dampingRatio, stiffness, visibilityThreshold)}.
- *
- * <p>KernelSU's bar is animated entirely by springs rather than duration-based
- * interpolators — five of them, each with its own damping and stiffness — so
- * reproducing the feel means reproducing the physics, not approximating it with
- * an {@code OvershootInterpolator}.
- *
- * <p>Integrated semi-implicitly, which stays stable at the stiffnesses used here
- * (up to 1000) as long as steps are clamped to a sane frame time.
+ * Damped harmonic oscillator driven toward a target, integrated with the
+ * semi-implicit Euler method. Fixed short sub-steps keep a missed frame from
+ * adding energy, and rest is snapped when both offset and velocity fall under
+ * the declared thresholds. Duration-based interpolators cannot reproduce the
+ * press/drag feel of the glass droplet, hence the physics model.
  */
 final class Spring {
 
-    private final float mStiffness;
-    private final float mDampingRatio;
-    private final float mThreshold;
+    private final float stiffness;
+    private final float dampingCoefficient;
+    private final float restOffset;
+    private final float restVelocityFactor;
 
-    private float mValue;
-    private float mVelocity;
-    private float mTarget;
-    private boolean mRunning;
+    private float position;
+    private float speed;
+    private float aim;
+    private boolean inFlight;
 
-    Spring(float dampingRatio, float stiffness, float threshold, float initial) {
-        mDampingRatio = dampingRatio;
-        mStiffness = stiffness;
-        mThreshold = threshold;
-        mValue = initial;
-        mTarget = initial;
+    Spring(float dampingRatio, float stiffness, float threshold, float start) {
+        this.stiffness = stiffness;
+        // critical damping for this stiffness equals 2*sqrt(k); the ratio scales it
+        this.dampingCoefficient = 2f * dampingRatio * (float) Math.sqrt(stiffness);
+        this.restOffset = threshold;
+        this.restVelocityFactor = threshold * 10f;
+        this.position = start;
+        this.aim = start;
     }
 
     float value() {
-        return mValue;
+        return position;
     }
 
     float target() {
-        return mTarget;
+        return aim;
     }
 
     float velocity() {
-        return mVelocity;
+        return speed;
     }
 
     boolean isRunning() {
-        return mRunning;
+        return inFlight;
     }
 
-    void animateTo(float target) {
-        if (mTarget != target) {
-            mTarget = target;
-            mRunning = true;
+    void animateTo(float newTarget) {
+        if (newTarget != aim) {
+            aim = newTarget;
+            inFlight = true;
         }
     }
 
+    /** Skip the animation: place immediately and deactivate. */
     void snapTo(float value) {
-        mValue = value;
-        mTarget = value;
-        mVelocity = 0f;
-        mRunning = false;
+        position = value;
+        aim = value;
+        speed = 0f;
+        inFlight = false;
     }
 
-    /** Advances by {@code dt} seconds; returns true while still in motion. */
+    /**
+     * Advance the oscillator by {@code dt} seconds, internally split into
+     * short fixed steps. Returns true while motion continues afterwards.
+     */
     boolean update(float dt) {
-        if (!mRunning) {
+        if (!inFlight) {
             return false;
         }
-        // Sub-step so a dropped frame cannot blow the integrator up.
-        float remaining = Math.min(dt, 0.064f);
-        float damping = 2f * mDampingRatio * (float) Math.sqrt(mStiffness);
-        while (remaining > 0f) {
-            float step = Math.min(remaining, 1f / 240f);
-            remaining -= step;
-            float accel = -mStiffness * (mValue - mTarget) - damping * mVelocity;
-            mVelocity += accel * step;
-            mValue += mVelocity * step;
+        float budget = Math.min(dt, 0.064f);
+        final float fixedStep = 1f / 240f;
+        while (budget > 0f) {
+            float h = Math.min(budget, fixedStep);
+            budget -= h;
+            float acceleration = -stiffness * (position - aim) - dampingCoefficient * speed;
+            speed += acceleration * h;
+            position += speed * h;
         }
-        if (Math.abs(mValue - mTarget) < mThreshold
-                && Math.abs(mVelocity) < mThreshold * 10f) {
-            mValue = mTarget;
-            mVelocity = 0f;
-            mRunning = false;
+        if (Math.abs(position - aim) < restOffset && Math.abs(speed) < restVelocityFactor) {
+            position = aim;
+            speed = 0f;
+            inFlight = false;
         }
-        return mRunning;
+        return inFlight;
     }
 }

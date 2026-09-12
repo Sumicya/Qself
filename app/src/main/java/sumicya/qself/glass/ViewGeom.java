@@ -1,64 +1,58 @@
-// Vendored from liuran001/WeChat-LiquidGlass (MIT): https://github.com/liuran001/WeChat-LiquidGlass
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 package sumicya.qself.glass;
 
 import android.view.View;
 import android.view.ViewParent;
 
 /**
- * Geometry helpers for views that are drawn while an ancestor is scaled.
+ * Coordinate math for layers drawn inside an ancestor that is scaled.
  *
- * <p>Pressing the droplet grows the whole bar (KernelSU's {@code layerBlock}),
- * which puts both glass panels inside a scaled graphics layer. Their shaders
- * work in unscaled local coordinates, so anything that samples the screen has to
- * ask for positions and scale factors that ignore that transform — otherwise the
- * backdrop comes out magnified instead of revealing more of what is behind.
+ * <p>The whole bar grows while a tab is pressed, so both glass layers sit
+ * under a scale transform. Their shaders sample the screen in untransformed
+ * coordinates; sampling with the usual on-screen location helpers would
+ * magnify the backdrop. These routines accumulate plain layout offsets and
+ * ancestor scales outside of the canvas matrix.
  */
 final class ViewGeom {
 
-    /** Scratch for the anchor lookup; every caller is on the UI thread. */
-    private static final int[] sAnchor = new int[2];
+    // Reused by the anchor walk; all callers run on the UI thread.
+    private static final int[] ROOT_LOCATION = new int[2];
 
     private ViewGeom() {
     }
 
     /**
-     * Screen position with every view scale factored out: accumulates the plain
-     * layout offsets all the way to the root and anchors there.
+     * Fills {@code out} with the view's screen position after undoing every
+     * ancestor scale/translation: walk to the top adding raw layout offsets,
+     * then anchor on the root's real screen location.
      */
-    static boolean unscaledScreenPos(View v, int[] out) {
-        float x = 0f;
-        float y = 0f;
-        View cur = v;
-        // All the way to the root. Stopping at the first unscaled ancestor is
-        // not enough: that ancestor's own getLocationOnScreen() still carries
-        // any scale applied further up, which is exactly the case once the bar
-        // grows as a whole.
-        while (cur.getParent() instanceof View) {
-            View parent = (View) cur.getParent();
-            x += cur.getLeft() + cur.getTranslationX() - parent.getScrollX();
-            y += cur.getTop() + cur.getTranslationY() - parent.getScrollY();
-            cur = parent;
+    static boolean unscaledScreenPos(View view, int[] out) {
+        float offsetX = 0f;
+        float offsetY = 0f;
+        View node = view;
+        View top = view;
+        while (node.getParent() instanceof View) {
+            View parent = (View) node.getParent();
+            offsetX += node.getLeft() + node.getTranslationX() - parent.getScrollX();
+            offsetY += node.getTop() + node.getTranslationY() - parent.getScrollY();
+            node = parent;
+            top = node;
         }
-        cur.getLocationOnScreen(sAnchor);
-        out[0] = Math.round(sAnchor[0] + x);
-        out[1] = Math.round(sAnchor[1] + y);
+        top.getLocationOnScreen(ROOT_LOCATION);
+        out[0] = Math.round(ROOT_LOCATION[0] + offsetX);
+        out[1] = Math.round(ROOT_LOCATION[1] + offsetY);
         return true;
     }
 
-    /**
-     * Scale this view is actually drawn at, including every ancestor's.
-     *
-     * <p>A view's own {@code getScaleX()} is not enough once the bar grows as a
-     * whole: the droplet carries its own press scale <em>and</em> the host's.
-     */
-    static float cumulativeScale(View v) {
-        float s = 1f;
-        View cur = v;
-        while (cur != null) {
-            s *= Math.abs(cur.getScaleX());
-            ViewParent parent = cur.getParent();
-            cur = parent instanceof View ? (View) parent : null;
+    /** Product of this view's scale and every ancestor's. */
+    static float cumulativeScale(View view) {
+        float product = 1f;
+        View node = view;
+        while (node != null) {
+            product *= Math.abs(node.getScaleX());
+            ViewParent parent = node.getParent();
+            node = parent instanceof View ? (View) parent : null;
         }
-        return s < 0.01f ? 1f : s;
+        return product < 0.01f ? 1f : product;
     }
 }

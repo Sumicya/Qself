@@ -1,66 +1,77 @@
-// Vendored from liuran001/WeChat-LiquidGlass (MIT): https://github.com/liuran001/WeChat-LiquidGlass
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 package sumicya.qself.glass;
 
 import android.content.Context;
-import android.content.SharedPreferences;
+
 import io.github.qauxv.config.ConfigManager;
 
-/** Shared settings for the actual QQ renderer, not just its preview. */
+/**
+ * Tunable geometry and appearance of the bottom-bar glass. Every value is a
+ * knob (never hard-wired), persisted under {@code qself.glass.bar.*} and
+ * snap-loaded into volatile fields before an install attempt.
+ */
 public final class GlassConfig {
 
-    /** Named before QQ was a target; kept so existing WeChat setups still read. */
-    private static final String PREFS = "wx_liquid_glass_cfg";
-
-    /**
-     * Distance between the bottom of the glass pill and the screen edge, dp.
-     */
-    static volatile int barOffsetDp = 12;
-
-    /**
-     * Breathing room added to each tab column when the pill hugs its
-     * content, dp. Trimmed to a minimum: the pill hugs the glyphs almost
-     * flush (columns = 24dp basis + this).
-     */
-    static volatile int hugPaddingDp = 32;
-
-
     public static final String PREFIX = "qself.glass.bar.";
-    public static volatile int transparency = 0;
-    public static volatile int background = 0;
-    public static volatile int tone = 0;
-    public static volatile int labelMode = 0;
-    public static volatile int labelSize = 12;
-    public static volatile int badgeMode = 0;
-    public static volatile int badgeSize = 10;
-    public static volatile int visibleTabCount = 0;
 
-    public static int materialAlpha() { return Math.round(255f * (100 - transparency) / 100f); }
-    public static boolean resolveNight(boolean detected) { return tone == 0 ? detected : tone == 2; }
-    public static int backgroundColor(boolean night) {
-        return background == 2 ? (night ? 0xFF18243F : 0xFFE3EAFF) : (night ? 0xFF111111 : 0xFFF7F7F7);
-    }
-    private static int read(ConfigManager c, String key, int fallback, int min, int max) {
-        try { return Math.max(min, Math.min(max, c.getIntOrDefault(PREFIX + key, fallback))); }
-        catch (Throwable ignored) { return fallback; }
-    }
+    // ---- appearance ----
+    public static volatile int transparency;   // 0..100, how much of the material to hide
+    public static volatile int background;     // 0 live refraction, 1 flat material, 2 tinted
+    public static volatile int tone;           // 0 follow host, 1 force light, 2 force dark
+    public static volatile int labelMode;      // 0 keep host labels, 1 glyphs only
+    public static volatile int labelSize = 12; // sp
+    public static volatile int badgeMode;      // 0 number-exact, 1 capped 99+, 2 host badge, 3 hidden
+    public static volatile int badgeSize = 10; // sp
+    public static volatile int visibleTabCount;
+
+    // ---- geometry, dp ----
+    public static volatile int barOffsetDp = 12;
+    public static volatile int hugPaddingDp = 32;
+
     private GlassConfig() {
     }
 
-    public static void load(Context ctx) {
-        ConfigManager c = ConfigManager.getDefaultConfig();
-        transparency = read(c, "transparency", 0, 0, 100);
-        background = read(c, "background", 0, 0, 2);
-        tone = read(c, "tone", 0, 0, 2);
-        labelMode = read(c, "labels", 0, 0, 1);
-        labelSize = read(c, "labelSize", 12, 9, 18);
-        badgeMode = read(c, "badges", 0, 0, 3);
-        badgeSize = read(c, "badgeSize", 10, 8, 18);
-        try {
-            SharedPreferences p = ctx.getSharedPreferences(PREFS, 0);
-            barOffsetDp = p.getInt("barOffsetDp", barOffsetDp);
-            hugPaddingDp = p.getInt("hugPaddingDp", hugPaddingDp);
-        } catch (Throwable t) {
-            LiquidGlassModule.logErr("config load failed", t);
+    /** Opacity left for the material after the transparency knob. */
+    public static int materialAlpha() {
+        return Math.round(255f * (100f - clamp(transparency, 0, 100)) / 100f);
+    }
+
+    /** Manual light/dark choice wins; auto follows the host detection. */
+    public static boolean resolveNight(boolean hostIsDark) {
+        return tone == 2 || (tone == 0 && hostIsDark);
+    }
+
+    /** Backing colour when the chosen background mode is not live refraction. */
+    public static int backgroundColor(boolean night) {
+        if (background == 2) {
+            return night ? 0xFF18243F : 0xFFE3EAFF;
         }
+        return night ? 0xFF111111 : 0xFFF7F7F7;
+    }
+
+    /** Re-read every knob, clamping bad values to their declared range. */
+    public static void load(Context ignored) {
+        ConfigManager c = ConfigManager.getDefaultConfig();
+        transparency = intKnob(c, "transparency", 0, 0, 100);
+        background = intKnob(c, "background", 0, 0, 2);
+        tone = intKnob(c, "tone", 0, 0, 2);
+        labelMode = intKnob(c, "labels", 0, 0, 1);
+        labelSize = intKnob(c, "labelSize", 12, 9, 18);
+        badgeMode = intKnob(c, "badges", 0, 0, 3);
+        badgeSize = intKnob(c, "badgeSize", 10, 8, 18);
+        barOffsetDp = intKnob(c, "barOffsetDp", 12, 0, 48);
+        hugPaddingDp = intKnob(c, "hugPaddingDp", 32, 4, 96);
+    }
+
+    private static int intKnob(ConfigManager c, String key, int fallback, int low, int high) {
+        try {
+            return clamp(c.getIntOrDefault(PREFIX + key, fallback), low, high);
+        } catch (Throwable t) {
+            return fallback;
+        }
+    }
+
+    private static int clamp(int v, int low, int high) {
+        return v < low ? low : (Math.min(v, high));
     }
 }
