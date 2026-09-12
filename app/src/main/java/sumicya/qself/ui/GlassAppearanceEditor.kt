@@ -25,7 +25,7 @@ object GlassAppearanceEditor {
             uiMode = (uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK.inv()) or
                 if (tone == 2) android.content.res.Configuration.UI_MODE_NIGHT_YES else android.content.res.Configuration.UI_MODE_NIGHT_NO
         }
-        val themed = android.view.ContextThemeWrapper(context.createConfigurationContext(config), io.github.qauxv.R.style.Theme_Qself_Expressive)
+        val themed = io.github.qauxv.ui.CommonContextWrapper(context, io.github.qauxv.R.style.Theme_Qself_Expressive, config)
         SettingsDynamicColors.apply(themed)
         return SettingsVisuals.palette(themed, mode)
     }

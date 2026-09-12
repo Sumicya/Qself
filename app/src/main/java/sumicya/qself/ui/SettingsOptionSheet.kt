@@ -124,6 +124,12 @@ class SettingsOptionSheet : BottomSheetDialogFragment() {
             SettingsMotion.enter(sheet)
         }
     }
+    override fun onStop() {
+        (dialog as? BottomSheetDialog)?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)?.let {
+            it.animate().cancel(); SettingsGlass.dispose(it.background)
+        }
+        super.onStop()
+    }
     override fun onDestroyView() {
         TransitionManager.endTransitions(deck)
         (dialog as? BottomSheetDialog)?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)?.let {

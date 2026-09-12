@@ -55,6 +55,7 @@ public class SettingsVisualTest {
             RuntimeEnvironment.getApplication().createConfigurationContext(config),
             io.github.qauxv.R.style.AppTheme_Ftb);
         context.getTheme().applyStyle(io.github.qauxv.R.style.Theme_Qself_Expressive, true);
+        SettingsDynamicColors.apply(context);
         return context;
     }
 
@@ -316,6 +317,30 @@ public class SettingsVisualTest {
         assertEquals(0, Color.alpha(next.getPixel(0, 0)));
         assertTrue("Must not silently fall back", SettingsGlass.INSTANCE.isOptical(glass));
         SettingsGlass.INSTANCE.dispose(glass); first.recycle(); next.recycle();
+    }
+
+    @Test public void checkedMotionDoesNotReplayOnBindingOrChangeStateTwice() throws Exception {
+        org.robolectric.android.controller.ActivityController<android.app.Activity> controller =
+            org.robolectric.Robolectric.buildActivity(android.app.Activity.class);
+        android.app.Activity activity = controller.get();
+        activity.setTheme(io.github.qauxv.R.style.Theme_Qself_Expressive);
+        controller.setup();
+        SquareStateControl control = new SquareStateControl(activity);
+        activity.setContentView(control);
+        layout(control, 48);
+        assertTrue(control.isAttachedToWindow());
+        assertTrue(SettingsMotion.INSTANCE.enabled());
+        final int[] calls = {0};
+        control.setOnCheckedChangeListener((button, checked) -> calls[0]++);
+        control.setChecked(true);
+        java.lang.reflect.Field field = SquareStateControl.class.getDeclaredField("animator"); field.setAccessible(true);
+        android.animation.ValueAnimator animation = (android.animation.ValueAnimator) field.get(control);
+        assertNotNull(animation);
+        animation.setCurrentFraction(.5f);
+        assertTrue(control.isChecked()); assertEquals(1, calls[0]);
+        control.setCheckedWithoutAnimation(false);
+        assertFalse(animation.isRunning()); assertFalse(control.isChecked()); assertEquals(2, calls[0]);
+        controller.pause().stop().destroy();
     }
 
     @Test public void noSourceAndRecursiveSourceUseHonestSolidFallback() {
