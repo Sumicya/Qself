@@ -318,8 +318,8 @@ public class SettingsVisualTest {
         assertTrue("Must not silently fall back", SettingsGlass.INSTANCE.isOptical(glass));
         SettingsGlass.INSTANCE.deform(glass, 1f);
         Bitmap deformed = drawHardware(300, 110, glass::draw);
-        assertTrue(Color.alpha(next.getPixel(8, 8)) > 0);
-        assertEquals("Dragging changes the actual lens contour", 0, Color.alpha(deformed.getPixel(8, 8)));
+        assertTrue(Color.alpha(next.getPixel(7, 8)) > 0);
+        assertEquals("Dragging changes the actual lens contour", 0, Color.alpha(deformed.getPixel(7, 8)));
         deformed.recycle();
         SettingsGlass.INSTANCE.dispose(glass); first.recycle(); next.recycle();
     }

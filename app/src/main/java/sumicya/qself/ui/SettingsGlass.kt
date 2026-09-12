@@ -44,6 +44,11 @@ internal object SettingsGlass {
             return col;
         }
     """
+    private val fallbackReasons = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Drawable, String>())
+    private fun fallback(drawable: Drawable, reason: String): Drawable {
+        fallbackReasons[drawable] = "实色回退：$reason"
+        return drawable
+    }
     private fun activity(context: Context): Activity? {
         var current = context
         repeat(12) {
@@ -58,18 +63,19 @@ internal object SettingsGlass {
     fun material(context: Context, p: SettingsVisuals.Palette, radius: Int, owner: View?, fallback: Drawable,
                  source: View? = activity(context)?.window?.decorView): Drawable {
         if (p.mode == 2) return fallback
-        if (Build.VERSION.SDK_INT < 33) return fallback
+        if (Build.VERSION.SDK_INT < 33) return fallback(fallback, "需要 Android 13 或更高版本")
         if (activity(context)?.window?.attributes?.flags?.and(WindowManager.LayoutParams.FLAG_SECURE) != 0
-            && activity(context) != null) return fallback
-        if (source == null || (owner != null && owner.rootView === source.rootView)) return fallback
+            && activity(context) != null) return fallback(fallback, "窗口禁止取景，遵守安全标记")
+        if (source == null) return fallback(fallback, "没有可用的设置窗口取景源")
+        if (owner != null && owner.rootView === source.rootView) return fallback(fallback, "已阻止窗口内自采样")
         return try { LiveMaterial(context.resources.displayMetrics.density, p, radius, owner, source, fallback) }
-        catch (error: Throwable) { sumicya.qself.diagnostics.FeatureJournal.error("SettingsGlass", error); fallback }
+        catch (error: Throwable) { sumicya.qself.diagnostics.FeatureJournal.error("SettingsGlass", error); fallback(fallback, "镜头初始化失败，请查看功能错误记录") }
     }
     fun backdrop(p: SettingsVisuals.Palette, fallback: Drawable): Drawable = fallback
     fun isOptical(drawable: Drawable): Boolean = Build.VERSION.SDK_INT >= 33 && drawable is LiveMaterial && !drawable.failed
     fun observeStatus(drawable: Drawable, listener: (String) -> Unit) {
         if (Build.VERSION.SDK_INT >= 33 && drawable is LiveMaterial) drawable.statusListener = listener
-        else listener("实色背景：当前未使用实时玻璃")
+        else listener(fallbackReasons[drawable] ?: "实色背景：当前选择不取景")
     }
     fun deform(drawable: Drawable?, amount: Float) {
         if (Build.VERSION.SDK_INT >= 33 && drawable is LiveMaterial) drawable.deform(amount)
