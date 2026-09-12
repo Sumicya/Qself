@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 package sumicya.qself.ui
 
-/** Presentation shortcuts only: never enables, disables or renames a feature's config key. */
+/** Shortcuts within config/simplified-features.txt; never mutates feature configuration. */
 object HomeCatalog {
     data class Section(val id: String, val title: String, val summary: String, val features: List<String>)
 

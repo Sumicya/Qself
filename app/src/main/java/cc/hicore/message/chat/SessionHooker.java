@@ -26,7 +26,6 @@ import androidx.annotation.Nullable;
 import cc.hicore.QApp.QAppUtils;
 import cc.hicore.ReflectUtil.XField;
 import cc.hicore.hook.RepeaterPlus;
-import cc.hicore.hook.stickerPanel.Hooker.StickerPanelEntryHooker;
 import com.google.common.collect.Lists;
 import io.github.qauxv.base.ITraceableDynamicHook;
 import io.github.qauxv.base.RuntimeErrorTracer;
@@ -43,9 +42,6 @@ import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedBridge;
 import java.util.List;
 import java.util.Stack;
-import me.hd.hook.QuickReplayPaiYiPai;
-import me.hd.hook.TimBarAddEssenceHook;
-import me.ketal.hook.MultiActionHook;
 
 @EntityAgentEntry
 @FunctionHookEntry
@@ -61,12 +57,8 @@ public class SessionHooker extends BaseHookDispatcher<SessionHooker.IAIOParamUpd
     }
 
     private static final SessionHooker.IAIOParamUpdate[] DECORATORS = {
-            StickerPanelEntryHooker.INSTANCE,
-            MultiActionHook.INSTANCE,
             RepeaterPlus.INSTANCE,
-            InputButtonHookDispatcher.INSTANCE,
-            TimBarAddEssenceHook.INSTANCE,
-            QuickReplayPaiYiPai.INSTANCE,
+            InputButtonHookDispatcher.INSTANCE
     };
 
     @NonNull

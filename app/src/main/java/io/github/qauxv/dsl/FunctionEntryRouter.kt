@@ -23,6 +23,7 @@
 package io.github.qauxv.dsl
 
 import io.github.qauxv.base.IUiItemAgentProvider
+import io.github.qauxv.dsl.func.FragmentImplDescription
 import io.github.qauxv.dsl.func.FragmentDescription
 import io.github.qauxv.dsl.func.IDslItemNode
 import io.github.qauxv.dsl.func.IDslParentNode
@@ -30,7 +31,6 @@ import io.github.qauxv.dsl.func.RootFragmentDescription
 import io.github.qauxv.dsl.func.UiItemAgentDescription
 import io.github.qauxv.fragment.AboutFragment
 import io.github.qauxv.fragment.BackupRestoreConfigFragment
-import io.github.qauxv.fragment.PendingFunctionFragment
 import io.github.qauxv.fragment.TroubleshootFragment
 
 object FunctionEntryRouter {
@@ -142,7 +142,6 @@ object FunctionEntryRouter {
                 fragmentImpl("debug-impl", "故障排查", TroubleshootFragment::class.java)
             }
             category("other-config", "其他") {
-                fragmentImpl("other-coming-soon", "开发中的功能", PendingFunctionFragment::class.java, false)
                 fragmentImpl("other-about", "关于", AboutFragment::class.java, false)
             }
         }
@@ -177,6 +176,16 @@ object FunctionEntryRouter {
             // sync with the skeleton
             settingsUiItemDslTreeSkeleton.addChild(FragmentDescription("lost-and-found", "Lost & Found", false, null), 0)
         }
+        // Keep the routing skeleton stable, but do not expose empty legacy categories.
+        fun pruneEmpty(parent: IDslParentNode) {
+            for (child in parent.children.toList()) {
+                if (child is IDslParentNode && child !is FragmentImplDescription) {
+                    pruneEmpty(child)
+                    if (child.children.isEmpty()) parent.removeChild(child)
+                }
+            }
+        }
+        pruneEmpty(baseTree)
         return baseTree
     }
 

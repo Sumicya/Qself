@@ -41,6 +41,7 @@ abstract class BaseComponentHook : ITraceableDynamicHook {
         get() = mInitializeResult
 
     override fun initialize(): Boolean {
+        if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(this)) return false
         if (mInitialized) {
             return mInitializeResult
         }

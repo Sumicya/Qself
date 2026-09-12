@@ -20,16 +20,35 @@ import com.squareup.kotlinpoet.ksp.writeTo
 
 class FunctionHookEntryItemProcessor(
         private val codeGenerator: CodeGenerator,
-        private val logger: KSPLogger
+        private val logger: KSPLogger,
+        private val options: Map<String, String>
 ) : SymbolProcessor {
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
-        val symbols = resolver.getSymbolsWithAnnotation("io.github.qauxv.base.annotation.FunctionHookEntry")
+        val allowed = requireNotNull(options["qself.allowedEntries"]) { "Missing simplified inventory" }.split("|").toSet()
+        val allSymbols = resolver.getSymbolsWithAnnotation("io.github.qauxv.base.annotation.FunctionHookEntry")
             .filterIsInstance<KSClassDeclaration>()
             .toList()
+        val symbols = allSymbols.filter { it.qualifiedName?.asString() in allowed }.sortedBy { it.qualifiedName?.asString() }
         if (symbols.isEmpty()) {
             return emptyList()
         }
+
+        // Strings only: the exclusion guard must not instantiate dormant singleton hooks.
+        val known = (allSymbols + resolver.getSymbolsWithAnnotation("io.github.qauxv.base.annotation.UiItemAgentEntry")
+            .filterIsInstance<KSClassDeclaration>().toList()).distinctBy { it.qualifiedName?.asString() }
+        val missing = allowed - known.mapNotNull { it.qualifiedName?.asString() }.toSet()
+        check(missing.isEmpty()) { "Unknown simplified entries: $missing" }
+        val excluded = known.mapNotNull { it.qualifiedName?.asString() }.filter { it !in allowed }.sorted()
+        FileSpec.builder("io.github.qauxv.gen", "SimplifiedEntryInventory")
+            .addFunction(FunSpec.builder("getExcludedFeatureClassNames")
+                .returns(ClassName("kotlin", "Array").parameterizedBy(ClassName("kotlin", "String")))
+                .addCode(CodeBlock.builder().apply {
+                    add("return arrayOf(\n")
+                    excluded.forEach { add("%S,\n", it) }
+                    add(")\n")
+                }.build()).build())
+            .build().writeTo(codeGenerator, Dependencies(true, *known.mapNotNull { it.containingFile }.toTypedArray()))
 
         logger.info("FunctionHookEntryProcessor start.")
         val simpleNameMap = HashMap<String, String>(symbols.size)
@@ -84,6 +103,6 @@ class FunctionHookEntryItemProcessor(
 
 class FunctionItemProvider : SymbolProcessorProvider {
     override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
-        return FunctionHookEntryItemProcessor(environment.codeGenerator, environment.logger)
+        return FunctionHookEntryItemProcessor(environment.codeGenerator, environment.logger, environment.options)
     }
 }

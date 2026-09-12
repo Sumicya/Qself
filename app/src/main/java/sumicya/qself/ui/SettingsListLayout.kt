@@ -13,11 +13,7 @@ class SettingsListLayout(context: Context) : FrameLayout(context) {
         id = R.id.fragmentMainRecyclerView
         layoutManager = LinearLayoutManager(context, RecyclerView.VERTICAL, false)
         clipToPadding = false
-        addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                if (dx != 0 || dy != 0) SettingsGlass.invalidateMaterials(recyclerView)
-            }
-        })
+
     }
     init {
         layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)

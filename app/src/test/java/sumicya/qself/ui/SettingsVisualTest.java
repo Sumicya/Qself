@@ -54,6 +54,7 @@ public class SettingsVisualTest {
         ContextThemeWrapper context = new ContextThemeWrapper(
             RuntimeEnvironment.getApplication().createConfigurationContext(config),
             io.github.qauxv.R.style.AppTheme_Ftb);
+        context.getTheme().applyStyle(io.github.qauxv.R.style.Theme_Qself_Expressive, true);
         return context;
     }
 
@@ -148,7 +149,7 @@ public class SettingsVisualTest {
             canvas.restore();
             Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
             paint.setColor(Color.DKGRAY); paint.setTextSize(10);
-            canvas.drawText("REAL HOST LAYOUT / RECYCLERVIEW / HWUI GLASS / TEST DATA / NOT DEVICE", 14, contentHeight + 18, paint);
+            canvas.drawText("REAL HOST LAYOUT / RECYCLERVIEW / MD3 EXPRESSIVE / TEST DATA / NOT DEVICE", 14, contentHeight + 18, paint);
         });
         byte[] result = null;
         for (int quality = 75; quality >= 5; quality -= 5) {
@@ -299,7 +300,7 @@ public class SettingsVisualTest {
             new android.graphics.RuntimeShader((String) field.get(null));
         }
         Context context = context(false, 1f, 412, false);
-        android.graphics.drawable.Drawable glass = SettingsVisuals.surface(context, SettingsVisuals.palette(context, 1), 24, false);
+        android.graphics.drawable.Drawable glass = SettingsGlass.INSTANCE.material(context, SettingsVisuals.palette(context, 1), 24, null, new android.graphics.drawable.ColorDrawable(Color.WHITE));
         assertTrue(SettingsGlass.INSTANCE.isOptical(glass));
         glass.setBounds(0, 0, 300, 110);
         Bitmap bitmap = drawHardware(300, 110, glass::draw);
@@ -462,4 +463,88 @@ public class SettingsVisualTest {
             }
         }
     }
+    @Test public void ordinaryPagesAreOpaqueMaterialRegardlessOfLegacyGlassMode() {
+        for (boolean dark : new boolean[]{false, true}) {
+            Context context = context(dark, 1f, 412, false);
+            for (int mode = 0; mode < 3; mode++) {
+                SettingsVisuals.Palette p = SettingsVisuals.palette(context, mode);
+                assertFalse(SettingsGlass.INSTANCE.isOptical(SettingsVisuals.backdrop(p)));
+                assertTrue(SettingsVisuals.surface(context, p, 24, false) instanceof com.google.android.material.shape.MaterialShapeDrawable);
+                assertEquals(255, Color.alpha(p.getSurface()));
+                assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(p.getText(), p.getSurface()) >= 4.5);
+                assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(p.getOnContainer(), p.getContainer()) >= 4.5);
+            }
+            SettingsHomeView view = home(context, false, 0, new ArrayList<>());
+            layout(view, 412);
+            assertTrue(view.findViewWithTag("appearance") instanceof com.google.android.material.card.MaterialCardView);
+            assertTrue(new TitleValueCell(context).getSwitchView() instanceof com.google.android.material.materialswitch.MaterialSwitch);
+        }
+    }
+
+    @Test public void migrationPreservesEveryFeatureKeyAndIsIdempotent() {
+        android.content.SharedPreferences config = RuntimeEnvironment.getApplication().getSharedPreferences("profile-migration", 0);
+        config.edit().clear().putBoolean("rq_risk_report_interceptor.enabled", true)
+            .putBoolean("ForcePadMode.enabled", true).putBoolean("HideQZoneAD.enabled", true)
+            .putBoolean("HideMiniAppLoadingAd.enabled", false).putString("rq_group_admin_marks", "test-fixture")
+            .putInt("qself.settings.glass", 0).apply();
+        java.util.Map<String, ?> original = config.getAll();
+        sumicya.qself.profile.ProfileMigration.migrate(config);
+        for (String key : original.keySet()) assertEquals(original.get(key), config.getAll().get(key));
+        assertEquals(0, config.getInt("qself.overlays.glass", -1));
+        assertEquals(1, config.getInt("qself.profile.schema", -1));
+        java.util.Map<String, ?> first = config.getAll();
+        sumicya.qself.profile.ProfileMigration.migrate(config);
+        assertEquals(first, config.getAll());
+    }
+
+    @Test public void restoredBackupMigratesWithoutOverwritingNewOverlayPreference() {
+        android.content.SharedPreferences config = RuntimeEnvironment.getApplication().getSharedPreferences("profile-restore", 0);
+        config.edit().clear().putInt("qself.settings.glass", 0).putInt("qself.overlays.glass", 2).apply();
+        sumicya.qself.profile.ProfileMigration.migrate(config);
+        assertEquals(2, config.getInt("qself.overlays.glass", -1));
+        config.edit().clear().putInt("qself.settings.glass", 99).apply();
+        sumicya.qself.profile.ProfileMigration.migrate(config);
+        assertEquals(1, config.getInt("qself.overlays.glass", -1));
+        assertEquals(99, config.getInt("qself.settings.glass", -1));
+        config.edit().clear().putInt("qself.profile.schema", 3).apply();
+        sumicya.qself.profile.ProfileMigration.migrate(config);
+        assertEquals(3, config.getInt("qself.profile.schema", -1));
+        assertFalse(config.contains("qself.overlays.glass"));
+    }
+
+    @Test public void dormantFeaturesAreBlockedEvenWithSavedEnabledValues() {
+        assertFalse(sumicya.qself.profile.SimplifiedProfile.isAllowedClass("sumicya.qself.feature.device.ForcePadMode"));
+        assertFalse(sumicya.qself.profile.SimplifiedProfile.isAllowedClass("sumicya.qself.feature.device.ForcePadMode$Callback"));
+        assertTrue(sumicya.qself.profile.SimplifiedProfile.isAllowedClass("sumicya.qself.feature.device.RiskReportInterceptor"));
+        assertTrue(sumicya.qself.profile.SimplifiedProfile.isAllowedClass(HomeCatalog.DIAGNOSTICS));
+        assertTrue(sumicya.qself.profile.SimplifiedProfile.dormantEntryCount() > 100);
+        for (HomeCatalog.Section section : HomeCatalog.sections) {
+            for (String feature : section.getFeatures()) assertTrue(sumicya.qself.profile.SimplifiedProfile.isAllowedClass(feature));
+        }
+    }
+
+    @Test public void actualGeneratedRegistriesOnlyImportInventoryMembers() throws Exception {
+        Path project = Paths.get(".");
+        if (!Files.isDirectory(project.resolve("src/main/java"))) project = project.resolve("app");
+        Path inventory = project.resolve("../config/simplified-features.txt");
+        Set<String> allowed = new HashSet<>();
+        for (String line : Files.readAllLines(inventory)) if (!line.startsWith("#") && !line.trim().isEmpty()) allowed.add(line.trim());
+        for (String registry : new String[]{"AnnotatedFunctionHookEntryList", "AnnotatedUiItemAgentEntryList"}) {
+            String generated = Files.readString(project.resolve("build/generated/ksp/debug/kotlin/io/github/qauxv/gen/" + registry + ".kt"));
+            assertFalse(generated.contains("ForcePadMode"));
+            assertFalse(generated.contains("ExternalModuleConfigHook"));
+            String annotation = registry.contains("FunctionHook") ? "@FunctionHookEntry" : "@UiItemAgentEntry";
+            for (String name : allowed) {
+                Path source = project.resolve("src/main/java/" + name.replace('.', '/') + ".kt");
+                if (!Files.exists(source)) source = project.resolve("src/main/java/" + name.replace('.', '/') + ".java");
+                if (Files.readString(source).contains(annotation)) assertTrue(name, generated.contains("import " + name + "\n"));
+            }
+            java.util.regex.Matcher imports = java.util.regex.Pattern.compile("(?m)^import ([a-zA-Z0-9_.]+)$").matcher(generated);
+            while (imports.find()) {
+                String name = imports.group(1);
+                if (!name.startsWith("kotlin.") && !name.startsWith("io.github.qauxv.base.")) assertTrue(name, allowed.contains(name));
+            }
+        }
+    }
+
 }

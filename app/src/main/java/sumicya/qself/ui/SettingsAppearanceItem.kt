@@ -2,32 +2,39 @@
 package sumicya.qself.ui
 
 import android.app.Activity
+import android.graphics.drawable.ColorDrawable
 import android.view.View
-import androidx.appcompat.app.AlertDialog
-import io.github.qauxv.activity.SettingsUiFragmentHostActivity
+import android.view.WindowManager
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.qauxv.base.IUiItemAgent
 import io.github.qauxv.base.annotation.UiItemAgentEntry
 import io.github.qauxv.config.ConfigManager
 import io.github.qauxv.dsl.FunctionEntryRouter
 import io.github.qauxv.hook.BasePlainUiAgentItem
 import kotlinx.coroutines.flow.MutableStateFlow
+import sumicya.qself.profile.ProfileMigration
 
 @UiItemAgentEntry
-object SettingsAppearanceItem : BasePlainUiAgentItem(title = "设置页玻璃") {
+object SettingsAppearanceItem : BasePlainUiAgentItem(title = "局部弹窗玻璃") {
     private val labels = arrayOf("通透玻璃", "柔和玻璃", "实色 · 更高可读性")
-    val mode: Int get() = ConfigManager.getDefaultConfig().getIntOrDefault("qself.settings.glass", 1).coerceIn(0, 2)
+    // All ordinary settings pages are opaque MD3E, independent of the old preference.
+    const val mode: Int = 2
+    val overlayMode: Int get() = ConfigManager.getDefaultConfig().getIntOrDefault(ProfileMigration.OVERLAY_GLASS, 1).coerceIn(0, 2)
     override val uiItemLocation = FunctionEntryRouter.Locations.ConfigCategory.THEME_CATEGORY
-    override val valueState by lazy { MutableStateFlow<String?>(labels[mode]) }
+    override val valueState by lazy { MutableStateFlow<String?>(labels[overlayMode]) }
     override val onClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, activity, _ ->
-        AlertDialog.Builder(activity)
-            .setTitle("设置页玻璃")
-            .setSingleChoiceItems(labels, mode) { dialog, which ->
-                ConfigManager.getDefaultConfig().putInt("qself.settings.glass", which)
+        val p = SettingsVisuals.palette(activity, overlayMode)
+        val dialog = MaterialAlertDialogBuilder(activity)
+            .setTitle("弹窗材质（本窗口预览）")
+            .setSingleChoiceItems(labels, overlayMode) { dialog, which ->
+                ConfigManager.getDefaultConfig().putInt(ProfileMigration.OVERLAY_GLASS, which)
                 valueState.value = labels[which]
                 dialog.dismiss()
-                if (activity is SettingsUiFragmentHostActivity) activity.recreate()
             }
-            .setNegativeButton("取消", null)
-            .show()
+            .setNegativeButton("关闭", null)
+            .setBackground(SettingsGlass.material(activity, p, 28, null, ColorDrawable(p.surface)))
+            .create()
+        dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+        dialog.show()
     }
 }

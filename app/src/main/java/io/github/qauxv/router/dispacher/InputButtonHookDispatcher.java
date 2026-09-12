@@ -37,12 +37,7 @@ import cc.hicore.QApp.QAppUtils;
 import cc.hicore.hook.ReplyMsgWithImg;
 import cc.hicore.message.chat.SessionHooker;
 import cc.hicore.message.chat.SessionUtils;
-import cc.ioctl.hook.experimental.CardMsgSender;
-import cc.ioctl.hook.msg.AioChatPieClipPasteHook;
 import cc.ioctl.util.HookUtils;
-import com.xiaoniu.hook.CtrlEnterToSend;
-import io.github.duzhaokun123.hook.InputPlusButtonHook;
-import io.github.duzhaokun123.hook.SendTTSHook;
 import io.github.qauxv.R;
 import io.github.qauxv.base.annotation.EntityAgentEntry;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
@@ -95,12 +90,7 @@ public class InputButtonHookDispatcher extends BaseHookDispatcher<IBaseChatPieDe
     }
 
     private static final IBaseChatPieDecorator[] DECORATORS = {
-            CardMsgSender.INSTANCE,
-            AioChatPieClipPasteHook.INSTANCE,
-            ReplyMsgWithImg.INSTANCE,
-            SendTTSHook.INSTANCE,
-            CtrlEnterToSend.INSTANCE,
-            InputPlusButtonHook.INSTANCE
+            ReplyMsgWithImg.INSTANCE
     };
 
     @NonNull

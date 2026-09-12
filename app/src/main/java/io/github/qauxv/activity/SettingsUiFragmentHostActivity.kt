@@ -67,6 +67,7 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
     override fun doOnEarlyCreate(savedInstanceState: Bundle?, isInitializing: Boolean) {
         super.doOnEarlyCreate(savedInstanceState, isInitializing)
         setTheme(ModuleThemeManager.getCurrentThemeColorStyleId())
+        theme.applyStyle(R.style.Theme_Qself_Expressive, true)
     }
 
     /**
@@ -78,7 +79,7 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
         // we don't want the Fragment to be recreated
         super.doOnCreate(null)
         // The proxy ActivityInfo comes from QQ. Do not inherit a software-only
-        // window for our optical settings surface. This affects this window only.
+        // window for native components and local dialogs. This affects this window only.
         window.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
         setContentView(R.layout.activity_settings_ui_host)
         // update window background, I don't know why, but it's necessary

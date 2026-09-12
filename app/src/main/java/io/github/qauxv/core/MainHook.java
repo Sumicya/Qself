@@ -33,23 +33,13 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.hook.SettingEntryHook;
-import sumicya.qself.feature.chat.MuteAtAllAndRedPacket;
-import sumicya.qself.feature.chat.GagInfoDisclosure;
-import cc.ioctl.hook.experimental.FileRecvRedirect;
-import sumicya.qself.feature.device.ForcePadMode;
-import sumicya.qself.feature.ui.CustomSplash;
 import sumicya.qself.feature.dev.GrayTipCapture;
 import sumicya.qself.feature.ui.LiquidGlassBottomBar;
 import cc.ioctl.hook.misc.DisableHotPatch;
 import cc.ioctl.hook.misc.DisableQQCrashReportManager;
 import cc.ioctl.hook.msg.RevokeMsgHook;
-import sumicya.qself.feature.notification.MuteQZoneThumbsUp;
-import cc.ioctl.hook.ui.misc.OptXListViewScrollBar;
-import sumicya.qself.feature.ui.RemoveCameraButton;
 import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Reflex;
-import io.github.qauxv.chainloader.detail.ExternalModuleChainLoader;
-import io.github.qauxv.chainloader.detail.ui.ExternalModuleConfigHook;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedBridge;
 import io.github.qauxv.config.ConfigItems;
@@ -63,10 +53,8 @@ import io.github.qauxv.util.Initiator;
 import io.github.qauxv.util.LicenseStatus;
 import io.github.qauxv.util.Log;
 import io.github.qauxv.util.SyncUtils;
-import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import sumicya.qself.feature.ui.RemoveSuperQQShow;
 
 /*TitleKit:Lcom/tencent/mobileqq/widget/navbar/NavBarCommon*/
 
@@ -122,17 +110,8 @@ public class MainHook {
         HookInstaller.allowEarlyInit(DisableQQCrashReportManager.INSTANCE);
         if (!safeMode) {
             HookInstaller.allowEarlyInit(RevokeMsgHook.INSTANCE);
-            HookInstaller.allowEarlyInit(MuteQZoneThumbsUp.INSTANCE);
-            HookInstaller.allowEarlyInit(MuteAtAllAndRedPacket.INSTANCE);
-            HookInstaller.allowEarlyInit(GagInfoDisclosure.INSTANCE);
-            HookInstaller.allowEarlyInit(CustomSplash.INSTANCE);
             HookInstaller.allowEarlyInit(LiquidGlassBottomBar.INSTANCE);
             HookInstaller.allowEarlyInit(GrayTipCapture.INSTANCE);
-            HookInstaller.allowEarlyInit(RemoveCameraButton.INSTANCE);
-            HookInstaller.allowEarlyInit(RemoveSuperQQShow.INSTANCE);
-            HookInstaller.allowEarlyInit(FileRecvRedirect.INSTANCE);
-            HookInstaller.allowEarlyInit(OptXListViewScrollBar.INSTANCE);
-            HookInstaller.allowEarlyInit(ForcePadMode.INSTANCE);
         }
         if (SyncUtils.isMainProcess()) {
             ConfigItems.removePreviousCacheIfNecessary();
@@ -179,14 +158,8 @@ public class MainHook {
                 InjectDelayableHooks.step(dir);
             }
         }
-        // load external modules, if any
-        if (!safeMode) {
-            try {
-                ExternalModuleChainLoader.loadExternalModulesForStartup();
-            } catch (IOException | RuntimeException e) {
-                ExternalModuleConfigHook.INSTANCE.traceError(e);
-            }
-        }
+        // Single edition does not chain-load external modules. Their saved config remains untouched.
+
     }
 
     private static boolean isForegroundStartupForMainProcess(Context ctx, Object step) {

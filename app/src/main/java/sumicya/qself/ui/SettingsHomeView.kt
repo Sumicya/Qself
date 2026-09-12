@@ -3,6 +3,7 @@ package sumicya.qself.ui
 
 import android.content.Context
 import android.content.res.ColorStateList
+import com.google.android.material.card.MaterialCardView
 import android.widget.ImageView
 import io.github.qauxv.R
 import android.graphics.Typeface
@@ -55,9 +56,9 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         boundMode = mode
         removeAllViews()
         palette = SettingsVisuals.palette(context, mode)
-        addView(text("Qself", 32, palette.text, true), lp(top = 7))
+        addView(text("Qself", 36, palette.text, true), lp(top = 7))
         addView(text("按需开启，保持简单。", 15, palette.secondary), lp(top = 6, bottom = 16))
-        addView(text(state.hostLabel + if (state.safeMode) "  ·  安全模式" else "  ·  个人设置", 12, palette.accent)
+        addView(text(state.hostLabel + if (state.safeMode) "  ·  安全模式" else "  ·  单一精简版", 12, palette.accent)
             .apply { setPadding(dp(12), dp(7), dp(12), dp(7)); background = SettingsVisuals.surface(context, palette, 12, owner = this) },
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
 
@@ -83,11 +84,19 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
                     orientation = VERTICAL
                     minimumHeight = dp(104)
                     setPadding(dp(18), dp(19), dp(18), dp(17))
-                    addView(text(section.title, 18, palette.text, true))
-                    addView(text(section.summary, 13, palette.secondary), lp(top = 9))
+                    addView(text(section.title, 20, palette.onContainer, true))
+                    addView(text(section.summary, 13, palette.onContainer), lp(top = 9))
                 }
-                button(card, section.id, "${section.title}，${section.summary}")
-                row.addView(card, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
+                val container = MaterialCardView(context).apply {
+                    cardElevation = 0f
+                    radius = dp(28).toFloat()
+                    strokeWidth = 0
+                    setCardBackgroundColor(palette.container)
+                    rippleColor = ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(palette.accent, 31))
+                    addView(card, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+                }
+                button(container, section.id, "${section.title}，${section.summary}", filled = false)
+                row.addView(container, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
                     if (index > 0) marginStart = dp(12)
                 })
             }
@@ -110,14 +119,15 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         addView(diagnostics)
 
         addView(text("管理", 14, palette.secondary, true), lp(top = 28, bottom = 12))
-        utility("主题与玻璃", "深浅色、主题色与通透程度", HomeCatalog.THEME)
+        utility("主题与显示", "Material 3 Expressive · 局部弹窗玻璃", HomeCatalog.THEME)
         utility("备份与恢复", "保留你的配置，放心调整", HomeCatalog.BACKUP)
-        utility("更多设置", "原有分类、故障排查与其他项目", HomeCatalog.CATALOG)
+        utility("精简功能清单", "保留功能、安全选项与故障排查", HomeCatalog.CATALOG)
+        addView(text("旧功能配置原位保留；未纳入本版的功能不会因恢复备份而重新加载。", 12, palette.secondary), lp(top = 10))
         val about = text("QSELF  ·  关于与隐私", 11, palette.secondary).apply {
             gravity = Gravity.CENTER
             minimumHeight = dp(48)
         }
-        button(about, HomeCatalog.ABOUT, "关于与隐私", glass = false)
+        button(about, HomeCatalog.ABOUT, "关于与隐私", filled = false)
         addView(about, lp(top = 16))
     }
 
@@ -148,13 +158,13 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         setLineSpacing(dp(3).toFloat(), 1f)
     }
 
-    private fun button(view: View, id: String, label: String, glass: Boolean = true) {
+    private fun button(view: View, id: String, label: String, filled: Boolean = true) {
         view.tag = id
         view.contentDescription = label
         view.isFocusable = true
         view.isClickable = true
         view.minimumHeight = maxOf(view.minimumHeight, dp(48))
-        if (glass) view.background = SettingsVisuals.surface(context, palette, 24, true, view)
+        if (filled) view.background = SettingsVisuals.surface(context, palette, 24, true, view)
         view.setOnClickListener { dispatch(id) }
         view.accessibilityDelegate = object : AccessibilityDelegate() {
             override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {

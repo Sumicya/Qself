@@ -31,7 +31,7 @@ import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.LinearLayout
-import androidx.appcompat.widget.SwitchCompat
+import com.google.android.material.materialswitch.MaterialSwitch
 import androidx.core.content.res.ResourcesCompat
 import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
@@ -47,7 +47,7 @@ class TitleValueCell(
     val titleView: TextView
     val summaryView: TextView
     val valueView: TextView
-    val switchView: SwitchCompat
+    val switchView: MaterialSwitch
 
     private val dividerColor: Int
     private val dip1: Float = 1.dp.toFloat()
@@ -101,7 +101,7 @@ class TitleValueCell(
             )
         }
         // switch view
-        switchView = SwitchCompat(context).apply {
+        switchView = MaterialSwitch(context).apply {
             visibility = GONE
             // disable click for default because this behavior is managed by the recycler view,
             // but they can still set onCheckedChangeListener if they want

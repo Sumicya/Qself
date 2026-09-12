@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Apply after the user's legacy color style to retain themeColor, before inflating any view. -->
+    <style name="Theme.Qself.Expressive" parent="Theme.Material3Expressive.DayNight.NoActionBar">
+        <item name="colorPrimary">?attr/themeColor</item>
+        <item name="colorAccent">?attr/themeColor</item>
+        <item name="backgroundColor">?attr/colorSurface</item>
+        <item name="whiteBackgroundColor">?attr/colorSurface</item>
+        <item name="android:windowLightStatusBar">@bool/is_not_night_mode</item>
+        <item name="android:windowLightNavigationBar">@bool/is_not_night_mode</item>
+    </style>
+</resources>

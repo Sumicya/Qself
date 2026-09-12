@@ -57,6 +57,7 @@ abstract class BaseFunctionHook(
         get() = mInitializeResult
 
     override fun initialize(): Boolean {
+        if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(this)) return false
         if (mInitialized) {
             return mInitializeResult
         }
@@ -104,11 +105,11 @@ abstract class BaseFunctionHook(
     override val isApplicationRestartRequired = false
 
     override var isEnabled: Boolean
-        get() = enableAllHook() ||
+        get() = sumicya.qself.profile.SimplifiedProfile.isAllowed(this) && (enableAllHook() ||
             ConfigManager.getDefaultConfig().getBooleanOrDefault(
                 mHookEnableConfigKey,
                 mDefaultEnabled && isAvailable
-            )
+            ))
         set(value) {
             ConfigManager.getDefaultConfig().putBoolean(mHookEnableConfigKey, value)
         }

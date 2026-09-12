@@ -92,6 +92,7 @@ public class HookInstaller {
     }
 
     public static void allowEarlyInit(@NonNull IDynamicHook hook) {
+        if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(hook)) return;
         try {
             if (hook.isTargetProcess() && hook.isEnabled() && !hook.isPreparationRequired() && !hook.isInitialized()) {
                 hook.initialize();
@@ -106,14 +107,17 @@ public class HookInstaller {
     }
 
     public static IDynamicHook getHookById(int index) {
-        return queryAllAnnotatedHooks()[index];
+        IDynamicHook[] hooks = queryAllAnnotatedHooks();
+        return index >= 0 && index < hooks.length ? hooks[index] : null;
     }
 
     public static void initializeHookForeground(@NonNull Context context, @NonNull IDynamicHook hook) {
+        if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(hook)) return;
         SyncUtils.async(() -> doInitAndSetupHookForeground(context, hook));
     }
 
     public static void doInitAndSetupHookForeground(@NonNull Context context, @NonNull IDynamicHook hook) {
+        if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(hook)) return;
         final CustomDialog[] pDialog = new CustomDialog[1];
         Throwable err = null;
         boolean isSuccessful = true;
