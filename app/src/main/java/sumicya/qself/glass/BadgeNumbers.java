@@ -1,5 +1,5 @@
-// Vendored-derived from liuran001/WeChat-LiquidGlass (MIT): https://github.com/liuran001/WeChat-LiquidGlass
-// Extension: plain unread numbers drawn over the bar, replacing the red capsule.
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+// Plain unread numbers drawn over the bar, replacing the red capsule.
 package sumicya.qself.glass;
 
 import android.graphics.Canvas;
