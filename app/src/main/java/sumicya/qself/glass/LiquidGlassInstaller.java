@@ -578,11 +578,45 @@ public final class LiquidGlassInstaller {
         int before = sHiddenLines.size();
         hideSubtreeLines(tabView, 0);
         int newlyHidden = sHiddenLines.size() - before;
-        if (!sSeparatorLogged || newlyHidden > 0) {
+        if (!sSeparatorLogged) {
             sSeparatorLogged = true;
+            dumpThinViews(tabView, 0);
             LiquidGlassModule.log(android.util.Log.INFO,
                     "separator suppression: " + branches
                             + " shape-matched lines=" + newlyHidden);
+        } else if (newlyHidden > 0) {
+            LiquidGlassModule.log(android.util.Log.INFO,
+                    "separator suppression re-hid lines=" + newlyHidden);
+        }
+    }
+
+    /** One-shot inventory of every line-shaped view for device diagnosis. */
+    private static void dumpThinViews(View v, int depth) {
+        if (depth > 8) {
+            return;
+        }
+        float density = v.getResources().getDisplayMetrics().density;
+        int thickness = Math.max(3, Math.round(density * 2f));
+        if (v.getWidth() > 0 && v.getHeight() > 0
+                && ((v.getWidth() <= thickness
+                        && v.getHeight() >= v.getResources()
+                                .getDisplayMetrics().heightPixels * 0.01f)
+                || (v.getHeight() <= thickness
+                        && v.getWidth() >= 40))) {
+            LiquidGlassModule.log(android.util.Log.INFO,
+                    "thin-view d" + depth + " "
+                            + v.getClass().getName()
+                            + " " + v.getWidth() + "x" + v.getHeight()
+                            + "@(" + v.getLeft() + "," + v.getTop() + ")"
+                            + " vis=" + v.getVisibility()
+                            + " bg=" + (v.getBackground() != null)
+                            + " leaf=" + !(v instanceof ViewGroup));
+        }
+        if (v instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) v;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                dumpThinViews(group.getChildAt(i), depth + 1);
+            }
         }
     }
 
