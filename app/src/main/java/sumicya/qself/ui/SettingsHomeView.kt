@@ -163,10 +163,10 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         if (view is ViewGroup) hideDecorativeChildren(view)
     }
 
-    override fun onSaveInstanceState(): android.os.Parcelable = SavedState(super.onSaveInstanceState()).apply {
+    public override fun onSaveInstanceState(): android.os.Parcelable = SavedState(super.onSaveInstanceState()).apply {
         opened = expandedSections.toTypedArray()
     }
-    override fun onRestoreInstanceState(state: android.os.Parcelable?) {
+    public override fun onRestoreInstanceState(state: android.os.Parcelable?) {
         if (state !is SavedState) { super.onRestoreInstanceState(state); return }
         super.onRestoreInstanceState(state.superState)
         expandedSections.clear(); expandedSections.addAll(state.opened)

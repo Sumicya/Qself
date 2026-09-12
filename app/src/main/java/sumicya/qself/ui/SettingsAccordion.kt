@@ -64,7 +64,7 @@ class SettingsAccordion(context: Context, title: String, summary: String,
         if (android.os.Build.VERSION.SDK_INT >= 30) header.stateDescription = if (value) "已展开" else "已收起"
         arrow.animate().cancel()
         arrow.animate().rotation(if (value) 180f else 0f).setDuration(if (animate && SettingsMotion.enabled()) 200 else 0).start()
-        if (!animate || !isLaidOut || !SettingsMotion.enabled()) {
+        if (!animate || !isLaidOut || !isAttachedToWindow || !SettingsMotion.enabled()) {
             body.visibility = if (value) VISIBLE else GONE
             body.layoutParams.height = LayoutParams.WRAP_CONTENT
         } else {

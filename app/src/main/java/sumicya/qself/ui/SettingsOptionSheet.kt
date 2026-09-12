@@ -39,7 +39,10 @@ class SettingsOptionSheet : DialogFragment() {
     private lateinit var heading: TextView
     private lateinit var back: MaterialButton
     private val rows = ArrayList<Any>()
-    private val providers by lazy { FunctionEntryRouter.queryAnnotatedUiItemAgentEntries().associateBy { it.javaClass.name } }
+    internal var providerLookup: () -> Map<String, io.github.qauxv.base.IUiItemAgentProvider> = {
+        FunctionEntryRouter.queryAnnotatedUiItemAgentEntries().associateBy { it.javaClass.name }
+    }
+    private val providers by lazy { providerLookup() }
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() { navigate(null, false) }
     }
@@ -63,7 +66,7 @@ class SettingsOptionSheet : DialogFragment() {
     override fun onCreateDialog(state: Bundle?): Dialog = ComponentDialog(requireContext(), theme).also {
         it.onBackPressedDispatcher.addCallback(this, backCallback)
         it.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        it.window?.setWindowAnimations(0)
+        it.window?.setWindowAnimations(if (SettingsMotion.enabled()) io.github.qauxv.R.style.QselfSmallWindowAnimation else 0)
     }
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, state: Bundle?): View {
         val context = requireActivity()
