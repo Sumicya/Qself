@@ -527,6 +527,7 @@ class SearchOverlaySubFragment {
             root.background = SettingsVisuals.backdrop(SettingsVisuals.palette(inflater.context, SettingsAppearanceItem.mode))
             searchSettingSearchResultRecyclerView.apply {
                 adapter = mRecyclerAdapter
+                SettingsVisuals.addListSpacing(this)
                 layoutManager = LinearLayoutManager(inflater.context).apply {
                     orientation = LinearLayoutManager.VERTICAL
                 }

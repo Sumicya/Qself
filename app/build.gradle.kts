@@ -656,9 +656,9 @@ if (System.getenv("GITHUB_ACTIONS") == "true") {
     }
 }
 
-// Preserve native-view render evidence in CI annotations; no APK, account data or secrets.
+// Preserve deterministic native-view evidence even when a rendering assertion fails.
 if (System.getenv("CI") == "true") {
-    tasks.withType<Test>().configureEach {
+    val publishNativeVisualEvidence = tasks.register("publishNativeVisualEvidence") {
         doLast {
             val report = providers.exec {
                 commandLine("python3", rootProject.file("scripts/publish_visual_test_results.py").absolutePath,
@@ -666,6 +666,11 @@ if (System.getenv("CI") == "true") {
             }
             println(report.standardOutput.asText.get())
             report.result.get().assertNormalExitValue()
+        }
+    }
+    tasks.withType<Test>().configureEach {
+        finalizedBy(publishNativeVisualEvidence)
+        doLast {
             for (script in listOf("test_settings_ui_contract.py", "test_report_diagnostics_contract.py")) {
                 val guard = providers.exec { commandLine("python3", rootProject.file("scripts/$script").absolutePath) }
                 println(guard.standardOutput.asText.get())

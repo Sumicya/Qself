@@ -146,6 +146,7 @@ class RecyclerListViewController(
                 layoutManager = this@RecyclerListViewController.layoutManager
                 adapter = this@RecyclerListViewController.adapter
                 clipToPadding = false
+                SettingsVisuals.addListSpacing(this)
                 background = SettingsVisuals.backdrop(SettingsVisuals.palette(context, SettingsAppearanceItem.mode))
             }
         }

@@ -15,6 +15,9 @@ import android.widget.TextView
 class SettingsHomeView(context: Context) : LinearLayout(context) {
     data class State(val hostLabel: String, val diagnosticEnabled: Boolean, val safeMode: Boolean = false)
     private lateinit var palette: SettingsVisuals.Palette
+    private var boundState: State? = null
+    private var boundMode: Int = -1
+    private var dispatch: (String) -> Unit = { }
     private fun dp(value: Int) = SettingsVisuals.dp(context, value)
 
     init {
@@ -23,6 +26,10 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
     }
 
     fun bind(state: State, mode: Int, action: (String) -> Unit) {
+        dispatch = action
+        if (boundState == state && boundMode == mode) return
+        boundState = state
+        boundMode = mode
         removeAllViews()
         palette = SettingsVisuals.palette(context, mode)
         addView(text("为你而设", 11, palette.secondary, true).apply { letterSpacing = .16f })
@@ -39,7 +46,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
             addView(text("搜索功能与设置", 15, palette.secondary), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             addView(text("⌕", 26, palette.accent).apply { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO })
         }
-        button(search, HomeCatalog.SEARCH, "搜索功能与设置", action)
+        button(search, HomeCatalog.SEARCH, "搜索功能与设置")
         addView(search, lp(top = 22, bottom = 25))
 
         addView(text("按你的习惯", 19, palette.text, true), lp(bottom = 12))
@@ -54,7 +61,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
                     addView(text(section.title, 19, palette.text, true))
                     addView(text(section.summary.replace(" · ", if (compact) " · " else "\n"), 12, palette.secondary), lp(top = 9))
                 }
-                button(card, section.id, "${section.title}，${section.summary}", action)
+                button(card, section.id, "${section.title}，${section.summary}")
                 row.addView(card, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply {
                     if (index > 0) marginStart = dp(12)
                 })
@@ -74,22 +81,22 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
             addView(text("只读 · 本地保存 · 按需开启", 13, palette.secondary), lp(top = 8))
             addView(text("观察到调用，不等于服务器已接收。", 12, palette.secondary), lp(top = 5))
         }
-        button(diagnostics, HomeCatalog.DIAGNOSTICS, "上报诊断，${if (state.diagnosticEnabled) "记录开关已开" else "记录开关已关"}，仅本地观察", action)
+        button(diagnostics, HomeCatalog.DIAGNOSTICS, "上报诊断，${if (state.diagnosticEnabled) "记录开关已开" else "记录开关已关"}，仅本地观察")
         addView(diagnostics)
 
         addView(text("管理你的设置", 19, palette.text, true), lp(top = 28, bottom = 12))
-        utility("主题与玻璃", "深浅色、主题色与通透程度", HomeCatalog.THEME, action)
-        utility("备份与恢复", "保留你的配置，放心调整", HomeCatalog.BACKUP, action)
-        utility("更多设置", "原有分类、故障排查与其他项目", HomeCatalog.CATALOG, action)
+        utility("主题与玻璃", "深浅色、主题色与通透程度", HomeCatalog.THEME)
+        utility("备份与恢复", "保留你的配置，放心调整", HomeCatalog.BACKUP)
+        utility("更多设置", "原有分类、故障排查与其他项目", HomeCatalog.CATALOG)
         val about = text("QSELF  ·  关于与隐私", 11, palette.secondary).apply {
             gravity = Gravity.CENTER
             minimumHeight = dp(48)
         }
-        button(about, HomeCatalog.ABOUT, "关于与隐私", action, glass = false)
+        button(about, HomeCatalog.ABOUT, "关于与隐私", glass = false)
         addView(about, lp(top = 16))
     }
 
-    private fun utility(title: String, subtitle: String, id: String, action: (String) -> Unit) {
+    private fun utility(title: String, subtitle: String, id: String) {
         val row = LinearLayout(context).apply {
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = dp(76)
@@ -103,7 +110,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
             addView(text(if (layoutDirection == LAYOUT_DIRECTION_RTL) "‹" else "›", 24, palette.secondary)
                 .apply { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO })
         }
-        button(row, id, "$title，$subtitle", action)
+        button(row, id, "$title，$subtitle")
         addView(row, lp(bottom = 9))
     }
 
@@ -116,14 +123,14 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         setLineSpacing(dp(3).toFloat(), 1f)
     }
 
-    private fun button(view: View, id: String, label: String, action: (String) -> Unit, glass: Boolean = true) {
+    private fun button(view: View, id: String, label: String, glass: Boolean = true) {
         view.tag = id
         view.contentDescription = label
         view.isFocusable = true
         view.isClickable = true
         view.minimumHeight = maxOf(view.minimumHeight, dp(48))
         if (glass) view.background = SettingsVisuals.surface(context, palette, 22, true)
-        view.setOnClickListener { action(id) }
+        view.setOnClickListener { dispatch(id) }
         view.accessibilityDelegate = object : AccessibilityDelegate() {
             override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
                 super.onInitializeAccessibilityNodeInfo(host, info)

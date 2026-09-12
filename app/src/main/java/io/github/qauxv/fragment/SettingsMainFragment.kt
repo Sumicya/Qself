@@ -130,6 +130,7 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             id = R.id.fragmentMainRecyclerView // id is used to allow saving state
             layoutManager = this@SettingsMainFragment.listLayoutManager
             clipToPadding = false
+            if (!isHome()) SettingsVisuals.addListSpacing(this)
         }
         // init adapter
         adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
@@ -415,7 +416,7 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
 
     private val mSearchModeOnBackPressedCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
-            mSearchMenuItem?.collapseActionView() ?: exitSearchMode()
+            if (mSearchMenuItem?.collapseActionView() != true) exitSearchMode()
         }
     }
 

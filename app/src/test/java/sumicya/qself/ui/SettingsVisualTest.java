@@ -32,7 +32,7 @@ import org.robolectric.annotation.GraphicsMode;
 import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk = 28, application = Application.class, manifest = Config.NONE, qualifiers = "w412dp-h915dp-mdpi")
+@Config(sdk = 35, application = Application.class, manifest = Config.NONE, qualifiers = "w412dp-h915dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 public class SettingsVisualTest {
     private Context context(boolean dark, float fontScale, int width, boolean rtl) {
@@ -146,6 +146,18 @@ public class SettingsVisualTest {
         diagnostics.performClick();
         assertTrue(oldClicks.isEmpty());
         assertEquals(java.util.Collections.singletonList(HomeCatalog.DIAGNOSTICS), newClicks);
+    }
+
+    @Test public void sameStateRefreshPreservesFocusTargetsAndUpdatesDispatch() {
+        List<String> oldClicks = new ArrayList<>(), newClicks = new ArrayList<>();
+        SettingsHomeView view = home(context(false, 1f, 412, false), false, 1, oldClicks);
+        View search = view.findViewWithTag(HomeCatalog.SEARCH);
+        view.bind(new SettingsHomeView.State("QQ 9.2.10", false, false), 1,
+            id -> { newClicks.add(id); return Unit.INSTANCE; });
+        assertSame(search, view.findViewWithTag(HomeCatalog.SEARCH));
+        search.performClick();
+        assertTrue(oldClicks.isEmpty());
+        assertEquals(java.util.Collections.singletonList(HomeCatalog.SEARCH), newClicks);
     }
 
     @Test public void realSwitchCellGrowsWithTextAndKeepsSwitchHitTarget() {

@@ -91,6 +91,16 @@ object SettingsVisuals {
         return RippleDrawable(ColorStateList.valueOf(Color.argb(32, Color.red(p.accent), Color.green(p.accent), Color.blue(p.accent))), base, mask)
     }
 
+    fun addListSpacing(recycler: RecyclerView) {
+        recycler.addItemDecoration(object : RecyclerView.ItemDecoration() {
+            override fun getItemOffsets(outRect: Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
+                val position = parent.getChildAdapterPosition(view)
+                outRect.top = if (position == 0) dp(parent.context, 16) else 0
+                outRect.bottom = if (position == state.itemCount - 1) dp(parent.context, 16) else 0
+            }
+        })
+    }
+
     fun decorateRow(view: View, context: Context, clickable: Boolean) {
         if (view is HeaderCell || view is SpacerCell) return
         val p = palette(context, SettingsAppearanceItem.mode)
