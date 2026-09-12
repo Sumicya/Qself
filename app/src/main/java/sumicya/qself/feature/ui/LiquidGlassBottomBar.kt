@@ -21,21 +21,10 @@ import sumicya.qself.hostapi.CapabilityRegistry
 import sumicya.qself.hostapi.CapabilityState
 
 /**
- * 底部导航栏液态玻璃 — extension program batch A1.
+ * 底部导航栏液态玻璃功能入口。
  *
- * The rendering/internals subsystem is vendored under sumicya.qself.glass
- * (from liuran001/WeChat-LiquidGlass, MIT); this feature is the entry that
- * adapts it to this repository's hook framework: the libxposed module shell
- * became a static hub on XposedBridge, and the package-loaded hook wiring
- * happens here, inside the host main process.
- *
- * Faithful notes:
- *  - upstream hooks Instrumentation.callActivityOnResume and reacts only to
- *    the launcher activity; preserved;
- *  - upstream gates by process name; here the feature system already runs
- *    per-process (PROC_MAIN) so the gate is the process mask;
- *  - the WeChat host table stays in HostApp but is dormant: this module is
- *    not scoped to com.tencent.mm.
+ * 渲染实现位于 sumicya.qself.glass；这里负责接入本仓库的 hook 框架：
+ * 在宿主主进程加载 tab 切换 hook，并在启动 Activity resume 时调度安装。
  */
 @FunctionHookEntry
 @UiItemAgentEntry
