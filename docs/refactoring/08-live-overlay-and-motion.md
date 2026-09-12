@@ -30,4 +30,32 @@ r3081 的生成纹理不能满足这一要求。本轮不以修改名称、加�
 5. 动画中的 checked 已是目标状态；不会重复调用监听；绑定会取消旧动画。
 6. 保留原全宽、大字、RTL、亮暗对比、配置及功能回归。
 
-自动化结果及源码对应的 APK 在完成后记录。视觉相似度、ColorOS GPU 实际效果和流畅度尚须实机验收，不能由 CI 通过推定。
+## 构建及验证记录
+
+- 源码：`cd091fbfd024988ef6073a529fc6658f8e7531fc`。
+- 完整 JVM CI：[34694873758](https://github.com/Sumicya/Qself/actions/runs/34694873758)，check `103556516656`，成功。
+  29 项界面/真实取景/动效/动态色测试、10 项合并回归、5 项策略测试均无失败或错误。
+- 静态合约 35 项：11（配置注册）+6（设置）+9（O3）+9（交互），通过；`git diff --check` 通过。
+- 已验证实际源由红变蓝、真实边界相对纯模糊发生折射位移、拖动时真实镜头轮廓变化、无源/自采样回退、
+  Android 系统语义色对应、开关动画不重复写状态，以及动态颜色中间帧的前景对比。
+- [系统色选项测试图](previews/settings-system-options.webp) 是原生宿主中的样例数据，不是 QQ 实机截图，也不是玻璃/动效的实机验收录像。
+- 修正过程中发现并处理：Android 14+ 动态色采用系统语义角色而非固定 palette tone；
+  抗锯齿边界不能当作完全透明像素；ColorUtils 插值可能把 alpha 255 舍入为 254，必须按实际不透明绘制底色计算对比度。
+
+## 安装包
+
+[下载 r3091](https://github.com/Sumicya/Qself/actions/runs/34694873777/artifacts/10298389821)。
+APK CI [34694873777](https://github.com/Sumicya/Qself/actions/runs/34694873777)、check `103556516796`，成功。
+
+| 项目 | 验证结果 |
+| --- | --- |
+| 文件/包名 | `app-debug.apk` / `io.github.qauxv` |
+| 版本 | `1.6.1.r3091.cd091fb` / 3091 |
+| APK 大小 | 17,831,350 字节 |
+| APK SHA256 | `9fe4a21e34d98c7b104a993921c21765d1f707532f9a8043930f4b6bd665c9da` |
+| Signer SHA256 | `a81797be084d6f575d85ad0976988c5da6ce307cb481bb8138b67df3b50bab14` |
+| Artifact | `app-debug-apk` / `10298389821`，归档 12,889,243 字节 |
+| 过期时间 | 2026-09-19T13:03:14Z |
+| 检查 | debuggable=false，targetApiVersion=102，autoHotReload=false；arm64/诊断玻璃/原生设置/合并实现存在，无 AppCenter |
+
+视觉相似度、ColorOS GPU 实际效果和流畅度尚须实机验收，不能由 CI 通过推定。本记录不将用户未认可的视觉效果标记为完成验收。
