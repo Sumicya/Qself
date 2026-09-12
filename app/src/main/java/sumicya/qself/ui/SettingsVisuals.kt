@@ -102,8 +102,12 @@ object SettingsVisuals {
     }
 
     fun decorateRow(view: View, context: Context, clickable: Boolean) {
-        if (view is HeaderCell || view is SpacerCell) return
+        if (view is SpacerCell) return
         val p = palette(context, SettingsAppearanceItem.mode)
+        if (view is HeaderCell) {
+            view.titleTextView.setTextColor(p.accent)
+            return
+        }
         val params = (view.layoutParams as? RecyclerView.LayoutParams)
             ?: RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         params.marginStart = dp(context, 16)

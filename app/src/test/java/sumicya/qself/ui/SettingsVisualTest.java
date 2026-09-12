@@ -48,7 +48,7 @@ public class SettingsVisualTest {
         if (rtl) config.setLayoutDirection(new java.util.Locale("ar"));
         ContextThemeWrapper context = new ContextThemeWrapper(
             RuntimeEnvironment.getApplication().createConfigurationContext(config),
-            androidx.appcompat.R.style.Theme_AppCompat_DayNight);
+            io.github.qauxv.R.style.AppTheme_Ftb);
         return context;
     }
 
@@ -99,13 +99,43 @@ public class SettingsVisualTest {
         bitmap.recycle();
     }
 
+    private void renderPreviewPair(View light, View dark) throws Exception {
+        // CI permits ten notices per step and truncates each message at 4096 characters.
+        // Keep one real-view contact sheet within nine small base64 chunks, plus test totals.
+        float scale = 720f / (light.getWidth() + dark.getWidth());
+        int contentHeight = Math.round(Math.max(light.getHeight(), dark.getHeight()) * scale);
+        Bitmap bitmap = Bitmap.createBitmap(720, contentHeight + 28, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawColor(Color.rgb(235, 239, 246));
+        canvas.save(); canvas.scale(scale, scale);
+        light.draw(canvas); canvas.translate(light.getWidth(), 0); dark.draw(canvas);
+        canvas.restore();
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.DKGRAY); paint.setTextSize(10);
+        canvas.drawText("NATIVE ANDROID VIEWS / DEFAULT THEME / SAMPLE STATE / NOT DEVICE", 14, bitmap.getHeight() - 10, paint);
+        byte[] result = null;
+        for (int quality = 75; quality >= 5; quality -= 5) {
+            java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+            assertTrue(bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, quality, bytes));
+            result = bytes.toByteArray();
+            if (result.length <= 24000) break;
+        }
+        assertNotNull(result);
+        assertTrue("CI contact sheet exceeds annotation budget", result.length <= 24000);
+        Files.write(Paths.get("build/reports/qself-visual/home-pair.webp"), result);
+        bitmap.recycle();
+    }
+
     @Test public void homeLightAndDarkRenderWithoutClippedLabels() throws Exception {
+        List<View> frames = new ArrayList<>();
         for (boolean dark : new boolean[]{false, true}) {
             SettingsHomeView view = home(context(dark, 1f, 412, false), dark, 1, new ArrayList<>());
             layout(view, 412);
             verifyTextBounds(view);
             render(dark ? "home-dark" : "home-light", view);
+            frames.add(view);
         }
+        renderPreviewPair(frames.get(0), frames.get(1));
     }
 
     @Test public void narrowLargeTextUsesOneColumnAndRemainsScrollable() throws Exception {

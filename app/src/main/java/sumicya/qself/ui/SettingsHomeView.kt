@@ -2,6 +2,9 @@
 package sumicya.qself.ui
 
 import android.content.Context
+import android.content.res.ColorStateList
+import android.widget.ImageView
+import io.github.qauxv.R
 import android.graphics.Typeface
 import android.view.Gravity
 import android.view.View
@@ -44,7 +47,11 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
             minimumHeight = dp(56)
             setPadding(dp(18), dp(12), dp(18), dp(12))
             addView(text("搜索功能与设置", 15, palette.secondary), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-            addView(text("⌕", 26, palette.accent).apply { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO })
+            addView(ImageView(context).apply {
+                setImageResource(R.drawable.ic_search_baseline)
+                imageTintList = ColorStateList.valueOf(palette.accent)
+                importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LayoutParams(dp(24), dp(24)))
         }
         button(search, HomeCatalog.SEARCH, "搜索功能与设置")
         addView(search, lp(top = 22, bottom = 25))
