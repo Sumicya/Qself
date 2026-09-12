@@ -25,6 +25,8 @@ class SettingsUiContract(unittest.TestCase):
 
     def test_utility_routes_are_real_and_do_not_write_feature_config(self):
         body = MAIN.split('private fun openHomeAction(')[1].split('override fun onCreateOptionsMenu')[0]
+        for method in re.findall(r'FunctionEntryRouter\.(\w+)\(', body):
+            self.assertRegex(ROUTER, r'fun\s+' + re.escape(method) + r'\s*\(')
         for route in ('cfg-theme', 'cfg-backup-restore', 'other-about'):
             self.assertIn('"' + route + '"', ROUTER)
             self.assertIn('"' + route + '"', body)

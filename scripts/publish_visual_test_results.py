@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 root = Path(sys.argv[1])
-for name in ("home-light", "home-dark", "home-large-text"):
+for name in ("home-light", "home-dark", "home-large-text", "feature-cells"):
     path = root / (name + ".jpg")
     if not path.is_file():
         continue

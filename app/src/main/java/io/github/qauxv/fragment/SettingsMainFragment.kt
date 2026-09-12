@@ -367,7 +367,7 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             // Open the existing agent's real page and highlight it; never bypass its interaction contract.
             val provider = FunctionEntryRouter.queryAnnotatedUiItemAgentEntries()
                 .firstOrNull { it.itemAgentProviderUniqueIdentifier == action } ?: return
-            val location = FunctionEntryRouter.resolveAnycastLocation(provider.uiItemLocation) ?: return
+            val location = FunctionEntryRouter.resolveUiItemAnycastLocation(provider.uiItemLocation) ?: return
             requireSettingsHostActivity().presentFragment(newInstance(location, action))
             return
         }
@@ -377,7 +377,7 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             HomeCatalog.ABOUT -> "other-about"
             else -> return
         }
-        val location = FunctionEntryRouter.resolveAnycastLocation(arrayOf(FunctionEntryRouter.Locations.ANY_CAST_PREFIX, id)) ?: return
+        val location = FunctionEntryRouter.resolveUiItemAnycastLocation(arrayOf(FunctionEntryRouter.Locations.ANY_CAST_PREFIX, id)) ?: return
         val desc = FunctionEntryRouter.findDescriptionByLocation(location) as? IDslFragmentNode ?: return
         val fragment = desc.getTargetFragmentClass(location).newInstance()
         fragment.arguments = desc.getTargetFragmentArguments(location)

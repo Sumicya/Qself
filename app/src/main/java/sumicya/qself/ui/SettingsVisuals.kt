@@ -12,6 +12,8 @@ import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import androidx.core.graphics.ColorUtils
+import io.github.qauxv.dsl.cell.TextInfoCell
 import io.github.qauxv.dsl.cell.HeaderCell
 import io.github.qauxv.dsl.cell.SpacerCell
 import io.github.qauxv.dsl.cell.TitleValueCell
@@ -31,11 +33,23 @@ object SettingsVisuals {
         val themeAccent = if (context.theme.resolveAttribute(android.R.attr.colorAccent, attr, true) &&
             attr.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT) attr.data else fallback
         // Blend theme color into a legible foreground, not an arbitrary pastel as body text.
-        val accent = blend(themeAccent, if (dark) Color.WHITE else Color.BLACK, if (dark) .36f else .22f)
+        val accent = readableAccent(themeAccent, dark)
         return if (dark) Palette(true, mode, Color.rgb(17, 22, 33), Color.rgb(239, 242, 250),
             Color.rgb(172, 185, 205), accent, Color.rgb(36, 44, 61), Color.argb(45, 220, 232, 255))
         else Palette(false, mode, Color.rgb(239, 243, 250), Color.rgb(28, 39, 58),
             Color.rgb(84, 99, 121), accent, Color.WHITE, Color.argb(220, 255, 255, 255))
+    }
+
+    @JvmStatic
+    fun readableAccent(color: Int, dark: Boolean): Int {
+        val backdrop = if (dark) Color.rgb(48, 60, 82) else Color.rgb(203, 222, 255)
+        val target = if (dark) Color.WHITE else Color.BLACK
+        var result = blend(color, target, if (dark) .36f else .22f)
+        repeat(24) {
+            if (ColorUtils.calculateContrast(result, backdrop) >= 4.5) return result
+            result = blend(result, target, .12f)
+        }
+        return target
     }
 
     private fun blend(a: Int, b: Int, fraction: Float): Int = Color.rgb(
@@ -88,6 +102,10 @@ object SettingsVisuals {
         view.layoutParams = params
         view.background = surface(context, p, 20, clickable)
         view.isFocusable = clickable
+        if (view is TextInfoCell) {
+            view.textColor = p.secondary
+            view.textLinkColor = p.accent
+        }
         if (view is TitleValueCell) {
             view.hasDivider = false
             view.titleView.setTextColor(p.text)

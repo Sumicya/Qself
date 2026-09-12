@@ -41,9 +41,11 @@ def audit(apk, build_tools):
         dex = b"".join(archive.read(name) for name in archive.namelist()
                        if re.fullmatch(r"classes\d*\.dex", name))
         for descriptor in (b"Lsumicya/qself/diagnostics/ReportDiagnostics;",
-                           b"Lsumicya/qself/glass/LiquidGlassInstaller;"):
+                           b"Lsumicya/qself/glass/LiquidGlassInstaller;",
+                           b"Lsumicya/qself/ui/SettingsHomeView;",
+                           b"Lsumicya/qself/ui/SettingsAppearanceItem;"):
             if descriptor not in dex:
-                raise RuntimeError("Diagnostic feature or inherited glass implementation missing")
+                raise RuntimeError("Diagnostics, glass or native settings implementation missing")
         if b"Lcom/microsoft/appcenter/" in dex:
             raise RuntimeError("AppCenter SDK descriptors remain in the APK")
     certificate = re.search(r"certificate SHA-256 digest: ([a-fA-F0-9]+)", signature)
@@ -55,7 +57,7 @@ def audit(apk, build_tools):
         "package": package[1], "versionCode": int(package[2]), "versionName": package[3],
         "signerSha256": certificate[1], "debuggable": False,
         "targetApiVersion": 102, "autoHotReload": False,
-        "arm64NativeLoader": True, "diagnosticsAndGlassPresent": True, "appCenterAbsent": True,
+        "arm64NativeLoader": True, "diagnosticsAndGlassPresent": True, "nativeSettingsPresent": True, "appCenterAbsent": True,
     }
 
 

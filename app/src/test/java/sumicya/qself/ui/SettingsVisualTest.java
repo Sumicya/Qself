@@ -174,6 +174,39 @@ public class SettingsVisualTest {
         assertTrue(cell.isClickOnSwitch(cell.getSwitchView().getLeft()));
     }
 
+    @Test public void themeAccentMaintainsTextContrastEvenForWhiteYellowAndBlack() {
+        for (boolean dark : new boolean[]{false, true}) {
+            int backdrop = dark ? Color.rgb(48, 60, 82) : Color.rgb(203, 222, 255);
+            for (int color : new int[]{Color.WHITE, Color.BLACK, Color.YELLOW, Color.CYAN, Color.RED, Color.BLUE}) {
+                int foreground = SettingsVisuals.readableAccent(color, dark);
+                assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(foreground, backdrop) >= 4.5);
+            }
+        }
+    }
+
+    @Test public void actualFeatureCellsRenderWithNativeSwitches() throws Exception {
+        Context context = context(false, 1f, 412, false);
+        SettingsVisuals.Palette palette = SettingsVisuals.palette(context, 1);
+        android.widget.LinearLayout list = new android.widget.LinearLayout(context);
+        list.setOrientation(android.widget.LinearLayout.VERTICAL);
+        list.setPadding(16, 24, 16, 24);
+        list.setBackground(SettingsVisuals.backdrop(palette));
+        TextView heading = new TextView(context);
+        heading.setText("外观"); heading.setTextSize(24); heading.setTextColor(palette.getText());
+        list.addView(heading);
+        String[][] rows = {{"液态玻璃底栏", "底栏的通透效果与形态"}, {"头像圆角（聊天）", "按自己的习惯调整圆角"},
+            {"广告净化（总开关）", "只在需要时开启，不自动改变其他功能"}};
+        for (String[] row : rows) {
+            TitleValueCell cell = new TitleValueCell(context);
+            cell.setTitle(row[0]); cell.setSummary(row[1]); cell.setChecked(false); cell.setHasDivider(false);
+            cell.getTitleView().setTextColor(palette.getText()); cell.getSummaryView().setTextColor(palette.getSecondary());
+            cell.setBackground(SettingsVisuals.surface(context, palette, 20, true));
+            android.widget.LinearLayout.LayoutParams params = new android.widget.LinearLayout.LayoutParams(-1, -2);
+            params.topMargin = 12; list.addView(cell, params);
+        }
+        layout(list, 412); verifyTextBounds(list); render("feature-cells", list);
+    }
+
     @Test public void catalogReferencesOnlyExistingAnnotatedProvidersAndNoDuplicates() throws Exception {
         Path root = Paths.get("src/main/java");
         if (!Files.isDirectory(root)) root = Paths.get("app/src/main/java");

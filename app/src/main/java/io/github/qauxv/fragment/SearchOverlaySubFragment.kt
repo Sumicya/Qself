@@ -257,8 +257,7 @@ class SearchOverlaySubFragment {
 
     private fun bindSearchResultItem(binding: SearchResultItemBinding, item: SearchResult) {
         val title: String = item.agent.uiItemAgent.titleProvider.invoke(item.agent.uiItemAgent)
-        val description: String = "[${item.score}] " +
-            (item.agent.uiItemAgent.summaryProvider?.invoke(item.agent.uiItemAgent, requireContext()) ?: "")
+        val description = item.agent.uiItemAgent.summaryProvider?.invoke(item.agent.uiItemAgent, requireContext()) ?: ""
         binding.title.text = title
         binding.summary.text = description
         val locationString = item.shownLocation!!.joinToString(separator = " > ")
