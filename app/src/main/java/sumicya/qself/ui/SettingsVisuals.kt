@@ -64,9 +64,14 @@ object SettingsVisuals {
 
     /** Non-text state glyphs must remain legible when a dynamic container changes luminance. */
     @JvmStatic
-    fun stateForeground(candidate: Int, background: Int): Int =
-        if (ColorUtils.calculateContrast(candidate, background) >= 3.0) candidate
-        else if (ColorUtils.calculateLuminance(background) > .179) Color.BLACK else Color.WHITE
+    fun stateForeground(candidate: Int, background: Int): Int {
+        // ColorUtils.blendARGB can round an opaque interpolated alpha to 254.
+        // The control paints its background at alpha=255; compare that actual opaque color.
+        val opaque = ColorUtils.setAlphaComponent(background, 255)
+        val foreground = ColorUtils.setAlphaComponent(candidate, 255)
+        return if (ColorUtils.calculateContrast(foreground, opaque) >= 3.0) foreground
+        else if (ColorUtils.calculateLuminance(opaque) > .179) Color.BLACK else Color.WHITE
+    }
 
     private fun blend(a: Int, b: Int, fraction: Float): Int = Color.rgb(
         (Color.red(a) * (1 - fraction) + Color.red(b) * fraction).toInt(),

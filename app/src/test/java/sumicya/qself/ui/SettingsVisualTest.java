@@ -389,7 +389,7 @@ public class SettingsVisualTest {
                 int background = androidx.core.graphics.ColorUtils.blendARGB(p.getSurface(), p.getContainer(), .35f + .65f * progress);
                 int candidate = androidx.core.graphics.ColorUtils.blendARGB(p.getText(), p.getOnContainer(), progress);
                 int foreground = SettingsVisuals.stateForeground(candidate, background);
-                assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(foreground, background) >= 3.0);
+                assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(foreground, androidx.core.graphics.ColorUtils.setAlphaComponent(background, 255)) >= 3.0);
             }
         }
     }
