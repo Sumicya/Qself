@@ -101,7 +101,7 @@ object QselfCatalog {
         "qself-safety	tools	维护与诊断	protection	既有保护选项	cc.ioctl.hook.misc.DisableHotPatch",
         "qself-safety	tools	维护与诊断	protection	既有保护选项	cc.ioctl.hook.misc.DisableQQCrashReportManager",
         "qself-safety	tools	维护与诊断	protection	既有保护选项	sumicya.qself.feature.device.RiskReportInterceptor",
-        "qself-safety	tools	维护与诊断	diagnostics	诊断	sumicya.qself.diagnostics.ReportDiagnostics",
+        "qself-safety	tools	维护与诊断	diagnostics	功能开关与错误记录	sumicya.qself.diagnostics.FeatureDiagnosticsItem",
         "cfg-theme		主题与显示	theme	界面	io.github.qauxv.fragment.ThemeColorStyleDialog",
         "cfg-theme		主题与显示	theme	界面	io.github.qauxv.fragment.ThemeModeStyleDialog",
         "_core					cc.hicore.message.chat.SessionHooker",
@@ -114,7 +114,6 @@ object QselfCatalog {
         "_core					io.github.qauxv.router.dispacher.StartActivityHook",
         "_core					io.github.qauxv.router.dispacher.ItemBuilderFactoryHook",
         "_core					me.ketal.dispacher.BaseBubbleBuilderHook",
-        "qself-safety	tools	维护与诊断	diagnostics	诊断	sumicya.qself.diagnostics.FeatureDiagnosticsItem",
         "qself-appearance	appearance	外观调整	local	局部效果	xyz.nextalone.hook.SimplifyBottomTab",
     )
 
