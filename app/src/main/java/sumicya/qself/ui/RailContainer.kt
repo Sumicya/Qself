@@ -85,9 +85,9 @@ open class RailContainer @JvmOverloads constructor(
         for (i in 0 until childCount) {
             val state = states[i]
             if (state == NONE) continue
-            val child = getChildAt(i)
-            child.switchView.getHitRect(slotRect)
-            slotRect.offset(child.left, child.top)
+            val cell = getChildAt(i) as? TitleValueCell ?: continue
+            cell.switchView.getHitRect(slotRect)
+            slotRect.offset(cell.left, cell.top)
             val roundTop = i == 0 || states[i - 1] == NONE
             val roundBottom = i == states.lastIndex || states[i + 1] == NONE
             radii.fill(0f)

@@ -59,9 +59,9 @@ class SettingsAccordion(context: Context, title: String, summary: String,
                         else android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_EXPAND)
                 }
                 override fun performAccessibilityAction(host: View, action: Int, args: android.os.Bundle?): Boolean {
-                    if (action == android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_EXPAND ||
-                        action == android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_COLLAPSE) {
-                        setExpanded(action == android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_EXPAND, true); return true
+                    if (action == android.view.accessibility.AccessibilityNodeInfo.ACTION_EXPAND ||
+                        action == android.view.accessibility.AccessibilityNodeInfo.ACTION_COLLAPSE) {
+                        setExpanded(action == android.view.accessibility.AccessibilityNodeInfo.ACTION_EXPAND, true); return true
                     }
                     return super.performAccessibilityAction(host, action, args)
                 }
