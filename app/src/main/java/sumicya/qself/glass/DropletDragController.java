@@ -23,7 +23,9 @@ final class DropletDragController implements LiquidGlassHostLayout.DragHandler {
     private static final float PRESSED_RATIO = 78f / 56f;
     private static final float MAX_STRETCH = 0.2f;
     private static final float SETTLE_TOLERANCE = 0.025f;
-    private static final float HOST_GROWTH_DP = 8f;
+    // The lens never grows while pressed: scaling the pill would magnify and
+    // redraw its contents (the old centred miniature ghosting).
+    private static final float HOST_GROWTH_DP = 0f;
 
     private final WeakReference<View> dropletRef;
     private WeakReference<ViewGroup> rowRef;

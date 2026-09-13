@@ -871,8 +871,10 @@ public final class LiquidGlassInstaller {
                 return;
             }
             float density = host.getResources().getDisplayMetrics().density;
-            int inset = Math.round(density * 4f);
-            int w = tab.getWidth();
+            // Light block hugs the pill inner wall (8dp top/bottom) and leaves
+            // a 3dp soft seam between neighbouring tab slots.
+            int inset = Math.round(density * 8f);
+            int w = tab.getWidth() - Math.round(density * 6f);
             int h = tab.getHeight() - inset * 2;
             if (w <= 0 || h <= 0) {
                 return;

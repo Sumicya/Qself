@@ -272,6 +272,9 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
                 it.title = text
                 it.subtitle = subtitle
             }
+            // Home draws its own centered header; hide the duplicated toolbar
+            // and let only the status-bar inset remain above the content.
+            mAppToolBar.visibility = if (fragment.ownsHeader()) View.GONE else View.VISIBLE
             mFlingLayout.isInterceptEnabled = fragment.isWrapContent
         }
     }

@@ -13,7 +13,7 @@ object HomeCatalog {
         Section("tools", "工具", "通知 · 媒体 · 维护", sumicya.qself.feature.consolidation.FeatureCatalog.featuresForHome("tools")),
     )
 
-    const val DIAGNOSTICS = "sumicya.qself.diagnostics.ReportDiagnostics"
+    const val DIAGNOSTICS = "sumicya.qself.diagnostics.FeatureDiagnosticsItem"
     const val SEARCH = "search"
     const val THEME = "theme"
     const val BACKUP = "backup"

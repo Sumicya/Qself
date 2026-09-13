@@ -110,7 +110,6 @@ final class LiquidGlassPanel extends View {
     private final int[] childPos = new int[2];
 
     private final RenderNode captureNode = new RenderNode("qselfGlassCapture");
-    private final RenderNode embeddedNode = new RenderNode("qselfGlassEmbedded");
     private final RenderEffect vibrancy;
     private RuntimeShader lens;
     private RuntimeShader bloom;
@@ -192,16 +191,6 @@ final class LiquidGlassPanel extends View {
         render(canvas, w, h, h * 0.5f, captureNode, ViewGeom.cumulativeScale(this));
     }
 
-    /** Paint the resting material into the droplet's captured surface. */
-    void drawEmbedded(Canvas canvas) {
-        int w = getWidth();
-        int h = getHeight();
-        if (w <= 0 || h <= 0) {
-            return;
-        }
-        render(canvas, w, h, h * 0.5f, embeddedNode, 1f);
-    }
-
     private void render(Canvas canvas, int w, int h, float radius,
                         RenderNode node, float drawScale) {
         int alpha = GlassConfig.materialAlpha();
@@ -226,7 +215,9 @@ final class LiquidGlassPanel extends View {
     }
 
     private void paintPressHighlight(Canvas canvas, int w, int h) {
-        if (press <= 0.01f || bloom == null) {
+        // The press ripple is owned by the selection light layer (DropletPanel);
+        // the lens itself stays flat and never paints its own radial bloom.
+        if (press <= 0.01f) {
             return;
         }
         int save = canvas.save();
@@ -235,13 +226,6 @@ final class LiquidGlassPanel extends View {
         edgeWash.setAlpha(Math.round(0xFF * PRESS_WASH * press));
         edgeWash.setBlendMode(BlendMode.PLUS);
         canvas.drawRect(0, 0, w, h, edgeWash);
-        bloom.setFloatUniform("bounds", (float) w, (float) h);
-        bloom.setFloatUniform("center", Math.max(0f, Math.min(pressX, w)), h * 0.5f);
-        bloom.setFloatUniform("reach", Math.min(w, h) * 1.2f);
-        bloom.setFloatUniform("strength", PRESS_BLOOM * press);
-        bloomPaint.setShader(bloom);
-        bloomPaint.setBlendMode(BlendMode.PLUS);
-        canvas.drawRect(0, 0, w, h, bloomPaint);
         canvas.restoreToCount(save);
     }
 

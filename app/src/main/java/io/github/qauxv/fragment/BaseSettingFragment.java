@@ -74,6 +74,14 @@ public abstract class BaseSettingFragment extends Fragment {
         mSettingsHostActivity.finishFragment(this);
     }
 
+    /**
+     * A fragment that draws its own in-content header asks the host to hide the
+     * toolbar: only the status-bar inset then remains above the content.
+     */
+    public boolean ownsHeader() {
+        return false;
+    }
+
     @Nullable
     public String getTitle() {
         return mTitle;

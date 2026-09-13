@@ -50,7 +50,6 @@ import sumicya.qself.ui.SettingsHomeItem
 import sumicya.qself.ui.SettingsHomeView
 import sumicya.qself.ui.SettingsVisuals
 import sumicya.qself.ui.SettingsAppearanceItem
-import sumicya.qself.diagnostics.ReportDiagnostics
 
 class SettingsMainFragment : BaseRootLayoutFragment() {
 
@@ -121,7 +120,7 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
         val tmsgDslTree = if (isHome()) arrayListOf<DslTMsgListItemInflatable>(SettingsHomeItem(
             { SettingsHomeView.State(
                 if (isInHostProcess) "${hostInfo.hostName} ${hostInfo.versionName}" else "模块管理",
-                ReportDiagnostics.isEnabled, SafeModeManager.getManager().isEnabledForThisTime
+                sumicya.qself.diagnostics.FeatureJournal.enabled, SafeModeManager.getManager().isEnabledForThisTime
             ) }, { SettingsAppearanceItem.mode }, ::openHomeAction
         ).also { it.savedState = homeViewState; homeItem = it })
             else convertFragmentDslToTMsgDslItemTree(context, mFragmentDescription)
@@ -189,9 +188,6 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             viewLifecycleOwner.lifecycleScope.launchWhenResumed {
                 state.collect { adapter?.notifyItemChanged(index) }
             }
-        }
-        if (isHome()) viewLifecycleOwner.lifecycleScope.launchWhenResumed {
-            ReportDiagnostics.valueState.collect { adapter?.notifyItemChanged(0) }
         }
     }
 
@@ -348,6 +344,8 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
     private fun isRootFragmentDescription(): Boolean {
         return mFragmentLocations.isEmpty() || mFragmentLocations.size == 1 && mFragmentLocations[0].isEmpty()
     }
+
+    override fun ownsHeader(): Boolean = isHome()
 
     private fun isHome(): Boolean = isRootFragmentDescription() &&
         arguments?.getString(HOME_SECTION) == null && arguments?.getBoolean(SHOW_CATALOG) != true &&

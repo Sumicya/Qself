@@ -33,8 +33,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /** Read-only diagnostic. Does not alter arguments, results, throwables, login or network policy. */
-@FunctionHookEntry
-@UiItemAgentEntry
+// Retired from the UI and hook registry; superseded by the unified
+// "诊断与导出" page (read-only probes + in-app ring buffer + single export).
+// Kept only as a reference for the O3 command inventory.
 object ReportDiagnostics : CommonConfigFunctionHook(
     hookKey = "qself.report_diagnostics",
     targetProc = SyncUtils.PROC_MAIN or SyncUtils.PROC_MSF,

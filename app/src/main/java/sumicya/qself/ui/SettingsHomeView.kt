@@ -165,6 +165,10 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         view.isClickable = true
         view.minimumHeight = maxOf(view.minimumHeight, dp(48))
         if (filled) view.background = SettingsVisuals.surface(context, palette, SettingsVisuals.CARD_RADIUS, true, view)
+        // Rows living inside an already-rounded card use a bounded state layer.
+        if (view is io.github.qauxv.dsl.cell.TitleValueCell) {
+            view.foreground = SettingsVisuals.rowStateLayer(context, palette)
+        }
         view.setOnClickListener { InlineSettings.anchor(view); dispatch(id) }
         view.accessibilityDelegate = object : AccessibilityDelegate() {
             override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
