@@ -507,8 +507,9 @@ public class SettingsVisualTest {
         layout(cell, 288);
         verifyTextBounds(cell);
         assertTrue(cell.getSummaryView().getTop() >= cell.getTitleView().getBottom());
+        // The tile is inset 8dp from the leading edge; the whole row toggles.
+        assertFalse(cell.isClickOnSwitch(0));
         assertTrue(cell.isClickOnSwitch(cell.getSwitchView().getLeft()));
-        assertTrue(cell.isClickOnSwitch(0));
         assertFalse(cell.isClickOnSwitch(cell.getSwitchView().getRight() + 1));
         assertEquals(cell.getTitle(), cell.getSwitchView().getContentDescription());
         cell.setHasError(true);
@@ -529,11 +530,13 @@ public class SettingsVisualTest {
         TitleValueCell cell = new TitleValueCell(context(false, 1f, 412, false));
         cell.setTitle("独立开关"); cell.setChecked(false);
         layout(cell, 380);
+        // Leading tile: 48dp wide box inset 8dp, stretched to the row height
+        // (header minus a 6dp gap) rather than hovering as a 48dp square.
         assertEquals(56, cell.getHeight());
         assertEquals(48, cell.getSwitchView().getWidth());
-        assertEquals(0, cell.getSwitchView().getLeft());
-        assertEquals((cell.getHeight() - 48) / 2, cell.getSwitchView().getTop());
-        assertEquals(48, cell.getSwitchView().getHeight());
+        assertEquals(8, cell.getSwitchView().getLeft());
+        assertEquals(50, cell.getSwitchView().getHeight());
+        assertEquals((cell.getHeight() - 50) / 2, cell.getSwitchView().getTop());
         assertTrue(cell.getSwitchView().getRight() < ((View) cell.getTitleView().getParent()).getLeft());
         final int[] changes = {0};
         cell.getSwitchView().setOnCheckedChangeListener((button, value) -> changes[0]++);
