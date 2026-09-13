@@ -154,7 +154,9 @@ class UiAgentItem(
             cell.isHasSwitch = true
             cell.switchView.setCheckedWithoutAnimation(switchAgent.isChecked)
             cell.switchView.isEnabled = isEnabled && switchAgent.isCheckable
-            cell.switchView.isClickable = isEnabled && switchAgent.isCheckable
+            // The whole row owns the click; a separately clickable tile would
+            // split the touch target and its ripple from the feature row.
+            cell.switchView.isClickable = false
             cell.switchView.setOnCheckedChangeListener(mCheckChangedListener)
         } else {
             // simple case, as it is

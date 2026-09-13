@@ -106,9 +106,7 @@ class TitleValueCell(
         // switch view
         switchView = SquareStateControl(context).apply {
             visibility = GONE
-            edgeAttached = false
-            // disable click for default because this behavior is managed by the recycler view,
-            // but they can still set onCheckedChangeListener if they want
+            // Clicks are owned by the whole row; the tile is a visual indicator.
             isClickable = false
         }.also {
             addView(
@@ -213,7 +211,8 @@ class TitleValueCell(
         inlineContent.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), unspecified)
         setMeasuredDimension(width, resolveSize(height + inlineContent.measuredHeight, heightMeasureSpec))
         if (isHasSwitch) switchView.measure(MeasureSpec.makeMeasureSpec(48.dp, MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(48.dp, MeasureSpec.EXACTLY))
+            // The state tile stretches with the row instead of staying a 48dp square.
+            MeasureSpec.makeMeasureSpec((height - 6.dp).coerceAtLeast(40.dp), MeasureSpec.EXACTLY))
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
@@ -226,7 +225,7 @@ class TitleValueCell(
         textColumn.layout(columnLeft, columnTop, columnLeft + textColumn.measuredWidth, columnTop + textColumn.measuredHeight)
         for (control in arrayOf(valueView, switchView)) if (control.visibility != GONE) {
             val atLeft = if (control === switchView) !rtl else rtl
-            val inset = if (control === switchView) 0 else 16.dp
+            val inset = if (control === switchView) 8.dp else 16.dp
             val x = if (atLeft) inset else measuredWidth - inset - control.measuredWidth
             val y = (headerHeight - control.measuredHeight) / 2
             control.layout(x, y, x + control.measuredWidth, y + control.measuredHeight)

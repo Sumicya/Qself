@@ -33,6 +33,7 @@ class InlineFeatureList(context: Context, groupId: String? = null, home: String?
             }
         } else {
             val providers = FunctionEntryRouter.queryAnnotatedUiItemAgentEntries().associateBy { it.itemAgentProviderUniqueIdentifier }
+            var rowIndex = 0
             FeatureCatalog.groups.firstOrNull { it.id == groupId }?.sections?.forEach { section ->
                 addView(HeaderCell(context).apply { title = section.title }, LayoutParams(-1, -2))
                 section.features.forEach { id -> providers[id]?.let { provider ->
@@ -41,10 +42,25 @@ class InlineFeatureList(context: Context, groupId: String? = null, home: String?
                     item.bindView(holder, -1, context)
                     bindings.add(item to holder)
                     SettingsVisuals.decorateRow(holder.itemView, context, item.isClickable)
-                    addView(holder.itemView, LayoutParams(-1, -2).apply { bottomMargin = SettingsVisuals.dp(context, 4) })
+                    addView(holder.itemView, LayoutParams(-1, -2).apply { bottomMargin = SettingsVisuals.dp(context, 6) })
+                    animateRowIn(holder.itemView, rowIndex++)
                     if (id == focus) holder.itemView.post { holder.itemView.requestFocus(); holder.itemView.requestRectangleOnScreen(android.graphics.Rect(0, 0, holder.itemView.width, holder.itemView.height)) }
                 } }
             }
         }
+    }
+
+    /** MD3 Expressive staggered settle of rows when a category expands. */
+    private fun animateRowIn(view: android.view.View, index: Int) {
+        if (!SettingsMotion.enabled()) return
+        val dy = SettingsVisuals.dp(context, 10).toFloat()
+        view.alpha = 0f
+        view.translationY = dy
+        view.animate().alpha(1f).translationY(0f)
+            .setStartDelay(40L + index * 35L)
+            .setDuration(260L)
+            .setInterpolator(SettingsMotion.easing(context))
+            .withEndAction { view.alpha = 1f; view.translationY = 0f }
+            .start()
     }
 }

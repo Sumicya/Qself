@@ -113,7 +113,7 @@ object SettingsVisuals {
             ?: RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         params.marginStart = dp(context, 16)
         params.marginEnd = dp(context, 16)
-        params.bottomMargin = dp(context, 2)
+        params.bottomMargin = dp(context, 6)
         view.layoutParams = params
         view.background = surface(context, p, 12, clickable, view)
         view.isFocusable = clickable

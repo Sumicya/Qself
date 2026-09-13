@@ -104,10 +104,29 @@ object InlineSettings {
             }
         }
         val cancel = { if (onCancel != null) onCancel.run() else close() }
-        if (cancelable) box.addView(MaterialButton(content.context).apply {
-            text = "收起"; contentDescription = "收起当前展开内容"
-            setOnClickListener { cancel() }
-        }, LinearLayout.LayoutParams(-1, -2))
+        if (cancelable) {
+            // Tonal button, not the bright filled primary: match the dark MD3
+            // surface hierarchy instead of a saturated blue capsule.
+            val containerColor = com.google.android.material.color.MaterialColors.getColor(
+                content.context, com.google.android.material.R.attr.colorSecondaryContainer,
+                SettingsVisuals.palette(content.context, 2).container)
+            val onContainerColor = com.google.android.material.color.MaterialColors.getColor(
+                content.context, com.google.android.material.R.attr.colorOnSecondaryContainer,
+                SettingsVisuals.palette(content.context, 2).onContainer)
+            val button = MaterialButton(content.context).apply {
+                text = "收起"; contentDescription = "收起当前展开内容"
+                backgroundTintList = android.content.res.ColorStateList.valueOf(containerColor)
+                setTextColor(onContainerColor)
+                cornerRadius = SettingsVisuals.dp(content.context, 16)
+                setOnClickListener { cancel() }
+            }
+            val buttonParams = LinearLayout.LayoutParams(-1, -2).apply {
+                val side = SettingsVisuals.dp(content.context, 14)
+                marginStart = side; marginEnd = side
+                topMargin = SettingsVisuals.dp(content.context, 2)
+            }
+            box.addView(button, buttonParams)
+        }
         when {
             target is TitleValueCell -> target.inlineContent.addView(box, LinearLayout.LayoutParams(-1, -2))
             target.parent is LinearLayout -> (target.parent as LinearLayout).let { parent ->
