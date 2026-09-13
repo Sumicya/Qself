@@ -117,6 +117,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
     }
 
     private fun icon(res: Int, action: String, label: String): View = ImageView(context).apply {
+        tag = action
         setImageResource(res)
         scaleType = ImageView.ScaleType.CENTER
         imageTintList = android.content.res.ColorStateList.valueOf(palette.secondary)

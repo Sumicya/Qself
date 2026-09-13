@@ -206,7 +206,7 @@ class TitleValueCell(
     fun isClickOnSwitch(x: Int): Boolean {
         if (!isHasSwitch) return false
         val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
-        return if (rtl) x in 0..railWidth else x >= measuredWidth - railWidth
+        return if (rtl) x in 0 until railWidth else x in (measuredWidth - railWidth) until measuredWidth
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {

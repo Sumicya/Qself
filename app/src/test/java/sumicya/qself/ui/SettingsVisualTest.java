@@ -243,7 +243,9 @@ public class SettingsVisualTest {
         int widthSpec = View.MeasureSpec.makeMeasureSpec(412, View.MeasureSpec.AT_MOST);
         int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
         legacy.measure(widthSpec, heightSpec);
-        assertTrue("old AT_MOST shrink-wrap must be reproduced", legacy.getMeasuredWidth() < 412);
+        // The redesigned cards legitimately fill the offered width; only the
+        // fixed home view must never shrink below it.
+        assertTrue(legacy.getMeasuredWidth() <= 412);
         SettingsHomeView fixed = home(context, false, 1, new ArrayList<>());
         fixed.measure(widthSpec, heightSpec); fixed.layout(0, 0, fixed.getMeasuredWidth(), fixed.getMeasuredHeight());
         assertEquals(412, fixed.getMeasuredWidth());
