@@ -259,7 +259,7 @@ public class SettingsVisualTest {
                 assertEquals(width, page.list.getWidth());
                 assertEquals(width, page.list.getRecycler().getWidth());
                 assertEquals(width, page.home().getWidth());
-                assertNull("Only the toolbar offers search", page.home().findViewWithTag(HomeCatalog.SEARCH));
+                assertNotNull("Home header offers an in-content search entry", page.home().findViewWithTag(HomeCatalog.SEARCH));
                 verifyTextBounds(page.home()); verifyContainedChildren(page.home());
                 View people = page.home().findViewWithTag("people");
                 View tools = page.home().findViewWithTag("tools");
@@ -480,7 +480,7 @@ public class SettingsVisualTest {
             id -> { newClicks.add(id); return Unit.INSTANCE; });
         assertEquals(count, view.getChildCount());
         View diagnostics = view.findViewWithTag(HomeCatalog.DIAGNOSTICS);
-        assertTrue(diagnostics.getContentDescription().toString().contains("记录开关已开"));
+        assertTrue(diagnostics.getContentDescription().toString().contains("记录已开"));
         diagnostics.performClick();
         assertTrue(oldClicks.isEmpty());
         assertEquals(java.util.Collections.singletonList(HomeCatalog.DIAGNOSTICS), newClicks);
@@ -507,37 +507,41 @@ public class SettingsVisualTest {
         layout(cell, 288);
         verifyTextBounds(cell);
         assertTrue(cell.getSummaryView().getTop() >= cell.getTitleView().getBottom());
-        // The tile is inset 8dp from the leading edge; the whole row toggles.
+        // The slot is flush to the trailing edge; the whole row toggles.
         assertFalse(cell.isClickOnSwitch(0));
         assertTrue(cell.isClickOnSwitch(cell.getSwitchView().getLeft()));
         assertFalse(cell.isClickOnSwitch(cell.getSwitchView().getRight() + 1));
+        assertEquals(288, cell.getSwitchView().getRight());
         assertEquals(cell.getTitle(), cell.getSwitchView().getContentDescription());
         cell.setHasError(true);
         cell.draw(new Canvas(Bitmap.createBitmap(288, cell.getHeight(), Bitmap.Config.ARGB_8888)));
     }
 
-    @Test public void rtlLeadingControlStaysOnTheRight() {
+    @Test public void rtlTrailingSlotGoesToTheLeadingSide() {
         TitleValueCell cell = new TitleValueCell(context(true, 1f, 412, true));
         cell.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-        cell.setTitle("RTL feature");
-        cell.setChecked(false);
+        cell.setTitle("RTL feature"); cell.setChecked(false);
         layout(cell, 380);
-        assertTrue(cell.getSwitchView().getLeft() > 190);
-        assertTrue(cell.isClickOnSwitch(cell.getSwitchView().getLeft()));
+        // Trailing in RTL is the visual leading (left) edge.
+        assertEquals(0, cell.getSwitchView().getLeft());
+        assertEquals(52, cell.getSwitchView().getRight());
+        assertTrue(cell.isClickOnSwitch(0));
+        assertFalse(cell.isClickOnSwitch(379));
     }
 
-    @Test public void compactLeadingSquarePreservesCheckableSemantics() {
+    @Test public void trailingSquareSlotPreservesCheckableSemantics() {
         TitleValueCell cell = new TitleValueCell(context(false, 1f, 412, false));
-        cell.setTitle("独立开关"); cell.setChecked(false);
+        cell.setTitle("\u72ec\u7acb\u5f00\u5173"); cell.setChecked(false);
         layout(cell, 380);
-        // Leading tile: 48dp wide box inset 8dp, stretched to the row height
-        // (header minus a 6dp gap) rather than hovering as a 48dp square.
-        assertEquals(56, cell.getHeight());
-        assertEquals(48, cell.getSwitchView().getWidth());
-        assertEquals(8, cell.getSwitchView().getLeft());
-        assertEquals(50, cell.getSwitchView().getHeight());
-        assertEquals((cell.getHeight() - 50) / 2, cell.getSwitchView().getTop());
-        assertTrue(cell.getSwitchView().getRight() < ((View) cell.getTitleView().getParent()).getLeft());
+        // Trailing slot: a fixed 52dp square flush to the trailing card wall,
+        // filling the whole 52dp row height so neighbouring slots merge.
+        assertEquals(52, cell.getHeight());
+        assertEquals(52, cell.getSwitchView().getWidth());
+        assertEquals(52, cell.getSwitchView().getHeight());
+        assertEquals(328, cell.getSwitchView().getLeft());
+        assertEquals(380, cell.getSwitchView().getRight());
+        assertEquals(0, cell.getSwitchView().getTop());
+        assertTrue(cell.getSwitchView().getLeft() > ((View) cell.getTitleView().getParent()).getRight());
         final int[] changes = {0};
         cell.getSwitchView().setOnCheckedChangeListener((button, value) -> changes[0]++);
         cell.getSwitchView().toggle();
@@ -593,10 +597,10 @@ public class SettingsVisualTest {
             Context context = context(dark, 1f, 412, false);
             NativePage page = page(context, 412, 540, new ArrayList<>());
             ((com.google.android.material.appbar.MaterialToolbar) page.host.findViewById(R.id.topAppBar)).setTitle("选项 · MD3");
-            String[][] data = {{"底部导航栏液态玻璃", "左侧开关；点击说明配置文字、数量与玻璃"},
+            String[][] data = {{"底部导航栏液态玻璃", "右侧状态槽；点击说明配置文字、数量与玻璃"},
                 {"消息防撤回", "关闭这一项，不改变其他选项"}, {"版本不支持的功能", "当前不可用；保留原配置"},
                 {"出现错误的功能", "查看功能错误记录，其他开关不受影响"},
-                {"较长的说明自动换行", "左侧圆角方形状态区保持固定大小，说明按照系统字号展开；不压缩文字，也不增加无意义的行间空白。"}};
+                {"较长的说明自动换行", "右侧 52dp 状态槽保持固定大小，说明按照系统字号展开；不压缩文字，也不增加无意义的行间空白。"}};
             page.list.getRecycler().setAdapter(new RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 @Override public int getItemCount() { return data.length; }
                 @Override public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int type) {

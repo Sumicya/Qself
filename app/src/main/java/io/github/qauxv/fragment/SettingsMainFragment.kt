@@ -104,7 +104,9 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
         title = when {
             section != null -> section.title
             arguments?.getBoolean(SHOW_CATALOG) == true -> "功能与设置"
-            else -> if (isHome()) "Qself" else mFragmentDescription.name ?: "设置"
+            // Home owns its in-content header (centered title, leading search).
+            isHome() -> ""
+            else -> mFragmentDescription.name ?: "设置"
         }
         mTargetUiAgentNavId = arguments?.getString(TARGET_UI_AGENT_IDENTIFIER)
     }
@@ -357,9 +359,15 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             return
         }
         if (action == HomeCatalog.SEARCH) {
-            mSearchMenuItem?.let { item ->
+            val item = mSearchMenuItem
+            if (item != null) {
                 item.expandActionView()
                 enterSearchMode(item.actionView as SearchView)
+            } else {
+                // Home has no toolbar menu: feed the overlay a standalone SearchView.
+                val searchView = SearchView(requireContext())
+                searchView.isIconified = false
+                enterSearchMode(searchView)
             }
             return
         }
@@ -395,6 +403,8 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         super.onCreateOptionsMenu(menu, inflater)
+        // Home hosts its own leading search icon in the in-content header.
+        if (isHome()) return
         inflater.inflate(R.menu.main_settings_toolbar, menu)
         mSearchMenuItem = menu.findItem(R.id.menu_item_action_search)
         menu.findItem(R.id.menu_item_action_search)?.setOnActionExpandListener(object : MenuItem.OnActionExpandListener {

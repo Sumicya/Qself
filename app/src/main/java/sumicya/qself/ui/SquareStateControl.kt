@@ -9,28 +9,29 @@ import android.graphics.Path
 import android.graphics.PathMeasure
 import android.graphics.RectF
 import android.os.Build
+import android.view.ViewGroup
 import androidx.appcompat.widget.AppCompatCheckBox
-import com.google.android.material.color.MaterialColors
-import com.google.android.material.R as MaterialR
 
 /**
- * Leading state tile for a feature row.
+ * Trailing state slot for a feature row — a fixed 52dp square that the row
+ * measures flush against its trailing edge and card wall.
  *
  * Three meanings, drawn as vector strokes rather than font glyphs (font
  * glyphs differ in curvature and optical centring):
- *  - checked: rounded check with a gently arched long stroke;
- *  - unchecked: a perfectly centred minus (the default state);
- *  - failed: an X in the error palette; unavailable shares the minus but
- *    renders at half opacity.
+ *  - checked: straight two-stroke check in the primary container;
+ *  - unchecked (ghost): a neutral minus with NO background block;
+ *  - failed / unavailable: an X in the error container.
  *
- * The tile is allowed to grow vertically with the row ("square can extend
- * up/down") instead of hovering as a fixed 44dp square.
+ * Inside a [RailContainer] the fill is painted by the merged rail itself
+ * (segments join across rows and share corner rules); this view then draws
+ * only the glyph. Outside a rail (standalone RecyclerView cards) it paints
+ * a fully rounded 14dp block on its own.
  */
 class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
     var unavailable = false
-        set(value) { field = value; refreshDrawableState(); invalidate() }
+        set(value) { field = value; refreshDrawableState(); invalidate(); RailContainer.invalidateAncestor(this) }
     var failed = false
-        set(value) { field = value; refreshDrawableState(); invalidate() }
+        set(value) { field = value; refreshDrawableState(); invalidate(); RailContainer.invalidateAncestor(this) }
     var paletteOverride: SettingsVisuals.Palette? = null
 
     private val tileBox = RectF()
@@ -39,7 +40,7 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
-    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
     // Glyph paths are rebuilt when the drawable box changes.
     private val checkPaths = listOf(Path(), Path())
@@ -55,9 +56,19 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
     private var morph = 1f          // 0..1 of the incoming glyph
     private var previousKind = -1
 
+    private val inRail: Boolean
+        get() {
+            var current: ViewGroup? = parent as? ViewGroup
+            while (current != null) {
+                if (current is RailContainer) return true
+                current = current.parent as? ViewGroup
+            }
+            return false
+        }
+
     private val kind: Int
         get() = when {
-            failed -> CROSS
+            failed || unavailable -> CROSS
             isChecked -> CHECK
             else -> MINUS
         }
@@ -74,12 +85,14 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
         previousKind = -1
         super.setChecked(checked)
         invalidate()
+        RailContainer.invalidateAncestor(this)
     }
 
     override fun setChecked(checked: Boolean) {
         if (isChecked == checked) return
         val beforeKind = kind
         super.setChecked(checked)
+        RailContainer.invalidateAncestor(this)
         animator?.cancel()
         if (!isLaidOut || !isAttachedToWindow || !SettingsMotion.enabled()) {
             morph = 1f; previousKind = -1; invalidate(); return
@@ -103,68 +116,49 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
         buttonDrawable = null
         text = ""
         setPadding(0, 0, 0, 0)
-        minimumWidth = SettingsVisuals.dp(context, 48)
-        // Fallback only: the row measures this EXACTLY to its header height
-        // so the tile stretches vertically with content.
-        minimumHeight = SettingsVisuals.dp(context, 40)
+        minimumWidth = SettingsVisuals.dp(context, SettingsVisuals.RAIL_WIDTH)
+        minimumHeight = SettingsVisuals.dp(context, SettingsVisuals.ROW_HEIGHT)
         isClickable = false
     }
 
     override fun onDraw(canvas: Canvas) {
         val p = paletteOverride ?: SettingsVisuals.palette(context)
         val density = resources.displayMetrics.density
-        // Visual tile: 44dp wide, filling the row's header height minus a
-        // slim inset, centred in the 48dp-wide control.
-        val tileW = 44f * density
-        // The row already measures this view 6dp shorter than its header;
-        // the tile fills that box, so it grows vertically with the row.
-        val tileH = height.toFloat().coerceAtLeast(40f * density)
-        val left = (width - tileW) / 2f
-        val top = (height - tileH) / 2f
-        tileBox.set(left, top, left + tileW, top + tileH)
-        val radius = 14f * density
+        val rail = inRail
+        val slot = SettingsVisuals.dp(context, SettingsVisuals.RAIL_WIDTH).toFloat()
+
+        if (rail) {
+            // The rail container owns the fill; the slot covers the full view.
+            tileBox.set(0f, 0f, width.toFloat(), height.toFloat())
+        } else {
+            val boxH = minOf(slot, height.toFloat())
+            val top = (height - boxH) / 2f
+            tileBox.set(width - slot, top, width.toFloat(), top + boxH)
+        }
+        val radius = SettingsVisuals.RAIL_RADIUS * density
 
         val targetKind = kind
-        val settled = morph >= 1f || previousKind < 0
-        val fillFraction = when {
-            failed -> 1f
-            settled -> if (isChecked) 1f else 0f
-            else -> if (targetKind == CHECK) morph else 1f - morph
-        }
+        val errored = targetKind == CROSS
+        val fillColor = if (errored) p.errorContainer else p.primaryContainer
 
-        // ---- tile background, stretched vertically with the row ----
-        val errorContainer = MaterialColors.getColor(context,
-            MaterialR.attr.colorErrorContainer, p.container)
-        val activeContainer = MaterialColors.getColor(context,
-            MaterialR.attr.colorSecondaryContainer, p.container)
-        val resting = androidx.core.graphics.ColorUtils.blendARGB(
-            p.surface, p.container, 0.18f)
-        val tileColor = when {
-            failed -> errorContainer
-            else -> androidx.core.graphics.ColorUtils.blendARGB(
-                resting, activeContainer, fillFraction)
+        // Standalone slots paint their own block; the rail paints merged fills.
+        if (!rail && (isChecked || errored)) {
+            fillPaint.color = fillColor
+            canvas.drawRoundRect(tileBox, radius, radius, fillPaint)
         }
-        fillPaint.style = Paint.Style.FILL
-        fillPaint.color = tileColor
-        val overallAlpha = if (unavailable && !failed) 128 else 255
-        fillPaint.alpha = overallAlpha
-        canvas.drawRoundRect(tileBox, radius, radius, fillPaint)
 
         // ---- glyphs ----
-        ensureGlyphs(tileW, tileH)
-        val box = tileBox
-        val onActive = MaterialColors.getColor(context,
-            MaterialR.attr.colorOnSecondaryContainer, p.onContainer)
-        val errorOn = MaterialColors.getColor(context,
-            MaterialR.attr.colorOnErrorContainer, p.text)
+        ensureGlyphs(tileBox.width(), tileBox.height())
         val glyphColor = when (targetKind) {
-            CROSS -> errorOn
-            CHECK -> SettingsVisuals.stateForeground(onActive, tileColor)
-            else -> p.secondary
+            CROSS -> p.onErrorContainer
+            CHECK -> if (rail) p.onPrimaryContainer
+                     else SettingsVisuals.stateForeground(p.onPrimaryContainer, fillColor)
+            else -> p.outline
         }
-        paint.strokeWidth = 2.6f * density
+        paint.strokeWidth = 2.8f * density
         paint.color = glyphColor
 
+        val settled = morph >= 1f || previousKind < 0
         val pop = if (settled) 1f else 0.85f + 0.15f * popCurve(morph)
         val save = canvas.save()
         canvas.scale(pop, pop, width / 2f, height / 2f)
@@ -172,16 +166,15 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
         // Outgoing glyph fades through the first 40% of the morph.
         if (!settled && previousKind in MINUS..CROSS) {
             val out = (1f - morph / 0.4f).coerceIn(0f, 1f)
-            if (out > 0f) {
-                paint.alpha = (overallAlpha * out * 0.6f).toInt()
-                drawGlyph(canvas, box, previousKind, 1f)
+            if (out > 0) {
+                paint.alpha = (out * 0.6f * 255).toInt()
+                drawGlyph(canvas, tileBox, previousKind, 1f)
             }
         }
 
-        paint.alpha = overallAlpha
-        // Failed glyphs simply appear; live state changes draw themselves.
-        val drawFraction = if (settled || failed) 1f else morph
-        drawGlyph(canvas, box, targetKind, drawFraction)
+        paint.alpha = 255
+        val drawFraction = if (settled || errored) 1f else morph
+        drawGlyph(canvas, tileBox, targetKind, drawFraction)
         canvas.restoreToCount(save)
     }
 
@@ -191,25 +184,23 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
         return 1f + 0.18f * Math.sin((s * Math.PI).toDouble()).toFloat() * (1f - s)
     }
 
-    /** Builds the three glyphs centred inside a tile of the given size. */
+    /** Builds the three glyphs centred inside a slot of the given size. */
     private fun ensureGlyphs(w: Float, h: Float) {
         if (glyphBoxW == w && glyphBoxH == h) return
         glyphBoxW = w; glyphBoxH = h
         val u = minOf(w, h)
         val cx = w / 2f
         val cy = h / 2f
-        // Glyph footprint ~ 22dp inside a 44dp tile.
+        // Glyph footprint ~25dp inside a 52dp slot.
         val half = u * 0.24f
 
-        // Check: short down stroke then a long, gently arched up stroke
-        // (curvature comes from the quad + round caps/join).
+        // Check: two straight strokes joined at the bottom; no arc.
         checkPaths[0].reset()
         checkPaths[0].moveTo(cx - half * 0.95f, cy + half * 0.05f)
         checkPaths[0].lineTo(cx - half * 0.15f, cy + half * 0.85f)
         checkPaths[1].reset()
         checkPaths[1].moveTo(cx - half * 0.15f, cy + half * 0.85f)
-        checkPaths[1].quadTo(cx + half * 0.18f, cy + half * 0.62f,
-            cx + half * 1.02f, cy - half * 0.82f)
+        checkPaths[1].lineTo(cx + half * 1.02f, cy - half * 0.82f)
 
         // Minus: one horizontal bar, optically centred.
         minusPath.reset()
@@ -245,7 +236,7 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
             val len = measures[i].length
             measures[i].getSegment(0f, len * local, drawn, true)
         }
-        // Glyphs were built in tile coordinates; translate into the box.
+        // Glyphs were built in slot coordinates; translate into the box.
         val save = canvas.save()
         canvas.translate(box.left, box.top)
         canvas.drawPath(drawn, paint)
@@ -256,7 +247,7 @@ class SquareStateControl(context: Context) : AppCompatCheckBox(context) {
         super.onInitializeAccessibilityNodeInfo(info)
         if (Build.VERSION.SDK_INT >= 30) info.stateDescription = when {
             failed -> "初始化或运行出错，配置${if (isChecked) "开启" else "关闭"}"
-            unavailable -> "当前不支持，配置${if (isChecked) "开启" else "关闭"}"
+            unavailable -> "与当前宿主版本不兼容，开关已锁定"
             isChecked -> "已开启"
             else -> "未开启"
         }

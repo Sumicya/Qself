@@ -8,8 +8,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import io.github.qauxv.dsl.cell.TitleValueCell
 
 /** Real settings-home content. Its action dispatcher is supplied by SettingsMainFragment. */
 class SettingsHomeView(context: Context) : LinearLayout(context) {
@@ -41,7 +44,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
 
     init {
         orientation = VERTICAL
-        setPadding(dp(16), dp(8), dp(16), dp(24))
+        setPadding(dp(SettingsVisuals.SCREEN_SIDE), dp(6), dp(SettingsVisuals.SCREEN_SIDE), dp(24))
     }
 
     fun bind(state: State, mode: Int, action: (String) -> Unit) {
@@ -51,27 +54,28 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         boundCompact = compact
         boundState = state
         boundMode = mode
-        removeAllViews()
         palette = SettingsVisuals.palette(context, mode)
-        addView(text("按需开启，保持简单。", 15, palette.secondary), lp(top = 6, bottom = 16))
-        addView(text(state.hostLabel + if (state.safeMode) "  ·  安全模式" else "  ·  合并版", 12, palette.accent)
-            .apply { setPadding(dp(12), dp(7), dp(12), dp(7)); background = SettingsVisuals.surface(context, palette, 12, owner = this) },
-            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        removeAllViews()
 
-        addView(text("功能", 14, palette.secondary, true), lp(top = 20, bottom = 12))
+        // ---- header: search left, centered title, theme/gear right ----
+        addView(headerBar(), LayoutParams(LayoutParams.MATCH_PARENT, dp(52)))
+        addView(text(state.hostLabel + if (state.safeMode) " · 安全模式" else "", 12, palette.secondary),
+            lp(top = 2, bottom = 14))
+
+        // ---- section cards ----
         for (section in HomeCatalog.sections) {
             val accordion = SettingsAccordion(context, section.title, section.summary) {
                 LinearLayout(context).apply {
                     orientation = VERTICAL
                     for (group in sumicya.qself.feature.consolidation.FeatureCatalog.groupsForHome(section.id)) {
-                        val row = io.github.qauxv.dsl.cell.TitleValueCell(context).apply {
+                        val row = TitleValueCell(context).apply {
                             title = group.title
                             summary = "${group.sections.sumOf { it.features.size }} 项独立设置"
-                            value = "⌄"; hasDivider = false
-                            titleView.setTextColor(palette.text); summaryView.setTextColor(palette.secondary)
+                            isChevron = true
                         }
-                        button(row, "group:${group.id}", group.title)
-                        addView(row, LayoutParams(-1, -2).apply { topMargin = dp(2) })
+                        SettingsVisuals.decorateCardChild(row, palette, true)
+                        makeButton(row, "group:${group.id}", group.title)
+                        addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
                     }
                 }
             }
@@ -80,63 +84,69 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
                 if (expanded) expandedSections.add(section.id) else expandedSections.remove(section.id)
             }
             accordion.setExpanded(section.id in expandedSections)
-            addView(accordion, lp(bottom = 4))
+            addView(accordion, lp(bottom = SettingsVisuals.CARD_GAP))
         }
 
-        addView(text("诊断", 14, palette.secondary, true), lp(top = 16, bottom = 12))
-        val diagnostics = LinearLayout(context).apply {
-            orientation = VERTICAL
-            setPadding(dp(18), dp(18), dp(18), dp(18))
-            val heading = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
-            heading.addView(text("上报诊断", 17, palette.text, true), LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-            heading.addView(text(if (state.diagnosticEnabled) "记录开关已开" else "记录开关已关", 11, palette.accent)
-                .apply { setPadding(dp(9), dp(6), dp(9), dp(6)); background = SettingsVisuals.surface(context, palette, 9, owner = this) })
-            addView(heading)
-            addView(text("只读 · 本地保存 · 按需开启", 13, palette.secondary), lp(top = 8))
-            addView(text("观察到调用，不等于服务器已接收。", 12, palette.secondary), lp(top = 5))
-        }
-        button(diagnostics, HomeCatalog.DIAGNOSTICS, "上报诊断，${if (state.diagnosticEnabled) "记录开关已开" else "记录开关已关"}，仅本地观察")
-        addView(diagnostics)
+        // ---- management card: every secondary destination in one container ----
+        addView(card {
+            navRow("诊断与导出",
+                if (state.diagnosticEnabled) "兼容性探针 · 日志 · 统一导出（记录已开）"
+                else "兼容性探针 · 日志 · 统一导出", HomeCatalog.DIAGNOSTICS)
+            navRow("主题与显示", "Material 3 Expressive · 玻璃与外观", HomeCatalog.THEME)
+            navRow("备份与恢复", "保留你的配置，放心调整", HomeCatalog.BACKUP)
+            navRow("功能与设置", "按场景合并，子项独立选择", HomeCatalog.CATALOG)
+        }, lp(bottom = SettingsVisuals.CARD_GAP))
 
-        addView(text("管理", 14, palette.secondary, true), lp(top = 28, bottom = 12))
-        utility("主题与显示", "Material 3 Expressive · 原地展开", HomeCatalog.THEME)
-        utility("备份与恢复", "保留你的配置，放心调整", HomeCatalog.BACKUP)
-        utility("功能与设置", "按场景合并，子项独立选择", HomeCatalog.CATALOG)
-        addView(text("同类能力共用入口与处理；各子项保留原来的配置。", 12, palette.secondary), lp(top = 10))
-        val about = text("QSELF  ·  关于与隐私", 11, palette.secondary).apply {
+        val about = text("QSELF · 关于与隐私", 11, palette.secondary).apply {
             gravity = Gravity.CENTER
             minimumHeight = dp(48)
         }
-        button(about, HomeCatalog.ABOUT, "关于与隐私", filled = false)
-        addView(about, lp(top = 16))
+        makeButton(about, HomeCatalog.ABOUT, "关于与隐私", filled = false)
+        addView(about, lp(top = 4))
     }
 
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        io.github.qauxv.dsl.item.UiAgentItem.findActivity(context)?.let { InlineSettings.register(it, this) }
-    }
-
-    override fun onDetachedFromWindow() {
-        io.github.qauxv.dsl.item.UiAgentItem.findActivity(context)?.let { InlineSettings.unregister(it) }
-        super.onDetachedFromWindow()
-    }
-
-    private fun utility(title: String, subtitle: String, id: String) {
-        val row = LinearLayout(context).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = dp(76)
-            setPadding(dp(18), dp(14), dp(18), dp(14))
-            val column = LinearLayout(context).apply {
-                orientation = VERTICAL
-                addView(text(title, 16, palette.text, true))
-                addView(text(subtitle, 12, palette.secondary), lp(top = 5))
-            }
-            addView(column, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-            addView(text(if (layoutDirection == LAYOUT_DIRECTION_RTL) "‹" else "›", 24, palette.secondary)
-                .apply { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO })
+    private fun headerBar(): View = FrameLayout(context).apply {
+        val title = text("Qself", 22, palette.text, true).apply {
+            gravity = Gravity.CENTER
         }
-        button(row, id, "$title，$subtitle")
-        addView(row, lp(bottom = 9))
+        addView(title, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
+        addView(icon(io.github.qauxv.R.drawable.ic_search_baseline, HomeCatalog.SEARCH, "搜索功能"),
+            FrameLayout.LayoutParams(dp(48), dp(48), Gravity.START or Gravity.CENTER_VERTICAL))
+        addView(icon(io.github.qauxv.R.drawable.ic_settings, HomeCatalog.THEME, "主题与显示"),
+            FrameLayout.LayoutParams(dp(48), dp(48), Gravity.END or Gravity.CENTER_VERTICAL))
+    }
+
+    private fun icon(res: Int, action: String, label: String): View = ImageView(context).apply {
+        setImageResource(res)
+        scaleType = ImageView.ScaleType.CENTER
+        imageTintList = android.content.res.ColorStateList.valueOf(palette.secondary)
+        contentDescription = label
+        isFocusable = true
+        setOnClickListener { InlineSettings.anchor(this); dispatch(action) }
+        accessibilityDelegate = object : AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = Button::class.java.name
+            }
+        }
+    }
+
+    private fun card(content: LinearLayout.() -> Unit): View = LinearLayout(context).apply {
+        orientation = VERTICAL
+        background = SettingsVisuals.surface(context, palette, SettingsVisuals.CARD_RADIUS, false)
+        SettingsVisuals.clipOutline(this, SettingsVisuals.CARD_RADIUS)
+        content()
+    }
+
+    private fun LinearLayout.navRow(title: String, subtitle: String, id: String) {
+        val row = TitleValueCell(context).apply {
+            this.title = title
+            summary = subtitle
+            isChevron = true
+        }
+        SettingsVisuals.decorateCardChild(row, palette, true)
+        makeButton(row, id, "$title，$subtitle")
+        addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
     }
 
     private fun text(value: String, size: Int, color: Int, medium: Boolean = false): TextView = TextView(context).apply {
@@ -145,16 +155,15 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         setTextColor(color)
         typeface = Typeface.create(if (medium) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
         includeFontPadding = false
-        setLineSpacing(dp(3).toFloat(), 1f)
     }
 
-    private fun button(view: View, id: String, label: String, filled: Boolean = true) {
+    private fun makeButton(view: View, id: String, label: String, filled: Boolean = false) {
         view.tag = id
         view.contentDescription = label
         view.isFocusable = true
         view.isClickable = true
         view.minimumHeight = maxOf(view.minimumHeight, dp(48))
-        if (filled) view.background = SettingsVisuals.surface(context, palette, 12, true, view)
+        if (filled) view.background = SettingsVisuals.surface(context, palette, SettingsVisuals.CARD_RADIUS, true, view)
         view.setOnClickListener { InlineSettings.anchor(view); dispatch(id) }
         view.accessibilityDelegate = object : AccessibilityDelegate() {
             override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
@@ -170,6 +179,16 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
             }
         }
         if (view is ViewGroup) hideDecorativeChildren(view)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        io.github.qauxv.dsl.item.UiAgentItem.findActivity(context)?.let { InlineSettings.register(it, this) }
+    }
+
+    override fun onDetachedFromWindow() {
+        io.github.qauxv.dsl.item.UiAgentItem.findActivity(context)?.let { InlineSettings.unregister(it) }
+        super.onDetachedFromWindow()
     }
 
     public override fun onSaveInstanceState(): android.os.Parcelable = SavedState(super.onSaveInstanceState()).apply {

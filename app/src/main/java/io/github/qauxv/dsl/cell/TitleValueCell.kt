@@ -29,9 +29,11 @@ import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.LinearLayout
 import sumicya.qself.ui.SquareStateControl
+import sumicya.qself.ui.SettingsVisuals
 import androidx.core.content.res.ResourcesCompat
 import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
@@ -48,10 +50,10 @@ class TitleValueCell(
     val summaryView: TextView
     val valueView: TextView
     val switchView: SquareStateControl
+    val chevronView: ImageView
 
     private val dividerColor: Int
     private val dip1: Float = 1.dp.toFloat()
-    private val errorLineColor: Int
 
     private val dividerPaint by lazy { Paint() }
 
@@ -60,15 +62,20 @@ class TitleValueCell(
     private var headerHeight = 0
     val inlineContent = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; isClickable = true }
 
+    // Unified trailing slot geometry: a 52dp square flush to the trailing card wall.
+    private val railWidth = SettingsVisuals.dp(context, SettingsVisuals.RAIL_WIDTH)
+    private val textStart = SettingsVisuals.dp(context, SettingsVisuals.TEXT_START)
+    private val textGap = 12.dp
+
     init {
-        minimumHeight = 56.dp
+        minimumHeight = SettingsVisuals.dp(context, SettingsVisuals.ROW_HEIGHT)
         setWillNotDraw(false)
         addView(textColumn)
         addView(inlineContent)
         dividerColor = ResourcesCompat.getColor(resources, R.color.divideColor, context.theme)
         // title text view
         titleView = TextView(context).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setTextColor(ResourcesCompat.getColor(resources, R.color.firstTextColor, context.theme))
             gravity = Gravity.CENTER_VERTICAL or Gravity.START
             maxLines = 3
@@ -78,18 +85,17 @@ class TitleValueCell(
         }
         // summary text view
         summaryView = TextView(context).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(ResourcesCompat.getColor(resources, R.color.thirdTextColor, context.theme))
             gravity = Gravity.START
             visibility = GONE
         }.also {
-            textColumn.addView(it, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = 4.dp })
+            textColumn.addView(it, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = 2.dp })
         }
         val valueTextColor = ThemeAttrUtils.resolveColorOrDefaultColorRes(context, androidx.appcompat.R.attr.colorAccent, R.color.colorAccent)
-        errorLineColor = ThemeAttrUtils.resolveColorOrDefaultColorInt(context, R.attr.unusableColor, valueTextColor)
         // value text view
         valueView = TextView(context).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(valueTextColor)
             maxLines = 3
             ellipsize = TextUtils.TruncateAt.END
@@ -99,22 +105,27 @@ class TitleValueCell(
             addView(
                 it, LayoutHelper.newFrameLayoutParamsRel(
                     WRAP_CONTENT, WRAP_CONTENT,
-                    Gravity.CENTER_VERTICAL or Gravity.END, 22.dp, 0, 22.dp, 0
+                    Gravity.CENTER_VERTICAL or Gravity.END, 16.dp, 0, 16.dp, 0
                 )
             )
         }
-        // switch view
+        // switch view: the trailing state slot, measured flush to the card wall
         switchView = SquareStateControl(context).apply {
             visibility = GONE
-            // Clicks are owned by the whole row; the tile is a visual indicator.
+            // Clicks are owned by the whole row; the slot is a visual indicator.
             isClickable = false
         }.also {
-            addView(
-                it, LayoutHelper.newFrameLayoutParamsRel(
-                    WRAP_CONTENT, WRAP_CONTENT,
-                    Gravity.CENTER_VERTICAL or Gravity.END, 22.dp, 0, 22.dp, 0
-                )
-            )
+            addView(it, LayoutHelper.newFrameLayoutParamsRel(railWidth, WRAP_CONTENT, Gravity.TOP or Gravity.END, 0, 0, 0, 0))
+        }
+        // navigation chevron for rows that open another page (groups, utilities)
+        chevronView = ImageView(context).apply {
+            setImageResource(R.drawable.qself_expand_more)
+            scaleType = ImageView.ScaleType.CENTER
+            rotation = -90f // down chevron -> right chevron
+            visibility = GONE
+            importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        }.also {
+            addView(it, LayoutHelper.newFrameLayoutParamsRel(railWidth, WRAP_CONTENT, Gravity.TOP or Gravity.END, 0, 0, 0, 0))
         }
     }
 
@@ -140,8 +151,9 @@ class TitleValueCell(
             valueView.text = value
             valueView.visibility = if (value.isNullOrEmpty()) GONE else VISIBLE
             if (!value.isNullOrEmpty()) {
-                // value text and switch view are in the same position
+                // value text and state slot are mutually exclusive
                 switchView.visibility = GONE
+                chevronView.visibility = GONE
             }
             requestLayout()
         }
@@ -151,7 +163,17 @@ class TitleValueCell(
         set(value) {
             switchView.visibility = if (value) VISIBLE else GONE
             if (isHasSwitch) {
-                // value text and switch view are in the same position
+                valueView.visibility = GONE
+                chevronView.visibility = GONE
+            }
+        }
+
+    var isChevron: Boolean
+        get() = chevronView.visibility == VISIBLE
+        set(value) {
+            chevronView.visibility = if (value) VISIBLE else GONE
+            if (value) {
+                switchView.visibility = GONE
                 valueView.visibility = GONE
             }
         }
@@ -163,6 +185,7 @@ class TitleValueCell(
             if (!isHasSwitch) {
                 isHasSwitch = true
             }
+            chevronView.visibility = GONE
         }
 
     var isUnavailable: Boolean = false
@@ -171,64 +194,80 @@ class TitleValueCell(
     var hasError: Boolean = false
         set(value) {
             switchView.failed = value
-            val needInvalidate = field != value
             field = value
-            if (needInvalidate) {
-                invalidate()
-            }
         }
 
     var hasDivider: Boolean = true
         set(value) {
-            var needInvalidate = false
-            if (value != field) {
-                needInvalidate = true
-            }
             field = value
-            if (needInvalidate) {
-                invalidate()
-            }
+            invalidate()
         }
 
     fun isClickOnSwitch(x: Int): Boolean {
-        return isHasSwitch && (x >= switchView.left && x <= switchView.right)
+        if (!isHasSwitch) return false
+        val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
+        return if (rtl) x in 0..railWidth else x >= measuredWidth - railWidth
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val unspecified = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-        val control = if (isHasSwitch) switchView else valueView
+        val hasSlot = isHasSwitch || isChevron
+        val control = when {
+            isHasSwitch -> switchView
+            isChevron -> chevronView
+            else -> valueView
+        }
         trailingWidth = 0
         if (control.visibility != GONE) {
-            control.measure(MeasureSpec.makeMeasureSpec(if (isHasSwitch) 48.dp else (width * .30f).toInt(),
-                if (isHasSwitch) MeasureSpec.EXACTLY else MeasureSpec.AT_MOST), unspecified)
-            trailingWidth = control.measuredWidth + if (isHasSwitch) 0 else 12.dp
+            if (hasSlot) {
+                control.measure(MeasureSpec.makeMeasureSpec(railWidth, MeasureSpec.EXACTLY), unspecified)
+                trailingWidth = railWidth
+            } else {
+                control.measure(MeasureSpec.makeMeasureSpec((width * .30f).toInt(), MeasureSpec.AT_MOST), unspecified)
+                trailingWidth = control.measuredWidth + 16.dp
+            }
         }
-        textColumn.measure(MeasureSpec.makeMeasureSpec((width - 32.dp - trailingWidth).coerceAtLeast(0), MeasureSpec.EXACTLY), unspecified)
-        val height = maxOf(minimumHeight, textColumn.measuredHeight + 16.dp,
-            if (control.visibility == GONE || isHasSwitch) 0 else control.measuredHeight + 8.dp)
-        headerHeight = height
+        textColumn.measure(
+            MeasureSpec.makeMeasureSpec((width - textStart - textGap - trailingWidth).coerceAtLeast(0), MeasureSpec.EXACTLY),
+            unspecified)
+        val header = maxOf(SettingsVisuals.dp(context, SettingsVisuals.ROW_HEIGHT),
+            textColumn.measuredHeight + 13.dp,
+            if (!hasSlot && control.visibility != GONE) control.measuredHeight + 8.dp else 0)
+        headerHeight = header
+        // The state slot fills the whole header height so the rail paints flush segments.
+        if (isHasSwitch) {
+            switchView.measure(MeasureSpec.makeMeasureSpec(railWidth, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(header, MeasureSpec.EXACTLY))
+        }
+        if (isChevron) {
+            chevronView.measure(MeasureSpec.makeMeasureSpec(railWidth, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(header, MeasureSpec.EXACTLY))
+        }
         inlineContent.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), unspecified)
-        setMeasuredDimension(width, resolveSize(height + inlineContent.measuredHeight, heightMeasureSpec))
-        if (isHasSwitch) switchView.measure(MeasureSpec.makeMeasureSpec(48.dp, MeasureSpec.EXACTLY),
-            // The state tile stretches with the row instead of staying a 48dp square.
-            MeasureSpec.makeMeasureSpec((height - 6.dp).coerceAtLeast(40.dp), MeasureSpec.EXACTLY))
+        setMeasuredDimension(width, resolveSize(header + inlineContent.measuredHeight, heightMeasureSpec))
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         inlineContent.layout(0, headerHeight, measuredWidth, headerHeight + inlineContent.measuredHeight)
         val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
-        // State belongs at the leading edge; explanatory text follows it.
-        val leadingControl = isHasSwitch
-        val columnLeft = 16.dp + if (leadingControl != rtl) trailingWidth else 0
+        val columnLeft = if (rtl) measuredWidth - textStart - textColumn.measuredWidth else textStart
         val columnTop = (headerHeight - textColumn.measuredHeight) / 2
         textColumn.layout(columnLeft, columnTop, columnLeft + textColumn.measuredWidth, columnTop + textColumn.measuredHeight)
-        for (control in arrayOf(valueView, switchView)) if (control.visibility != GONE) {
-            val atLeft = if (control === switchView) !rtl else rtl
-            val inset = if (control === switchView) 8.dp else 16.dp
-            val x = if (atLeft) inset else measuredWidth - inset - control.measuredWidth
-            val y = (headerHeight - control.measuredHeight) / 2
-            control.layout(x, y, x + control.measuredWidth, y + control.measuredHeight)
+        // State slot / navigation chevron: flush to the trailing edge and the row's vertical bounds.
+        val slotStart = if (rtl) 0 else measuredWidth - railWidth
+        if (switchView.visibility != GONE) {
+            switchView.layout(slotStart, 0, slotStart + railWidth, headerHeight)
+        }
+        if (chevronView.visibility != GONE) {
+            chevronView.layout(slotStart, 0, slotStart + railWidth, headerHeight)
+        }
+        if (valueView.visibility != GONE) {
+            val vw = valueView.measuredWidth
+            val vh = valueView.measuredHeight
+            val x0 = if (rtl) 16.dp else measuredWidth - 16.dp - vw
+            val y0 = (headerHeight - vh) / 2
+            valueView.layout(x0, y0, x0 + vw, y0 + vh)
         }
     }
 
@@ -238,16 +277,6 @@ class TitleValueCell(
             dividerPaint.strokeWidth = dip1
             dividerPaint.color = dividerColor
             canvas.drawLine(0f, measuredHeight.toFloat(), measuredWidth.toFloat(), measuredHeight.toFloat(), dividerPaint)
-        }
-        if (hasError) {
-            dividerPaint.strokeWidth = dip1 * 2f
-            dividerPaint.color = errorLineColor
-            val textWidth = titleView.paint.measureText(titleView.text.toString())
-            val startX = textColumn.left + titleView.left
-            // startY is baseline
-            val startY = titleView.baseline + textColumn.top + titleView.top + dip1 * 2f
-            val endX = startX + minOf(textWidth, titleView.width.toFloat())
-            canvas.drawLine(startX.toFloat(), startY, endX, startY, dividerPaint)
         }
     }
 }

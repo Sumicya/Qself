@@ -76,6 +76,9 @@ object InlineSettings {
     @JvmStatic @JvmOverloads fun show(context: Context, content: View, onClose: Runnable? = null, cancelable: Boolean = true, onCancel: Runnable? = null): (() -> Unit)? {
         val activity = UiAgentItem.findActivity(context) ?: return null
         val fallback = fallbacks[activity]?.get()?.takeIf { it.isAttachedToWindow } ?: return null
+        // Single-panel contract: opening a new panel closes every existing one,
+        // so rapid taps on several anchors can never stack or drill through panels.
+        closers[activity]?.toList()?.asReversed()?.forEach { runCatching { it() } }
         var target = anchors[activity]?.get()?.takeIf { it.isAttachedToWindow } ?: fallback
         // A text/icon inside a row anchors to that row, not to its internal label column.
         var ancestor: View? = target
@@ -86,9 +89,9 @@ object InlineSettings {
         val box = LinearLayout(content.context).apply {
             orientation = LinearLayout.VERTICAL
             setTag(io.github.qauxv.R.id.qself_inline_cancelable, cancelable)
-            val p = SettingsVisuals.palette(context, 2)
-            background = SettingsVisuals.surface(context, p, 20)
-            setPadding(0, SettingsVisuals.dp(context, 8), 0, SettingsVisuals.dp(context, 8))
+            // Part of the surrounding card, not a nested rounded container.
+            background = null
+            setPadding(0, 0, 0, SettingsVisuals.dp(context, 6))
             isClickable = true
         }
         (content.parent as? ViewGroup)?.removeView(content)
