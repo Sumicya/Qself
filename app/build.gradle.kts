@@ -358,8 +358,6 @@ dependencies {
     implementation(libs.dexlib2)
     // I don't know why, but without this, compilation will fail
     implementation(libs.google.guava)
-    implementation(libs.sealedEnum.runtime)
-    ksp(libs.sealedEnum.ksp)
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.runner)
 }
