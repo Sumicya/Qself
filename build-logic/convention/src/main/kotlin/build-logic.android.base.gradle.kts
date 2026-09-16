@@ -53,7 +53,7 @@ extensions.findByType(CommonExtension::class)?.run {
 
 extensions.findByType(KotlinAndroidProjectExtension::class)?.run {
     compilerOptions {
-        languageVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_0
+        languageVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(Version.java.toString())
     }
 }
