@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources><style name="QselfSmallWindowAnimation"><item name="android:windowExitAnimation">@anim/qself_small_window_exit</item></style></resources>

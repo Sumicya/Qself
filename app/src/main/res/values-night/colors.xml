@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#03A9F4</color>
+    <color name="colorPrimaryDark">#FF82A8E7</color>
+    <color name="colorAccent">#2D88FF</color>
+
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Text Colors -->
+    <color name="firstTextColor">#FFFFFFFF</color>
+    <color name="secondTextColor">#DEFFFFFF</color>
+    <color name="thirdTextColor">#99FFFFFF</color>
+    <color name="whiteTextColor">#FFFFFFFF</color>
+    <color name="rippleColor">#14FFFFFF</color>
+    <color name="divideColor">#14FFFFFF</color>
+
+    <color name="global_font_color">@color/white</color>
+    <color name="global_background_color">@color/black</color>
+
+    <color name="sticker_share_root_tab_back">#555555</color>
+    <color name="sticker_share_root_tab_back_selected">#885555</color>
+
+    <color name="defaultThemeBackgroundColor">#FF303030</color>
+    <color name="defaultThemeBackgroundColorAlpha80">#CC303030</color>
+
+
+    <color name="font_plugin">#FFFFFFFF</color>
+    <color name="bg_plugin">#FF3C3C3C</color>
+</resources>
