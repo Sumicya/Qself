@@ -22,6 +22,10 @@
 
 package me.ketal.hook
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
 import android.content.Context
 import android.text.Spannable
 import android.text.SpannableString
@@ -34,8 +38,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.view.forEach
 import cc.hicore.QApp.QAppUtils
 import cc.ioctl.hook.profile.OpenProfileCard
-import cc.ioctl.util.HostInfo
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.FaultyDialog
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord
 import com.tencent.qqnt.kernel.nativeinterface.TextElement
 import io.github.qauxv.util.xpcompat.XC_MethodHook
@@ -85,7 +88,7 @@ object ShowMsgAt : CommonSwitchFunctionHook(), OnBubbleBuilder, DexKitFinder {
             val cache = ConfigManager.getCache()
             val lastVersion = cache.getIntOrDefault("ShowMsgAt_ex1_id_version_code", 0)
             val id = cache.getIntOrDefault("ShowMsgAt_ex1_id_value", 0)
-            return if (HostInfo.getVersionCode() == lastVersion) {
+            return if (hostInfo.versionCode32 == lastVersion) {
                 id
             } else 0
         }
@@ -140,7 +143,7 @@ object ShowMsgAt : CommonSwitchFunctionHook(), OnBubbleBuilder, DexKitFinder {
     public fun createUnknownUidDialog(outerContext: Context, uid: String) {
         val ctx = CommonContextWrapper.createAppCompatContext(outerContext)
         // BTN: OK, COPY
-        AlertDialog.Builder(ctx)
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle("未知的 UID")
             .setMessage(uid + "\n如果您是第一次遇到此情况，建议您在右上角打开群资料卡后点开群聊成员列表，并等待其全部加载完成后返回重试。")
             .setPositiveButton("确认") { _, _ -> }

@@ -27,7 +27,7 @@
     android:layout_height="match_parent"
     tools:viewBindingIgnore="true">
 
-    <cc.ioctl.util.ui.fling.SimpleFlingInterceptLayout
+    <io.github.qauxv.util.ui.fling.SimpleFlingInterceptLayout
         android:id="@+id/fragment_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
@@ -35,8 +35,8 @@
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/backgroundColorAlphaTitle"
-        android:elevation="1dp"
+        android:background="@android:color/transparent"
+        android:elevation="0dp"
         android:orientation="vertical">
 
         <com.google.android.material.appbar.AppBarLayout
@@ -54,6 +54,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@null"
+                app:titleCentered="false"
+                app:subtitleCentered="true"
                 app:title="@string/app_name" />
 
         </com.google.android.material.appbar.AppBarLayout>

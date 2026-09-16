@@ -33,7 +33,7 @@ import androidx.annotation.UiThread
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import cc.ioctl.util.BugUtils
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.FaultyDialog
 import cc.ioctl.hook.misc.CustomSplash
 import io.github.qauxv.R
 import io.github.qauxv.databinding.FragmentCustomSplashConfigBinding

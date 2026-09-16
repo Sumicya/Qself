@@ -25,7 +25,7 @@ package me.singleneuron.hook.decorator
 import android.app.Activity
 import android.view.View
 import android.widget.EditText
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.hook.notification.MessageInterception
 import cc.ioctl.util.msg.MessageReceiver
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -102,7 +102,7 @@ object RegexAntiMeg : CommonConfigFunctionHook(), MessageReceiver {
 
     override val onUiItemClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, activity, _ ->
         val dialogContext = CommonContextWrapper.createMaterialDesignContext(activity)
-        MaterialAlertDialogBuilder(dialogContext).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(dialogContext).apply {
             setTitle("设置正则表达式")
             setMessage("请输入正则表达式，以便屏蔽指定的卡片消息")
             val editTextPreference: EditText = EditText(dialogContext).apply {

@@ -22,7 +22,7 @@
 
 package cc.ioctl.hook.notification
 
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.msg.MessageManager
 import cc.ioctl.util.msg.MessageReceiver
 import cn.lliiooll.hook.AntiRobotMessage

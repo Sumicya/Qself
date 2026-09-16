@@ -24,7 +24,6 @@ package io.github.qauxv.activity
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
@@ -35,8 +34,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.annotation.CallSuper
 import androidx.core.view.doOnLayout
 import androidx.fragment.app.Fragment
-import cc.ioctl.util.ui.ThemeAttrUtils
-import cc.ioctl.util.ui.fling.SimpleFlingInterceptLayout
+import io.github.qauxv.util.ui.fling.SimpleFlingInterceptLayout
 import com.google.android.material.appbar.AppBarLayout
 import io.github.qauxv.R
 import io.github.qauxv.fragment.BaseSettingFragment
@@ -44,10 +42,13 @@ import io.github.qauxv.fragment.SettingsMainFragment
 import io.github.qauxv.ui.ModuleThemeManager
 import io.github.qauxv.util.SyncUtils
 import io.github.qauxv.util.isInHostProcess
-import name.mikanoshi.customiuizer.holidays.HolidayHelper
+import sumicya.qself.ui.SettingsVisuals
+import sumicya.qself.ui.SettingsAppearanceItem
 import java.lang.Integer.max
 
 open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingInterceptLayout.SimpleOnFlingHandler {
+
+    private var dynamicColorSignature = 0
 
     private val FRAGMENT_TAG = "SettingsUiFragmentHostActivity.FRAGMENT_TAG"
     private val FRAGMENT_SAVED_STATE_KEY = "SettingsUiFragmentHostActivity.FRAGMENT_SAVED_STATE_KEY"
@@ -68,6 +69,9 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
     override fun doOnEarlyCreate(savedInstanceState: Bundle?, isInitializing: Boolean) {
         super.doOnEarlyCreate(savedInstanceState, isInitializing)
         setTheme(ModuleThemeManager.getCurrentThemeColorStyleId())
+        theme.applyStyle(R.style.Theme_Qself_Expressive, true)
+        sumicya.qself.ui.SettingsDynamicColors.apply(this)
+        dynamicColorSignature = sumicya.qself.ui.SettingsDynamicColors.signature(this)
     }
 
     /**
@@ -78,33 +82,55 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
     override fun doOnCreate(savedInstanceState: Bundle?): Boolean {
         // we don't want the Fragment to be recreated
         super.doOnCreate(null)
+        // The proxy ActivityInfo comes from QQ. Do not inherit a software-only
+        // window for native components and local dialogs. This affects this window only.
+        window.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
         setContentView(R.layout.activity_settings_ui_host)
         // update window background, I don't know why, but it's necessary
-        val bgColor = ThemeAttrUtils.resolveColorOrDefaultColorInt(this, android.R.attr.windowBackground, 0)
-        window.setBackgroundDrawable(ColorDrawable(bgColor))
+        val visualPalette = SettingsVisuals.palette(this, SettingsAppearanceItem.mode)
+        window.setBackgroundDrawable(SettingsVisuals.backdrop(visualPalette))
         window.setSoftInputMode(
             WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
                 or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
         )
         mAppBarLayout = findViewById(R.id.topAppBarLayout)
         mAppToolBar = findViewById(R.id.topAppBar)
-        mAppBarLayout.background = mAppToolBar.background
+        mAppBarLayout.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        mAppToolBar.setTitleTextColor(visualPalette.text)
+        mAppToolBar.setSubtitleTextColor(visualPalette.secondary)
         setSupportActionBar(mAppToolBar)
         requestTranslucentStatusBar()
-        HolidayHelper.setup(this)
         mFlingLayout = findViewById(R.id.fragment_container)
         mFlingLayout.onFlingHandler = this
         mAppBarLayout.addOnLayoutChangeListener { _, _, top, _, bottom, _, _, _, _ ->
             mAppBarLayoutHeight = bottom - top
+            (mFlingLayout.layoutParams as android.widget.FrameLayout.LayoutParams).apply {
+                topMargin = max(mAppBarLayoutHeight, statusBarLayoutInsect)
+                mFlingLayout.layoutParams = this
+            }
             for (fragment in mFragmentStack) {
                 fragment.notifyLayoutPaddingsChanged()
             }
         }
         onBackPressedDispatcher.addCallback(this, mFragmentPopOnBackCallback)
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                // Back unwinds one level: an expanded row panel or an expanded category card,
+                // most recently opened first. Only an empty stack leaves the screen.
+                if (!sumicya.qself.ui.InlineSettings.back(this@SettingsUiFragmentHostActivity)) {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
         mAppBarLayout.doOnLayout {
             SyncUtils.postDelayed(0) {
                 runOnStart {
                     initFragments(savedInstanceState)
+                    savedInstanceState?.getBundle(sumicya.qself.ui.SettingsOptionSheet.TAG)?.let {
+                        sumicya.qself.ui.SettingsOptionSheet.restore(this, it)
+                    }
                 }
             }
         }
@@ -187,10 +213,12 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
     }
 
     fun presentFragment(fragment: BaseSettingFragment) {
+        if (sumicya.qself.ui.InlineSettings.presentFragment(this, fragment)) return
         rtlAddFragmentToTop(fragment)
     }
 
     fun finishFragment(fragment: BaseSettingFragment) {
+        if (sumicya.qself.ui.InlineSettings.finishFragment(fragment)) return
         rtlRemoveFragment(fragment)
     }
 
@@ -246,6 +274,9 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
                 it.title = text
                 it.subtitle = subtitle
             }
+            // Home draws its own centered header; hide the duplicated toolbar
+            // and let only the status-bar inset remain above the content.
+            mAppToolBar.visibility = if (fragment.ownsHeader()) View.GONE else View.VISIBLE
             mFlingLayout.isInterceptEnabled = fragment.isWrapContent
         }
     }
@@ -268,7 +299,7 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
         } else {
             // replace the top fragment
             supportFragmentManager.beginTransaction()
-                .setCustomAnimations(R.anim.enter_from_right, R.anim.exit_to_left, R.anim.enter_from_left, R.anim.exit_to_right)
+                .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out, android.R.anim.fade_in, android.R.anim.fade_out)
                 .hide(mTopVisibleFragment!!)
                 .add(R.id.fragment_container, fragment)
                 .commit()
@@ -285,7 +316,7 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
         if (fragment == mTopVisibleFragment) {
             // this is the visible fragment, so we need to show the previous one
             val transaction = supportFragmentManager.beginTransaction()
-                .setCustomAnimations(R.anim.enter_from_left, R.anim.exit_to_right, R.anim.enter_from_right, R.anim.exit_to_left)
+                .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out, android.R.anim.fade_in, android.R.anim.fade_out)
                 .hide(fragment)
             mFragmentStack.remove(fragment)
             mTopVisibleFragment = mFragmentStack.lastOrNull()
@@ -309,7 +340,7 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
     }
 
     open val layoutPaddingTop: Int
-        get() = max(mAppBarLayoutHeight, statusBarLayoutInsect)
+        get() = 0 // Content is laid out below the toolbar, not scrolled behind a transparent strip.
 
     open val layoutPaddingBottom: Int
         get() = navigationBarLayoutInsect
@@ -322,19 +353,9 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
         }
     }
 
-    override fun doOnPostResume() {
-        super.doOnPostResume()
-        HolidayHelper.onResume()
-    }
-
-    override fun doOnPause() {
-        super.doOnPause()
-        HolidayHelper.onPause()
-    }
-
     override fun doOnDestroy() {
+        sumicya.qself.ui.InlineSettings.unregister(this)
         super.doOnDestroy()
-        HolidayHelper.onDestroy()
         synchronized(mPendingActionsLock) {
             mPendingOnStartActions.clear()
             mPendingOnResumeActions.clear()
@@ -378,6 +399,12 @@ open class SettingsUiFragmentHostActivity : BaseActivity(), SimpleFlingIntercept
     @CallSuper
     override fun doOnResume() {
         super.doOnResume()
+        val colors = sumicya.qself.ui.SettingsDynamicColors.signature(this)
+        if (dynamicColorSignature != colors) {
+            dynamicColorSignature = colors
+            recreate()
+            return
+        }
         synchronized(mPendingActionsLock) {
             // on start actions
             for (action in mPendingOnStartActions) {

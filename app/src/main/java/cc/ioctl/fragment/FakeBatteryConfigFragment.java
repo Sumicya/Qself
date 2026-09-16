@@ -25,9 +25,9 @@ import static android.text.InputType.TYPE_CLASS_NUMBER;
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 import static cc.ioctl.util.HostStyledViewBuilder.subtitle;
-import static cc.ioctl.util.LayoutHelper.dip2px;
-import static cc.ioctl.util.LayoutHelper.dip2sp;
-import static cc.ioctl.util.LayoutHelper.newLinearLayoutParams;
+import static io.github.qauxv.util.LayoutHelper.dip2px;
+import static io.github.qauxv.util.LayoutHelper.dip2sp;
+import static io.github.qauxv.util.LayoutHelper.newLinearLayoutParams;
 
 import android.app.Activity;
 import android.app.Dialog;
@@ -48,8 +48,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
 import cc.ioctl.hook.experimental.FakeBatteryHook;
-import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.ui.drawable.HighContrastBorder;
+import io.github.qauxv.util.HostInfo;
+import io.github.qauxv.util.ui.drawable.HighContrastBorder;
 import com.tencent.mobileqq.widget.BounceScrollView;
 import io.github.qauxv.R;
 import io.github.qauxv.config.ConfigManager;
@@ -223,9 +223,9 @@ public class FakeBatteryConfigFragment extends BaseRootLayoutFragment implements
                                     } else {
                                         CustomDialog.create(context).setTitle("操作失败")
                                                 .setCancelable(true).setPositiveButton("确认", null)
-                                                .setMessage("发生错误:\n" + HostInfo.getApplication().getPackageName()
+                                                .setMessage("发生错误:\n" + HostInfo.getHostInfo().getApplication().getPackageName()
                                                         + ":MSF 进程响应超时\n" +
-                                                        "如果您的" + HostInfo.getAppName() + "刚刚启动,您可以在十几秒后再试一次\n" +
+                                                        "如果您的" + HostInfo.getHostInfo().getHostName() + "刚刚启动,您可以在十几秒后再试一次\n" +
                                                         "如果您是太极(含无极)用户,请确认您的太极版本至少为 湛泸-6.0.2(1907) ,如低于此版本,请尽快升级")
                                                 .show();
                                     }

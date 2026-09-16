@@ -52,6 +52,7 @@ abstract class BaseHookDispatcher<T : ITraceableDynamicHook>(
     abstract val decorators: Array<T>
 
     override fun initialize(): Boolean {
+        if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(this)) return false
         if (mInitialized) {
             return mInitializeResult
         }

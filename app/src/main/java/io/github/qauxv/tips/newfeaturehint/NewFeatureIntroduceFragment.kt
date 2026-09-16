@@ -55,7 +55,7 @@ class NewFeatureIntroduceFragment : BaseRootLayoutFragment() {
     private fun initView() {
         val disableBtn = mBinding.newFeatureIntroDisableButton
         disableBtn.setOnClickListener {
-            AlertDialog.Builder(requireContext())
+            sumicya.qself.ui.InlineAlertDialogBuilder(requireContext())
                 .setTitle("禁用新功能提示")
                 .setMessage("禁用后，您将不再收到新功能提示。\n您可用在 辅助 > 杂项 > 新功能提示 中重新开启。")
                 .setPositiveButton("禁用") { _, _ ->
@@ -151,7 +151,7 @@ class NewFeatureIntroduceFragment : BaseRootLayoutFragment() {
         }
         if (targetFragmentLocation == null) {
             // tell user we are lost
-            AlertDialog.Builder(requireContext()).apply {
+            sumicya.qself.ui.InlineAlertDialogBuilder(requireContext()).apply {
                 setTitle("Navigation Error")
                 setMessage("We are lost, can't find the target fragment: " + absFullLocation.joinToString("."))
                 setPositiveButton(android.R.string.ok) { _, _ -> }

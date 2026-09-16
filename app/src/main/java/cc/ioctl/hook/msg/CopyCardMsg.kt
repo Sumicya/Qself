@@ -25,7 +25,7 @@ import android.app.Activity
 import android.content.Context
 import android.view.View
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.afterHookIfEnabled
 import cc.ioctl.util.beforeHookIfEnabled
 import com.tencent.qqnt.kernel.nativeinterface.MsgElement

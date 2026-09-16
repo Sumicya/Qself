@@ -22,6 +22,8 @@
 
 package io.github.qauxv.fragment
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.hostInfo
 import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -52,14 +54,13 @@ import androidx.lifecycle.lifecycleScope
 import cc.ioctl.fragment.ExfriendListFragment
 import cc.ioctl.hook.misc.DisableHotPatch
 import cc.ioctl.util.ExfriendManager
-import cc.ioctl.util.HostInfo
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.data.EventRecord
 import cc.ioctl.util.data.FriendRecord
-import cc.ioctl.util.ui.FaultyDialog
-import cc.ioctl.util.ui.ThemeAttrUtils
-import cc.ioctl.util.ui.dsl.RecyclerListViewController
+import io.github.qauxv.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.ui.dsl.RecyclerListViewController
 import com.github.kyuubiran.ezxhelper.utils.invokeAs
 import com.github.kyuubiran.ezxhelper.utils.isPublic
 import com.github.kyuubiran.ezxhelper.utils.isStatic
@@ -424,7 +425,7 @@ class TroubleshootFragment : BaseRootLayoutFragment() {
 
     private val clickToClearShortCuts = confirmBeforeAction("确定清除所有ShortCuts吗？") {
         ShortcutManagerCompat.removeAllDynamicShortcuts(
-            HostInfo.getApplication().applicationContext
+            hostInfo.application.applicationContext
         )
         Toasts.success(requireContext(), "操作成功")
     }
@@ -455,7 +456,7 @@ class TroubleshootFragment : BaseRootLayoutFragment() {
         action: () -> Unit
     ) = View.OnClickListener {
         val ctx = requireContext()
-        val builder = AlertDialog.Builder(ctx)
+        val builder = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
         builder.setPositiveButton(android.R.string.ok) { _, _ ->
             try {
                 action()
@@ -508,7 +509,7 @@ class TroubleshootFragment : BaseRootLayoutFragment() {
         action: (extraOptionChecked: Boolean) -> Unit
     ) = View.OnClickListener {
         val ctx = requireContext()
-        val builder = AlertDialog.Builder(ctx)
+        val builder = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
         val checkBoxStatus = AtomicBoolean(extraOptionCheckedByDefault)
         builder.setPositiveButton(android.R.string.ok) { _, _ ->
             try {
@@ -610,7 +611,7 @@ class TroubleshootFragment : BaseRootLayoutFragment() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setTextColor(ResourcesCompat.getColor(resources, R.color.firstTextColor, ctx.theme))
         }
-        AlertDialog.Builder(ctx).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
             setTitle("请输入 URL")
             setCancelable(true)
             setNeutralButton(android.R.string.paste, null) // set listener later
@@ -646,9 +647,9 @@ class TroubleshootFragment : BaseRootLayoutFragment() {
         val app = hostInfo.application
         val inner = createStartActivityForFragmentIntent(app, ExfriendListFragment::class.java, null)
         val wrapper = Intent()
-        wrapper.setClassName(HostInfo.getApplication().packageName, ActProxyMgr.STUB_DEFAULT_ACTIVITY)
+        wrapper.setClassName(hostInfo.application.packageName, ActProxyMgr.STUB_DEFAULT_ACTIVITY)
         wrapper.putExtra(ActProxyMgr.ACTIVITY_PROXY_INTENT, inner)
-        val pi = PendingIntent.getActivity(HostInfo.getApplication(), 0, wrapper, PendingIntent.FLAG_IMMUTABLE)
+        val pi = PendingIntent.getActivity(hostInfo.application, 0, wrapper, PendingIntent.FLAG_IMMUTABLE)
         val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val n = ExfriendManager.getCurrent().createNotiComp(nm, "Ticker", "Title", "Content", longArrayOf(100, 200, 200, 100), pi)
         nm.notify(ExfriendManager.ID_EX_NOTIFY, n)
@@ -660,7 +661,7 @@ class TroubleshootFragment : BaseRootLayoutFragment() {
         return actionOrShowError {
             val ctx = requireContext()
             if (!mCrashActionWarned) {
-                AlertDialog.Builder(ctx).apply {
+                sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
                     setTitle("警告")
                     setMessage("此操作将会导致应用崩溃, 仅用于测试崩溃处理功能。\nPS: 经常崩溃容易造成聊天记录数据库损坏")
                     setCancelable(true)
@@ -701,7 +702,7 @@ class TroubleshootFragment : BaseRootLayoutFragment() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setTextColor(ResourcesCompat.getColor(resources, R.color.firstTextColor, ctx.theme))
         }
-        AlertDialog.Builder(ctx).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
             setTitle("请输入 Activity 类名")
             setCancelable(true)
             setNeutralButton(android.R.string.paste, null) // set listener later

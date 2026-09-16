@@ -35,7 +35,7 @@ import androidx.appcompat.widget.AppCompatEditText
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.appcompat.widget.SwitchCompat
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import cc.ioctl.util.hookBeforeIfEnabled
 import com.tencent.qqnt.kernel.nativeinterface.MsgElement
 import io.github.qauxv.R
@@ -189,7 +189,7 @@ object ImageCustomSummary : CommonConfigFunctionHook("ImageCustomSummary", array
             addView(summaryTextEdit, lp)
         }
 
-        AlertDialog.Builder(ctx).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
             setTitle("自定义外显内容")
             setView(rootLayout)
             setPositiveButton("确定") { _, _ ->

@@ -107,7 +107,7 @@ object GalBgBlurHook : CommonConfigFunctionHook(SyncUtils.PROC_PEAK + SyncUtils.
                     }
                 }, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             }
-            AlertDialog.Builder(ctx)
+            sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setView(ll)
                 .show()
                 .also {

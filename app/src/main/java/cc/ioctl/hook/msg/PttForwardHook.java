@@ -23,11 +23,11 @@ package cc.ioctl.hook.msg;
 
 import static android.widget.LinearLayout.LayoutParams.MATCH_PARENT;
 import static android.widget.LinearLayout.LayoutParams.WRAP_CONTENT;
-import static cc.ioctl.util.LayoutHelper.dip2px;
-import static cc.ioctl.util.LayoutHelper.dip2sp;
-import static cc.ioctl.util.LayoutHelper.newLinearLayoutParams;
-import static cc.ioctl.util.Reflex.findField;
-import static cc.ioctl.util.Reflex.getFirstByType;
+import static io.github.qauxv.util.LayoutHelper.dip2px;
+import static io.github.qauxv.util.LayoutHelper.dip2sp;
+import static io.github.qauxv.util.LayoutHelper.newLinearLayoutParams;
+import static io.github.qauxv.util.Reflex.findField;
+import static io.github.qauxv.util.Reflex.getFirstByType;
 import static io.github.qauxv.bridge.AppRuntimeHelper.getQQAppInterface;
 import static io.github.qauxv.util.Initiator._PttItemBuilder;
 import static io.github.qauxv.util.Initiator.load;
@@ -56,7 +56,7 @@ import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.util.DebugUtils;
 import cc.ioctl.util.HookUtils;
 import cc.ioctl.util.HostStyledViewBuilder;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import com.tencent.qqnt.kernel.nativeinterface.PttElement;
 import com.xiaoniu.dispatcher.ComponentType;
 import com.xiaoniu.dispatcher.OnMenuBuilder;
@@ -147,7 +147,7 @@ public class PttForwardHook extends CommonSwitchFunctionHook implements OnMenuBu
         linearLayout.setOrientation(LinearLayout.VERTICAL);
         linearLayout.addView(tv, MATCH_PARENT, WRAP_CONTENT);
         linearLayout.addView(editText, newLinearLayoutParams(MATCH_PARENT, WRAP_CONTENT));
-        final AlertDialog alertDialog = new AlertDialog.Builder(ctx)
+        final AlertDialog alertDialog = new sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setTitle("输入保存路径(请自行转码)")
                 .setView(linearLayout)
                 .setPositiveButton("保存", null)

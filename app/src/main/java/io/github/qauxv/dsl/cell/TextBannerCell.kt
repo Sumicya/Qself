@@ -39,9 +39,9 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.content.res.ResourcesCompat
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.LayoutHelperViewScope
-import cc.ioctl.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelperViewScope
+import io.github.qauxv.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 
 class TextBannerCell @JvmOverloads constructor(
@@ -242,7 +242,7 @@ class TextBannerCell @JvmOverloads constructor(
 
     init {
         textView = AppCompatTextView(context)
-        textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14f)
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
         textView.gravity = Gravity.START
         textView.setPadding(0, 10.dp, 0, 17.dp)
         textView.movementMethod = LinkMovementMethod.getInstance()

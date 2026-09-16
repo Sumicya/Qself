@@ -51,11 +51,7 @@ object StartActivityHook : BaseHookDispatcher<IStartActivityHookDecorator>(null)
                 ForceSystemAlbum,
                 ForceSystemFile
             )
-            return if (BuildConfig.DEBUG) {
-                val debugDump = StartActivityHook::class.java.classLoader.loadClass("hook.DebugDump")
-                    .getStaticObject("INSTANCE") as IStartActivityHookDecorator
-                ret + debugDump
-            } else ret
+            return ret
         }
 
     override val targetProcesses = SyncUtils.PROC_ANY

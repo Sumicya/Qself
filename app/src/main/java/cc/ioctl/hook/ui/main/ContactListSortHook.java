@@ -32,7 +32,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.IEntityAgent;
 import io.github.qauxv.base.ISwitchCellAgent;
 import io.github.qauxv.base.IUiItemAgent;
@@ -227,7 +227,7 @@ public class ContactListSortHook extends BaseFunctionHook implements IUiItemAgen
     }
 
     private void showConfigDialog(@NonNull Activity ctx) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(ctx);
+        AlertDialog.Builder builder = new sumicya.qself.ui.InlineAlertDialogBuilder(ctx);
         LinearLayout root = new LinearLayout(ctx);
         root.setOrientation(LinearLayout.VERTICAL);
         CheckBox ignoreVipStatus = new CheckBox(ctx);

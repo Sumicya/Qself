@@ -30,7 +30,7 @@ import android.view.ViewGroup
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.content.res.ResourcesCompat
-import cc.ioctl.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 import io.github.qauxv.databinding.FragmentHotUpdateConfigBinding
 import io.github.qauxv.util.hotupdate.HotUpdateManager
@@ -177,14 +177,14 @@ class HotUpdateConfigFragment : BaseRootLayoutFragment(), View.OnClickListener {
             updateViewStatus(binding!!)
         }
         if (channelId == HotUpdateManager.CHANNEL_BETA) {
-            AlertDialog.Builder(requireContext())
+            sumicya.qself.ui.InlineAlertDialogBuilder(requireContext())
                 .setTitle("警告")
                 .setMessage("您确定要切换到 Beta 测试频道吗？\n这个频道的更新可能不稳定，可能会导致应用崩溃。")
                 .setPositiveButton("确定") { _, _ -> fn() }
                 .setNegativeButton("取消", null)
                 .show()
         } else if (channelId == HotUpdateManager.CHANNEL_CANARY) {
-            AlertDialog.Builder(requireContext())
+            sumicya.qself.ui.InlineAlertDialogBuilder(requireContext())
                 .setTitle("严重警告")
                 .setMessage(
                     "您确定要切换到 Canary 测试频道吗？\n" +

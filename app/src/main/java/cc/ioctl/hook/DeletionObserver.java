@@ -24,7 +24,7 @@ package cc.ioctl.hook;
 
 import static android.widget.LinearLayout.LayoutParams.MATCH_PARENT;
 import static android.widget.LinearLayout.LayoutParams.WRAP_CONTENT;
-import static cc.ioctl.util.LayoutHelper.dip2px;
+import static io.github.qauxv.util.LayoutHelper.dip2px;
 import static io.github.qauxv.util.xpcompat.XposedHelpers.findAndHookMethod;
 import static io.github.qauxv.util.Initiator.load;
 
@@ -40,8 +40,8 @@ import android.widget.TextView;
 import cc.ioctl.fragment.ExfriendListFragment;
 import cc.ioctl.hook.friend.ShowDeletedFriendListEntry;
 import cc.ioctl.util.ExfriendManager;
-import cc.ioctl.util.LayoutHelper;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.LayoutHelper;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedHelpers;
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity;
@@ -54,7 +54,6 @@ import io.github.qauxv.util.LicenseStatus;
 import io.github.qauxv.util.Log;
 import java.lang.ref.WeakReference;
 import java.util.HashSet;
-import me.singleneuron.hook.AppCenterHookKt;
 
 @FunctionHookEntry
 public class DeletionObserver extends BasePersistBackgroundHook {
@@ -151,7 +150,6 @@ public class DeletionObserver extends BasePersistBackgroundHook {
     protected boolean initOnce() throws Exception {
         findAndHookMethod(load("com/tencent/widget/PinnedHeaderExpandableListView"),
             "setAdapter", ExpandableListAdapter.class, exfriendEntryHook);
-        AppCenterHookKt.initAppCenterHook();
         XposedHelpers.findAndHookMethod(load("com/tencent/mobileqq/activity/SplashActivity"), "doOnResume",
             new XC_MethodHook(700) {
                 boolean z = false;

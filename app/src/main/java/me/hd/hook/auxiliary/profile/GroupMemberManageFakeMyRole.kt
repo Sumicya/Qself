@@ -26,34 +26,23 @@ import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry
 import io.github.qauxv.dsl.FunctionEntryRouter
 import io.github.qauxv.hook.CommonSwitchFunctionHook
-import io.github.qauxv.util.QQVersion
-import io.github.qauxv.util.requireMinQQVersion
-import me.hd.util.hookAfterIfEnabled
-import me.hd.util.name
-import me.hd.util.parameterCount
-import me.hd.util.returnType
-import me.hd.util.singleMethod
-import me.hd.util.toHostClass
 
 @FunctionHookEntry
 @UiItemAgentEntry
 object GroupMemberManageFakeMyRole : CommonSwitchFunctionHook() {
     override val name = "群成员管理页伪装身份为群主"
-    override val description = "使其在管理页显示群昵称及设置禁言等入口"
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.PROFILE_CATEGORY
-    override val isAvailable = requireMinQQVersion(QQVersion.QQ_9_2_20)
+    override val description = "已停用：群管理写操作尚未完成精确签名审计"
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.DISGUISE_AND_DEVICE_CATEGORY
+
+    // This hook fakes an elevated role and thereby exposes host-side group
+    // management write actions. Until every write operation has a verified
+    // exact signature, keep the capability disabled rather than relying on
+    // name/parameter-shape guesses.
+    override val isAvailable = false
 
     override fun initOnce(): Boolean {
-        // MemberSettingGroupManagePart
-        "com.tencent.mobileqq.troop.membersetting.model.a".toHostClass()
-            .singleMethod {
-                // myRole
-                returnType(Int::class.java) &&
-                    name("o") &&
-                    parameterCount(0)
-            }.hookAfterIfEnabled(this) { param ->
-                param.result = 3
-            }
-        return true
+        // Deliberately disabled until the host write methods are mapped by
+        // exact, device-confirmed descriptors.
+        return false
     }
 }

@@ -23,7 +23,7 @@ package io.github.qauxv.bridge.ntapi;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import com.tencent.qqnt.kernel.nativeinterface.IKernelMsgService;
 import io.github.qauxv.bridge.kernelcompat.KernelMsgServiceCompat;
 import io.github.qauxv.util.Initiator;

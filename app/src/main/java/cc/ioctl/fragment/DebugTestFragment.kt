@@ -38,7 +38,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.res.ResourcesCompat
 import cc.ioctl.util.DebugTestRunner
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import com.github.kyuubiran.ezxhelper.utils.isNative
 import com.github.kyuubiran.ezxhelper.utils.isStatic
 import io.github.qauxv.R

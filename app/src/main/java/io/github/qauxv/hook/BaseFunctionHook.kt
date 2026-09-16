@@ -22,7 +22,6 @@
 
 package io.github.qauxv.hook
 
-import io.github.qauxv.BuildConfig
 import io.github.qauxv.base.ITraceableDynamicHook
 import io.github.qauxv.base.IUiItemAgentProvider
 import io.github.qauxv.config.ConfigManager
@@ -57,9 +56,11 @@ abstract class BaseFunctionHook(
         get() = mInitializeResult
 
     override fun initialize(): Boolean {
+        if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(this)) return false
         if (mInitialized) {
             return mInitializeResult
         }
+        sumicya.qself.diagnostics.FeatureJournal.record("INIT_BEGIN", javaClass.name)
         mInitializeResult = try {
             initOnce()
         } catch (e: Throwable) {
@@ -71,6 +72,7 @@ abstract class BaseFunctionHook(
             }
             false
         }
+        sumicya.qself.diagnostics.FeatureJournal.record("INIT_END", javaClass.name, mInitializeResult.toString())
         mInitialized = true
         return mInitializeResult
     }
@@ -104,18 +106,21 @@ abstract class BaseFunctionHook(
     override val isApplicationRestartRequired = false
 
     override var isEnabled: Boolean
-        get() = enableAllHook() ||
+        get() = sumicya.qself.profile.SimplifiedProfile.isAllowed(this) &&
             ConfigManager.getDefaultConfig().getBooleanOrDefault(
                 mHookEnableConfigKey,
                 mDefaultEnabled && isAvailable
             )
         set(value) {
+            val previous = isEnabled
             ConfigManager.getDefaultConfig().putBoolean(mHookEnableConfigKey, value)
+            if (previous != value) sumicya.qself.diagnostics.FeatureJournal.record("CONFIG", javaClass.name, "$previous->$value")
         }
 
     override val dependentComponents: List<ITraceableDynamicHook>? = null
 
     override fun traceError(e: Throwable) {
+        sumicya.qself.diagnostics.FeatureJournal.error(javaClass.name, e)
         // check if there is already an error with the same error message and stack trace
         var alreadyLogged = false
         synchronized(mErrorsLock) {
@@ -135,7 +140,4 @@ abstract class BaseFunctionHook(
         Log.e(e)
     }
 
-    private fun enableAllHook(): Boolean {
-        return BuildConfig.DEBUG && ConfigManager.getDefaultConfig().getBooleanOrDefault("EnableAllHook.enabled", false)
-    }
 }

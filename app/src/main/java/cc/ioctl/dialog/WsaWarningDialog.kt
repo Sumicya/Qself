@@ -21,9 +21,10 @@
 
 package cc.ioctl.dialog
 
+import io.github.qauxv.util.isInHostProcess
+import io.github.qauxv.util.isInHostProcess
 import android.content.Context
 import androidx.appcompat.app.AlertDialog
-import cc.ioctl.util.HostInfo
 import io.github.qauxv.R
 import io.github.qauxv.config.ConfigManager
 import io.github.qauxv.core.MainHook
@@ -46,7 +47,7 @@ object WsaWarningDialog {
         }
 
     private fun isNeedShow(): Boolean {
-        return HostInfo.isInHostProcess()
+        return isInHostProcess
             && MainHook.isWindowsSubsystemForAndroid()
             && currentWsaWarningVersion < LATEST_WSA_WARNING_VERSION
             && !mHasShownThisTime
@@ -60,7 +61,7 @@ object WsaWarningDialog {
         }
         mHasShownThisTime = true
         val ctx = CommonContextWrapper.createAppCompatContext(baseContext)
-        AlertDialog.Builder(ctx).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
             setTitle(R.string.wsa_warning_dialog_title)
             setMessage(R.string.wsa_warning_dialog_message)
             setPositiveButton(android.R.string.ok, null)

@@ -22,6 +22,8 @@
 
 package cc.ioctl.util;
 
+import io.github.qauxv.util.Reflex;
+
 import io.github.qauxv.bridge.AppRuntimeHelper;
 import io.github.qauxv.util.Initiator;
 import io.github.qauxv.util.Log;

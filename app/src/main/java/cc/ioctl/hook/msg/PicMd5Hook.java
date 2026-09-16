@@ -35,7 +35,7 @@ import cc.hicore.ReflectUtil.XField;
 import cc.hicore.ReflectUtil.XMethod;
 import cc.hicore.Utils.FunProtoData;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import com.tencent.qphone.base.remote.FromServiceMsg;
 import com.tencent.qqnt.kernel.nativeinterface.PicElement;
 import com.xiaoniu.dispatcher.ComponentType;
@@ -256,7 +256,7 @@ public class PicMd5Hook extends CommonSwitchFunctionHook implements OnMenuBuilde
         final String[] actions = canBlockPicture
                 ? new String[]{"复制 MD5", "复制图片链接", "屏蔽图片"}
                 : new String[]{"复制 MD5", "复制图片链接"};
-        new AlertDialog.Builder(CommonContextWrapper.createAppCompatContext(ctx)).setTitle("MD5\n" + md5).setCancelable(true)
+        new sumicya.qself.ui.InlineAlertDialogBuilder(CommonContextWrapper.createAppCompatContext(ctx)).setTitle("MD5\n" + md5).setCancelable(true)
                 .setItems(actions, (dialog, which) -> {
                     if (which == 0) {
                         SystemServiceUtils.copyToClipboard(ctx, md5);

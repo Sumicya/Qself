@@ -32,8 +32,8 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
 import androidx.appcompat.app.AlertDialog
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.ui.FaultyDialog
 import io.github.qauxv.base.IEntityAgent
 import io.github.qauxv.base.ISwitchCellAgent
 import io.github.qauxv.base.IUiItemAgent
@@ -67,7 +67,7 @@ object OpenMultiFwdMsg : IUiItemAgent, IUiItemAgentProvider {
         editText.textSize = 16f
         val linearLayout = LinearLayout(ctx)
         linearLayout.addView(editText, LayoutHelper.newLinearLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        val alertDialog = AlertDialog.Builder(ctx)
+        val alertDialog = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle("输入合并消息的 ResID (看起来像 base64 一样的东西)")
             .setView(linearLayout)
             .setCancelable(true)

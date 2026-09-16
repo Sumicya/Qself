@@ -20,13 +20,16 @@ import com.squareup.kotlinpoet.ksp.writeTo
 
 class UiItemAgentEntryProcessor(
         private val codeGenerator: CodeGenerator,
-        private val logger: KSPLogger
+        private val logger: KSPLogger,
+        private val options: Map<String, String>
 ) : SymbolProcessor {
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
-        val symbols = resolver.getSymbolsWithAnnotation("io.github.qauxv.base.annotation.UiItemAgentEntry")
+        val allowed = cn.lliiooll.processors.qself.QselfCatalog.allowedProviders
+        val allSymbols = resolver.getSymbolsWithAnnotation("io.github.qauxv.base.annotation.UiItemAgentEntry")
                 .filterIsInstance<KSClassDeclaration>()
                 .toList()
+        val symbols = allSymbols.filter { it.qualifiedName?.asString() in allowed }.sortedBy { it.qualifiedName?.asString() }
         if (symbols.isEmpty()) {
             return emptyList()
         }
@@ -82,6 +85,6 @@ class UiItemAgentEntryProcessor(
 
 class UiItemAgentEntryProcessorProvider : SymbolProcessorProvider {
     override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
-        return UiItemAgentEntryProcessor(environment.codeGenerator, environment.logger)
+        return UiItemAgentEntryProcessor(environment.codeGenerator, environment.logger, environment.options)
     }
 }

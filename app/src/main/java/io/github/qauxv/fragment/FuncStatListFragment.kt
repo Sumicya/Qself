@@ -31,9 +31,9 @@ import androidx.annotation.UiThread
 import androidx.core.content.res.ResourcesCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.Reflex
-import cc.ioctl.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.Reflex
+import io.github.qauxv.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity
 import io.github.qauxv.base.IDynamicHook
@@ -197,8 +197,7 @@ class FuncStatListFragment : BaseRootLayoutFragment() {
             val hostActivity = activity as? SettingsUiFragmentHostActivity ?: return@OnLongClickListener false
 
             val identifier = itemAgentProvider.itemAgentProviderUniqueIdentifier
-            val baseContainerLocation = FunctionEntryRouter.resolveUiItemAnycastLocation(itemAgentProvider.uiItemLocation)
-                ?: itemAgentProvider.uiItemLocation
+            val baseContainerLocation = FunctionEntryRouter.locationForProvider(itemAgentProvider)
 
             val absFullLocation = arrayOf(*baseContainerLocation, identifier)
             var containerForFragmentLookup = absFullLocation.dropLast(1).toTypedArray()

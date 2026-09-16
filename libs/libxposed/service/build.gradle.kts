@@ -33,6 +33,7 @@ android {
 
     dependencies {
         compileOnly(libs.androidx.annotation)
+        compileOnly("io.github.libxposed:annotation:1.0.0")
     }
 
 }

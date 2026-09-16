@@ -41,7 +41,7 @@ import xyz.nextalone.util.throwOrTrue
 object FakeNetworkType : CommonSwitchFunctionHook() {
 
     override val name = "伪装网络类型为移动网络"
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.MISC_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.DISGUISE_AND_DEVICE_CATEGORY
 
     override fun initOnce() = throwOrTrue {
         ConnectivityManager::class.java.method("isActiveNetworkMetered")?.replace(this, true)

@@ -22,42 +22,34 @@
 
 package io.github.qauxv.fragment
 
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
 import android.content.Context
 import android.graphics.Rect
 import android.os.Bundle
 import android.view.*
-import android.view.animation.AlphaAnimation
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
 import androidx.core.content.res.ResourcesCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import cc.ioctl.dialog.WsaWarningDialog
-import cc.ioctl.util.LayoutHelper.MATCH_PARENT
-import cc.ioctl.util.ui.drawable.BackgroundDrawableUtils
+import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
 import io.github.qauxv.R
-import io.github.qauxv.bridge.AppRuntimeHelper
-import io.github.qauxv.bridge.ContactUtils
-import io.github.qauxv.config.ConfigManager
 import io.github.qauxv.config.SafeModeManager
 import io.github.qauxv.dsl.FunctionEntryRouter
 import io.github.qauxv.dsl.func.*
 import io.github.qauxv.dsl.item.*
-import io.github.qauxv.tips.newfeaturehint.NewFeatureIntroduceFragment
-import io.github.qauxv.tips.newfeaturehint.NewFeatureManager
 import io.github.qauxv.util.SyncUtils
-import io.github.qauxv.util.SyncUtils.async
-import io.github.qauxv.util.SyncUtils.runOnUiThread
 import io.github.qauxv.util.UiThread
 import io.github.qauxv.util.hostInfo
 import io.github.qauxv.util.isInHostProcess
-import kotlinx.coroutines.flow.StateFlow
-import me.singleneuron.util.forSuBanXia
+import sumicya.qself.ui.HomeCatalog
+import sumicya.qself.ui.SettingsListLayout
+import sumicya.qself.ui.SettingsHomeItem
+import sumicya.qself.ui.SettingsHomeView
+import sumicya.qself.ui.SettingsVisuals
+import sumicya.qself.ui.SettingsAppearanceItem
 
 class SettingsMainFragment : BaseRootLayoutFragment() {
 
@@ -74,6 +66,8 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
     // DSL stuff below
     private var adapter: RecyclerView.Adapter<*>? = null
     private var listLayoutManager: LinearLayoutManager? = null
+    private var homeItem: SettingsHomeItem? = null
+    private var homeViewState: android.os.Parcelable? = null
     private var recyclerListView: RecyclerView? = null
     private var rootFrameLayout: FrameLayout? = null
 
@@ -84,29 +78,52 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
-        val location: Array<String> = arguments?.getStringArray(TARGET_FRAGMENT_LOCATION)
+        var location: Array<String> = arguments?.getStringArray(TARGET_FRAGMENT_LOCATION)
             ?: throw IllegalArgumentException("target fragment location is null")
-        // fault, why start SettingsMainFragment but not no location?
-        mFragmentLocations = location
-        // find fragment description
-        val desc = FunctionEntryRouter.findDescriptionByLocation(location)
-            ?: throw IllegalArgumentException("unable to find fragment description by location: " + location.contentToString())
-        if (desc !is FragmentDescription) {
-            throw IllegalArgumentException("fragment description is not FragmentDescription, got: " + desc.javaClass.name)
+        // Migrate a saved search/deep link by capability ID, not by its old category.
+        arguments?.getString(TARGET_UI_AGENT_IDENTIFIER)?.let { id ->
+            FunctionEntryRouter.locationForFeature(id)?.let { location = it.dropLast(1).toTypedArray() }
         }
-        mFragmentDescription = desc
-        title = mFragmentDescription.name ?: "QAuxiliary"
+        var desc = FunctionEntryRouter.findDescriptionByLocation(location)
+        if (desc !is FragmentDescription) {
+            // Old category-only saved state: show the consolidated catalog rather than crash.
+            location = emptyArray()
+            desc = FunctionEntryRouter.settingsUiItemDslTree
+            arguments?.putBoolean(SHOW_CATALOG, true)
+        }
+        mFragmentLocations = location
+        val section = HomeCatalog.sections.firstOrNull { it.id == arguments?.getString(HOME_SECTION) }
+        mFragmentDescription = if (section != null) {
+            FragmentDescription(section.id, section.title, false) {
+                for (group in sumicya.qself.feature.consolidation.FeatureCatalog.groupsForHome(section.id)) {
+                    FunctionEntryRouter.findDescriptionByLocation(group.path)?.let { addChild(it) }
+                }
+            }
+        } else desc
+        title = when {
+            section != null -> section.title
+            arguments?.getBoolean(SHOW_CATALOG) == true -> "功能与设置"
+            // Home owns its in-content header (centered title, leading search).
+            isHome() -> ""
+            else -> mFragmentDescription.name ?: "设置"
+        }
         mTargetUiAgentNavId = arguments?.getString(TARGET_UI_AGENT_IDENTIFIER)
     }
 
     override fun doOnCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val context = layoutInflater.context
-        val rootView = FrameLayout(context)
-        rootFrameLayout = rootView
-        val tmsgDslTree = convertFragmentDslToTMsgDslItemTree(context, mFragmentDescription)
-        if (isRootFragmentDescription()) {
-            addHeaderItemToRootDslTree(tmsgDslTree)
+        val rootView = SettingsListLayout(context).apply {
+            background = SettingsVisuals.backdrop(SettingsVisuals.palette(context, SettingsAppearanceItem.mode))
         }
+        rootFrameLayout = rootView
+        if (homeViewState == null) homeViewState = savedInstanceState?.getParcelable("homeExpansion")
+        val tmsgDslTree = if (isHome()) arrayListOf<DslTMsgListItemInflatable>(SettingsHomeItem(
+            { SettingsHomeView.State(
+                if (isInHostProcess) "${hostInfo.hostName} ${hostInfo.versionName}" else "模块管理",
+                sumicya.qself.diagnostics.FeatureJournal.enabled, SafeModeManager.getManager().isEnabledForThisTime
+            ) }, { SettingsAppearanceItem.mode }, ::openHomeAction
+        ).also { it.savedState = homeViewState; homeItem = it })
+            else convertFragmentDslToTMsgDslItemTree(context, mFragmentDescription)
         // inflate DSL tree, the most awful code in the world
         itemList = ArrayList()
         // inflate hierarchy recycler list view items, each item will have its own view holder type
@@ -123,13 +140,9 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
         itemTypeDelegate = Array(typeList.size) {
             itemList[itemTypeIds.indexOf(it)]
         }
-        this@SettingsMainFragment.listLayoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-        // init view
-        recyclerListView = RecyclerView(context).apply {
-            id = R.id.fragmentMainRecyclerView // id is used to allow saving state
-            layoutManager = this@SettingsMainFragment.listLayoutManager
-            clipToPadding = false
-        }
+        recyclerListView = rootView.recycler
+        listLayoutManager = rootView.recycler.layoutManager as LinearLayoutManager
+        if (!isHome()) SettingsVisuals.addListSpacing(rootView.recycler)
         // init adapter
         adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             override fun onCreateViewHolder(
@@ -138,17 +151,13 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             ): RecyclerView.ViewHolder {
                 val delegate = itemTypeDelegate[viewType]
                 val vh = delegate.createViewHolder(context, parent)
-                if (!delegate.isVoidBackground && delegate.isClickable) {
-                    // add ripple effect
-                    val rippleColor: Int = ResourcesCompat.getColor(context.resources, R.color.rippleColor, parent.context.theme)
-                    vh.itemView.background = BackgroundDrawableUtils.getRoundRectSelectorDrawable(parent.context, rippleColor)
-                }
                 return vh
             }
 
             override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
                 val item = itemList[position]
                 item.bindView(holder, position, context)
+                if (!item.isVoidBackground) SettingsVisuals.decorateRow(holder.itemView, context, item.isClickable)
             }
 
             override fun getItemCount() = itemList.size
@@ -158,46 +167,33 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
 
         recyclerListView!!.adapter = adapter
 
-        // collect all StateFlow and observe them in case of state change
-        for (i in itemList.indices) {
-            val item = itemList[i]
-            if (item is UiAgentItem) {
-                val valueStateFlow: StateFlow<String?>? = item.agentProvider.uiItemAgent.valueState
-                if (valueStateFlow != null) {
-                    lifecycleScope.launchWhenResumed {
-                        valueStateFlow.collect {
-                            runOnUiThread { adapter?.notifyItemChanged(i) }
-                        }
-                    }
-                }
-            }
-        }
         rootLayoutView = recyclerListView
-        rootView.addView(recyclerListView!!, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         if (isInHostProcess) {
             WsaWarningDialog.showWsaWarningDialogIfNecessary(requireContext())
         }
         return rootView
     }
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setHasOptionsMenu(true)
+        requireActivity().onBackPressedDispatcher.addCallback(this, mSearchModeOnBackPressedCallback)
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        // A view recreation must not keep observers pointing at a discarded row index.
+        for ((index, item) in itemList.withIndex()) {
+            val state = (item as? UiAgentItem)?.agentProvider?.uiItemAgent?.valueState ?: continue
+            viewLifecycleOwner.lifecycleScope.launchWhenResumed {
+                state.collect { adapter?.notifyItemChanged(index) }
+            }
+        }
+    }
+
     override fun onResume() {
         super.onResume()
-        try {
-            val buddyName = ContactUtils.getBuddyName(AppRuntimeHelper.getAppRuntime()!!, AppRuntimeHelper.getAccount())
-            if ((buddyName?.contains("\u26A7\uFE0F") == true || buddyName?.contains("\uD83C\uDF65") == true) &&
-                ConfigManager.forAccount(AppRuntimeHelper.getLongAccountUin()).getBoolean("ForSuBanXia", true)
-            ) {
-                AlertDialog.Builder(requireContext())
-                    .setTitle(forSuBanXia.first)
-                    .setMessage(forSuBanXia.second + "\n\n当你心情低落的时候，就在QA的搜索里输入MtF/FtM回来看看我吧！ ^_^")
-                    .setPositiveButton("OK", null)
-                    .create()
-                    .show()
-                ConfigManager.forAccount(AppRuntimeHelper.getLongAccountUin()).putBoolean("ForSuBanXia", false)
-            }
-        } catch (e: Exception) {
-            //ignored
-        }
+        if (isHome()) adapter?.notifyItemChanged(0)
         if (!mTargetUiAgentNavId.isNullOrEmpty() && !mTargetUiAgentNavigated) {
             navigateToTargetUiAgentItem()
         }
@@ -218,7 +214,9 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             return
         }
         // wait for the view to be created and animation to finish
+        val recycler = recyclerListView ?: return
         SyncUtils.postDelayed(300) {
+            if (!isResumed || recyclerListView !== recycler) return@postDelayed
             var index = -1
             // find the UI agent index
             for (i in itemList.indices) {
@@ -229,34 +227,15 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
                 }
             }
             if (index >= 0) {
-                // scroll it to the center
-                val layoutManager = recyclerListView!!.layoutManager as LinearLayoutManager
-                val firstVisibleItemPosition: Int = layoutManager.findFirstVisibleItemPosition()
-                val lastVisibleItemPosition: Int = layoutManager.findLastVisibleItemPosition()
-                val centerPosition = (firstVisibleItemPosition + lastVisibleItemPosition) / 2
-                var scrollTargetIndex = index
-                if (scrollTargetIndex > centerPosition) {
-                    scrollTargetIndex++
-                } else if (scrollTargetIndex < centerPosition) {
-                    scrollTargetIndex--
-                }
-                if (scrollTargetIndex < 0) {
-                    scrollTargetIndex = 0
-                }
-                if (scrollTargetIndex > itemList.size - 1) {
-                    scrollTargetIndex = itemList.size - 1
-                }
-                recyclerListView!!.scrollToPosition(scrollTargetIndex)
-                SyncUtils.postDelayed(100) {
-                    // wait for scrolling to finish
-                    val itemView = layoutManager.findViewByPosition(index)!!
-                    // calculate the position of the item, startY and endY of the recyclerView
-                    val startY = itemView.top
-                    val endY = itemView.bottom
-                    val width = itemView.width
-                    val rect = Rect(0, startY, width, endY)
-                    highlightRect(rect)
-                }
+                val layoutManager = recycler.layoutManager as LinearLayoutManager
+                layoutManager.scrollToPositionWithOffset(index, recycler.paddingTop + SettingsVisuals.dp(requireContext(), 12))
+                recycler.postDelayed({
+                    if (isResumed && recyclerListView === recycler) {
+                        layoutManager.findViewByPosition(index)?.let { itemView ->
+                            highlightRect(Rect(itemView.left, itemView.top, itemView.right, itemView.bottom))
+                        }
+                    }
+                }, 100)
                 mTargetUiAgentNavigated = true
             }
         }
@@ -268,50 +247,30 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             return
         }
         val context = requireContext()
-        val fadeIn = AlphaAnimation(0f, 1f).apply {
-            duration = 300
-            fillAfter = true
-        }
-        val fadeOut = AlphaAnimation(1f, 0f).apply {
-            duration = 300
-            fillAfter = true
-        }
-        val view = View(context).apply {
-            isFocusable = false
-            isFocusableInTouchMode = false
-            isClickable = false
-            isLongClickable = false
+        val parent = rootFrameLayout ?: return
+        val highlight = View(context).apply {
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             setBackgroundColor(ResourcesCompat.getColor(context.resources, R.color.rippleColor, context.theme))
         }
-        val layoutParams = FrameLayout.LayoutParams(rect.width(), rect.height()).apply {
+        parent.addView(highlight, FrameLayout.LayoutParams(rect.width(), rect.height()).apply {
             setMargins(rect.left, rect.top, 0, 0)
-        }
-        val parent = rootFrameLayout ?: return
-        async {
-            var isAddedToParent = false
-            // in out and repeat
-            for (i in 0..3) {
-                val animation = if (i % 2 == 0) {
-                    fadeIn
-                } else {
-                    fadeOut
-                }
-                runOnUiThread {
-                    if (!isAddedToParent) {
-                        parent.addView(view, layoutParams)
-                        isAddedToParent = true
-                    }
-                    view.startAnimation(animation)
-                }
-                Thread.sleep(300)
-            }
-            runOnUiThread {
-                rootFrameLayout?.removeView(view)
-            }
-        }
+        })
+        // Native property animator respects the system animation scale, including animations off.
+        highlight.animate().alpha(0f).setDuration(900).withEndAction { parent.removeView(highlight) }.start()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // RecyclerView freezes only itself, not its child hierarchy.
+        outState.putParcelable("homeExpansion", homeItem?.savedState ?: homeViewState)
     }
 
     override fun onDestroyView() {
+        homeViewState = homeItem?.savedState ?: homeViewState
+        homeItem = null
+        abortSearchMode()
+        mSearchMenuItem = null
+        adapter = null
         super.onDestroyView()
         recyclerListView?.let {
             it.adapter = null
@@ -355,7 +314,11 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             return UiAgentItem(endNode.identifier, endNode.name, endNode.itemAgentProvider)
         } else if (endNode is IDslFragmentNode) {
             return SimpleListItem(endNode.identifier, endNode.name ?: endNode.toString(), null).apply {
-                onClickListener = {
+                onClickListener = click@{
+                    sumicya.qself.feature.consolidation.FeatureCatalog.groupPath(endNode.identifier)?.let {
+                        sumicya.qself.ui.SettingsOptionSheet.show(requireSettingsHostActivity(), group = endNode.identifier)
+                        return@click
+                    }
                     val targetLocation = FunctionEntryRouter.resolveUiItemAnycastLocation(
                         arrayOf(
                             FunctionEntryRouter.Locations.ANY_CAST_PREFIX, endNode.identifier
@@ -382,34 +345,66 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
         return mFragmentLocations.isEmpty() || mFragmentLocations.size == 1 && mFragmentLocations[0].isEmpty()
     }
 
-    private fun addHeaderItemToRootDslTree(dslTree: ArrayList<DslTMsgListItemInflatable>) {
-        // TODO: 2022-02-22 add flavor to root dsl tree
-        if (NewFeatureManager.newFeatureTipEnabled) {
-            val newFeatureCount = NewFeatureManager.queryNewFeatures()?.size ?: 0
-            if (newFeatureCount > 0) {
-                val newFeatureBanner = TextBannerItem(
-                    text = "本次更新增加了 $newFeatureCount 项新功能，点击查看",
-                    isCloseable = true,
-                    onClick = {
-                        val fragment = NewFeatureIntroduceFragment()
-                        requireSettingsHostActivity().presentFragment(fragment)
-                    }
-                )
-                // add to the beginning
-                dslTree.add(0, newFeatureBanner)
-            }
-        }
-    }
+    override fun ownsHeader(): Boolean = isHome()
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setHasOptionsMenu(true)
-        requireActivity().onBackPressedDispatcher.addCallback(this, mSearchModeOnBackPressedCallback)
+    private fun isHome(): Boolean = isRootFragmentDescription() &&
+        arguments?.getString(HOME_SECTION) == null && arguments?.getBoolean(SHOW_CATALOG) != true &&
+        arguments?.getString(TARGET_UI_AGENT_IDENTIFIER) == null
+
+    private fun openHomeAction(action: String) {
+        if (action.startsWith("group:")) {
+            sumicya.qself.ui.SettingsOptionSheet.show(requireSettingsHostActivity(), group = action.removePrefix("group:"))
+            return
+        }
+        if (action == HomeCatalog.SEARCH) {
+            val item = mSearchMenuItem
+            if (item != null) {
+                item.expandActionView()
+                enterSearchMode(item.actionView as SearchView)
+            } else {
+                // Home has no toolbar menu: feed the overlay a standalone SearchView.
+                val searchView = SearchView(requireContext())
+                searchView.isIconified = false
+                enterSearchMode(searchView)
+            }
+            return
+        }
+        if (HomeCatalog.sections.any { it.id == action } || action == HomeCatalog.CATALOG) {
+            sumicya.qself.ui.SettingsOptionSheet.show(requireSettingsHostActivity(),
+                home = action.takeUnless { it == HomeCatalog.CATALOG })
+            return
+        }
+        if (action == HomeCatalog.DIAGNOSTICS) {
+            // Open the existing agent's real page and highlight it; never bypass its interaction contract.
+            val provider = FunctionEntryRouter.queryAnnotatedUiItemAgentEntries()
+                .firstOrNull { it.itemAgentProviderUniqueIdentifier == action } ?: return
+            val location = FunctionEntryRouter.locationForProvider(provider).dropLast(1).toTypedArray()
+            sumicya.qself.ui.SettingsOptionSheet.show(requireSettingsHostActivity(), group = location.lastOrNull(), focus = action)
+            return
+        }
+        val id = when (action) {
+            HomeCatalog.THEME -> "cfg-theme"
+            HomeCatalog.BACKUP -> "cfg-backup-restore"
+            HomeCatalog.ABOUT -> "other-about"
+            else -> return
+        }
+        if (id == "cfg-theme") {
+            sumicya.qself.ui.SettingsOptionSheet.show(requireSettingsHostActivity(), group = id)
+            return
+        }
+        val location = FunctionEntryRouter.resolveUiItemAnycastLocation(arrayOf(FunctionEntryRouter.Locations.ANY_CAST_PREFIX, id)) ?: return
+        val desc = FunctionEntryRouter.findDescriptionByLocation(location) as? IDslFragmentNode ?: return
+        val fragment = desc.getTargetFragmentClass(location).newInstance()
+        fragment.arguments = desc.getTargetFragmentArguments(location)
+        requireSettingsHostActivity().presentFragment(fragment)
     }
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         super.onCreateOptionsMenu(menu, inflater)
+        // Home hosts its own leading search icon in the in-content header.
+        if (isHome()) return
         inflater.inflate(R.menu.main_settings_toolbar, menu)
+        mSearchMenuItem = menu.findItem(R.id.menu_item_action_search)
         menu.findItem(R.id.menu_item_action_search)?.setOnActionExpandListener(object : MenuItem.OnActionExpandListener {
             override fun onMenuItemActionExpand(item: MenuItem): Boolean {
                 return true
@@ -437,99 +432,57 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
 
     private val mSearchModeOnBackPressedCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
-            mSearchMenuItem?.collapseActionView() ?: exitSearchMode()
+            if (mSearchMenuItem?.collapseActionView() != true) exitSearchMode()
         }
     }
 
-    /**
-     * Enter search mode with animation
-     */
+    /** Toolbar expansion is native. The overlay itself has no race-prone delayed transitions. */
     private fun enterSearchMode(searchView: SearchView) {
+        val recycler = recyclerListView ?: return
+        val root = rootFrameLayout ?: return
         if (mSearchSubFragment == null) {
-            mSearchSubFragment = SearchOverlaySubFragment().also {
+            val fragment = SearchOverlaySubFragment().also {
                 it.parent = this
-                it.context = this.requireContext()
-                it.settingsHostActivity = settingsHostActivity!!
-
-                mSearchRootLayout = it.onCreateView(requireActivity().layoutInflater, mSearchRootLayout, null) as ViewGroup
-                it.onResume()
-                // hide the recycler view and show the search view
-                recyclerListView!!.animate().alpha(0f).setDuration(300).setListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: Animator) {
-                        recyclerListView!!.visibility = View.GONE
-                    }
-                }).start()
-                rootFrameLayout!!.addView(mSearchRootLayout)
-                mSearchRootLayout!!.alpha = 0f
-                mSearchRootLayout!!.animate().alpha(1f).setDuration(300).setListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: Animator) {
-                        mSearchRootLayout!!.visibility = View.VISIBLE
-                    }
-                }).start()
-                searchView.setOnCloseListener {
-                    exitSearchMode()
-                    true
-                }
-                rootLayoutView = mSearchRootLayout
-                applyRootLayoutPaddingFor(mSearchRootLayout!!)
+                it.context = requireContext()
+                it.settingsHostActivity = requireSettingsHostActivity()
             }
+            val overlay = fragment.onCreateView(requireActivity().layoutInflater, root, null) as ViewGroup
+            mSearchSubFragment = fragment
+            mSearchRootLayout = overlay
+            root.addView(overlay)
+            recycler.visibility = View.GONE
+            rootLayoutView = overlay
+            applyRootLayoutPaddingFor(overlay)
+            fragment.onResume()
+            searchView.setOnCloseListener { exitSearchMode(); true }
         }
         mSearchSubFragment!!.initForSearchView(searchView)
         mSearchModeOnBackPressedCallback.isEnabled = true
     }
 
-    /**
-     * Exit search mode with animation
-     */
-    private fun exitSearchMode() {
-        mSearchSubFragment?.let { fragment ->
-            mSearchRootLayout!!.animate().alpha(0f).setDuration(300).setListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) {
-                    rootFrameLayout!!.removeView(mSearchRootLayout)
-                    fragment.onDestroyView()
-                    mSearchRootLayout = null
-                    mSearchSubFragment = null
-                }
-            }).start()
-            recyclerListView!!.visibility = View.VISIBLE
-            recyclerListView!!.alpha = 0f
-            recyclerListView!!.animate().alpha(1f).setDuration(300).setListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) {
-                    recyclerListView?.let { v ->
-                        v.alpha = 1f
-                    }
-                }
-            }).start()
-        }
-        rootLayoutView = recyclerListView
-        applyRootLayoutPaddingFor(recyclerListView!!)
-        mSearchModeOnBackPressedCallback.isEnabled = false
-    }
+    private fun exitSearchMode() = abortSearchMode()
 
-    /**
-     * Abort search mode without animation
-     */
     private fun abortSearchMode() {
-        mSearchSubFragment?.let {
-            rootFrameLayout!!.removeView(mSearchRootLayout)
-            it.onDestroyView()
-            mSearchRootLayout = null
-            mSearchSubFragment = null
-            mSearchModeOnBackPressedCallback.isEnabled = false
+        mSearchRootLayout?.let { rootFrameLayout?.removeView(it) }
+        mSearchSubFragment?.onDestroyView()
+        mSearchRootLayout = null
+        mSearchSubFragment = null
+        mSearchModeOnBackPressedCallback.isEnabled = false
+        recyclerListView?.let { recycler ->
+            recycler.visibility = View.VISIBLE
+            rootLayoutView = recycler
+            applyRootLayoutPaddingFor(recycler)
         }
-        recyclerListView!!.apply {
-            alpha = 1f
-            visibility = View.VISIBLE
-        }
-        rootLayoutView = recyclerListView
-        applyRootLayoutPaddingFor(recyclerListView!!)
     }
 
     fun onNavigateToOtherFragment() {
+        mSearchMenuItem?.collapseActionView()
         abortSearchMode()
     }
 
     companion object {
+        private const val HOME_SECTION = "qself.settings.section"
+        private const val SHOW_CATALOG = "qself.settings.catalog"
         const val TARGET_FRAGMENT_LOCATION = "SettingsMainFragment.TARGET_FRAGMENT_LOCATION"
         const val TARGET_UI_AGENT_IDENTIFIER = "SettingsMainFragment.TARGET_UI_AGENT_IDENTIFIER"
 

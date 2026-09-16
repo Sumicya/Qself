@@ -29,7 +29,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.R;
 
 public class CounterfeitActivityInfoFactory {
@@ -37,7 +37,7 @@ public class CounterfeitActivityInfoFactory {
     @Nullable
     public static ActivityInfo makeProxyActivityInfo(@NonNull String className, long flags) {
         try {
-            Context ctx = HostInfo.getApplication();
+            Context ctx = HostInfo.getHostInfo().getApplication();
             Class<?> cl = Class.forName(className);
             String[] candidates = new String[]{
                     "com.tencent.mobileqq.activity.QQSettingSettingActivity",

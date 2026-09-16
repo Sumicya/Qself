@@ -61,6 +61,7 @@ class SimpleListItem(
     }
 
     override fun onItemClick(v: View, position: Int, x: Int, y: Int) {
+        sumicya.qself.ui.InlineSettings.anchor(v)
         onClickListener?.invoke(v)
     }
 

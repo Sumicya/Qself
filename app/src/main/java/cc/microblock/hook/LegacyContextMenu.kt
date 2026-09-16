@@ -47,14 +47,24 @@ object LegacyContextMenu : CommonSwitchFunctionHook() {
         val dip2pxMethod = "Lcom/tencent/mobileqq/utils/ViewUtils;->dip2px(F)I".method
         val menuClass = Initiator.loadClass("com.tencent.qqnt.aio.menu.ui.QQCustomMenuExpandableLayout")
         val getBtnLayoutMethod = menuClass.method("o")!!
+        // 9.2.10 (device census sweep2): the height field 'n' is gone and the
+        // layout method returns a plain View - the old set() threw
+        // NoSuchFieldException and the old cast threw CCE on every menu open.
+        var heightFieldPresent = true
         getBtnLayoutMethod.hookBefore(this) {
-            val defaultHeight = 71f
-            val scale = 1.5f
-            val height = dip2pxMethod.invoke(null, defaultHeight / scale)!!
-            it.thisObject.set("n", height)
+            if (heightFieldPresent) {
+                val defaultHeight = 71f
+                val scale = 1.5f
+                val height = dip2pxMethod.invoke(null, defaultHeight / scale)!!
+                try {
+                    it.thisObject.set("n", height)
+                } catch (e: Exception) {
+                    heightFieldPresent = false
+                }
+            }
         }
         getBtnLayoutMethod.hookAfter(this) {
-            (it.result as LinearLayout).removeViewAt(0)
+            (it.result as? android.view.ViewGroup)?.removeViewAt(0)
         }
         return true
     }

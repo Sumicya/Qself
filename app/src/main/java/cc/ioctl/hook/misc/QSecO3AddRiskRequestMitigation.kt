@@ -28,7 +28,7 @@ import android.os.Parcelable
 import android.view.View
 import androidx.appcompat.app.AlertDialog
 import cc.ioctl.util.HookUtils
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import io.github.qauxv.util.xpcompat.XposedBridge
 import io.github.qauxv.R
 import io.github.qauxv.base.annotation.ComponentHookEntry
@@ -205,7 +205,7 @@ object QSecO3AddRiskRequestMitigation : BaseComponentHook() {
     @UiThread
     fun onAddFriendButtonClick(activity: Activity, uin: String, originProcedure: Runnable) {
         val ctx = CommonContextWrapper.createAppCompatContext(activity)
-        AlertDialog.Builder(ctx)
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle(R.string.dialog_tx_risk_control_general_title)
             .setMessage(R.string.dialog_tx_risk_control_msg_for_add_friend_from_void)
             .setPositiveButton(R.string.dialog_tx_risk_control_btn_copy_user_uin) { dialog, _ ->
@@ -224,7 +224,7 @@ object QSecO3AddRiskRequestMitigation : BaseComponentHook() {
     @UiThread
     fun onAddGroupButtonClick(activity: Activity, uin: String, originProcedure: Runnable) {
         val ctx = CommonContextWrapper.createAppCompatContext(activity)
-        AlertDialog.Builder(ctx)
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle(R.string.dialog_tx_risk_control_general_title)
             .setMessage(R.string.dialog_tx_risk_control_msg_for_add_group_from_void)
             .setPositiveButton(R.string.dialog_tx_risk_control_btn_copy_troop_uin) { dialog, _ ->

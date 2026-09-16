@@ -25,7 +25,7 @@ import static io.github.qauxv.util.xpcompat.XposedHelpers.callMethod;
 import static io.github.qauxv.util.xpcompat.XposedHelpers.setObjectField;
 
 import android.os.Bundle;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.annotation.DexDeobfs;
 import io.github.qauxv.util.Log;
 import io.github.qauxv.util.dexkit.CMessageRecordFactory;

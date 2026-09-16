@@ -21,7 +21,7 @@
  */
 package me.singleneuron.hook.decorator
 
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import io.github.qauxv.util.xpcompat.XC_MethodHook
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry

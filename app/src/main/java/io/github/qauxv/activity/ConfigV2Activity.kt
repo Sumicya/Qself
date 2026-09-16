@@ -21,6 +21,12 @@
  */
 package io.github.qauxv.activity
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isInHostProcess
+import io.github.qauxv.util.isInModuleProcess
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isInHostProcess
+import io.github.qauxv.util.isInModuleProcess
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.DialogInterface
@@ -42,7 +48,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import cc.ioctl.fragment.DebugTestFragment
 import cc.ioctl.fragment.JunkCodeFragment
 import cc.ioctl.fragment.Pcm2SilkTestFragment
-import cc.ioctl.util.HostInfo
 import io.github.libxposed.service.XposedService
 import io.github.qauxv.BuildConfig
 import io.github.qauxv.R
@@ -84,7 +89,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (HostInfo.isInHostProcess()) {
+        if (isInHostProcess) {
             // we have to set the theme before super.onCreate()
             setTheme(if (currentV2Theme == 3) R.style.Theme_MaiTungTMDesign_Light_Blue else R.style.Theme_MaiTungTMDesign_DayNight)
         } else {
@@ -139,7 +144,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
     }
 
     fun updateActivationStatus() {
-        val isHookEnabledByLegacyApi = HookStatus.isModuleEnabled() || HostInfo.isInHostProcess()
+        val isHookEnabledByLegacyApi = HookStatus.isModuleEnabled() || isInHostProcess
         val xposedService: XposedService? = HookStatus.getXposedService().value
         val isHookEnabledByLibXposedApi = if (xposedService != null) {
             val scope = xposedService.scope.toSet()
@@ -148,7 +153,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
         } else false
         val isHookEnabled = isHookEnabledByLegacyApi || isHookEnabledByLibXposedApi
         var isAbiMatch = CheckAbiVariantModel.collectAbiInfo(this).isAbiMatch
-        if ((isHookEnabled && HostInfo.isInModuleProcess() && !HookStatus.isZygoteHookMode()
+        if ((isHookEnabled && isInModuleProcess && !HookStatus.isZygoteHookMode()
                 && HookStatus.isTaiChiInstalled(this)) && HookStatus.getHookType() == HookStatus.HookType.APP_PATCH && "armAll" != AbiUtils.getModuleFlavorName()
         ) {
             isAbiMatch = false
@@ -171,8 +176,8 @@ class ConfigV2Activity : AppCompatTransferActivity() {
                 )
             )
             statusTitle.text = if (isHookEnabled) "已激活" else "未激活"
-            if (HostInfo.isInHostProcess()) {
-                tvStatus.text = HostInfo.getPackageName()
+            if (isInHostProcess) {
+                tvStatus.text = hostInfo.packageName
             } else {
                 tvStatus.text = if (isHookEnabledByLibXposedApi) {
                     val xp = xposedService!!
@@ -209,7 +214,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
             try {
                 startActivity(intent)
             } catch (e: ActivityNotFoundException) {
-                AlertDialog.Builder(this).setTitle("出错啦")
+                sumicya.qself.ui.InlineAlertDialogBuilder(this).setTitle("出错啦")
                     .setMessage("拉起模块设置失败, 请确认 $pkg 已安装并启用(没有被关冰箱或被冻结停用)\n$e")
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
@@ -224,14 +229,14 @@ class ConfigV2Activity : AppCompatTransferActivity() {
             intent.setData(Uri.parse("https://github.com/cinit/QAuxiliary"))
             startActivity(intent)
         } else if (id == R.id.mainV2_help) {
-            AlertDialog.Builder(this)
+            sumicya.qself.ui.InlineAlertDialogBuilder(this)
                 .setMessage(
                     "如模块无法使用，EdXposed 用户可尝试取消优化+开启兼容模式  "
                         + "root 用户可尝试 用幸运破解器-工具箱-移除 odex 更改 移除 QQ/TIM 的优化, 太极用户请尝试取消优化"
                 )
                 .setCancelable(true).setPositiveButton(android.R.string.ok, null).show()
         } else if (id == R.id.mainV2_troubleshoot) {
-            AlertDialog.Builder(this)
+            sumicya.qself.ui.InlineAlertDialogBuilder(this)
                 .setTitle("你想要进入哪个App的故障排除")
                 .setItems(arrayOf("QQ", "TIM", "QQ极速版", "QQ HD")) { dialog: DialogInterface?, which: Int ->
                     var pkg: String? = null
@@ -253,7 +258,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
                         try {
                             startActivity(intent)
                         } catch (e: ActivityNotFoundException) {
-                            AlertDialog.Builder(this).setTitle("出错啦")
+                            sumicya.qself.ui.InlineAlertDialogBuilder(this).setTitle("出错啦")
                                 .setMessage("拉起模块设置失败, 请确认 $pkg 已安装并启用(没有被关冰箱或被冻结停用)\n$e")
                                 .setPositiveButton(android.R.string.ok, null)
                                 .show()
@@ -262,7 +267,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
                 }
                 .setPositiveButton(android.R.string.ok, null)
                 .setNegativeButton("无法进入？") { dialog: DialogInterface?, which: Int ->
-                    AlertDialog.Builder(this).setTitle("手动启用安全模式")
+                    sumicya.qself.ui.InlineAlertDialogBuilder(this).setTitle("手动启用安全模式")
                         .setMessage(
                             """
     如果模块已经激活但无法进入故障排除界面，或在点击进入故障排除后卡死，你可以手动在以下位置建立一个空文件来强制启用 QAuxiliary 的安全模式。
@@ -283,7 +288,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         super.onCreateOptionsMenu(menu)
-        if (HostInfo.isInModuleProcess()) {
+        if (isInModuleProcess) {
             menuInflater.inflate(R.menu.main_v2_toolbar, menu)
             updateMenuItems()
         } else {
@@ -314,7 +319,7 @@ class ConfigV2Activity : AppCompatTransferActivity() {
                 startActivity(intent)
                 finish()
             } catch (e: ActivityNotFoundException) {
-                AlertDialog.Builder(this).setTitle("出错啦")
+                sumicya.qself.ui.InlineAlertDialogBuilder(this).setTitle("出错啦")
                     .setMessage(
                         """拉起模块失败, 请确认 ${BuildConfig.APPLICATION_ID} 已安装并启用(没有被关冰箱或被冻结停用)
 $e"""
@@ -347,7 +352,7 @@ $e"""
 
     private fun showChangeThemeDialog() {
         val themes = arrayOf("系统默认", "深色", "浅色", "浅蓝限定")
-        AlertDialog.Builder(this)
+        sumicya.qself.ui.InlineAlertDialogBuilder(this)
             .setTitle("更换主题")
             .setItems(themes) { dialog: DialogInterface?, which: Int ->
                 saveCurrentV2Theme(which)
@@ -411,7 +416,7 @@ $e"""
     }
 
     fun updateMenuItems() {
-        if (HostInfo.isInHostProcess()) {
+        if (isInHostProcess) {
             return
         }
         val menu = mainV2Binding!!.topAppBar.menu

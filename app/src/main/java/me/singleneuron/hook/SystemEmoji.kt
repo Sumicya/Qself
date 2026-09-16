@@ -22,7 +22,7 @@
 
 package me.singleneuron.hook
 
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.beforeHookIfEnabled
 import io.github.qauxv.util.xpcompat.XposedBridge
 import io.github.qauxv.base.annotation.FunctionHookEntry

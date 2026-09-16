@@ -34,9 +34,9 @@ import android.widget.FrameLayout
 import androidx.annotation.UiThread
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
-import cc.ioctl.util.LayoutHelper.MATCH_PARENT
-import cc.ioctl.util.ui.doWithFaultyDialogWithoutErrorHandling
-import cc.ioctl.util.ui.dsl.RecyclerListViewController
+import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
+import io.github.qauxv.util.ui.doWithFaultyDialogWithoutErrorHandling
+import io.github.qauxv.util.ui.dsl.RecyclerListViewController
 import io.github.qauxv.R
 import io.github.qauxv.base.IEntityAgent
 import io.github.qauxv.base.ISwitchCellAgent
@@ -194,7 +194,7 @@ class ExternalModuleConfigFragment : BaseRootLayoutFragment() {
     private fun showConfigExternalModuleDialog(current: ExternalModuleManager.ExternalModuleInfo?) {
         val ctx = CommonContextWrapper.createAppCompatContext(requireContext())
         val vb = DialogExternalModuleInfoBinding.inflate(LayoutInflater.from(ctx))
-        val builder = AlertDialog.Builder(ctx)
+        val builder = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle(if (current == null) "添加外部模块" else "编辑外部模块")
             .setView(vb.root)
             .setPositiveButton(android.R.string.ok, null)

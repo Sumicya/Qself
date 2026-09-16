@@ -24,7 +24,7 @@ package cc.hicore.hook;
 import androidx.annotation.NonNull;
 import cc.hicore.ReflectUtil.XMethod;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
 import io.github.qauxv.dsl.FunctionEntryRouter;
@@ -58,7 +58,7 @@ public class UnlockLeftSlipLimit extends CommonSwitchFunctionHook {
 
     @Override
     protected boolean initOnce() throws Exception {
-        if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_63_BETA_11345) || HostInfo.requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)) {
+        if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_63_BETA_11345) || HostInfo.requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)) {
             XposedHelpers.findAndHookMethod(
                     Initiator.loadClass("com.tencent.mobileqq.ark.api.impl.ArkHelperImpl"),
                     "isSupportReply",
@@ -73,7 +73,7 @@ public class UnlockLeftSlipLimit extends CommonSwitchFunctionHook {
             return true;
         }
         Method m = XMethod.clz(DexKit.requireMethodFromCache(NLeftSwipeReplyHelper_reply.INSTANCE).getDeclaringClass())
-                .name(io.github.qauxv.util.HostInfo.requireRangePlayQQVersion(PlayQQVersion.PlayQQ_8_2_11, PlayQQVersion.PlayQQ_8_2_11) ? "c" : !HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_93) ? "h" : HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_33) ? "I" : "H")
+                .name(io.github.qauxv.util.HostInfo.requireRangePlayQQVersion(PlayQQVersion.PlayQQ_8_2_11, PlayQQVersion.PlayQQ_8_2_11) ? "c" : !HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_93) ? "h" : HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_33) ? "I" : "H")
                 .ret(boolean.class)
                 .get();
         HookUtils.hookBeforeIfEnabled(this, m, param -> param.setResult(true));

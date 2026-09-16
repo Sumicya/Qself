@@ -28,7 +28,7 @@ import android.content.Context
 import android.view.View
 import android.widget.TextView
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.afterHookIfEnabled
 import com.xiaoniu.dispatcher.OnMenuBuilder
 import com.xiaoniu.util.ContextUtils
@@ -114,12 +114,12 @@ object MessageCopyHook : CommonSwitchFunctionHook(targets = arrayOf(AIOMsgItem_i
         get() = FunctionEntryRouter.Locations.Auxiliary.MESSAGE_CATEGORY
 
     fun showDialog(context: Context, text: CharSequence) {
-        AlertDialog.Builder(context)
+        sumicya.qself.ui.InlineAlertDialogBuilder(context)
             .setMessage(text)
             .setNegativeButton(android.R.string.cancel, null)
             .show()
             .findViewById<TextView>(android.R.id.message)
-            .setTextIsSelectable(true)
+            ?.setTextIsSelectable(true)
     }
 
     override val targetComponentTypes = null

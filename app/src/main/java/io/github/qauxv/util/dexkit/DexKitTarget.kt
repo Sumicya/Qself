@@ -22,17 +22,17 @@
 
 package io.github.qauxv.util.dexkit
 
+import io.github.qauxv.util.hostInfo
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
-import cc.ioctl.util.HostInfo
 import com.github.kyuubiran.ezxhelper.utils.isAbstract
 import com.github.kyuubiran.ezxhelper.utils.isFinal
 import com.github.kyuubiran.ezxhelper.utils.isStatic
 import com.github.kyuubiran.ezxhelper.utils.paramCount
+import com.livefront.sealedenum.GenSealedEnum
 import com.tencent.common.app.AppInterface
 import com.tencent.mobileqq.app.QQAppInterface
-import io.github.qauxv.base.annotation.GenSealedEnum
 import io.github.qauxv.config.ConfigManager
 import io.github.qauxv.util.Initiator._BaseChatPie
 import io.github.qauxv.util.Initiator._ChatMessage
@@ -44,7 +44,7 @@ import io.github.qauxv.util.Initiator.load
 import io.github.qauxv.util.Log
 import io.github.qauxv.util.QQVersion
 import io.github.qauxv.util.requireMinQQVersion
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 import mqq.app.AppRuntime
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.result.MethodData
@@ -53,7 +53,7 @@ import java.util.concurrent.ConcurrentHashMap
 typealias DexKitBridgeFinder = (bridge: DexKitBridge) -> MethodData
 
 sealed class DexKitTarget {
-    val version = HostInfo.getVersionCode32()
+    val version = hostInfo.versionCode32
 
     sealed class UsingStr : DexKitTarget() {
         // with 'OR' relationship

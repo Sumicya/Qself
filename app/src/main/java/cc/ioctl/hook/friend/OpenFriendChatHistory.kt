@@ -34,8 +34,8 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import androidx.appcompat.app.AlertDialog
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.ui.FaultyDialog
 import io.github.qauxv.base.IEntityAgent
 import io.github.qauxv.base.ISwitchCellAgent
 import io.github.qauxv.base.IUiItemAgent
@@ -68,7 +68,7 @@ object OpenFriendChatHistory : IUiItemAgent, IUiItemAgentProvider {
         editText.textSize = 16f
         val linearLayout = LinearLayout(ctx)
         linearLayout.addView(editText, LayoutHelper.newLinearLayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        val alertDialog = AlertDialog.Builder(ctx)
+        val alertDialog = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle("请输入对方 qq 或 uid ")
             .setView(linearLayout)
             .setCancelable(true)

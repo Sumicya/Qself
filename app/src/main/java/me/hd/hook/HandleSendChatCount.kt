@@ -42,7 +42,7 @@ import androidx.appcompat.widget.AppCompatEditText
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.view.children
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import cc.ioctl.util.hookAfterIfEnabled
 import cc.ioctl.util.hookBeforeIfEnabled
 import com.tencent.qqnt.kernel.nativeinterface.MsgElement
@@ -236,7 +236,7 @@ object HandleSendChatCount : CommonConfigFunctionHook(
             addView(tvColor, lp)
             addView(tvClickToAppend, lp)
         }
-        AlertDialog.Builder(ctx).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
             setTitle("设置自定义格式")
             setView(layout)
             setCancelable(false)

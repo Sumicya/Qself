@@ -26,7 +26,6 @@ import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.hook.msg.MultiForwardAvatarHook
 import cc.ioctl.util.HookUtils
 import com.github.kyuubiran.ezxhelper.utils.findMethodOrNull
 import com.github.kyuubiran.ezxhelper.utils.invokeMethod
@@ -38,10 +37,7 @@ import io.github.qauxv.util.QQVersion
 import io.github.qauxv.util.requireMinQQVersion
 import io.github.qauxv.util.xpcompat.XC_MethodHook
 import me.ketal.hook.ChatItemShowQQUin
-import me.ketal.hook.ShowMsgAt
 import me.singleneuron.data.MsgRecordData
-import nep.timeline.PromptForNoSeqMessage
-import xyz.nextalone.hook.HideTroopLevel
 import xyz.nextalone.util.hookAfter
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -53,11 +49,13 @@ object BaseBubbleBuilderHook : BasePersistBackgroundHook() {
     // CACHE REFLECTION METHODS AND FIELDS FOR BETTER PERFORMANCE
     // Peak frequency: ~68 invocations per second
     private val decorators = arrayOf<OnBubbleBuilder>(
-        HideTroopLevel,
-        ShowMsgAt,
         ChatItemShowQQUin,
-        PromptForNoSeqMessage,
-        MultiForwardAvatarHook
+        me.ketal.hook.ShowMsgAt,
+        xyz.nextalone.hook.HideTroopLevel,
+        cc.ioctl.hook.msg.MultiForwardAvatarHook,
+        sumicya.qself.feature.chat.RevokeWrapHint,
+        sumicya.qself.feature.chat.GroupAdminMenu,
+        sumicya.qself.feature.ui.AvatarRounding
     )
 
     @Throws(Exception::class)

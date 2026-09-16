@@ -21,6 +21,8 @@
  */
 package xyz.nextalone.hook
 
+import io.github.qauxv.util.requireMinVersionAnyQQ
+import io.github.qauxv.util.requireMinVersionAnyQQ
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
@@ -40,9 +42,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.view.children
 import cc.hicore.QApp.QAppUtils
 import cc.hicore.ReflectUtil.MField
-import cc.ioctl.util.HostInfo
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.LayoutHelper.newLinearLayoutParams
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper.newLinearLayoutParams
 import io.github.qauxv.base.IUiItemAgent
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry
@@ -164,7 +165,7 @@ object ChatWordsCount : CommonConfigFunctionHook("na_chat_words_count_kt", array
 
     private fun updateChatWordView(viewGroup: ViewGroup) {
         val relativeLayout: RelativeLayout =
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_80) && !QAppUtils.isQQnt()) {
+            if (requireMinVersionAnyQQ(QQVersion.QQ_8_8_80) && !QAppUtils.isQQnt()) {
                 val getId = MField.GetStaticField<Int>("com.tencent.mobileqq.R\$id".clazz, "drawer_top_sig_layout")
                 viewGroup.findViewById(getId)
             } else {
@@ -185,7 +186,7 @@ object ChatWordsCount : CommonConfigFunctionHook("na_chat_words_count_kt", array
 
     private fun injectChatWordView(context: Context, viewGroup: ViewGroup) {
         val relativeLayout: RelativeLayout =
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_80) && !QAppUtils.isQQnt()) {
+            if (requireMinVersionAnyQQ(QQVersion.QQ_8_8_80) && !QAppUtils.isQQnt()) {
                 val getId = MField.GetStaticField<Int>("com.tencent.mobileqq.R\$id".clazz, "drawer_top_sig_layout")
                 viewGroup.findViewById(getId)
             } else {
@@ -199,7 +200,7 @@ object ChatWordsCount : CommonConfigFunctionHook("na_chat_words_count_kt", array
         textView.id = io.github.qauxv.R.id.chat_words_count
         textView.textSize = 15.0f
         textView.setOnClickListener {
-            val dialog = AlertDialog.Builder(CommonContextWrapper.createAppCompatContext(context))
+            val dialog = sumicya.qself.ui.InlineAlertDialogBuilder(CommonContextWrapper.createAppCompatContext(context))
             val ctx = dialog.context
             val editText = EditText(ctx)
             editText.setText(getExFriendCfg()?.getString(colorCfg) ?: "#ff000000")
@@ -232,7 +233,7 @@ object ChatWordsCount : CommonConfigFunctionHook("na_chat_words_count_kt", array
                 }
             }
             textView.setOnLongClickListener {
-                AlertDialog.Builder(CommonContextWrapper.createAppCompatContext(context))
+                sumicya.qself.ui.InlineAlertDialogBuilder(CommonContextWrapper.createAppCompatContext(context))
                     .setTitle("聊天字数统计设置").setMessage("是否要重置统计记录")
                     .setPositiveButton(android.R.string.ok) { _: DialogInterface, _: Int ->
                         putExFriend(timeCfg, Date().today)
@@ -254,7 +255,7 @@ object ChatWordsCount : CommonConfigFunctionHook("na_chat_words_count_kt", array
 
     @SuppressLint("SetTextI18n")
     private fun showChatWordsCountDialog(activity: Context) {
-        val dialog = AlertDialog.Builder(CommonContextWrapper.createAppCompatContext(activity))
+        val dialog = sumicya.qself.ui.InlineAlertDialogBuilder(CommonContextWrapper.createAppCompatContext(activity))
         val ctx = dialog.context
         val editText = EditText(ctx)
         editText.textSize = 16f

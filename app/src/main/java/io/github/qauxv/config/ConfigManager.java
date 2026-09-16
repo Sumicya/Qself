@@ -72,6 +72,7 @@ public abstract class ConfigManager implements SharedPreferences, SharedPreferen
         if (sDefConfig == null) {
             sDefConfig = new MmkvConfigManagerImpl("global_config");
         }
+        sumicya.qself.profile.ProfileMigration.migrate(sDefConfig);
         return sDefConfig;
     }
 

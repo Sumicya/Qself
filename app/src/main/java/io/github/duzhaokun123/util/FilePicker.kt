@@ -47,7 +47,7 @@ object FilePicker {
         if (dirOnly) entries = entries?.filter { it.isDirectory }
         entries = entries?.sorted()
         val item = listOf("..") + (entries?.map { it.name } ?: if (file.isFile) listOf("<entry is file>") else listOf("<can't list files>"))
-        val dialogBuilder = MaterialAlertDialogBuilder(context)
+        val dialogBuilder = sumicya.qself.ui.InlineAlertDialogBuilder(context)
         dialogBuilder.setCustomTitle(TextView(context).apply {
             text = message + "\n" + path
             setPadding(40)
@@ -92,7 +92,7 @@ object FilePicker {
                 typeface = Typeface.MONOSPACE
                 isSingleLine = true
             }
-            AlertDialog.Builder(context)
+            sumicya.qself.ui.InlineAlertDialogBuilder(context)
                 .setTitle("输入路径")
                 .setView(et)
                 .setPositiveButton(android.R.string.ok) { _, _ ->

@@ -40,7 +40,7 @@ object EmotionSharePanelDownload : CommonSwitchFunctionHook(
 ) {
     override val name = "表情分享菜单允许保存图片"
     override val description = "表情详情页右上角菜单中显示保存到手机选项"
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.MESSAGE_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EMOTICON_AND_STICKER_CATEGORY
     override val isAvailable = requireMinQQVersion(QQVersion.QQ_8_9_80)
 
     override fun initOnce(): Boolean {

@@ -34,7 +34,7 @@ import android.widget.LinearLayout;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import io.github.qauxv.base.IEntityAgent;
 import io.github.qauxv.base.IUiItemAgent;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
@@ -63,7 +63,7 @@ public class AddAccount extends CommonClickableStaticFunctionItem {
         editText.setTextSize(16);
         LinearLayout linearLayout = new LinearLayout(ctx);
         linearLayout.addView(editText, LayoutHelper.newLinearLayoutParams(MATCH_PARENT, WRAP_CONTENT));
-        AlertDialog alertDialog = new AlertDialog.Builder(ctx)
+        AlertDialog alertDialog = new sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle("输入要添加的QQ号")
             .setView(linearLayout)
             .setPositiveButton("添加", null)

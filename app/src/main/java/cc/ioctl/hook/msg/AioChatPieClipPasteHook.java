@@ -47,7 +47,7 @@ import androidx.core.view.inputmethod.EditorInfoCompat;
 import androidx.core.view.inputmethod.InputConnectionCompat;
 import cc.hicore.message.bridge.Chat_facade_bridge;
 import cc.ioctl.util.SendCacheUtils;
-import cc.ioctl.util.ui.FaultyDialog;
+import io.github.qauxv.util.ui.FaultyDialog;
 import io.github.duzhaokun123.activity.PictureEditProxyActivity;
 import io.github.duzhaokun123.util.AioChatPieClipPasteHookUtils;
 import io.github.duzhaokun123.util.CacheManager;
@@ -290,7 +290,7 @@ public class AioChatPieClipPasteHook extends CommonSwitchFunctionHook implements
         binding.ivPicture.setImageBitmap(bitmap);
         binding.tvName.setText(uin);
         FaceImpl.getInstance().setImageOrRegister(uinType == 1 ? FaceImpl.TYPE_TROOP : FaceImpl.TYPE_USER, uin, binding.ivAvatar);
-        new AlertDialog.Builder(ctx)
+        new sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setTitle("发送给：")
                 .setView(binding.getRoot())
                 .setPositiveButton("发送", (dialog, which) -> executeSendMessage(context, session, data, aioRootView, rt))

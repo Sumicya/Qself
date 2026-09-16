@@ -3,7 +3,7 @@ package com.alphi.qhmk.module;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedBridge;
 import io.github.qauxv.base.annotation.FunctionHookEntry;

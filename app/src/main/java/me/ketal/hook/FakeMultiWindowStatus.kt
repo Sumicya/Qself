@@ -38,7 +38,7 @@ object FakeMultiWindowStatus : CommonSwitchFunctionHook(
 ) {
     override val name = "伪装处于非多窗口模式"
     override val description = "用于分屏状态使用一些功能,例如扫码"
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.MISC_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.DISGUISE_AND_DEVICE_CATEGORY
 
     override fun initOnce() = throwOrTrue {
         Activity::class.java.getDeclaredMethod("isInMultiWindowMode")

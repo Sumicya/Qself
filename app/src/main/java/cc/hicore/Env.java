@@ -21,8 +21,8 @@
 
 package cc.hicore;
 
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 
 public class Env {
-    public static String app_save_path = "/sdcard/Android/data/" + HostInfo.getPackageName() + "/files/.tool/";
+    public static String app_save_path = "/sdcard/Android/data/" + HostInfo.getHostInfo().getPackageName() + "/files/.tool/";
 }

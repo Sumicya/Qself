@@ -21,8 +21,8 @@
 
 package cc.hicore.message.chat;
 
-import static cc.ioctl.util.HostInfo.requireMinQQVersion;
-import static cc.ioctl.util.HostInfo.requireMinTimVersion;
+import io.github.qauxv.util.HostInfo;
+import static io.github.qauxv.util.HostInfo.requireMinTimVersion;
 
 import cc.hicore.ReflectUtil.XField;
 import cc.hicore.Utils.XLog;
@@ -60,19 +60,19 @@ public class SessionUtils {
 
     public static String getCurrentPeerIDByAIOContact(Object AIOContact) throws Exception {
         return XField.obj(AIOContact).name(
-                (requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA) || requireMinQQVersion(QQVersion.QQ_9_1_70))
+                (requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA) || HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_1_70))
                 ? "e" : "f").type(String.class).get();
     }
 
     public static int getCurrentChatTypeByAIOContact(Object AIOContact) throws Exception {
         return XField.obj(AIOContact).name(
-                (requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA) || requireMinQQVersion(QQVersion.QQ_9_1_70))
+                (requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA) || HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_1_70))
                 ? "d" : "e").type(int.class).get();
     }
 
     public static String getCurrentGuildIDByAIOContact(Object AIOContact) throws Exception {
         return XField.obj(AIOContact).name(
-                (requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA) || requireMinQQVersion(QQVersion.QQ_9_1_70))
+                (requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA) || HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_1_70))
                 ? "f" : "g").type(String.class).get();
     }
 }

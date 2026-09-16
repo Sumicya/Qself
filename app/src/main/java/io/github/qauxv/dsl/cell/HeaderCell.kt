@@ -27,9 +27,9 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.TextView
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.LayoutHelperViewScope
-import cc.ioctl.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelperViewScope
+import io.github.qauxv.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 
 class HeaderCell(context: Context) : FrameLayout(context), LayoutHelperViewScope {
@@ -40,14 +40,16 @@ class HeaderCell(context: Context) : FrameLayout(context), LayoutHelperViewScope
     var paddings: Int = 0
 
     init {
-        cellHeight = 40.dp
-        topMargin = 15.dp
-        paddings = 21.dp
+        cellHeight = 28.dp
+        topMargin = 8.dp
+        paddings = 20.dp
         titleTextView = TextView(context).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             gravity = Gravity.CENTER_VERTICAL or Gravity.START
             setTextColor(ThemeAttrUtils.resolveColorOrDefaultColorRes(context, androidx.appcompat.R.attr.colorAccent, R.color.colorAccent))
             minHeight = cellHeight - topMargin
+            setPadding(0, 0, 0, 4.dp)
+            androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
         }
         addView(titleTextView, LayoutHelper.newFrameLayoutParamsRel(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT,
             Gravity.TOP or Gravity.START, paddings, topMargin, paddings, 0))

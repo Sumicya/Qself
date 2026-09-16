@@ -26,7 +26,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.view.View
 import android.widget.ImageView
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity
 import io.github.qauxv.base.IUiItemAgent
 import io.github.qauxv.base.annotation.FunctionHookEntry
@@ -43,7 +43,7 @@ import io.github.qauxv.util.dexkit.NBaseChatPie_chooseMsg
 import io.github.qauxv.util.dexkit.NLeftSwipeReplyHelper_reply
 import io.github.qauxv.util.requireMinVersion
 import kotlinx.coroutines.flow.MutableStateFlow
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 import me.ketal.ui.activity.ModifyLeftSwipeReplyFragment
 import xyz.nextalone.util.hookBefore
 import xyz.nextalone.util.throwOrTrue

@@ -23,7 +23,7 @@
 package io.github.qauxv.util.data;
 
 import androidx.annotation.Nullable;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.QQVersion;
 

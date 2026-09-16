@@ -40,7 +40,7 @@ import cc.hicore.hook.stickerPanel.PanelUtils;
 import cc.hicore.message.chat.SessionHooker;
 import cc.hicore.message.chat.SessionUtils;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import com.tencent.qphone.base.remote.FromServiceMsg;
 import com.tencent.qphone.base.remote.ToServiceMsg;
 import com.tencent.qqnt.kernel.nativeinterface.MsgElement;

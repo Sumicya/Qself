@@ -33,7 +33,7 @@ import android.os.Looper;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.PermissionChecker;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.IDynamicHook;
 import io.github.qauxv.core.HookInstaller;
 import io.github.qauxv.util.dexkit.DexDeobfsProvider;
@@ -112,7 +112,7 @@ public class SyncUtils {
     //file=0
     public static final String SYNC_FILE_CHANGED = "io.github.qauxv.SYNC_FILE_CHANGED";
     //process=010001 hook=0011000
-    public static final String HOOK_DO_INIT = "io.github.qauxv.HOOK_DO_INIT";
+    public static final String HOOK_DO_INIT = "io.github.qauxv.HOOK_DO_INIT_SIMPLIFIED_V1";
     public static final String ENUM_PROC_REQ = "io.github.qauxv.ENUM_PROC_REQ";
     public static final String ENUM_PROC_RESP = "io.github.qauxv.ENUM_PROC_RESP";
     public static final String GENERIC_WRAPPER = "io.github.qauxv.GENERIC_WRAPPER";
@@ -186,7 +186,7 @@ public class SyncUtils {
 
     public static void sendGenericBroadcast(Context ctx, Intent intent) {
         if (ctx == null) {
-            ctx = HostInfo.getApplication();
+            ctx = HostInfo.getHostInfo().getApplication();
         }
         intent.putExtra(_REAL_INTENT, intent.getAction());
         intent.setAction(GENERIC_WRAPPER);
@@ -204,7 +204,7 @@ public class SyncUtils {
      * @param what 0 for unspecified
      */
     public static void onFileChanged(int file, long uin, int what) {
-        Context ctx = HostInfo.getApplication();
+        Context ctx = HostInfo.getHostInfo().getApplication();
         Intent changed = new Intent(SYNC_FILE_CHANGED);
         changed.setPackage(ctx.getPackageName());
         initId();
@@ -216,12 +216,15 @@ public class SyncUtils {
     }
 
     public static void requestInitHook(int hookId, int process) {
-        Context ctx = HostInfo.getApplication();
+        IDynamicHook requested = HookInstaller.getHookById(hookId);
+        if (requested == null || !sumicya.qself.profile.SimplifiedProfile.isAllowed(requested)) return;
+        Context ctx = HostInfo.getHostInfo().getApplication();
         Intent changed = new Intent(HOOK_DO_INIT);
         changed.setPackage(ctx.getPackageName());
         initId();
         changed.putExtra("process", process);
-        changed.putExtra("hook", hookId);
+        changed.putExtra("qselfHookClass", requested.getClass().getName());
+        changed.putExtra("qselfBuild", io.github.qauxv.BuildConfig.VERSION_NAME);
         ctx.sendBroadcast(changed);
     }
 
@@ -286,7 +289,7 @@ public class SyncUtils {
         do {
             try {
                 List<ActivityManager.RunningAppProcessInfo> runningAppProcesses =
-                        ((ActivityManager) HostInfo.getApplication().getSystemService(Context.ACTIVITY_SERVICE))
+                        ((ActivityManager) HostInfo.getHostInfo().getApplication().getSystemService(Context.ACTIVITY_SERVICE))
                                 .getRunningAppProcesses();
                 if (runningAppProcesses != null) {
                     for (ActivityManager.RunningAppProcessInfo runningAppProcessInfo : runningAppProcesses) {
@@ -513,14 +516,20 @@ public class SyncUtils {
                 case HOOK_DO_INIT:
                     int myType = getProcessType();
                     int targetType = intent.getIntExtra("process", 0);
-                    int hookId = intent.getIntExtra("hook", -1);
-                    if (hookId != -1 && (myType & targetType) != 0) {
-                        IDynamicHook hook = HookInstaller.getHookById(hookId);
-                        if (hook != null && hook.isTargetProcess() && !hook.isPreparationRequired()) {
+                    // Old index-only requests and mixed-build processes are ignored, never reinterpreted.
+                    if (!io.github.qauxv.BuildConfig.VERSION_NAME.equals(intent.getStringExtra("qselfBuild"))) break;
+                    String hookClass = intent.getStringExtra("qselfHookClass");
+                    if (hookClass != null && (myType & targetType) != 0) {
+                        IDynamicHook hook = null;
+                        for (IDynamicHook candidate : HookInstaller.queryAllAnnotatedHooks()) {
+                            if (candidate.getClass().getName().equals(hookClass)) { hook = candidate; break; }
+                        }
+                        final IDynamicHook selectedHook = hook;
+                        if (selectedHook != null && selectedHook.isEnabled() && sumicya.qself.profile.SimplifiedProfile.isAllowed(selectedHook) && selectedHook.isTargetProcess() && !selectedHook.isPreparationRequired()) {
                             async(() -> {
                                 DexDeobfsProvider.INSTANCE.enterDeobfsSection();
                                 try {
-                                    hook.initialize();
+                                    selectedHook.initialize();
                                     try {
                                         OatInlineDeoptManager.getInstance().updateDeoptListForCurrentProcess();
                                     } finally {

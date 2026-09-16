@@ -28,7 +28,7 @@ import android.view.View;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Objects;
@@ -63,7 +63,7 @@ public class Toasts {
                                  @NonNull final CharSequence text, int duration) {
         Objects.requireNonNull(text, "text");
         if (context == null) {
-            context = HostInfo.getApplication();
+            context = HostInfo.getHostInfo().getApplication();
         }
         final Context ctx = context;
         SyncUtils.runOnUiThread(() -> {

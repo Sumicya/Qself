@@ -226,7 +226,7 @@ object DumpTelegramStickers : CommonConfigFunctionHook() {
 
     @SuppressLint("SetTextI18n")
     override val onUiItemClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, ctx, _ ->
-        val builder = AlertDialog.Builder(ctx)
+        val builder = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
         val wrapper = LinearLayout(ctx)
         val layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
@@ -321,7 +321,7 @@ object DumpTelegramStickers : CommonConfigFunctionHook() {
             .setNegativeButton("取消", null)
             .show()
     }
-    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.CHAT_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EMOTICON_AND_STICKER_CATEGORY
 
     override fun initOnce(): Boolean {
         val EmoticonPanelController = Initiator.loadClass("com.tencent.mobileqq.emoticonview.EmoticonPanelController")

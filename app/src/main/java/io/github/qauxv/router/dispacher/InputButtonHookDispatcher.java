@@ -21,7 +21,7 @@
  */
 package io.github.qauxv.router.dispacher;
 
-import static cc.ioctl.util.Reflex.getFirstNSFByType;
+import static io.github.qauxv.util.Reflex.getFirstNSFByType;
 import static io.github.qauxv.util.Initiator._SessionInfo;
 
 import android.content.Context;
@@ -37,12 +37,7 @@ import cc.hicore.QApp.QAppUtils;
 import cc.hicore.hook.ReplyMsgWithImg;
 import cc.hicore.message.chat.SessionHooker;
 import cc.hicore.message.chat.SessionUtils;
-import cc.ioctl.hook.experimental.CardMsgSender;
-import cc.ioctl.hook.msg.AioChatPieClipPasteHook;
 import cc.ioctl.util.HookUtils;
-import com.xiaoniu.hook.CtrlEnterToSend;
-import io.github.duzhaokun123.hook.InputPlusButtonHook;
-import io.github.duzhaokun123.hook.SendTTSHook;
 import io.github.qauxv.R;
 import io.github.qauxv.base.annotation.EntityAgentEntry;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
@@ -95,12 +90,9 @@ public class InputButtonHookDispatcher extends BaseHookDispatcher<IBaseChatPieDe
     }
 
     private static final IBaseChatPieDecorator[] DECORATORS = {
-            CardMsgSender.INSTANCE,
-            AioChatPieClipPasteHook.INSTANCE,
             ReplyMsgWithImg.INSTANCE,
-            SendTTSHook.INSTANCE,
-            CtrlEnterToSend.INSTANCE,
-            InputPlusButtonHook.INSTANCE
+            cc.ioctl.hook.msg.AioChatPieClipPasteHook.INSTANCE,
+            com.xiaoniu.hook.CtrlEnterToSend.INSTANCE
     };
 
     @NonNull

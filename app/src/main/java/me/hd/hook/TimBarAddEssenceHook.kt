@@ -32,7 +32,7 @@ import android.widget.RelativeLayout
 import androidx.core.view.children
 import cc.hicore.message.chat.SessionHooker.IAIOParamUpdate
 import cc.hicore.message.chat.SessionUtils
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import com.github.kyuubiran.ezxhelper.utils.findMethod
 import com.github.kyuubiran.ezxhelper.utils.hookAfter
 import io.github.qauxv.base.annotation.FunctionHookEntry

@@ -33,7 +33,7 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;

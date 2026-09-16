@@ -39,8 +39,8 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import cc.ioctl.util.LayoutHelper.MATCH_PARENT
-import cc.ioctl.util.ui.dsl.RecyclerListViewController
+import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
+import io.github.qauxv.util.ui.dsl.RecyclerListViewController
 import io.github.qauxv.util.Log
 import io.github.qauxv.BuildConfig
 import io.github.qauxv.R
@@ -129,15 +129,10 @@ class AboutFragment : BaseRootLayoutFragment() {
                         fragmentClass = EulaFragment::class.java
                     )
                 }
-                if (!isInModuleProcess) {
-                    add(
-                        TextSwitchItem(
-                            "AppCenter 匿名统计与崩溃收集",
-                            summary = "我们使用 Microsoft AppCenter 来匿名地收集崩溃信息和最常被人们使用的功能和一些使用习惯数据来使得 QAuxiliary 变得更加实用",
-                            switchAgent = mAllowAppCenterStatics
-                        )
-                    )
-                }
+                description(
+                    "此版本已移除 AppCenter 统计与崩溃上传。" +
+                        "本地诊断只记录元数据、默认开启，可随时关闭或清空，不会上传。"
+                )
             },
             CategoryItem("群组") {
                 textItem("Telegram 频道", value = "@QAuxiliary") {
@@ -201,18 +196,6 @@ class AboutFragment : BaseRootLayoutFragment() {
     }
 
     private val GITHUB_URL = "https://github.com/cinit/QAuxiliary"
-
-    private val mAllowAppCenterStatics: ISwitchCellAgent = object : ISwitchCellAgent {
-        override val isCheckable = true
-        override var isChecked: Boolean
-            get() = CliOper.isAppCenterAllowed()
-            set(value) {
-                CliOper.setAppCenterAllowed(value)
-                if (value) {
-                    CliOper.__init__(hostInfo.application)
-                }
-            }
-    }
 
     private val notices: List<LicenseNotice> by lazy {
         val ret = listOf(

@@ -30,6 +30,7 @@ import com.android.tools.build.apkzlib.zip.AlignmentRule
 import com.android.tools.build.apkzlib.zip.CompressionMethod
 import com.android.tools.build.apkzlib.zip.ZFile
 import com.android.tools.build.apkzlib.zip.ZFileOptions
+import org.gradle.api.tasks.testing.Test
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -204,6 +205,9 @@ android {
             }
         }
         getByName("debug") {
+            // Distribution from the existing CI task must not expose JDWP/debuggable mode.
+            // The task/artifact keeps its old name; signing is still the CI debug certificate.
+            isDebuggable = false
             ndk {
                 if (isNativeFullDebugMode) {
                     isJniDebuggable = true
@@ -303,6 +307,15 @@ android {
     lint {
         disable += arrayOf("BlockedPrivateApi", "DiscouragedPrivateApi", "PrivateApi", "SoonBlockedPrivateApi")
     }
+
+    // JVM unit tests (app/src/test): android.jar method calls return defaults
+    // instead of throwing "not mocked"; tests must not rely on those return values.
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 kotlin {
@@ -333,8 +346,6 @@ dependencies {
     // for get activation status
     implementation(projects.libs.libxposed.service)
     implementation(libs.hiddenapibypass)
-    implementation(libs.appcenter.analytics)
-    implementation(libs.appcenter.crashes)
     implementation(libs.androidx.browser)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.core.ktx)
@@ -358,6 +369,10 @@ dependencies {
     implementation(libs.dexlib2)
     // I don't know why, but without this, compilation will fail
     implementation(libs.google.guava)
+    implementation(libs.sealedEnum.runtime)
+    ksp(libs.sealedEnum.ksp)
+    testImplementation(libs.junit)
+    testImplementation("org.robolectric:robolectric:4.16.1")
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.runner)
 }

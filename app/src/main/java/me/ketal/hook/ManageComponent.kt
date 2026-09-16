@@ -77,7 +77,7 @@ object ManageComponent : CommonConfigFunctionHook("Ketal_ManageComponent") {
             ary
         }
         val cache = enable.clone()
-        AlertDialog.Builder(CommonContextWrapper.createAppCompatContext(context))
+        sumicya.qself.ui.InlineAlertDialogBuilder(CommonContextWrapper.createAppCompatContext(context))
             .setTitle("选择要启用的组件")
             .setMultiChoiceItems(keys, enable) { _: DialogInterface, i: Int, _: Boolean ->
                 cache[i] = !cache[i]

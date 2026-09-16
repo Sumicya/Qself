@@ -78,7 +78,7 @@ object ForceSystemFile : BaseSwitchFunctionDecorator(), IStartActivityHookDecora
                     }
             )
             val materialContext = CommonContextWrapper.createMaterialDesignContext(context)
-            MaterialAlertDialogBuilder(materialContext)
+            sumicya.qself.ui.InlineAlertDialogBuilder(materialContext)
                     .setTitle("选择文件选择器")
                     .setItems(activityMap.keys.toTypedArray()) { _: DialogInterface, i: Int ->
                         // recursion here

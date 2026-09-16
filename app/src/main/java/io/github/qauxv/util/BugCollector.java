@@ -21,24 +21,8 @@
  */
 package io.github.qauxv.util;
 
-import android.app.Application;
-import cc.ioctl.util.Reflex;
-import com.microsoft.appcenter.crashes.Crashes;
-import cc.ioctl.util.HostInfo;
-
-public class BugCollector {
-
-    public static void onThrowable(Throwable th) {
-        try {
-            if (Reflex.isCallingFrom("BugCollector")) {
-                return;
-            }
-            Application ctx = HostInfo.getApplication();
-            if (ctx != null) {
-                CliOper.__init__(ctx);
-                Crashes.trackError(th);
-            }
-        } catch (Throwable ignored) {
-        }
-    }
+/** No automatic crash uploads. User-enabled diagnostics remain local. */
+public final class BugCollector {
+    private BugCollector() { }
+    public static void onThrowable(Throwable ignored) { }
 }

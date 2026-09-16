@@ -29,7 +29,7 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
 import cc.ioctl.util.HostStyledViewBuilder
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.qauxv.R
 import io.github.qauxv.base.IUiItemAgent
@@ -40,7 +40,7 @@ import io.github.qauxv.util.Toasts
 import io.github.qauxv.util.dexkit.DexKitTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 
 abstract class MultiItemDelayableHook(keyName: String,targets: Array<DexKitTarget>? = null) :
     CommonConfigFunctionHook(keyName,targets) {
@@ -59,7 +59,7 @@ abstract class MultiItemDelayableHook(keyName: String,targets: Array<DexKitTarge
     override val onUiItemClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, activity, _ ->
         // create a dialog
         val dialogContext = CommonContextWrapper.createMaterialDesignContext(activity)
-        val builder = MaterialAlertDialogBuilder(dialogContext)
+        val builder = sumicya.qself.ui.InlineAlertDialogBuilder(dialogContext)
         alertDialogDecorator(builder)
         builder.show()
     }
@@ -90,12 +90,13 @@ abstract class MultiItemDelayableHook(keyName: String,targets: Array<DexKitTarge
         }
         set(value) {
             itemsConfigKeys.value = value.toSet()
+            sumicya.qself.diagnostics.FeatureJournal.record("OPTIONS", javaClass.name, "selectedCount=${value.size}")
             valueState.update { "已选择" + value.size + "项" }
         }
 
     open fun listener() = View.OnClickListener {
         try {
-            MaterialAlertDialogBuilder(CommonContextWrapper.createMaterialDesignContext(it.context)).apply(alertDialogDecorator).show()
+            sumicya.qself.ui.InlineAlertDialogBuilder(CommonContextWrapper.createMaterialDesignContext(it.context)).apply(alertDialogDecorator).show()
         } catch (e: Exception) {
             Log.e(e)
         }
@@ -117,7 +118,7 @@ abstract class MultiItemDelayableHook(keyName: String,targets: Array<DexKitTarge
         return ret
     }
 
-    private val alertDialogDecorator: MaterialAlertDialogBuilder.() -> Unit = {
+    private val alertDialogDecorator: sumicya.qself.ui.InlineAlertDialogBuilder.() -> Unit = {
         val cache = activeItems.toMutableList()
         setTitle("选择要${dialogDesc}的项目")
         setMultiChoiceItems(items.toTypedArray(), getBoolAry()) { _: DialogInterface, i: Int, _: Boolean ->
@@ -155,7 +156,7 @@ abstract class MultiItemDelayableHook(keyName: String,targets: Array<DexKitTarge
                         _5 * 2, _5, _5 * 2, _5
                     )
                 )
-                MaterialAlertDialogBuilder(context, R.style.MaterialDialog)
+                sumicya.qself.ui.InlineAlertDialogBuilder(context, R.style.MaterialDialog)
                     .setTitle("自定义${dialogDesc}项目")
                     .setView(linearLayout)
                     .setCancelable(true)

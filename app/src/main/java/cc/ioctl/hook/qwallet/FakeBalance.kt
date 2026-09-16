@@ -29,7 +29,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.core.widget.doAfterTextChanged
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.customview.customView
 import com.afollestad.materialdialogs.customview.getCustomView
@@ -41,7 +41,7 @@ import io.github.qauxv.dsl.uiClickableItem
 import io.github.qauxv.util.SyncUtils
 import io.github.qauxv.util.hostInfo
 import me.ketal.base.PluginDelayableHook
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 import me.ketal.ui.view.ConfigView
 import me.ketal.util.findClass
 import me.ketal.util.getMethod

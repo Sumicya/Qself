@@ -36,7 +36,7 @@ public class CustomDialog {
     public static CustomDialog create(Context ctx) {
         CustomDialog ref = new CustomDialog();
         // dark/light theme is already handled by CommonContextWrapper.createAppCompatContext(context)
-        ref.mBuilder = new androidx.appcompat.app.AlertDialog.Builder(CommonContextWrapper.createAppCompatContext(ctx));
+        ref.mBuilder = new sumicya.qself.ui.InlineAlertDialogBuilder(CommonContextWrapper.createAppCompatContext(ctx));
         return ref;
     }
 

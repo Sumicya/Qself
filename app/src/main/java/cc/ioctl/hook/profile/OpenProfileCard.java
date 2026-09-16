@@ -24,7 +24,7 @@ package cc.ioctl.hook.profile;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
-import static cc.ioctl.util.LayoutHelper.newLinearLayoutParams;
+import static io.github.qauxv.util.LayoutHelper.newLinearLayoutParams;
 
 import android.app.Activity;
 import android.content.ComponentName;
@@ -40,7 +40,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import cc.ioctl.hook.misc.QSecO3AddRiskRequestMitigation;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.IEntityAgent;
 import io.github.qauxv.base.ISwitchCellAgent;
 import io.github.qauxv.base.IUiItemAgent;
@@ -71,7 +71,7 @@ public class OpenProfileCard extends CommonClickableStaticFunctionItem {
         editText.setTextSize(16);
         LinearLayout linearLayout = new LinearLayout(ctx);
         linearLayout.addView(editText, newLinearLayoutParams(MATCH_PARENT, WRAP_CONTENT));
-        AlertDialog alertDialog = new AlertDialog.Builder(ctx)
+        AlertDialog alertDialog = new sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setTitle("输入对方QQ号")
                 .setView(linearLayout)
                 .setCancelable(true)

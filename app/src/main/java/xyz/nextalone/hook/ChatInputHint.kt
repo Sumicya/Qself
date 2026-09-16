@@ -31,7 +31,7 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import io.github.qauxv.base.IUiItemAgent
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry
