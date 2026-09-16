@@ -1,31 +1,17 @@
 plugins {
-    id("com.android.library")
+    id("build-logic.android.library-jre8")
 }
 
 android {
     namespace = "io.github.qauxv.loader.sbl"
 
-    compileSdk {
-        // "36.1" -> major=36, minor=1
-        version = release(Version.compileSdkVersion.substringBefore('.').toInt()) {
-            minorApiLevel = Version.compileSdkVersion.substringAfter('.').toIntOrNull()
-        }
-    }
-
     defaultConfig {
-        minSdk = Version.minSdk
-
         buildConfigField("String", "VERSION_NAME", "\"${Common.getBuildVersionName(rootProject)}\"")
         buildConfigField("int", "VERSION_CODE", "${Common.getBuildVersionCode(rootProject)}")
     }
 
     buildFeatures {
         buildConfig = true
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
     }
 }
 

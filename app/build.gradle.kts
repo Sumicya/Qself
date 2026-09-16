@@ -369,8 +369,6 @@ dependencies {
     implementation(libs.dexlib2)
     // I don't know why, but without this, compilation will fail
     implementation(libs.google.guava)
-    implementation(libs.sealedEnum.runtime)
-    ksp(libs.sealedEnum.ksp)
     testImplementation(libs.junit)
     testImplementation("org.robolectric:robolectric:4.16.1")
     androidTestImplementation(libs.junit)

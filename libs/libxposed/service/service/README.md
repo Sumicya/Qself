@@ -10,8 +10,9 @@ longer depends on the dead remote. They correspond to the libxposed service
 API version 100 (see `IXposedService.aidl`), which is the version this
 project was pinned to via the old submodule commit.
 
-- Upstream: https://github.com/libxposed/service (deleted; Apache License 2.0)
-- Mirror used for re-import: https://github.com/Colo-Thor/libxposedService
-- Published artifacts (for reference): `io.github.libxposed:service` /
-  `io.github.libxposed:interface` on Maven Central (101.0.0+, minSdk 26,
-  therefore not directly usable here because this project's minSdk is 24)
+- Upstream: https://github.com/libxposed/service (deleted; see LICENSE,
+  Apache License 2.0)
+- The Maven Central artifacts (`io.github.libxposed:service` 101+) are not
+  used directly because their declared minSdk is higher than desired at
+  vendoring time; compiling the sources in-tree keeps the project's own
+  minSdk in charge.

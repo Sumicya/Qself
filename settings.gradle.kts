@@ -1,7 +1,6 @@
 @file:Suppress("UnstableApiUsage")
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
-// enableFeaturePreview("STABLE_CONFIGURATION_CACHE")
 
 pluginManagement {
     repositories {
@@ -23,9 +22,7 @@ dependencyResolutionManagement {
         }
         maven("https://jitpack.io") {
             content {
-                includeGroup("com.github.livefront.sealed-enum")
                 includeGroup("com.github.MatteoBattilana")
-                // includeGroup("com.github.plattysoft")
             }
         }
         maven("https://api.xposed.info/") {

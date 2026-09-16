@@ -30,7 +30,7 @@ import com.github.kyuubiran.ezxhelper.utils.isAbstract
 import com.github.kyuubiran.ezxhelper.utils.isFinal
 import com.github.kyuubiran.ezxhelper.utils.isStatic
 import com.github.kyuubiran.ezxhelper.utils.paramCount
-import com.livefront.sealedenum.GenSealedEnum
+import io.github.qauxv.base.annotation.GenSealedEnum
 import com.tencent.common.app.AppInterface
 import com.tencent.mobileqq.app.QQAppInterface
 import io.github.qauxv.config.ConfigManager

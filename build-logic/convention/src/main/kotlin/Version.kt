@@ -9,7 +9,7 @@ object Version {
     // some dependencies require compileSdkVersion 37+
     const val compileSdkVersion = "37.0"
     val buildToolsVersion = findBuildToolsVersion()
-    const val minSdk = 26 // libxposed-service 102 minimum; personal ColorOS target is newer
+    const val minSdk = 26 // raised from 24: modern libxposed artifacts require 26; personal ColorOS target is newer
     const val targetSdk = 36
     const val versionName = "1.6.1"
 

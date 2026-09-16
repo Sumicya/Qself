@@ -7,7 +7,6 @@ ksp = "2.3.11"
 lifecycle = "2.11.0"
 materialDialog = "3.3.0"
 protobuf = "4.35.1"
-sealedEnum = "0.7.0"
 
 [libraries]
 hiddenapibypass = { module = "org.lsposed.hiddenapibypass:hiddenapibypass", version = "6.1" }
@@ -38,8 +37,6 @@ byte-buddy = { module = "net.bytebuddy:byte-buddy", version = "1.18.12-jdk5" }
 dalvik-dx = { module = "com.jakewharton.android.repackaged:dalvik-dx", version = "16.0.1" }
 dexlib2 = { module = "org.smali:dexlib2", version = "2.5.2" }
 google-guava = { module = "com.google.guava:guava", version = "33.7.0-android" }
-sealedEnum-runtime = { module = "com.github.livefront.sealed-enum:runtime", version.ref = "sealedEnum" }
-sealedEnum-ksp = { module = "com.github.livefront.sealed-enum:ksp", version.ref = "sealedEnum" }
 davemorrissey-subsampling-scale-image-view = { module = "com.davemorrissey.labs:subsampling-scale-image-view-androidx", version = "3.10.0" }
 #noinspection NewerVersionAvailable do not update com.google.flatbuffers:flatbuffers-java, need to keep it sync with DexKit
 flatbuffers-java = { module = "com.google.flatbuffers:flatbuffers-java", version = "23.5.26" }
