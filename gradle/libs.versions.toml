@@ -2,8 +2,8 @@
 # AGP 9.3: keep the module resource-package compatibility switches in gradle.properties.
 # AGP 10.0 no longer supports `android.newDsl=false`, so do not use AGP 10.0 for now.
 agp = "9.3.1"
-kotlin = "2.4.10"
-ksp = "2.3.11"
+kotlin = "2.4.20"
+ksp = "2.3.12"
 lifecycle = "2.11.0"
 materialDialog = "3.3.0"
 protobuf = "4.35.1"
