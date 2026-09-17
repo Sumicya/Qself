@@ -77,5 +77,4 @@ include(
     ":libs:ezxhelper",
     ":libs:xView",
     ":libs:libxposed:api",
-    ":libs:libxposed:service",
 )
