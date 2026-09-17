@@ -85,7 +85,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import kotlin.Pair;
 import mqq.app.AppRuntime;
 
-import static cc.ioctl.util.HostInfo.requireMinQQVersion;
+import static io.github.qauxv.util.HostInfo.requireMinQQVersion;
 
 @FunctionHookEntry
 @UiItemAgentEntry
