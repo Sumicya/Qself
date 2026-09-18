@@ -6,28 +6,19 @@ import java.io.File
 import java.nio.file.Paths
 
 object Common {
-    /**
-     * The history was squashed for the repository reset, so the raw commit
-     * count no longer orders against upstream releases (v1.6.1 = r3000+).
-     * Base the code above that line and keep growing with each commit, so
-     * installs over upstream builds are upgrades, never downgrades.
-     */
-    private const val VERSION_CODE_BASE = 3000
-
-    private fun commitCount(rootProject: Project): Int? {
-        val headFile = File(rootProject.projectDir, ".git" + File.separator + "HEAD")
-        if (!headFile.exists()) {
-            println("WARN: .git/HEAD does NOT exist")
-            return null
-        }
-        return FileRepository(rootProject.file(".git")).use { repo ->
-            val refId = repo.resolve("HEAD")
-            Git(repo).log().add(refId).call().count()
-        }
-    }
-
     fun getBuildVersionCode(project: Project): Int {
-        return VERSION_CODE_BASE + (commitCount(project.rootProject) ?: 1)
+        val rootProject = project.rootProject
+        val projectDir = rootProject.projectDir
+        val headFile = File(projectDir, ".git" + File.separator + "HEAD")
+        return if (headFile.exists()) {
+            FileRepository(rootProject.file(".git")).use { repo ->
+                val refId = repo.resolve("HEAD")
+                Git(repo).log().add(refId).call().count()
+            }
+        } else {
+            println("WARN: .git/HEAD does NOT exist")
+            1
+        }
     }
 
     fun getGitHeadRefsSuffix(project: Project): String {
@@ -36,7 +27,7 @@ object Common {
         return if (headFile.exists()) {
             FileRepository(rootProject.file(".git")).use { repo ->
                 val refId = repo.resolve("HEAD")
-                val commitCount = VERSION_CODE_BASE + Git(repo).log().add(refId).call().count()
+                val commitCount = Git(repo).log().add(refId).call().count()
                 ".r" + commitCount + "." + refId.name.substring(0, 7)
             }
         } else {
