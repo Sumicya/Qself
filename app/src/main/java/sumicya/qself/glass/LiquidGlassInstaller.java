@@ -52,7 +52,8 @@ public final class LiquidGlassInstaller {
     private static WeakReference<LiquidGlassHostLayout> sHostRef =
             new WeakReference<>(null);
     private static WeakReference<View> sTabViewRef = new WeakReference<>(null);
-    private static WeakReference<View> sGlassRef = new WeakReference<>(null);
+    private static WeakReference<GlassSurface> sGlassRef =
+            new WeakReference<>(null);
     private static WeakReference<View> sDropletRef = new WeakReference<>(null);
     private static WeakReference<ViewGroup> sTabRowRef =
             new WeakReference<>(null);
@@ -330,7 +331,11 @@ public final class LiquidGlassInstaller {
                                 .removeOnGlobalLayoutListener(this);
                         host.attach();
                         syncDropletSize(TabBarBridge.currentIndex(tabView));
-                        GlassBlurProbe.verify(glass);
+                        GlassSurface glass = sGlassRef.get();
+                        if (glass != null) {
+                            // Pixel-level blur proof, fired once frames settle.
+                            GlassBlurProbe.verify(glass);
+                        }
                         PAGES.extendPagesToBottom(backdrop);
                         host.postDelayed(
                                 () -> PAGES.extendPagesToBottom(backdrop),
@@ -344,8 +349,8 @@ public final class LiquidGlassInstaller {
                                         + " hostH=" + host.getHeight()
                                         + " barH=" + tabView.getHeight()
                                         + " navInset=" + navigationInset
-                                        + " glassPath="
-                                        + glass.renderPathName()
+                                        + " glassPath=" + (glass == null ? "none"
+                                                : glass.renderPathName())
                                         + " sdk=" + Build.VERSION.SDK_INT);
                     }
                 });
