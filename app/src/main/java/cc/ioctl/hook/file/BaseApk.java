@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -34,7 +33,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.dialog.RikkaBaseApkFormatDialog;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.IUiItemAgent;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
@@ -96,7 +95,7 @@ public class BaseApk extends CommonConfigFunctionHook {
 
     @Override
     public boolean initOnce() throws Exception {
-        if (HostInfo.requireMinQQVersion(QQ_8_9_63_BETA_11345)) {
+        if (HostInfo.requireMinVersionAnyQQ(QQ_8_9_63_BETA_11345)) {
             HookUtils.hookBeforeIfEnabled(this, DexKit.requireMethodFromCache(TroopSendFile_QQNT.INSTANCE), param -> {
                 Field[] fs = param.thisObject.getClass().getDeclaredFields();
                 Field f = null;
@@ -123,7 +122,7 @@ public class BaseApk extends CommonConfigFunctionHook {
                     }
                 }
             });
-        } else if (HostInfo.requireMinQQVersion(QQ_8_6_0)) {
+        } else if (HostInfo.requireMinVersionAnyQQ(QQ_8_6_0)) {
             Class c = Initiator.load("com.tencent.mobileqq.utils.FileUtils");
             XposedHelpers.findAndHookMethod(c, "getFileName", String.class, new XC_MethodHook() {
                 @Override
@@ -189,7 +188,7 @@ public class BaseApk extends CommonConfigFunctionHook {
     }
 
     private String getFormattedFileNameByPath(String path) {
-        PackageManager packageManager = HostInfo.getApplication().getPackageManager();
+        PackageManager packageManager = HostInfo.getHostInfo().getApplication().getPackageManager();
         PackageInfo packageArchiveInfo = packageManager
                 .getPackageArchiveInfo(path, PackageManager.GET_ACTIVITIES);
         ApplicationInfo applicationInfo = packageArchiveInfo.applicationInfo;

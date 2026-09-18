@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -27,8 +26,8 @@ import static io.github.qauxv.util.QQVersion.QQ_8_2_0;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.HostInfo;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedHelpers;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
@@ -120,7 +119,7 @@ public class FavMoreEmo extends CommonSwitchFunctionHook {
 
     @Override
     public boolean isAvailable() {
-        return !HostInfo.isTim() && HostInfo.getVersionCode() < QQ_8_2_0;
+        return !HostInfo.isTim() && HostInfo.getHostInfo().getVersionCode32() < QQ_8_2_0;
     }
 
     @NonNull
@@ -138,6 +137,6 @@ public class FavMoreEmo extends CommonSwitchFunctionHook {
     @NonNull
     @Override
     public String[] getUiItemLocation() {
-        return Auxiliary.CHAT_CATEGORY;
+        return Auxiliary.FAVORITE_AND_TOOLS_CATEGORY;
     }
 }

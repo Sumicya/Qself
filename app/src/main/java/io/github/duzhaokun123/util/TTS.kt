@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -71,7 +70,7 @@ object TTS {
 
     fun checkInit(wc: Context): Boolean {
         if (initResult != TextToSpeech.SUCCESS) {
-            AlertDialog.Builder(wc)
+            sumicya.qself.ui.InlineAlertDialogBuilder(wc)
                 .setTitle("TTS 未正常初始化")
                 .setMessage("检查 系统设置 -> 无障碍 -> 文字转语言(TTS)")
                 .show()
@@ -81,7 +80,7 @@ object TTS {
 
     fun checkTTSRequestResult(wc: Context, result: Int) {
         if (result == TextToSpeech.ERROR) {
-            AlertDialog.Builder(wc)
+            sumicya.qself.ui.InlineAlertDialogBuilder(wc)
                 .setTitle("TTS 请求失败")
                 .setNegativeButton("TTS 设置") { _, _ ->
                     showConfigDialog(wc, "")
@@ -107,17 +106,17 @@ object TTS {
         val voices = instance.voices
         val byLocal = voices.groupBy { it.locale }
         val localKeys = byLocal.keys.toList().sortedBy { it.toLanguageTag() }
-        AlertDialog.Builder(wc)
+        sumicya.qself.ui.InlineAlertDialogBuilder(wc)
             .setTitle("local")
             .setItems(localKeys.map { it.toLanguageTag() }.toTypedArray()) { _, which ->
                 val local = localKeys[which]
                 val voices2 = byLocal[local]
                 val names = voices2!!.map { it.name }.sorted().toTypedArray()
-                AlertDialog.Builder(wc)
+                sumicya.qself.ui.InlineAlertDialogBuilder(wc)
                     .setTitle(local.toLanguageTag())
                     .setItems(names) {_, which2 ->
                         val selectedVoice = voices2[which2]
-                        AlertDialog.Builder(wc)
+                        sumicya.qself.ui.InlineAlertDialogBuilder(wc)
                             .setTitle(selectedVoice.name)
                             .setMessage(selectedVoice.toString())
                             .setPositiveButton("确定") { _, _ ->
@@ -149,7 +148,7 @@ object TTS {
                 binding.tvVoice.text = it
             }
         }
-        AlertDialog.Builder(wc)
+        sumicya.qself.ui.InlineAlertDialogBuilder(wc)
             .setView(binding.root)
             .setTitle("TTS 设置")
             .show()
@@ -179,7 +178,7 @@ object TTS {
 
                 override fun onStart(utteranceId: String?) {
                     SyncUtils.runOnUiThread {
-                        dialog = AlertDialog.Builder(wc)
+                        dialog = sumicya.qself.ui.InlineAlertDialogBuilder(wc)
                             .setTitle("合成中")
                             .setView(ProgressBar(wc))
                             .setPositiveButton("取消发送") { _, _ ->
@@ -203,12 +202,12 @@ object TTS {
                         SyncUtils.runOnUiThread {
                             dialog.dismiss()
                             if (it.message != null && it.message!!.endsWith("-2")) {
-                                AlertDialog.Builder(wc)
+                                sumicya.qself.ui.InlineAlertDialogBuilder(wc)
                                     .setTitle("不支持的采样率 ${sampleRateInHz}Hz")
                                     .setMessage("仅支持 8000Hz 12000Hz 16000Hz 24000Hz")
                                     .show()
                             } else {
-                                AlertDialog.Builder(wc)
+                                sumicya.qself.ui.InlineAlertDialogBuilder(wc)
                                     .setTitle(it.message)
                                     .setMessage(it.stackTraceToString())
                                     .show()
@@ -241,7 +240,7 @@ object TTS {
             })
             toFile(wc, binding.etMsg.text.toString(), File(wc.externalCacheDir, "send_tts/audio").apply { parentFile!!.mkdirs() }, "send_tts")
         }
-        editDialog = MaterialAlertDialogBuilder(wc)
+        editDialog = sumicya.qself.ui.InlineAlertDialogBuilder(wc)
             .setView(binding.root)
             .setTitle("TTS 发送")
             .show()

@@ -9,7 +9,7 @@ object Version {
     // some dependencies require compileSdkVersion 37+
     const val compileSdkVersion = "37.0"
     val buildToolsVersion = findBuildToolsVersion()
-    const val minSdk = 24
+    const val minSdk = 31 // Android 12 floor: modern host apps, libxposed artifacts and the personal ColorOS target are all newer
     const val targetSdk = 36
     const val versionName = "1.6.1"
 

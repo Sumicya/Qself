@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -45,12 +44,16 @@ object ChannelProxyHook : CommonSwitchFunctionHook() {
         "此为开发调试功能，普通用户请不要启用\n拦截 trpc.o3.* 包体以防止 QQ 上报环境检测(其中包含 root/Magisk/Xposed 安装情况)，理论上降低新号封号概率\n警告：请勿在 QQ v9.1.30 (8538) 及更高版本上启用此功能，否则可能导致您的 QQ 账号异常下线甚至冻结。"
     override val targetProcesses: Int = SyncUtils.PROC_MSF
 
-    override val isAvailable = requireMinQQVersion(QQVersion.QQ_8_9_83) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)
+    override val isAvailable =
+        (requireMinQQVersion(QQVersion.QQ_8_9_83) && !requireMinQQVersion(QQVersion.QQ_9_1_30)) ||
+            requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)
     override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EXPERIMENTAL_CATEGORY
 
     override val isApplicationRestartRequired = true
 
     override fun initOnce(): Boolean {
+        // Enforce the existing warning even with stale settings or debug "enable all".
+        if (!isAvailable) return false
         val clazz = Initiator.loadClass("com.tencent.mobileqq.channel.ChannelProxyExt")
         clazz.method("sendMessage", Void.TYPE, String::class.java, ByteArray::class.java, Long::class.java)!!
             .replace(this) {

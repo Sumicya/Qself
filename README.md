@@ -30,25 +30,10 @@ QAuxiliary 是一个基于 QNotified 的开源 Xposed 模块
 
 ### 许可证
 
-- [EULA](https://github.com/qwq233/License/blob/master/v2/LICENSE.md)
+本项目基于 [GNU Affero General Public License v3.0 (AGPL-3.0-or-later)](LICENSE.md) 许可，
+派生自 [QAuxiliary](https://github.com/cinit/QAuxiliary)（AGPL-3.0-or-later）。
+原有的非自由附加条款（EULA）已依据 AGPL 第 7/10 条移除。
 
-```
-版权所有©2022 gao_cai_sheng <qwq233@qwq2333.top, qwq2333.top>
-
-允许在遵守 CC BY-NC-SA 4.0 协议的同时，复制和分发此协议文档的逐字记录副本，
-且允许对其进行更改，但必须保留其版权信息与原作者。如果您提出申请特殊权限，协议
-作者可在其口头或书面授予任何人任何但不包括以盈利为目的的使用本协议的权利。
-
-请务必仔细阅读和理解通用许可协议书中规定的所有权利和限制。在使用前，您需要仔细
-阅读并决定接受或不接受本协议的条款。除非或直至您接受本协议的条款，否则本作品及
-其相关副本、相关程序代码或相关资源不得在您的任何终端上下载、安装或使用。
-
-您一旦下载、使用本作品及其相关副本、相关程序代码或相关资源，即表示您同意接受本
-协议各项条款的约束。如您不同意本协议中的条款，您则应当立即删除本作品、附属资源
-及其相关源代码。
-
-本作品权利只许可使用，而不出售。
-```
 
 ## 发行渠道说明
 
@@ -67,7 +52,7 @@ QAuxiliary 将为分 `CI` 和 `推荐的CI` 两个版本
   `推荐的CI` 版本是被挑选出的推荐用户更新的 `CI` 版本 (如：添加功能或者修复重要 Bug)
 
 开发组不限制用户选择自己需要的版本，同时也不为任何版本产生的任何后果承担任何责任
-（详情请见[QAuxiliary EULA](https://github.com/cinit/QAuxiliary/blob/master/app/src/main/assets/eula.md)），
+（详情请见 [LICENSE](LICENSE.md)），
 但希望各位用户各取所需，根据自己的能力范围选择适合自己的版本。
 
 - QAuxiliary 的版本号组成为`major.minor.bugfix.rev.commit`
@@ -132,4 +117,4 @@ QAuxiliary 将为分 `CI` 和 `推荐的CI` 两个版本
 - 由于项目的特殊性，我们不接受任何形式的捐赠，但是我们希望有更多的人能够参与本项目的开发
 - 如果您有兴趣参与本项目的开发，您可以参考[贡献指南](.github/CONTRIBUTING.md)，其中包含了一些可以帮助您快速上手的信息
 
-## [通用许可协议](https://github.com/qwq233/License/blob/master/v2/LICENSE.md)
+## 许可证

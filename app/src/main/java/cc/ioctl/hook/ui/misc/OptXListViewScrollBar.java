@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -34,8 +33,8 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
-import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.HostInfo;
+import io.github.qauxv.util.LayoutHelper;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedBridge;
 import io.github.qauxv.base.IUiItemAgent;
@@ -100,12 +99,12 @@ public class OptXListViewScrollBar extends CommonConfigFunctionHook {
 
     private void showDialog(Activity ctx) {
         int current = getCurrentValue();
-        new AlertDialog.Builder(ctx)
+        new sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setTitle("修改滑条样式")
                 .setSingleChoiceItems(SWITCH_ITEMS_DETAIL, current, (dialog, which) -> {
                     setCurrentValue(which);
                     if (current != which) {
-                        Toasts.info(ctx, "重启" + HostInfo.getAppName() + "生效");
+                        Toasts.info(ctx, "重启" + HostInfo.getHostInfo().getHostName() + "生效");
                     }
                     dialog.dismiss();
                     if (!isInitialized() && which != 0) {

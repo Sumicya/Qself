@@ -3,25 +3,23 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
- * and/or modify it under the terms of the qwq233 Universal License
- * as published on https://github.com/qwq233/license; either
- * version 2 of the License, or any later version and our EULA as published
- * by QAuxiliary contributors.
+ * This software is free software: you can redistribute it
+ * and/or modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the qwq233 Universal License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Affero General Public License for more details.
  *
- * See
- * <https://github.com/qwq233/license>
- * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 package cc.hicore.message.bridge;
 
-import static cc.ioctl.util.HostInfo.requireMinQQVersion;
+import io.github.qauxv.util.HostInfo;
 
 import cc.hicore.QApp.QAppUtils;
 import cc.hicore.Utils.XLog;
@@ -57,7 +55,7 @@ public class Nt_kernel_bridge {
             try {
                 KernelMsgServiceCompat service = MsgServiceHelper.getKernelMsgService(AppRuntimeHelper.getAppRuntime());
                 long msgUniqueId;
-                if (requireMinQQVersion(QQVersion.QQ_9_0_30)) {
+                if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_0_30)) {
                     msgUniqueId = service.generateMsgUniqueId(contact.getChatType(), QAppUtils.getServiceTime());
                 } else {
                     msgUniqueId = service.getMsgUniqueId(QAppUtils.getServiceTime());
@@ -72,7 +70,7 @@ public class Nt_kernel_bridge {
 
     public static MsgAttributeInfo getDefaultAttributeInfo() {
         VASMsgNamePlate plate;
-        if (requireMinQQVersion(QQVersion.QQ_9_1_70)) {
+        if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_1_70)) {
             plate = new VASMsgNamePlate(258, 64, 0, 0, 0, 0, 258, 0, new ArrayList<>(), 0, 0, 0);
         } else {
             plate = new VASMsgNamePlate(258, 64, 0, 0, 0, 0, 258, 0, new ArrayList<>(), 0, 0);

@@ -22,6 +22,8 @@
 
 package io.github.duzhaokun123.util
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.hostInfo
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
@@ -29,7 +31,6 @@ import android.graphics.Typeface
 import android.view.View
 import android.widget.TextView
 import androidx.core.util.TypedValueCompat
-import cc.ioctl.util.HostInfo
 import io.github.qauxv.base.IUiItemAgent
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry
@@ -47,7 +48,7 @@ object CacheManager : CommonConfigFunctionHook(defaultEnabled = true) {
     override val uiItemLocation = FunctionEntryRouter.Locations.ConfigCategory.CONFIG_CATEGORY
     override val valueState = MutableStateFlow("")
 
-    val cacheDir = File(HostInfo.getApplication().cacheDir, "qauxv_cache")
+    val cacheDir = File(hostInfo.application.cacheDir, "qauxv_cache")
 
     override fun initOnce(): Boolean {
         return true
@@ -60,7 +61,7 @@ object CacheManager : CommonConfigFunctionHook(defaultEnabled = true) {
                 "(${formatSize(it.length())}) ${it.name}"
             }
 
-            AlertDialog.Builder(activity)
+            sumicya.qself.ui.InlineAlertDialogBuilder(activity)
                 .setTitle("缓存文件列表")
                 .setMessage(fileNames.joinToString("\n"))
                 .setPositiveButton("清空缓存") { _, _ ->
@@ -70,13 +71,14 @@ object CacheManager : CommonConfigFunctionHook(defaultEnabled = true) {
                 .setNegativeButton("关闭", null)
                 .show()
                 .findViewById<TextView>(android.R.id.message)
-                .apply {
+                ?.apply {
                     typeface = Typeface.MONOSPACE
                     textSize = TypedValueCompat.spToPx(5F, activity.resources.displayMetrics)
                 }
         }
 
     override fun initialize(): Boolean {
+        if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(this)) return false
         ConfigManager.getDefaultConfig().getStringSetOrDefault("CacaheManager.deleteOnStartupFiles", setOf<String>()).forEach {
             val f = File(it)
             if (f.exists()) {

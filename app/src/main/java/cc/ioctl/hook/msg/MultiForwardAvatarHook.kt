@@ -3,23 +3,23 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
- * and/or modify it under the terms of the qwq233 Universal License
- * as published on https://github.com/qwq233/license; either
- * version 2 of the License, or any later version and our EULA as published
- * by QAuxiliary contributors.
+ * This software is free software: you can redistribute it
+ * and/or modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the qwq233 Universal License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Affero General Public License for more details.
  *
- * See
- * <https://github.com/qwq233/license>
- * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package cc.ioctl.hook.msg
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.hostInfo
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.DialogInterface
@@ -36,12 +36,11 @@ import androidx.core.text.buildSpannedString
 import androidx.core.text.method.LinkMovementMethodCompat
 import cc.hicore.QApp.QAppUtils
 import cc.ioctl.hook.profile.OpenProfileCard
-import cc.ioctl.util.HostInfo
 import cc.ioctl.util.HostStyledViewBuilder
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.hookBeforeIfEnabled
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.FaultyDialog
 import com.github.kyuubiran.ezxhelper.utils.hookBefore
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord
 import io.github.qauxv.R
@@ -227,8 +226,8 @@ object MultiForwardAvatarHook : CommonSwitchFunctionHook(arrayOf(CAIOUtils, Mult
                 FaultyDialog.show(ctx, e)
             }
         }
-        mChatItemHeadIconViewId = HostInfo.getApplication().resources
-            .getIdentifier("chat_item_head_icon", "id", HostInfo.getPackageName())
+        mChatItemHeadIconViewId = hostInfo.application.resources
+            .getIdentifier("chat_item_head_icon", "id", hostInfo.packageName)
         check(mChatItemHeadIconViewId != 0) { "R.id.chat_item_head_icon not found" }
         return true
     }

@@ -22,6 +22,7 @@
 
 package me.hd.hook
 
+import io.github.qauxv.util.hostInfo
 import androidx.appcompat.app.AlertDialog
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.base.annotation.UiItemAgentEntry
@@ -37,7 +38,7 @@ import me.hd.util.parameters
 import me.hd.util.returnType
 import me.hd.util.singleMethod
 import me.hd.util.toClass
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 
 @FunctionHookEntry
 @UiItemAgentEntry
@@ -67,7 +68,7 @@ object CustomPetHomeBg : KuiklyDelayableHook(
     override val uiItemAgent = uiClickableItem {
         title = "自定义宠物首页背景"
         onClickListener = { _, activity, _ ->
-            AlertDialog.Builder(activity)
+            sumicya.qself.ui.InlineAlertDialogBuilder(activity)
                 .setTitle("更换背景")
                 .setItems(bgMap.keys.toTypedArray()) { dialog, which ->
                     val key = bgMap.keys.elementAt(which)

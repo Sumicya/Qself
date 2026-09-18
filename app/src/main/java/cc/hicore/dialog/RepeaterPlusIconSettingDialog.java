@@ -3,20 +3,18 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
- * and/or modify it under the terms of the qwq233 Universal License
- * as published on https://github.com/qwq233/license; either
- * version 2 of the License, or any later version and our EULA as published
- * by QAuxiliary contributors.
+ * This software is free software: you can redistribute it
+ * and/or modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the qwq233 Universal License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Affero General Public License for more details.
  *
- * See
- * <https://github.com/qwq233/license>
- * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package cc.hicore.dialog;
 
@@ -44,10 +42,10 @@ import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.view.ViewCompat;
-import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.LayoutHelper;
-import cc.ioctl.util.ui.FaultyDialog;
-import cc.ioctl.util.ui.drawable.DebugDrawable;
+import io.github.qauxv.util.HostInfo;
+import io.github.qauxv.util.LayoutHelper;
+import io.github.qauxv.util.ui.FaultyDialog;
+import io.github.qauxv.util.ui.drawable.DebugDrawable;
 import io.github.duzhaokun123.util.FilePicker;
 import io.github.qauxv.R;
 import io.github.qauxv.config.ConfigManager;
@@ -140,7 +138,7 @@ public class RepeaterPlusIconSettingDialog implements View.OnClickListener,
         check_showInMenu.setChecked(cfg.getBooleanOrFalse(qn_repeat_show_in_menu));
 
         // temporary
-        if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_63_BETA_11345)) {
+        if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_63_BETA_11345)) {
             check_showUpper.setEnabled(false);
         }
 
@@ -311,7 +309,7 @@ public class RepeaterPlusIconSettingDialog implements View.OnClickListener,
                 dialog.dismiss();
                 sCachedRepeaterIcon = null;
             }
-            Toasts.info(ctx, "重启" + HostInfo.getAppName() + "生效");
+            Toasts.info(ctx, "重启" + HostInfo.getHostInfo().getHostName() + "生效");
         } else if (v == browseBtn) {
             SafUtils.requestOpenFile(ctx).setMimeType("image/*").onResult(uri -> {
                         try (InputStream is = SafUtils.openInputStream(ctx, uri)) {

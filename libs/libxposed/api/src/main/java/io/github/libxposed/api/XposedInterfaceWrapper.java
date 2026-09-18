@@ -22,19 +22,66 @@ import java.lang.reflect.Method;
 public class XposedInterfaceWrapper implements XposedInterface {
 
     private volatile XposedInterface mBase;
+    private volatile Runnable mDetachImpl;
+    private volatile boolean mDetached;
 
     /**
      * Attaches the framework interface to the module. Modules should never call this method.
+     *
+     * <p>This one-argument form is retained for API 101 framework implementations. API 102
+     * frameworks must use the two-argument form so that {@link #detach()} can release the
+     * framework's reference to the current module entry.</p>
      *
      * @param base The framework interface
      */
     @SuppressWarnings("unused")
     @XposedApiMin(101)
-    public final void attachFramework(@NonNull XposedInterface base) {
+    public final synchronized void attachFramework(@NonNull XposedInterface base) {
+        attachFramework(base, () -> {
+        });
+    }
+
+    /**
+     * Attaches the framework interface and the per-entry detach implementation. This method is
+     * reserved for framework implementations and must not be called by modules.
+     *
+     * @param base      The framework interface
+     * @param detachImpl The implementation invoked by {@link #detach()}
+     */
+    @SuppressWarnings("unused")
+    @XposedApiMin(102)
+    public final synchronized void attachFramework(@NonNull XposedInterface base, @NonNull Runnable detachImpl) {
         if (mBase != null) {
             throw new IllegalStateException("Framework already attached");
         }
+        if (detachImpl == null) {
+            throw new NullPointerException("detachImpl must not be null");
+        }
         mBase = base;
+        mDetachImpl = detachImpl;
+        mDetached = false;
+    }
+
+    /**
+     * Stops subsequent lifecycle callbacks for this module entry in the current process.
+     * Hooks and the other {@link XposedInterface} APIs remain usable. Calling this method more
+     * than once has no additional effect.
+     */
+    @XposedApiMin(102)
+    public final void detach() {
+        Runnable detachImpl;
+        synchronized (this) {
+            if (mDetached) {
+                return;
+            }
+            ensureAttached();
+            detachImpl = mDetachImpl;
+            if (detachImpl == null) {
+                throw new UnsupportedOperationException("Framework does not support detach");
+            }
+            mDetached = true;
+        }
+        detachImpl.run();
     }
 
     @XposedApiMin(101)
@@ -48,7 +95,11 @@ public class XposedInterfaceWrapper implements XposedInterface {
     @Override
     public final int getApiVersion() {
         ensureAttached();
-        return XposedInterface.super.getApiVersion();
+        // LIB_API describes the compile-time surface of this stub. The
+        // runtime framework version must come from the attached interface;
+        // otherwise bumping the stub to API 102 would misreport API 101
+        // runtimes as 102.
+        return mBase.getApiVersion();
     }
 
     @NonNull

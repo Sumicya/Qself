@@ -3,20 +3,18 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
- * and/or modify it under the terms of the qwq233 Universal License
- * as published on https://github.com/qwq233/license; either
- * version 2 of the License, or any later version and our EULA as published
- * by QAuxiliary contributors.
+ * This software is free software: you can redistribute it
+ * and/or modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the qwq233 Universal License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Affero General Public License for more details.
  *
- * See
- * <https://github.com/qwq233/license>
- * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 package cc.ioctl.hook.misc
@@ -28,7 +26,7 @@ import android.os.Parcelable
 import android.view.View
 import androidx.appcompat.app.AlertDialog
 import cc.ioctl.util.HookUtils
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import io.github.qauxv.util.xpcompat.XposedBridge
 import io.github.qauxv.R
 import io.github.qauxv.base.annotation.ComponentHookEntry
@@ -205,7 +203,7 @@ object QSecO3AddRiskRequestMitigation : BaseComponentHook() {
     @UiThread
     fun onAddFriendButtonClick(activity: Activity, uin: String, originProcedure: Runnable) {
         val ctx = CommonContextWrapper.createAppCompatContext(activity)
-        AlertDialog.Builder(ctx)
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle(R.string.dialog_tx_risk_control_general_title)
             .setMessage(R.string.dialog_tx_risk_control_msg_for_add_friend_from_void)
             .setPositiveButton(R.string.dialog_tx_risk_control_btn_copy_user_uin) { dialog, _ ->
@@ -224,7 +222,7 @@ object QSecO3AddRiskRequestMitigation : BaseComponentHook() {
     @UiThread
     fun onAddGroupButtonClick(activity: Activity, uin: String, originProcedure: Runnable) {
         val ctx = CommonContextWrapper.createAppCompatContext(activity)
-        AlertDialog.Builder(ctx)
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle(R.string.dialog_tx_risk_control_general_title)
             .setMessage(R.string.dialog_tx_risk_control_msg_for_add_group_from_void)
             .setPositiveButton(R.string.dialog_tx_risk_control_btn_copy_troop_uin) { dialog, _ ->

@@ -3,20 +3,18 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
- * and/or modify it under the terms of the qwq233 Universal License
- * as published on https://github.com/qwq233/license; either
- * version 2 of the License, or any later version and our EULA as published
- * by QAuxiliary contributors.
+ * This software is free software: you can redistribute it
+ * and/or modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the qwq233 Universal License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Affero General Public License for more details.
  *
- * See
- * <https://github.com/qwq233/license>
- * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 package cc.hicore.message.chat;
@@ -26,7 +24,6 @@ import androidx.annotation.Nullable;
 import cc.hicore.QApp.QAppUtils;
 import cc.hicore.ReflectUtil.XField;
 import cc.hicore.hook.RepeaterPlus;
-import cc.hicore.hook.stickerPanel.Hooker.StickerPanelEntryHooker;
 import com.google.common.collect.Lists;
 import io.github.qauxv.base.ITraceableDynamicHook;
 import io.github.qauxv.base.RuntimeErrorTracer;
@@ -43,9 +40,6 @@ import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedBridge;
 import java.util.List;
 import java.util.Stack;
-import me.hd.hook.QuickReplayPaiYiPai;
-import me.hd.hook.TimBarAddEssenceHook;
-import me.ketal.hook.MultiActionHook;
 
 @EntityAgentEntry
 @FunctionHookEntry
@@ -61,12 +55,8 @@ public class SessionHooker extends BaseHookDispatcher<SessionHooker.IAIOParamUpd
     }
 
     private static final SessionHooker.IAIOParamUpdate[] DECORATORS = {
-            StickerPanelEntryHooker.INSTANCE,
-            MultiActionHook.INSTANCE,
             RepeaterPlus.INSTANCE,
-            InputButtonHookDispatcher.INSTANCE,
-            TimBarAddEssenceHook.INSTANCE,
-            QuickReplayPaiYiPai.INSTANCE,
+            InputButtonHookDispatcher.INSTANCE
     };
 
     @NonNull

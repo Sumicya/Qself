@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -24,8 +23,8 @@ package io.github.qauxv.bridge;
 import static io.github.qauxv.bridge.AppRuntimeHelper.getQQAppInterface;
 
 import androidx.annotation.NonNull;
-import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.HostInfo;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.annotation.DexDeobfs;
 import io.github.qauxv.tlb.ConfigTable;
 import io.github.qauxv.util.Initiator;
@@ -56,7 +55,7 @@ public class QQMessageFacade {
 
     public static Object getMessageManager(int istroop) {
         try {
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_6_0)) {
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_6_0)) {
                 return Reflex.invokeVirtualDeclaredFixedModifierOrdinal(get(), Modifier.PUBLIC, 0,
                     Initiator._BaseQQMessageFacade(), 0, 1, true, istroop,
                     int.class, Initiator._BaseMessageManager());
@@ -85,13 +84,13 @@ public class QQMessageFacade {
             String methodName = ConfigTable.getConfig(QQMessageFacade.class.getSimpleName());
             // invoke-virtual BaseMessageManager->doMsgRevokeRequest(MessageRecord)V
             Reflex.invokeVirtual(msgCache, methodName, true, boolean.class, void.class);
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_3)) {
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_3)) {
                 Method m = Reflex.findMethod(Initiator._BaseMessageManager(), void.class, "o", Initiator._MessageRecord());
                 m.invoke(mgr, msg);
-            } else if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_93)) {
+            } else if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_93)) {
                 Method m = Reflex.findMethod(Initiator._BaseMessageManager(), void.class, "l", Initiator._MessageRecord());
                 m.invoke(mgr, msg);
-            } else if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_6_0)) {
+            } else if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_6_0)) {
                 Reflex.invokeVirtualDeclaredFixedModifierOrdinal(mgr, Modifier.PUBLIC, 0,
                         Initiator._BaseMessageManager(), 4, 7, true, msg, Initiator._MessageRecord(),
                         void.class);
@@ -139,10 +138,10 @@ public class QQMessageFacade {
                 return;
             }
         }
-        if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_93)) {
+        if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_93)) {
             Reflex.invokeVirtual(ManagerHelper.getQQMessageFacade(), "h", messages, account,
                     List.class, String.class, void.class);
-        } else if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_6_0)) {
+        } else if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_6_0)) {
             Reflex.invokeVirtual(ManagerHelper.getQQMessageFacade(), "a", messages, account,
                     List.class, String.class, void.class);
         } else {

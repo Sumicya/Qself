@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -159,7 +158,7 @@ public class Natives {
     /**
      * Allocate a object instance of the specified class without calling the constructor.
      * <p>
-     * Do not use this directly, use {@link cc.ioctl.util.Reflex#allocateInstance(Class)} instead.
+     * Do not use this directly, use {@link io.github.qauxv.util.Reflex#allocateInstance(Class)} instead.
      *
      * @param clazz the class to allocate
      * @return the allocated object
@@ -169,7 +168,7 @@ public class Natives {
     /**
      * Invoke an instance method non-virtually (i.e. without calling the overridden method).
      * <p>
-     * Do not use this directly, use {@link cc.ioctl.util.Reflex#invokeNonVirtual(Object, Method, Object[])} instead.
+     * Do not use this directly, use {@link io.github.qauxv.util.Reflex#invokeNonVirtual(Object, Method, Object[])} instead.
      *
      * @param declaringClass the class of the method, e.g. "Ljava/lang/String;"
      * @param methodName     the method name

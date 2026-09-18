@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,8 +22,8 @@ package io.github.qauxv.util;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.HostInfo;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.config.ConfigManager;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -140,7 +139,7 @@ public class ArscKit {
         } catch (NumberFormatException ignored) {
         }
         if (ctx == null) {
-            ctx = HostInfo.getApplication();
+            ctx = HostInfo.getHostInfo().getApplication();
         }
         String pkg = ctx.getPackageName();
         int ret = ctx.getResources().getIdentifier(name, type, pkg);
@@ -151,7 +150,7 @@ public class ArscKit {
         ConfigManager cache = ConfigManager.getCache();
         ret = cache.getIntOrDefault(CACHED_RES_ID_NAME_PREFIX + type + "/" + name, 0);
         int oldcode = cache.getIntOrDefault(CACHED_RES_ID_CODE_PREFIX + type + "/" + name, -1);
-        int currcode = HostInfo.getVersionCode32();
+        int currcode = HostInfo.getHostInfo().getVersionCode32();
         if (ret != 0 && (oldcode == currcode)) {
             return ret;
         }

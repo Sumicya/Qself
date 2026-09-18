@@ -1,0 +1,47 @@
+name: Misc
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  issues: write
+
+jobs:
+  check-issue:
+    name: Check Issues
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains(github.event.issue.body, '最新版' )
+        id: close-latest-version
+        name: Close Issue(template)
+        uses: peter-evans/close-issue@v3
+        with:
+          comment: 我不知道什么是最新版捏，具体版本号pls
+
+  clear-cache:
+    name: Clear cache
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clear cache
+        uses: actions/github-script@v9
+        with:
+          script: |
+            console.log("About to clear")
+            const caches = await github.rest.actions.getActionsCacheList({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            })
+            for (const cache of caches.data.actions_caches) {
+              console.log(cache)
+              github.rest.actions.deleteActionsCacheById({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                cache_id: cache.id,
+              })
+            }
+            console.log("Clear completed")

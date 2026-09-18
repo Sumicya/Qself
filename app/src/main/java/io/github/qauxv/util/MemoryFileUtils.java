@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,7 +22,7 @@
 package io.github.qauxv.util;
 
 import androidx.annotation.NonNull;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import java.io.IOException;
 import java.util.Objects;
 
@@ -39,7 +38,7 @@ public class MemoryFileUtils {
 
     public static int createMemoryFile(@NonNull String name, int size) throws IOException {
         if (!sInitialized) {
-            int rc = nativeInitializeTmpDir(HostInfo.getApplication().getCacheDir().getAbsolutePath());
+            int rc = nativeInitializeTmpDir(HostInfo.getHostInfo().getApplication().getCacheDir().getAbsolutePath());
             if (rc != 0) {
                 throw new IOException("nativeInitializeTmpDir failed: " + rc);
             }

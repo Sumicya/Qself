@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -29,7 +28,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.R;
 
 public class CounterfeitActivityInfoFactory {
@@ -37,7 +36,7 @@ public class CounterfeitActivityInfoFactory {
     @Nullable
     public static ActivityInfo makeProxyActivityInfo(@NonNull String className, long flags) {
         try {
-            Context ctx = HostInfo.getApplication();
+            Context ctx = HostInfo.getHostInfo().getApplication();
             Class<?> cl = Class.forName(className);
             String[] candidates = new String[]{
                     "com.tencent.mobileqq.activity.QQSettingSettingActivity",

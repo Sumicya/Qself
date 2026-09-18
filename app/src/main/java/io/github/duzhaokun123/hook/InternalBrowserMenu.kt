@@ -35,7 +35,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import com.github.kyuubiran.ezxhelper.utils.argTypes
 import com.github.kyuubiran.ezxhelper.utils.args
 import com.github.kyuubiran.ezxhelper.utils.hookBefore
@@ -163,7 +163,7 @@ object InternalBrowserMenu : CommonSwitchFunctionHook(targets = arrayOf(RecentPo
             mainLayout.addView(scrollView)
         }
 
-        dialog = AlertDialog.Builder(context)
+        dialog = sumicya.qself.ui.InlineAlertDialogBuilder(context)
             .setTitle("内部浏览器")
             .setView(mainLayout)
             .setCancelable(true)
@@ -188,7 +188,7 @@ object InternalBrowserMenu : CommonSwitchFunctionHook(targets = arrayOf(RecentPo
         val items = bookmarks.toTypedArray()
         val checkedItems = BooleanArray(items.size) { false }
         
-        AlertDialog.Builder(context)
+        sumicya.qself.ui.InlineAlertDialogBuilder(context)
             .setTitle("管理书签")
             .setMultiChoiceItems(items, checkedItems) { _, which, isChecked ->
                 checkedItems[which] = isChecked
@@ -223,7 +223,7 @@ object InternalBrowserMenu : CommonSwitchFunctionHook(targets = arrayOf(RecentPo
             )
         )
 
-        AlertDialog.Builder(context)
+        sumicya.qself.ui.InlineAlertDialogBuilder(context)
             .setTitle("添加书签")
             .setView(linearLayout)
             .setCancelable(true)

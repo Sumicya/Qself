@@ -42,7 +42,7 @@ import io.github.qauxv.util.requireMinQQVersion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 import xyz.nextalone.util.throwOrTrue
 import cc.ioctl.util.hookAfterIfEnabled
 import cc.ioctl.util.hookBeforeIfEnabled
@@ -164,7 +164,7 @@ object BlockListPlusHook : CommonSwitchFunctionHook("block_list_plus_hook") {
     private fun showItemsDialog(activity: Activity) {
         val context = CommonContextWrapper.createMaterialDesignContext(activity)
         val cache = activeItems.toMutableSet()
-        val builder = MaterialAlertDialogBuilder(context)
+        val builder = sumicya.qself.ui.InlineAlertDialogBuilder(context)
             .setTitle("选择要屏蔽的项目")
             .setMultiChoiceItems(
                 ALL_ITEMS.toTypedArray(),

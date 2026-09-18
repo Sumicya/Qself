@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -27,9 +26,9 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.TextView
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.LayoutHelperViewScope
-import cc.ioctl.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelperViewScope
+import io.github.qauxv.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 
 class HeaderCell(context: Context) : FrameLayout(context), LayoutHelperViewScope {
@@ -40,14 +39,16 @@ class HeaderCell(context: Context) : FrameLayout(context), LayoutHelperViewScope
     var paddings: Int = 0
 
     init {
-        cellHeight = 40.dp
-        topMargin = 15.dp
-        paddings = 21.dp
+        cellHeight = 28.dp
+        topMargin = 8.dp
+        paddings = 20.dp
         titleTextView = TextView(context).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             gravity = Gravity.CENTER_VERTICAL or Gravity.START
             setTextColor(ThemeAttrUtils.resolveColorOrDefaultColorRes(context, androidx.appcompat.R.attr.colorAccent, R.color.colorAccent))
             minHeight = cellHeight - topMargin
+            setPadding(0, 0, 0, 4.dp)
+            androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
         }
         addView(titleTextView, LayoutHelper.newFrameLayoutParamsRel(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT,
             Gravity.TOP or Gravity.START, paddings, topMargin, paddings, 0))

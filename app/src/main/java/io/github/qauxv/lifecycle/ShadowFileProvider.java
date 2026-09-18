@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -31,7 +30,7 @@ import android.os.RemoteException;
 import android.provider.OpenableColumns;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedBridge;
 import io.github.qauxv.util.Initiator;
@@ -211,7 +210,7 @@ public class ShadowFileProvider {
             androidxOpenFile = androidxFileProvider.getDeclaredMethod("openFile", Uri.class, String.class);
             androidxQuery = androidxFileProvider.getDeclaredMethod("query", Uri.class, String[].class, String.class, String[].class, String.class);
         }
-        String targetAuthority = HostInfo.getPackageName() + ".fileprovider";
+        String targetAuthority = HostInfo.getHostInfo().getPackageName() + ".fileprovider";
         XC_MethodHook hookOpenFile = new XC_MethodHook(51) {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) {
@@ -277,7 +276,7 @@ public class ShadowFileProvider {
     }
 
     public static String getAuthority() {
-        return HostInfo.getPackageName() + ".fileprovider";
+        return HostInfo.getHostInfo().getPackageName() + ".fileprovider";
     }
 
     public static String addItem(@NonNull String displayName, @Nullable String mimeType, @NonNull ParcelFileDescriptor pfd) {
@@ -297,7 +296,7 @@ public class ShadowFileProvider {
         item.mimeType = mimeType;
         item.pfd = pfd;
         impl.addItem(item);
-        String authority = HostInfo.getPackageName() + ".fileprovider";
+        String authority = HostInfo.getHostInfo().getPackageName() + ".fileprovider";
         String path = "/qauxv/tmp/" + id + "/" + displayName;
         return new Uri.Builder().scheme("content").authority(authority).path(path).build().toString();
     }

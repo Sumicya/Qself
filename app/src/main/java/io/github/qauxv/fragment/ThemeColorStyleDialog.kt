@@ -45,41 +45,34 @@ object ThemeColorStyleDialog : BasePlainUiAgentItem(title = "主题颜色") {
     override val uiItemLocation: Array<String> = FunctionEntryRouter.Locations.ConfigCategory.THEME_CATEGORY
 
     override val valueState: MutableStateFlow<String?> by lazy {
-        MutableStateFlow(ModuleThemeManager.getCurrentThemeColorName())
+        MutableStateFlow(if (sumicya.qself.ui.SettingsDynamicColors.followsSystem && android.os.Build.VERSION.SDK_INT >= 31) "跟随系统壁纸" else ModuleThemeManager.getCurrentThemeColorName())
     }
 
     override val onClickListener: ((IUiItemAgent, Activity, View) -> Unit) = { _, activity, _ ->
-        showSelectDialog(activity)
+        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
+            .setTitle("设置页配色来源")
+            .setItems(arrayOf("系统壁纸动态配色", "手动主题色")) { _, which ->
+                if (which == 0 && android.os.Build.VERSION.SDK_INT >= 31) {
+                    io.github.qauxv.config.ConfigManager.getDefaultConfig().putBoolean(sumicya.qself.ui.SettingsDynamicColors.KEY, true)
+                    valueState.value = "跟随系统壁纸"
+                    activity.recreate()
+                } else if (which == 0) {
+                    android.widget.Toast.makeText(activity, "系统动态配色需要 Android 12 或更高版本", android.widget.Toast.LENGTH_SHORT).show()
+                } else showSelectDialog(activity)
+            }.setNegativeButton("取消", null).show()
     }
 
     private fun showSelectDialog(activity: Activity) {
-        val dialog = ColorPickerDialog.newBuilder()
-            .setDialogType(ColorPickerDialog.TYPE_PRESETS)
-            .setDialogTitle(R.string.cpv_default_title)
-            .setColorShape(ColorShape.CIRCLE)
-            .setPresets(ModuleThemeManager.getThemeColors(activity))
-            .setAllowPresets(true)
-            .setAllowCustom(false)
-            .setShowAlphaSlider(false)
-            .setShowColorShades(false)
-            .setColor(ModuleThemeManager.getCurrentThemeColorId(activity))
-            .create()
-        dialog.setColorPickerDialogListener(object : ColorPickerDialogListener {
-            override fun onColorSelected(dialogId: Int, color: Int) {
-                updateThemeColor(activity, color)
-            }
-
-            override fun onDialogDismissed(dialogId: Int) {
-                // nothing to do
-            }
-        })
-        (activity as FragmentActivity).supportFragmentManager
-            .beginTransaction()
-            .add(dialog, "color_picker_dialog")
-            .commitAllowingStateLoss()
+        val colors = ModuleThemeManager.getThemeColors(activity)
+        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
+            .setTitle("手动主题色")
+            .setItems(colors.map { String.format("#%06X", it and 0xFFFFFF) }.toTypedArray()) { _, which ->
+                updateThemeColor(activity, colors[which])
+            }.setNegativeButton("取消", null).show()
     }
 
     private fun updateThemeColor(activity: Activity, color: Int) {
+        io.github.qauxv.config.ConfigManager.getDefaultConfig().putBoolean(sumicya.qself.ui.SettingsDynamicColors.KEY, false)
         ModuleThemeManager.setCurrentThemeColor(activity, color)
         valueState.update { ModuleThemeManager.getCurrentThemeColorName() }
         if (activity is SettingsUiFragmentHostActivity) {

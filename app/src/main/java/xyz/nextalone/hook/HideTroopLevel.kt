@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -83,6 +82,9 @@ object HideTroopLevel : CommonSwitchFunctionHook(), OnBubbleBuilder {
         val isAdmin = admin?.contains(sendUin) == true || ownerUin == sendUin
         //levelView.children.filter { it !is TextView }.forEach { it.visibility = android.view.View.GONE }
         // 如果forEach，则会隐藏昵称右侧的部分图标
-        (levelView as LinearLayout).children.first().isVisible = isAdmin
+        // 9.2.10: the level view is a RelativeLayout now, not a LinearLayout -
+        // the hard cast threw on every group bubble (device census 2026-09-07).
+        // ViewGroup covers both shapes; non-view-group hits skip quietly.
+        (levelView as? ViewGroup)?.getChildAt(0)?.isVisible = isAdmin
     }
 }

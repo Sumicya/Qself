@@ -3,28 +3,26 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
- * and/or modify it under the terms of the qwq233 Universal License
- * as published on https://github.com/qwq233/license; either
- * version 2 of the License, or any later version and our EULA as published
- * by QAuxiliary contributors.
+ * This software is free software: you can redistribute it
+ * and/or modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the qwq233 Universal License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Affero General Public License for more details.
  *
- * See
- * <https://github.com/qwq233/license>
- * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 package cc.hicore.hook;
 
 
-import static cc.ioctl.util.HostInfo.requireMinQQVersion;
-import static cc.ioctl.util.HostInfo.requireMinTimVersion;
-import static cc.ioctl.util.Reflex.getFirstNSFByType;
+import io.github.qauxv.util.HostInfo;
+import static io.github.qauxv.util.HostInfo.requireMinTimVersion;
+import static io.github.qauxv.util.Reflex.getFirstNSFByType;
 import static io.github.qauxv.util.Initiator._SessionInfo;
 import static io.github.qauxv.util.Initiator.load;
 
@@ -46,7 +44,7 @@ import cc.hicore.dialog.RepeaterPlusIconSettingDialog;
 import cc.hicore.message.chat.SessionHooker;
 import cc.hicore.message.chat.SessionUtils;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import com.tencent.qqnt.kernel.nativeinterface.MsgAttributeInfo;
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord;
 import com.xiaoniu.dispatcher.ComponentType;
@@ -180,7 +178,7 @@ public class RepeaterPlus extends BaseFunctionHook implements SessionHooker.IAIO
     @Override
     @SuppressLint({"WrongConstant", "ResourceType"})
     public boolean initOnce() throws Exception {
-        if (requireMinQQVersion(QQVersion.QQ_9_2_30)) {
+        if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_2_30)) {
             if (!RepeaterPlusIconSettingDialog.getIsShowInMenu()) {
                 XC_MethodHook callback = new XC_MethodHook() {
                     private volatile long click_time = 0;
@@ -248,7 +246,7 @@ public class RepeaterPlus extends BaseFunctionHook implements SessionHooker.IAIO
                 }
             }
             return true;
-        } else if (requireMinQQVersion(QQVersion.QQ_8_9_63_BETA_11345) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)) {
+        } else if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_63_BETA_11345) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)) {
             if (!RepeaterPlusIconSettingDialog.getIsShowInMenu()) {
                 XC_MethodHook callback = new XC_MethodHook() {
                     private ImageView img;
@@ -386,7 +384,7 @@ public class RepeaterPlus extends BaseFunctionHook implements SessionHooker.IAIO
 
     @Override
     public boolean isAvailable() {
-        return requireMinQQVersion(QQVersion.QQ_8_6_0) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA);
+        return HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_6_0) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA);
     }
 
     private static Object AIOParam;
@@ -427,7 +425,7 @@ public class RepeaterPlus extends BaseFunctionHook implements SessionHooker.IAIO
                     });
                 } else {
                     long msgUniqueId;
-                    if (requireMinQQVersion(QQVersion.QQ_9_0_30) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)) {
+                    if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_0_30) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)) {
                         msgUniqueId = service.generateMsgUniqueId(contact.getChatType(), QAppUtils.getServiceTime());
                     } else {
                         msgUniqueId = service.getMsgUniqueId(QAppUtils.getServiceTime());

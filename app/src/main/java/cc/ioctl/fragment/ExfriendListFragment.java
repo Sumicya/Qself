@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -54,10 +53,10 @@ import cc.ioctl.hook.friend.OpenFriendChatHistory;
 import cc.ioctl.hook.profile.OpenProfileCard;
 import cc.ioctl.util.ExfriendManager;
 import cc.ioctl.util.HostStyledViewBuilder;
-import cc.ioctl.util.LayoutHelper;
+import io.github.qauxv.util.LayoutHelper;
 import cc.ioctl.util.data.EventRecord;
 import cc.ioctl.util.data.FriendRecord;
-import cc.ioctl.util.ui.FaultyDialog;
+import io.github.qauxv.util.ui.FaultyDialog;
 import com.tencent.widget.XListView;
 import io.github.qauxv.R;
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity;
@@ -306,7 +305,7 @@ public class ExfriendListFragment extends BaseRootLayoutFragment {
         EventRecord r = (EventRecord) Objects.requireNonNull(v.getTag(), "v.getTag() == null");
         // long click menu
         String[] options = new String[]{"复制 QQ 号", "删除记录", "查看本地聊天记录"};
-        AlertDialog.Builder builder = new AlertDialog.Builder(ctx);
+        AlertDialog.Builder builder = new sumicya.qself.ui.InlineAlertDialogBuilder(ctx);
         builder.setTitle("操作");
         builder.setItems(options, (dialog, which) -> {
             switch (which) {
@@ -365,7 +364,7 @@ public class ExfriendListFragment extends BaseRootLayoutFragment {
             return true;
         } else if (id == R.id.menu_item_clear_all_record) {
             Context ctx = requireContext();
-            new AlertDialog.Builder(ctx)
+            new sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                     .setTitle("删除所有记录")
                     .setMessage("您可以前往模块设置的故障排除页面来删除所有历史记录。\n如果您需要删除单个记录，请长按记录进行删除。")
                     .setPositiveButton("前往", (dialog, which) -> {
@@ -420,7 +419,7 @@ public class ExfriendListFragment extends BaseRootLayoutFragment {
         layout.addView(inputNick);
         layout.addView(inputTime);
         layout.addView(hintTextV);
-        AlertDialog.Builder builder = new AlertDialog.Builder(ctx);
+        AlertDialog.Builder builder = new sumicya.qself.ui.InlineAlertDialogBuilder(ctx);
         builder.setTitle("添加历史好友记录");
         builder.setView(layout);
         builder.setPositiveButton("添加", null); // set later
@@ -500,7 +499,7 @@ public class ExfriendListFragment extends BaseRootLayoutFragment {
         layout.setGravity(Gravity.CENTER_HORIZONTAL);
         layout.addView(desc);
         layout.addView(input);
-        AlertDialog.Builder builder = new AlertDialog.Builder(ctx);
+        AlertDialog.Builder builder = new sumicya.qself.ui.InlineAlertDialogBuilder(ctx);
         builder.setTitle("编辑排除列表");
         builder.setView(layout);
         builder.setPositiveButton("保存", null); // set later

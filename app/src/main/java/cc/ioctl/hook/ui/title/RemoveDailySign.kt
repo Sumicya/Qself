@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,9 +20,13 @@
  */
 package cc.ioctl.hook.ui.title
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
+import io.github.qauxv.util.PACKAGE_NAME_QQ
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
 import android.widget.LinearLayout
 import cc.ioctl.util.HookUtils
-import cc.ioctl.util.HostInfo
 import com.github.kyuubiran.ezxhelper.utils.findField
 import com.github.kyuubiran.ezxhelper.utils.findMethod
 import com.github.kyuubiran.ezxhelper.utils.getObjectAs
@@ -52,7 +55,7 @@ object RemoveDailySign : CommonSwitchFunctionHook("kr_remove_daily_sign") {
     override val isAvailable: Boolean get() = !isTim()
 
     override fun initOnce(): Boolean {
-        if (hostInfo.packageName != HostInfo.PACKAGE_NAME_QQ) return false
+        if (hostInfo.packageName != PACKAGE_NAME_QQ) return false
         val callback = HookUtils.afterIfEnabled(this) { param ->
             // em_drawer_sign_up
             val dailySignName = when {

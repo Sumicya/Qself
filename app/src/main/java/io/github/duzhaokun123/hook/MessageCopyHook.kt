@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -28,7 +27,7 @@ import android.content.Context
 import android.view.View
 import android.widget.TextView
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.afterHookIfEnabled
 import com.xiaoniu.dispatcher.OnMenuBuilder
 import com.xiaoniu.util.ContextUtils
@@ -114,12 +113,12 @@ object MessageCopyHook : CommonSwitchFunctionHook(targets = arrayOf(AIOMsgItem_i
         get() = FunctionEntryRouter.Locations.Auxiliary.MESSAGE_CATEGORY
 
     fun showDialog(context: Context, text: CharSequence) {
-        AlertDialog.Builder(context)
+        sumicya.qself.ui.InlineAlertDialogBuilder(context)
             .setMessage(text)
             .setNegativeButton(android.R.string.cancel, null)
             .show()
             .findViewById<TextView>(android.R.id.message)
-            .setTextIsSelectable(true)
+            ?.setTextIsSelectable(true)
     }
 
     override val targetComponentTypes = null

@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,7 +21,9 @@
 
 package io.github.qauxv.dsl
 
+import sumicya.qself.feature.consolidation.FeatureCatalog
 import io.github.qauxv.base.IUiItemAgentProvider
+import io.github.qauxv.dsl.func.FragmentImplDescription
 import io.github.qauxv.dsl.func.FragmentDescription
 import io.github.qauxv.dsl.func.IDslItemNode
 import io.github.qauxv.dsl.func.IDslParentNode
@@ -30,7 +31,6 @@ import io.github.qauxv.dsl.func.RootFragmentDescription
 import io.github.qauxv.dsl.func.UiItemAgentDescription
 import io.github.qauxv.fragment.AboutFragment
 import io.github.qauxv.fragment.BackupRestoreConfigFragment
-import io.github.qauxv.fragment.PendingFunctionFragment
 import io.github.qauxv.fragment.TroubleshootFragment
 
 object FunctionEntryRouter {
@@ -81,7 +81,7 @@ object FunctionEntryRouter {
             // wtf?
             return arrayOf()
         }
-        return settingsUiItemDslTreeSkeleton.findLocationByIdentifier(tag)
+        return FeatureCatalog.groupPath(tag) ?: settingsUiItemDslTreeSkeleton.findLocationByIdentifier(tag)
     }
 
     /**
@@ -119,6 +119,7 @@ object FunctionEntryRouter {
                     category("auxiliary-message", "消息")
                     category("auxiliary-guild", "频道")
                 }
+                fragment("auxiliary-emoticon-and-sticker", "表情与贴纸")
                 fragment("auxiliary-file", "文件与存储")
                 fragment("auxiliary-friend-and-profile", "好友和资料卡") {
                     category("auxiliary-friend", "好友")
@@ -126,8 +127,10 @@ object FunctionEntryRouter {
                 }
                 fragment("auxiliary-group", "群聊")
                 fragment("auxiliary-notification", "通知设置")
-                fragment("auxiliary-experimental", "实验性功能")
+                fragment("auxiliary-disguise-and-device", "伪装与设备")
+                fragment("auxiliary-favorite-and-tools", "收藏与工具")
                 fragment("entertainment-function", "娱乐功能")
+                fragment("auxiliary-experimental", "实验性功能")
                 fragment("auxiliary-misc", "杂项", false)
             }
             category("module-config", "配置", false) {
@@ -139,42 +142,54 @@ object FunctionEntryRouter {
                 fragmentImpl("debug-impl", "故障排查", TroubleshootFragment::class.java)
             }
             category("other-config", "其他") {
-                fragmentImpl("other-coming-soon", "开发中的功能", PendingFunctionFragment::class.java, false)
                 fragmentImpl("other-about", "关于", AboutFragment::class.java, false)
             }
         }
         return baseTree
     }
 
-    private fun zwBuildUiItemDslTree(): RootFragmentDescription {
-        val baseTree: RootFragmentDescription = zwCreateBaseDslTree()
-        val lostAndFoundItems = mutableListOf<IUiItemAgentProvider>()
-        val annotatedUiItemAgentEntries = queryAnnotatedUiItemAgentEntries()
-        for (uiItemAgentEntry in annotatedUiItemAgentEntries) {
-            var location = uiItemAgentEntry.uiItemLocation
-            location = resolveUiItemAnycastLocation(location) ?: location
-            // find the parent node
-            val parentNode = baseTree.lookupHierarchy(location)
-            if (parentNode is IDslParentNode) {
-                parentNode.addChild(UiItemAgentDescription(uiItemAgentEntry))
-            } else {
-                // not found, add to lost and found
-                lostAndFoundItems.add(uiItemAgentEntry)
-            }
-        }
-        if (lostAndFoundItems.isNotEmpty()) {
-            // create a lost and found node
-            val lostAndFoundFragmentDescription = FragmentDescription("lost-and-found", "Lost & Found") {
-                lostAndFoundItems.forEach {
-                    addChild(UiItemAgentDescription(it))
+    /** The original provider is kept: wrapping it would break IDynamicHook initialization and switches. */
+    @JvmStatic
+    fun locationForProvider(provider: IUiItemAgentProvider): Array<String> =
+        FeatureCatalog.locationFor(provider.itemAgentProviderUniqueIdentifier)
+            ?: resolveUiItemAnycastLocation(provider.uiItemLocation) ?: provider.uiItemLocation
+
+    @JvmStatic
+    fun locationForFeature(identifier: String): Array<String>? = FeatureCatalog.locationFor(identifier)
+
+    private fun zwBuildUiItemDslTree(): RootFragmentDescription = buildCatalogTree(queryAnnotatedUiItemAgentEntries())
+
+    @JvmStatic
+    fun buildCatalogTree(entries: Array<IUiItemAgentProvider>): RootFragmentDescription {
+        val providers = entries.associateBy { it.itemAgentProviderUniqueIdentifier }
+        fun populate(fragment: FragmentDescription, group: FeatureCatalog.Group) {
+            for (section in group.sections) {
+                fragment.category(section.id, section.title) {
+                    for (id in section.features) {
+                        val provider = checkNotNull(providers[id]) { "Missing catalog provider: $id" }
+                        agentItem(provider)
+                    }
                 }
             }
-            // add to the top of the tree to make it the first node
-            baseTree.addChild(lostAndFoundFragmentDescription, 0)
-            // sync with the skeleton
-            settingsUiItemDslTreeSkeleton.addChild(FragmentDescription("lost-and-found", "Lost & Found", false, null), 0)
         }
-        return baseTree
+        return RootFragmentDescription {
+            category("features", "功能") {
+                for (group in FeatureCatalog.groups.filter { it.id != "cfg-theme" }) {
+                    fragment(group.id, group.title) { populate(this, group) }
+                }
+            }
+            category("module-config", "设置", false) {
+                val theme = FeatureCatalog.groups.single { it.id == "cfg-theme" }
+                fragment("cfg-theme", theme.title) { populate(this, theme) }
+                fragmentImpl("cfg-backup-restore", "备份与恢复", BackupRestoreConfigFragment::class.java)
+            }
+            category("debug-category", "维护", false) {
+                fragmentImpl("debug-impl", "故障排查", TroubleshootFragment::class.java)
+            }
+            category("other-config", "其他", false) {
+                fragmentImpl("other-about", "关于", AboutFragment::class.java, false)
+            }
+        }
     }
 
     /**
@@ -267,6 +282,14 @@ object FunctionEntryRouter {
 
             @JvmField
             val NOTIFICATION_CATEGORY: Array<String> = arrayOf(ANY_CAST_PREFIX, "auxiliary-notification")
+
+            @JvmField
+            val DISGUISE_AND_DEVICE_CATEGORY: Array<String> = arrayOf(ANY_CAST_PREFIX, "auxiliary-disguise-and-device")
+
+            val EMOTICON_AND_STICKER_CATEGORY: Array<String> = arrayOf(ANY_CAST_PREFIX, "auxiliary-emoticon-and-sticker")
+
+            @JvmField
+            val FAVORITE_AND_TOOLS_CATEGORY: Array<String> = arrayOf(ANY_CAST_PREFIX, "auxiliary-favorite-and-tools")
 
             @JvmField
             val EXPERIMENTAL_CATEGORY: Array<String> = arrayOf(ANY_CAST_PREFIX, "auxiliary-experimental")

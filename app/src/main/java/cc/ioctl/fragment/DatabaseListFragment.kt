@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -39,8 +38,8 @@ import android.widget.TextView
 import androidx.annotation.UiThread
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.res.ResourcesCompat
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.ui.FaultyDialog
 import com.tencent.mobileqq.widget.BounceScrollView
 import io.github.qauxv.R
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity
@@ -155,7 +154,7 @@ class DatabaseListFragment : BaseRootLayoutFragment() {
 
     private fun confirmDeleteFile(file: File) {
         val ctx = requireContext()
-        AlertDialog.Builder(ctx).setTitle("确定要删除吗？").setMessage(file.absolutePath).setPositiveButton("确定") { _, _ ->
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).setTitle("确定要删除吗？").setMessage(file.absolutePath).setPositiveButton("确定") { _, _ ->
             try {
                 if (!file.isFile) {
                     Toasts.error(ctx, "不是文件：${file.absolutePath}")

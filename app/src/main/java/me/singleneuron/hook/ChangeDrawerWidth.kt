@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 dmca@ioctl.cc
  * https://github.com/ferredoxin/QNotified
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by ferredoxin.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,6 +20,9 @@
  */
 package me.singleneuron.hook
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.PACKAGE_NAME_QQ
+import io.github.qauxv.util.hostInfo
 import android.app.Activity
 import android.content.Context
 import android.content.DialogInterface
@@ -29,7 +31,6 @@ import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.View
 import android.view.WindowManager
-import cc.ioctl.util.HostInfo.PACKAGE_NAME_QQ
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import io.github.qauxv.util.xpcompat.XC_MethodHook
@@ -106,7 +107,7 @@ object ChangeDrawerWidth : CommonConfigFunctionHook("changeDrawerWidth") {
 
     override val onUiItemClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, activity, _ ->
         val dialogContext = CommonContextWrapper.createMaterialDesignContext(activity)
-        MaterialAlertDialogBuilder(dialogContext).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(dialogContext).apply {
             val slider = Slider(dialogContext)
             slider.valueFrom = 0f
             slider.valueTo = getMaxWidth(dialogContext).toInt().toFloat()

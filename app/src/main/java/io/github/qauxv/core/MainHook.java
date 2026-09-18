@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,6 +20,9 @@
  */
 package io.github.qauxv.core;
 
+import sumicya.qself.feature.chat.GagInfoDisclosure;
+import sumicya.qself.feature.ui.RemoveSuperQQShow;
+import cc.ioctl.hook.ui.misc.OptXListViewScrollBar;
 import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
@@ -33,21 +35,13 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.hook.SettingEntryHook;
-import cc.ioctl.hook.bak.MuteAtAllAndRedPacket;
-import cc.ioctl.hook.chat.GagInfoDisclosure;
-import cc.ioctl.hook.experimental.FileRecvRedirect;
-import cc.ioctl.hook.experimental.ForcePadMode;
-import cc.ioctl.hook.misc.CustomSplash;
+import sumicya.qself.feature.dev.GrayTipCapture;
+import sumicya.qself.feature.ui.LiquidGlassBottomBar;
 import cc.ioctl.hook.misc.DisableHotPatch;
 import cc.ioctl.hook.misc.DisableQQCrashReportManager;
 import cc.ioctl.hook.msg.RevokeMsgHook;
-import cc.ioctl.hook.notification.MuteQZoneThumbsUp;
-import cc.ioctl.hook.ui.misc.OptXListViewScrollBar;
-import cc.ioctl.hook.ui.title.RemoveCameraButton;
-import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.Reflex;
-import io.github.qauxv.chainloader.detail.ExternalModuleChainLoader;
-import io.github.qauxv.chainloader.detail.ui.ExternalModuleConfigHook;
+import io.github.qauxv.util.HostInfo;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.util.xpcompat.XposedBridge;
 import io.github.qauxv.config.ConfigItems;
@@ -61,10 +55,8 @@ import io.github.qauxv.util.Initiator;
 import io.github.qauxv.util.LicenseStatus;
 import io.github.qauxv.util.Log;
 import io.github.qauxv.util.SyncUtils;
-import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import xyz.nextalone.hook.RemoveSuperQQShow;
 
 /*TitleKit:Lcom/tencent/mobileqq/widget/navbar/NavBarCommon*/
 
@@ -111,6 +103,7 @@ public class MainHook {
         }
         boolean safeMode = SafeModeManager.getManager().isEnabledForNextTime();
         SafeModeManager.getManager().setSafeModeForThisTime(safeMode);
+        sumicya.qself.diagnostics.FeatureJournal.start("safeMode=" + safeMode);
         if (safeMode) {
             LicenseStatus.sDisableCommonHooks = true;
             Log.i("Safe mode enabled, disable hooks");
@@ -120,15 +113,12 @@ public class MainHook {
         HookInstaller.allowEarlyInit(DisableQQCrashReportManager.INSTANCE);
         if (!safeMode) {
             HookInstaller.allowEarlyInit(RevokeMsgHook.INSTANCE);
-            HookInstaller.allowEarlyInit(MuteQZoneThumbsUp.INSTANCE);
-            HookInstaller.allowEarlyInit(MuteAtAllAndRedPacket.INSTANCE);
+            HookInstaller.allowEarlyInit(LiquidGlassBottomBar.INSTANCE);
+            HookInstaller.allowEarlyInit(GrayTipCapture.INSTANCE);
+            // Restored capabilities retain their original early-install timing.
             HookInstaller.allowEarlyInit(GagInfoDisclosure.INSTANCE);
-            HookInstaller.allowEarlyInit(CustomSplash.INSTANCE);
-            HookInstaller.allowEarlyInit(RemoveCameraButton.INSTANCE);
             HookInstaller.allowEarlyInit(RemoveSuperQQShow.INSTANCE);
-            HookInstaller.allowEarlyInit(FileRecvRedirect.INSTANCE);
             HookInstaller.allowEarlyInit(OptXListViewScrollBar.INSTANCE);
-            HookInstaller.allowEarlyInit(ForcePadMode.INSTANCE);
         }
         if (SyncUtils.isMainProcess()) {
             ConfigItems.removePreviousCacheIfNecessary();
@@ -175,14 +165,8 @@ public class MainHook {
                 InjectDelayableHooks.step(dir);
             }
         }
-        // load external modules, if any
-        if (!safeMode) {
-            try {
-                ExternalModuleChainLoader.loadExternalModulesForStartup();
-            } catch (IOException | RuntimeException e) {
-                ExternalModuleConfigHook.INSTANCE.traceError(e);
-            }
-        }
+        // Single edition does not chain-load external modules. Their saved config remains untouched.
+
     }
 
     private static boolean isForegroundStartupForMainProcess(Context ctx, Object step) {
@@ -230,7 +214,7 @@ public class MainHook {
                         String className = null;
                         if (intent != null) {
                             ComponentName component = intent.getComponent();
-                            if (component != null && HostInfo.getPackageName().equals(component.getPackageName())) {
+                            if (component != null && HostInfo.getHostInfo().getPackageName().equals(component.getPackageName())) {
                                 className = component.getClassName();
                             }
                         }

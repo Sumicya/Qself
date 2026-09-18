@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,6 +21,12 @@
 
 package cc.ioctl.hook.experimental
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
+import io.github.qauxv.util.requireMinVersionAnyQQ
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
+import io.github.qauxv.util.requireMinVersionAnyQQ
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.os.Environment
@@ -32,7 +37,6 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
-import cc.ioctl.util.HostInfo
 import cc.ioctl.util.hookAfterIfEnabled
 import com.github.kyuubiran.ezxhelper.utils.Log
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -78,7 +82,7 @@ object FileRecvRedirect : CommonConfigFunctionHook(SyncUtils.PROC_ANY and (SyncU
             root.addView(cb_enable)
 
             val tv_note = TextView(activity)
-            tv_note.text = "如果提示 目录无效 请检查是否已经给 ${HostInfo.getAppName()} 授予了读写权限"
+            tv_note.text = "如果提示 目录无效 请检查是否已经给 ${hostInfo.hostName} 授予了读写权限"
             root.addView(tv_note)
 
             val ll_path = LinearLayout(activity)
@@ -103,7 +107,7 @@ object FileRecvRedirect : CommonConfigFunctionHook(SyncUtils.PROC_ANY and (SyncU
                 }
             }
 
-            MaterialAlertDialogBuilder(activity)
+            sumicya.qself.ui.InlineAlertDialogBuilder(activity)
                 .setTitle("下载文件重定向")
                 .setPositiveButton("保存") { _, _ ->
                     val path = et_path.text.toString()
@@ -115,7 +119,7 @@ object FileRecvRedirect : CommonConfigFunctionHook(SyncUtils.PROC_ANY and (SyncU
                     if (isEnabled) {
                         setRedirectPathAndEnable(path)
                     }
-                    Toasts.show(activity, "已保存,请重启 ${HostInfo.getAppName()}")
+                    Toasts.show(activity, "已保存,请重启 ${hostInfo.hostName}")
                 }.setNegativeButton(android.R.string.cancel, null)
                 .setView(root)
                 .show()
@@ -173,7 +177,7 @@ object FileRecvRedirect : CommonConfigFunctionHook(SyncUtils.PROC_ANY and (SyncU
 
     private fun doSetPath(path: String): Boolean {
         try {
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_2_8)) {
+            if (requireMinVersionAnyQQ(QQVersion.QQ_8_2_8)) {
                 if (inited.not()) {
                     hookAfterIfEnabled(XposedHelpers.findMethodBestMatch(Initiator.load("com.tencent.mobileqq.vfs.VFSAssistantUtils"), "getSDKPrivatePath", String::class.java)) { param ->
                         val result = param.result as String
@@ -184,7 +188,7 @@ object FileRecvRedirect : CommonConfigFunctionHook(SyncUtils.PROC_ANY and (SyncU
                     }
                     try {
                         hookAfterIfEnabled(XposedHelpers.findMethodBestMatch(Initiator.load("com.tencent.guild.api.msg.impl.GuildMsgApiImpl"), "getNTKernelExtDataPath", *arrayOf<String>())) { param ->
-                            param.result = HostInfo.getApplication().externalCacheDir!!.parentFile!!.absolutePath + "/Tencent/QQfile_recv/"
+                            param.result = hostInfo.application.externalCacheDir!!.parentFile!!.absolutePath + "/Tencent/QQfile_recv/"
                         }
                     } catch (ignored: Exception) {
                     }
@@ -214,11 +218,11 @@ object FileRecvRedirect : CommonConfigFunctionHook(SyncUtils.PROC_ANY and (SyncU
 
     private fun getDefaultPath() =
         when {
-            HostInfo.isTim() ->
+            isTim() ->
                 Environment.getExternalStorageDirectory().absolutePath + "/Tencent/TIMfile_recv/"
 
-            HostInfo.requireMinQQVersion(QQVersion.QQ_8_2_8) ->
-                HostInfo.getApplication().getExternalFilesDir(null)!!.parent!! + "/Tencent/QQfile_recv"
+            requireMinVersionAnyQQ(QQVersion.QQ_8_2_8) ->
+                hostInfo.application.getExternalFilesDir(null)!!.parent!! + "/Tencent/QQfile_recv"
 
             else ->
                 Environment.getExternalStorageDirectory().absolutePath + "/Tencent/QQfile_recv"

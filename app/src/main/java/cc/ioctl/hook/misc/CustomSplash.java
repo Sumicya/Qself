@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -29,7 +28,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.fragment.CustomSplashConfigFragment;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity;
 import io.github.qauxv.base.IUiItemAgent;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
@@ -185,7 +184,7 @@ public class CustomSplash extends CommonConfigFunctionHook {
 
     @Nullable
     public InputStream openSplashInputStream(@NonNull String which) throws IOException {
-        File f = new File(HostInfo.getApplication().getFilesDir(), DIR_NANE_CONFIG_MISC + File.separator + which);
+        File f = new File(HostInfo.getHostInfo().getApplication().getFilesDir(), DIR_NANE_CONFIG_MISC + File.separator + which);
         if (f.exists() && f.isFile()) {
             return new FileInputStream(f);
         }
@@ -216,13 +215,13 @@ public class CustomSplash extends CommonConfigFunctionHook {
 
     @NonNull
     public File getDarkSplashFile() {
-        File dir = new File(HostInfo.getApplication().getFilesDir(), DIR_NANE_CONFIG_MISC);
+        File dir = new File(HostInfo.getHostInfo().getApplication().getFilesDir(), DIR_NANE_CONFIG_MISC);
         return new File(IoUtils.mkdirsOrThrow(dir), FILE_NAME_SPLASH_DARK);
     }
 
     @NonNull
     public File getLightSplashFile() {
-        File dir = new File(HostInfo.getApplication().getFilesDir(), DIR_NANE_CONFIG_MISC);
+        File dir = new File(HostInfo.getHostInfo().getApplication().getFilesDir(), DIR_NANE_CONFIG_MISC);
         return new File(IoUtils.mkdirsOrThrow(dir), FILE_NAME_SPLASH_LIGHT);
     }
 

@@ -10,7 +10,7 @@ import android.system.OsConstants;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
-import cc.ioctl.util.ui.FaultyDialog;
+import io.github.qauxv.util.ui.FaultyDialog;
 import io.github.qauxv.activity.ShadowSafTransientActivity;
 import java.io.FileInputStream;
 import java.io.IOException;

@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -35,7 +34,7 @@ import cc.hicore.ReflectUtil.XField;
 import cc.hicore.ReflectUtil.XMethod;
 import cc.hicore.Utils.FunProtoData;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import com.tencent.qphone.base.remote.FromServiceMsg;
 import com.tencent.qqnt.kernel.nativeinterface.PicElement;
 import com.xiaoniu.dispatcher.ComponentType;
@@ -256,7 +255,7 @@ public class PicMd5Hook extends CommonSwitchFunctionHook implements OnMenuBuilde
         final String[] actions = canBlockPicture
                 ? new String[]{"复制 MD5", "复制图片链接", "屏蔽图片"}
                 : new String[]{"复制 MD5", "复制图片链接"};
-        new AlertDialog.Builder(CommonContextWrapper.createAppCompatContext(ctx)).setTitle("MD5\n" + md5).setCancelable(true)
+        new sumicya.qself.ui.InlineAlertDialogBuilder(CommonContextWrapper.createAppCompatContext(ctx)).setTitle("MD5\n" + md5).setCancelable(true)
                 .setItems(actions, (dialog, which) -> {
                     if (which == 0) {
                         SystemServiceUtils.copyToClipboard(ctx, md5);

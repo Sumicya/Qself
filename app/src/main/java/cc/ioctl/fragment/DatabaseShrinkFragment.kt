@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -46,9 +45,9 @@ import androidx.recyclerview.widget.RecyclerView
 import cc.ioctl.hook.friend.OpenFriendChatHistory
 import cc.ioctl.hook.profile.OpenProfileCard
 import cc.ioctl.util.ExfriendManager
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import cc.ioctl.util.TroopManagerHelper
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.ui.FaultyDialog
 import io.github.qauxv.R
 import io.github.qauxv.bridge.AppRuntimeHelper
 import io.github.qauxv.fragment.BaseRootLayoutFragment
@@ -205,7 +204,7 @@ class DatabaseShrinkFragment : BaseRootLayoutFragment() {
         if (!mIsCalcSize.compareAndSet(false, true)) {
             return
         }
-        val dialog = AlertDialog.Builder(ctx)
+        val dialog = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
             .setTitle("COUNT(*)")
             .setMessage("正在计算表的数据量，请稍候...")
             .setCancelable(false)
@@ -249,7 +248,7 @@ class DatabaseShrinkFragment : BaseRootLayoutFragment() {
             CATEGORY_FRIENDS, CATEGORY_TROOPS, CATEGORY_GUILDS,
             CATEGORY_TROOP_FILE_TRANSFER_ITEM, CATEGORY_QQ_CALL, CATEGORY_OTHERS
         )
-        AlertDialog.Builder(ctx).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
             setTitle("筛选")
             setMultiChoiceItems(
                 choicesNames, booleanArrayOf(
@@ -532,8 +531,8 @@ class DatabaseShrinkFragment : BaseRootLayoutFragment() {
 
     private fun confirmAndExecuteSql(db: SQLiteDatabase, sql: String) {
         val ctx = requireContext()
-        AlertDialog.Builder(ctx).setTitle("确定要执行该语句吗？").setMessage(sql).setPositiveButton("确定") { _, _ ->
-            val waitDialog = AlertDialog.Builder(ctx).setTitle("请稍候").setMessage(sql).setCancelable(false).show()
+        sumicya.qself.ui.InlineAlertDialogBuilder(ctx).setTitle("确定要执行该语句吗？").setMessage(sql).setPositiveButton("确定") { _, _ ->
+            val waitDialog = sumicya.qself.ui.InlineAlertDialogBuilder(ctx).setTitle("请稍候").setMessage(sql).setCancelable(false).show()
             async {
                 try {
                     db.execSQL(sql)
@@ -588,7 +587,7 @@ class DatabaseShrinkFragment : BaseRootLayoutFragment() {
                 return@lambda
             }
             val ctx = requireContext()
-            val waitDialog = AlertDialog.Builder(ctx)
+            val waitDialog = sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setTitle("正在查询")
                 .setMessage("$md5\n通常不会超过一分钟")
                 .setCancelable(false)
@@ -633,7 +632,7 @@ class DatabaseShrinkFragment : BaseRootLayoutFragment() {
                         mMd5ToUinLut[md5] = plain
                     } else {
                         runOnUiThread {
-                            AlertDialog.Builder(ctx).apply {
+                            sumicya.qself.ui.InlineAlertDialogBuilder(ctx).apply {
                                 setTitle("查询失败")
                                 setMessage("$md5\n$resp")
                                 setNeutralButton("复制 MD5") { _, _ ->

@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -26,7 +25,7 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.hook.SettingEntryHook;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.BuildConfig;
 import io.github.qauxv.base.IDynamicHook;
 import io.github.qauxv.base.RuntimeErrorTracer;
@@ -92,6 +91,7 @@ public class HookInstaller {
     }
 
     public static void allowEarlyInit(@NonNull IDynamicHook hook) {
+        if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(hook)) return;
         try {
             if (hook.isTargetProcess() && hook.isEnabled() && !hook.isPreparationRequired() && !hook.isInitialized()) {
                 hook.initialize();
@@ -106,14 +106,25 @@ public class HookInstaller {
     }
 
     public static IDynamicHook getHookById(int index) {
-        return queryAllAnnotatedHooks()[index];
+        IDynamicHook[] hooks = queryAllAnnotatedHooks();
+        return index >= 0 && index < hooks.length ? hooks[index] : null;
     }
 
     public static void initializeHookForeground(@NonNull Context context, @NonNull IDynamicHook hook) {
-        SyncUtils.async(() -> doInitAndSetupHookForeground(context, hook));
+        initializeHookForeground(context, hook, null);
+    }
+
+    public static void initializeHookForeground(@NonNull Context context, @NonNull IDynamicHook hook,
+                                                @Nullable Runnable completion) {
+        if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(hook)) return;
+        SyncUtils.async(() -> {
+            try { doInitAndSetupHookForeground(context, hook); }
+            finally { if (completion != null) SyncUtils.runOnUiThread(completion); }
+        });
     }
 
     public static void doInitAndSetupHookForeground(@NonNull Context context, @NonNull IDynamicHook hook) {
+        if (!sumicya.qself.profile.SimplifiedProfile.isAllowed(hook)) return;
         final CustomDialog[] pDialog = new CustomDialog[1];
         Throwable err = null;
         boolean isSuccessful = true;
@@ -147,6 +158,7 @@ public class HookInstaller {
                 try {
                     success = hook.initialize();
                 } catch (Throwable ex) {
+                    if (hook instanceof RuntimeErrorTracer) ((RuntimeErrorTracer) hook).traceError(ex);
                     err = ex;
                 }
                 if (!success) {
@@ -177,7 +189,7 @@ public class HookInstaller {
     }
 
     public static void restartToTakeEffect(@Nullable Context context) {
-        Toasts.info(context, "重启 " + HostInfo.getAppName() + " 生效");
+        Toasts.info(context, "重启 " + HostInfo.getHostInfo().getHostName() + " 生效");
     }
 
     public static Step[] stepsOf(@Nullable Step[] a, @Nullable Step[] b) {

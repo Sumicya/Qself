@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -24,6 +23,7 @@ package io.github.qauxv.util;
 import android.os.Parcelable;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 import com.tencent.mobileqq.app.QQAppInterface;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -45,6 +45,23 @@ public class Initiator {
     public static void init(ClassLoader classLoader) {
         sHostClassLoader = classLoader;
         sPluginParentClassLoader = Initiator.class.getClassLoader();
+    }
+
+    /**
+     * Test only: (re)initialize the classloader references for JVM unit tests.
+     * <p>
+     * Passing {@code null} restores the "not yet initialized" state, in which
+     * {@link #load(String)} is guaranteed to return {@code null} instead of
+     * throwing. This method is deliberately package-private so that it can
+     * only be referenced by tests in this package.
+     */
+    @VisibleForTesting
+    static void initForTest(@Nullable ClassLoader hostClassLoader) {
+        sHostClassLoader = hostClassLoader;
+        sPluginParentClassLoader = hostClassLoader == null
+                ? null : Initiator.class.getClassLoader();
+        sClassCache.clear();
+        kQQAppInterface = null;
     }
 
     public static ClassLoader getPluginClassLoader() {
@@ -85,6 +102,11 @@ public class Initiator {
 
     public static boolean checkHostHasClass(String className) {
         ClassLoader hostClassLoader = getHostClassLoader();
+        if (hostClassLoader == null) {
+            // not initialized: be fail-safe like load(), "no host" means
+            // "the host does not have this class" instead of an NPE
+            return false;
+        }
         try {
             hostClassLoader.loadClass(className);
             return true;

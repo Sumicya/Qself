@@ -3,20 +3,18 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
- * and/or modify it under the terms of the qwq233 Universal License
- * as published on https://github.com/qwq233/license; either
- * version 2 of the License, or any later version and our EULA as published
- * by QAuxiliary contributors.
+ * This software is free software: you can redistribute it
+ * and/or modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the qwq233 Universal License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Affero General Public License for more details.
  *
- * See
- * <https://github.com/qwq233/license>
- * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 package cc.hicore.message.common;
@@ -27,7 +25,7 @@ import cc.hicore.ReflectUtil.XClass;
 import cc.hicore.ReflectUtil.XField;
 import cc.hicore.ReflectUtil.XMethod;
 import cc.hicore.Utils.DataUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import cc.hicore.Utils.XLog;
 import com.tencent.qqnt.kernel.nativeinterface.MsgElement;
 import com.tencent.qqnt.kernel.nativeinterface.PttElement;
@@ -108,7 +106,7 @@ public class MsgBuilder {
     public static Object copy_new_flash_chat(Object source){
         try {
             Method ArkChatObj;
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_90)){
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_90)){
                 ArkChatObj = XMethod.clz("com.tencent.mobileqq.service.h.r")
                         .ret(Initiator.loadClass("com.tencent.mobileqq.data.MessageForArkFlashChat"))
                         .param(
@@ -171,7 +169,7 @@ public class MsgBuilder {
             String friendInfo = XField.obj(source).name("frienduin").type(String.class).get();
             int istroop = XField.obj(source).name("istroop").type(int.class).get();
 
-            XMethod.clz(HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_0) ? Initiator.loadClass("com.tencent.mobileqq.service.h.r"):
+            XMethod.clz(HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_0) ? Initiator.loadClass("com.tencent.mobileqq.service.h.r"):
                     Initiator.loadClass("com.tencent.mobileqq.service.message.MessageRecordFactory"))
                     .ret(void.class)
                     .param(
@@ -189,7 +187,7 @@ public class MsgBuilder {
     }
     public static Object rebuild_message(Object record){
         try{
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_0)){
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_0)){
                 return XMethod.clz("com.tencent.mobileqq.service.h.r").ret(Initiator.loadClass("com.tencent.mobileqq.data.MessageRecord")).invoke(record);
             }else {
                 return XMethod.clz("com.tencent.mobileqq.service.message.MessageRecordFactory").ret(Initiator.loadClass("com.tencent.mobileqq.data.MessageRecord")).invoke(record);
@@ -202,12 +200,12 @@ public class MsgBuilder {
     public static Object build_common_message_record(int type){
         try{
             Method CallMethod = null;
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_0)){
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_0)){
                 CallMethod = XMethod.clz("com.tencent.mobileqq.service.h.r")
                                 .name("d")
                                 .ret(Initiator.loadClass("com.tencent.mobileqq.data.MessageRecord"))
                                 .param(int.class).get();
-            } else if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_93)){
+            } else if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_93)){
 
                 CallMethod = XMethod.clz("com.tencent.mobileqq.service.message.MessageRecordFactory")
                         .name("d")

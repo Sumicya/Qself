@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,7 +21,10 @@
 
 package me.ketal.base
 
-import cc.ioctl.util.HostInfo
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isAnyQQSpecies
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isAnyQQSpecies
 import io.github.qauxv.base.IUiItemAgent
 import io.github.qauxv.base.RuntimeErrorTracer
 import io.github.qauxv.config.ConfigManager
@@ -99,7 +101,7 @@ abstract class PluginDelayableHook(keyName: String) : BaseFunctionHook(hookKey =
         private const val KEY_DISABLE_PLUGIN_DELAYABLE_HOOK = "disable_plugin_delayable_hook"
 
         private fun getDefValForDisablePluginDelayableHook(): Boolean {
-            return HostInfo.isQQ() && hostInfo.versionCode == 4056L
+            return isAnyQQSpecies() && hostInfo.versionCode == 4056L
         }
 
         var disablePluginDelayableHook: Boolean

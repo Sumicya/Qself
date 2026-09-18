@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -24,7 +23,7 @@ package cc.ioctl.hook.profile;
 import androidx.annotation.NonNull;
 import cc.ioctl.util.BugUtils;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
 import io.github.qauxv.dsl.FunctionEntryRouter.Locations.Auxiliary;
@@ -70,7 +69,7 @@ public class InterceptZipBomb extends CommonSwitchFunctionHook {
             zipFile.close();
             if (sizeSum >= 104550400 && sizeSum > file.length() * 10) {
                 param.setResult(null);
-                Toasts.show(HostInfo.getApplication(),
+                Toasts.show(HostInfo.getHostInfo().getApplication(),
                         String.format(Locale.ROOT, "已拦截 %s ,解压后大小异常: %s",
                                 file.getPath(), BugUtils.getSizeString(sizeSum)));
             }

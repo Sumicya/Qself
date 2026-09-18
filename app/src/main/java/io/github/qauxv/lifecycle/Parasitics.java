@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -50,7 +49,7 @@ import android.view.MotionEvent;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.R;
 import io.github.qauxv.core.MainHook;
 import io.github.qauxv.poststartup.StartupInfo;
@@ -328,7 +327,7 @@ public class Parasitics {
                 if (index != -1) {
                     Intent raw = (Intent) args[index];
                     ComponentName component = raw.getComponent();
-                    Context hostApp = HostInfo.getApplication();
+                    Context hostApp = HostInfo.getHostInfo().getApplication();
                     if (hostApp != null && component != null
                             && hostApp.getPackageName().equals(component.getPackageName())
                             && ActProxyMgr.isModuleProxyActivity(component.getClassName())) {
@@ -888,7 +887,7 @@ public class Parasitics {
                     ComponentName component = (ComponentName) args[0];
                     // before Android 13 flag was int; >= Android 13, flag is long
                     long flags = ((Number) args[1]).longValue();
-                    if (HostInfo.getPackageName().equals(component.getPackageName())
+                    if (HostInfo.getHostInfo().getPackageName().equals(component.getPackageName())
                             && ActProxyMgr.isModuleProxyActivity(component.getClassName())) {
                         return CounterfeitActivityInfoFactory.makeProxyActivityInfo(component.getClassName(), flags);
                     } else {

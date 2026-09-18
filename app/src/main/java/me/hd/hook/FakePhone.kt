@@ -42,7 +42,7 @@ import io.github.qauxv.util.QQVersion
 import io.github.qauxv.util.dexkit.DexKit
 import io.github.qauxv.util.dexkit.Hd_FakePhone_Method
 import io.github.qauxv.util.requireMinQQVersion
-import me.ketal.data.ConfigData
+import io.github.qauxv.config.ConfigData
 import me.ketal.ui.view.ConfigView
 import me.ketal.util.ignoreResult
 
@@ -68,7 +68,7 @@ object FakePhone : BaseFunctionHook(
             }
         }
     }
-    override val uiItemLocation = FunctionEntryRouter.Locations.Simplify.UI_MISC
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.DISGUISE_AND_DEVICE_CATEGORY
     override val isAvailable = requireMinQQVersion(QQVersion.QQ_8_9_88)
     override val runtimeErrorDependentComponents: List<RuntimeErrorTracer>? = null
 

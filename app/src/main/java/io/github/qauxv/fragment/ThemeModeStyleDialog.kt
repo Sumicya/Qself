@@ -50,7 +50,7 @@ object ThemeModeStyleDialog : BasePlainUiAgentItem(title = "主题模式") {
     }
 
     fun showSelectDialog(activity: Activity) {
-        AlertDialog.Builder(activity)
+        sumicya.qself.ui.InlineAlertDialogBuilder(activity)
             .setTitle("主题样式")
             .setSingleChoiceItems(ModuleThemeManager.getThemeModes(), ModuleThemeManager.getCurrentThemeModeIndex()) { dialog, which ->
                 updateThemeMode(activity, which)

@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 dmca@ioctl.cc
  * https://github.com/ferredoxin/QNotified
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by ferredoxin.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -57,7 +56,7 @@ object ForceSystemAlbum : BaseConfigFunctionDecorator(), IStartActivityHookDecor
 
     override val onUiItemClickListener: (IUiItemAgent, Activity, View) -> Unit
         get() = { _, activity, _ ->
-            AlertDialog.Builder(activity)
+            sumicya.qself.ui.InlineAlertDialogBuilder(activity)
                 .setTitle("选择相册类型")
                 .setSingleChoiceItems(albumTypes, ConfigManager.getDefaultConfig().getInt(ALBUM_TYPE, ALBUM_TYPE_DEFAULT)) { dialog, which ->
                     ConfigManager.getDefaultConfig().putInt(ALBUM_TYPE, which)
@@ -86,7 +85,7 @@ object ForceSystemAlbum : BaseConfigFunctionDecorator(), IStartActivityHookDecor
             val materialContext = CommonContextWrapper.createMaterialDesignContext(context)
             val runnableArray = arrayOf(
                 "系统相册" to {
-                    MaterialAlertDialogBuilder(materialContext)
+                    sumicya.qself.ui.InlineAlertDialogBuilder(materialContext)
                         .setTitle("系统相册")
                         .setItems(arrayOf("图片", "视频"), { _, i ->
                             val intent = Intent(context, ChooseAgentActivity::class.java).apply ChooseAgentActivity@{
@@ -109,7 +108,7 @@ object ForceSystemAlbum : BaseConfigFunctionDecorator(), IStartActivityHookDecor
                         .show()
                 },
                 "系统文档" to {
-                    MaterialAlertDialogBuilder(materialContext)
+                    sumicya.qself.ui.InlineAlertDialogBuilder(materialContext)
                         .setTitle("系统文档")
                         .setItems(arrayOf("图片", "视频"), { _, i ->
                             val intent = Intent(context, ChooseAgentActivity::class.java).apply ChooseAgentActivity@{
@@ -140,7 +139,7 @@ object ForceSystemAlbum : BaseConfigFunctionDecorator(), IStartActivityHookDecor
             if (selectedType != null) {
                 selectedType.second.invoke()
             } else {
-                MaterialAlertDialogBuilder(materialContext)
+                sumicya.qself.ui.InlineAlertDialogBuilder(materialContext)
                     .setTitle("选择相册")
                     .setItems(runnableArray.map { it.first }.toTypedArray()) { _: DialogInterface, i: Int ->
                         // recursion here

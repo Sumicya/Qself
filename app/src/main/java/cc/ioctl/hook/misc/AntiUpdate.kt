@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,7 +22,7 @@
 package cc.ioctl.hook.misc
 
 import android.os.Message
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.hookBeforeIfEnabled
 import com.github.kyuubiran.ezxhelper.utils.emptyParam
 import com.github.kyuubiran.ezxhelper.utils.findAllMethods
@@ -40,6 +39,15 @@ object AntiUpdate : CommonSwitchFunctionHook() {
     override val name: String = "屏蔽更新"
 
     override fun initOnce(): Boolean {
+        // shiply upgrade-strategy path, folded from the retired qhmk
+        // HookUpgrade (superseded twin; obfuscated names drift, so this
+        // surface is best-effort and must never fail the whole hook)
+        runCatching {
+            val shiply = Initiator.loadClass("com.tencent.mobileqq.upgrade.a.a")
+            val strategy = Initiator.loadClass("com.tencent.upgrade.bean.UpgradeStrategy")
+            val getConfigUpgrade = shiply.getDeclaredMethod("c", strategy, Boolean::class.javaPrimitiveType)
+            hookBeforeIfEnabled(getConfigUpgrade) { param -> param.result = null }
+        }
         val kUpgradeController = Initiator._UpgradeController()
             ?: throw ClassNotFoundException("UpgradeController")
         val kUpgradeDetailWrapper = Initiator.load("com.tencent.mobileqq.upgrade.UpgradeDetailWrapper")

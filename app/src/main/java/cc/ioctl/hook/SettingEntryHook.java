@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,7 +22,7 @@ package cc.ioctl.hook;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
-import static cc.ioctl.util.HostInfo.requireMinQQVersion;
+import io.github.qauxv.util.HostInfo;
 import static io.github.qauxv.util.Initiator.load;
 
 import android.annotation.SuppressLint;
@@ -39,9 +38,9 @@ import android.widget.LinearLayout;
 import androidx.annotation.NonNull;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.LayoutHelper;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.HostInfo;
+import io.github.qauxv.util.LayoutHelper;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.BuildConfig;
 import io.github.qauxv.R;
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity;
@@ -129,7 +128,7 @@ public class SettingEntryHook extends BasePersistBackgroundHook {
 
     private boolean isNeedFind() {
         return QAppUtils.isQQnt()
-                && requireMinQQVersion(QQVersion.QQ_9_2_10)
+                && HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_2_10)
                 && DexKit.getMethodDescFromCacheImpl(SimpleItemProcessor_Method.INSTANCE) == null;
     }
 
@@ -230,7 +229,7 @@ public class SettingEntryHook extends BasePersistBackgroundHook {
                 }
             }
             // use 'SimpleItemProcessor' keyword to search (9.2.10 ~ 9.3.10)
-            if (requireMinQQVersion(QQVersion.QQ_9_2_10)) {
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_2_10)) {
                 Method m = DexKit.loadMethodFromCache(SimpleItemProcessor_Method.INSTANCE);
                 if (m != null) {
                     Class<?> klass = m.getDeclaringClass();

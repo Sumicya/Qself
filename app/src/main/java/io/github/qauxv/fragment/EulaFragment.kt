@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * context software is non-free but opensource software: you can redistribute it
+ * context software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * context software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -39,10 +38,10 @@ import android.widget.Toast
 import androidx.core.content.res.ResourcesCompat
 import cc.ioctl.dialog.WsaWarningDialog
 import cc.ioctl.hook.experimental.FakeBatteryHook
-import cc.ioctl.util.LayoutHelper.MATCH_PARENT
-import cc.ioctl.util.LayoutHelper.WRAP_CONTENT
-import cc.ioctl.util.LayoutHelper.dip2px
-import cc.ioctl.util.LayoutHelper.newLinearLayoutParams
+import io.github.qauxv.util.LayoutHelper.MATCH_PARENT
+import io.github.qauxv.util.LayoutHelper.WRAP_CONTENT
+import io.github.qauxv.util.LayoutHelper.dip2px
+import io.github.qauxv.util.LayoutHelper.newLinearLayoutParams
 import io.github.qauxv.BuildConfig
 import io.github.qauxv.R
 import io.github.qauxv.activity.SettingsUiFragmentHostActivity
@@ -113,7 +112,7 @@ class EulaFragment : BaseRootLayoutFragment(), View.OnClickListener {
             tv.textSize = 23f
             tv.gravity = Gravity.CENTER
             tv.setTextColor(ResourcesCompat.getColor(resources, R.color.firstTextColor, context.theme))
-            tv.text = "\n注意: 本软件是免费软件!\nQAuxiliary自始至终都是免费且非商业使用，如果有你发现有人在违反AGPL和Eula，请拒绝并不遗余力地在一切平台举报投诉他！\n"
+            tv.text = "\n注意: 本软件是免费软件!\nQself 基于 AGPL-3.0 许可，自始至终都是自由软件；如果发现有人收费贩卖或违反 AGPL，请拒绝并向平台举报。\n"
             addView(tv, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
 
             val _5dp: Int = dip2px(context, 5f)

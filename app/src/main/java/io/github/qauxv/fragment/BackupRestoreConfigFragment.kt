@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -31,8 +30,8 @@ import android.view.ViewGroup
 import android.widget.EditText
 import androidx.annotation.AnyThread
 import androidx.appcompat.app.AlertDialog
-import cc.ioctl.util.Reflex
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.Reflex
+import io.github.qauxv.util.ui.FaultyDialog
 import io.github.duzhaokun123.util.FilePicker
 import io.github.qauxv.R
 import io.github.qauxv.config.BackupConfigSession
@@ -117,7 +116,7 @@ class BackupRestoreConfigFragment : BaseRootLayoutFragment(), View.OnClickListen
                 return
             }
             // show multi choice dialog, all choices are checked by default
-            AlertDialog.Builder(context)
+            sumicya.qself.ui.InlineAlertDialogBuilder(context)
                 .setTitle("选择要备份的配置文件")
                 .setMultiChoiceItems(availableChoices.toTypedArray(), BooleanArray(availableChoices.size) { true }) { _, _, _ -> }
                 .setPositiveButton("确定") { dialog, _ ->
@@ -183,7 +182,7 @@ class BackupRestoreConfigFragment : BaseRootLayoutFragment(), View.OnClickListen
                     return
                 }
                 // show multi choice dialog
-                AlertDialog.Builder(context)
+                sumicya.qself.ui.InlineAlertDialogBuilder(context)
                     .setTitle("选择要恢复的配置文件")
                     .setMultiChoiceItems(availableChoices.toTypedArray(), null) { _, _, _ -> }
                     .setPositiveButton("确定") { dialog, _ ->
@@ -233,7 +232,7 @@ class BackupRestoreConfigFragment : BaseRootLayoutFragment(), View.OnClickListen
             append(overwriteList.joinToString(", ")).append("\n")
             append("已存在的配置文件将被覆盖，确定要恢复吗？")
         }
-        AlertDialog.Builder(context)
+        sumicya.qself.ui.InlineAlertDialogBuilder(context)
             .setTitle("恢复配置文件")
             .setMessage(message)
             .setPositiveButton("确定") { _, _ ->
@@ -256,7 +255,7 @@ class BackupRestoreConfigFragment : BaseRootLayoutFragment(), View.OnClickListen
                 mRestoreSession = null
                 // ask user to restart app
                 runOnUiThread {
-                    AlertDialog.Builder(requireContext())
+                    sumicya.qself.ui.InlineAlertDialogBuilder(requireContext())
                         .setTitle("恢复完成")
                         .setMessage("恢复完成，部分功能需要重启应用才能生效，是否现在重启应用？")
                         .setCancelable(false)
@@ -298,7 +297,7 @@ class BackupRestoreConfigFragment : BaseRootLayoutFragment(), View.OnClickListen
         }
         if (file.exists()) {
             if (file.isDirectory) {
-                AlertDialog.Builder(context)
+                sumicya.qself.ui.InlineAlertDialogBuilder(context)
                     .setTitle("路径错误")
                     .setMessage("请输入完整的带文件名的路径，而不是目录！")
                     .setPositiveButton("确定") { _, _ -> }

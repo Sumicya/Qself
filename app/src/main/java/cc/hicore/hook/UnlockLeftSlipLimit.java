@@ -3,20 +3,18 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
- * and/or modify it under the terms of the qwq233 Universal License
- * as published on https://github.com/qwq233/license; either
- * version 2 of the License, or any later version and our EULA as published
- * by QAuxiliary contributors.
+ * This software is free software: you can redistribute it
+ * and/or modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the qwq233 Universal License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Affero General Public License for more details.
  *
- * See
- * <https://github.com/qwq233/license>
- * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 package cc.hicore.hook;
@@ -24,7 +22,7 @@ package cc.hicore.hook;
 import androidx.annotation.NonNull;
 import cc.hicore.ReflectUtil.XMethod;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
 import io.github.qauxv.dsl.FunctionEntryRouter;
@@ -58,7 +56,7 @@ public class UnlockLeftSlipLimit extends CommonSwitchFunctionHook {
 
     @Override
     protected boolean initOnce() throws Exception {
-        if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_63_BETA_11345) || HostInfo.requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)) {
+        if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_63_BETA_11345) || HostInfo.requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)) {
             XposedHelpers.findAndHookMethod(
                     Initiator.loadClass("com.tencent.mobileqq.ark.api.impl.ArkHelperImpl"),
                     "isSupportReply",
@@ -73,7 +71,7 @@ public class UnlockLeftSlipLimit extends CommonSwitchFunctionHook {
             return true;
         }
         Method m = XMethod.clz(DexKit.requireMethodFromCache(NLeftSwipeReplyHelper_reply.INSTANCE).getDeclaringClass())
-                .name(io.github.qauxv.util.HostInfo.requireRangePlayQQVersion(PlayQQVersion.PlayQQ_8_2_11, PlayQQVersion.PlayQQ_8_2_11) ? "c" : !HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_93) ? "h" : HostInfo.requireMinQQVersion(QQVersion.QQ_8_9_33) ? "I" : "H")
+                .name(io.github.qauxv.util.HostInfo.requireRangePlayQQVersion(PlayQQVersion.PlayQQ_8_2_11, PlayQQVersion.PlayQQ_8_2_11) ? "c" : !HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_93) ? "h" : HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_9_33) ? "I" : "H")
                 .ret(boolean.class)
                 .get();
         HookUtils.hookBeforeIfEnabled(this, m, param -> param.setResult(true));

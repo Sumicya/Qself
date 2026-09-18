@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -43,9 +42,9 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.res.ResourcesCompat
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.Reflex
-import cc.ioctl.util.ui.FaultyDialog
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.Reflex
+import io.github.qauxv.util.ui.FaultyDialog
 import io.github.qauxv.BuildConfig
 import io.github.qauxv.R
 import io.github.qauxv.activity.ShadowShareFileAgentActivity
@@ -67,29 +66,7 @@ class FuncStatusDetailsFragment : BaseRootLayoutFragment() {
 
     private var mFunction: IUiItemAgentProvider? = null
     private var mTextDetails: String? = null
-    private var observerDialog: AlertDialog? = null
-    private val observerPaths = HashSet<String>()
     private var mInitException: Throwable? = null
-
-    private val observer = object : ContentObserver(Handler()) {
-        override fun onChange(selfChange: Boolean, uri: Uri?) {
-            if (mInitException != null) {
-                // special case...
-                return
-            }
-            if (observerPaths.contains(uri?.path ?: "")) return
-            observerDialog?.cancel()
-            observerDialog = AlertDialog.Builder(requireActivity())
-                .setTitle("嘿！请不要截图日志")
-                .setMessage("由于截图的日志无法方便排查问题，请点击下方的“复制日志”按钮或在此界面右上角的复制按钮，将日志复制后进行反馈，感谢你的理解。")
-                .setPositiveButton("复制日志") { _, _ -> copyDebugLog() }
-                .setNegativeButton("取消", null)
-                .create()
-            observerDialog?.show()
-            uri?.path?.let { observerPaths.add(it) }
-            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
-    }
 
     private fun copyDebugLog() {
         mTextDetails?.let {
@@ -100,7 +77,7 @@ class FuncStatusDetailsFragment : BaseRootLayoutFragment() {
                     Toasts.show(ctx, "已复制到剪贴板")
                 }
                 if (it.length > 1024) {
-                    AlertDialog.Builder(ctx)
+                    sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                         .setTitle("日志较长")
                         .setMessage("日志较长，建议使用文件方式分享（点击右上角的以文件分享按钮，或者保存为文件）")
                         .setPositiveButton("仍然复制") { _, _ -> copy() }
@@ -219,18 +196,6 @@ class FuncStatusDetailsFragment : BaseRootLayoutFragment() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        requireActivity().contentResolver.registerContentObserver(
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, observer
-        )
-    }
-
-    override fun onPause() {
-        super.onPause()
-        requireActivity().contentResolver.unregisterContentObserver(observer)
-    }
-
     override fun doOnCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         val ctx = inflater.context
         mTextDetails = if (mInitException != null) {
@@ -330,19 +295,13 @@ class FuncStatusDetailsFragment : BaseRootLayoutFragment() {
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        observerDialog = null
-        activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-    }
-
     companion object {
         const val TARGET_IDENTIFIER = "FuncStatusDetailsFragment.TARGET_IDENTIFIER"
         const val TARGET_INIT_EXCEPTION = "FuncStatusDetailsFragment.TARGET_FATAL_EXCEPTION"
 
         @JvmStatic
-        fun newInstance(targetUiAgentId: String): SettingsMainFragment {
-            val fragment = SettingsMainFragment()
+        fun newInstance(targetUiAgentId: String): FuncStatusDetailsFragment {
+            val fragment = FuncStatusDetailsFragment()
             val bundle = getBundleForLocation(targetUiAgentId)
             fragment.arguments = bundle
             return fragment

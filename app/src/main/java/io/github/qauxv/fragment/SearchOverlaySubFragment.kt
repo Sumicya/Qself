@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -39,7 +38,7 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import cc.ioctl.hook.profile.OpenProfileCard
-import cc.ioctl.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelper
 import com.google.android.flexbox.FlexDirection
 import com.google.android.flexbox.FlexWrap
 import com.google.android.flexbox.FlexboxLayoutManager
@@ -57,7 +56,8 @@ import io.github.qauxv.util.NonUiThread
 import io.github.qauxv.util.SyncUtils
 import io.github.qauxv.util.Toasts
 import io.github.qauxv.util.UiThread
-import me.singleneuron.util.processSearchEasterEgg
+import sumicya.qself.ui.SettingsVisuals
+import sumicya.qself.ui.SettingsAppearanceItem
 import xyz.nextalone.util.SystemServiceUtils
 
 /**
@@ -112,7 +112,6 @@ class SearchOverlaySubFragment {
                 override fun onQueryTextSubmit(query: String) = false
 
                 override fun onQueryTextChange(newText: String): Boolean {
-                    processSearchEasterEgg(newText, requireContext())
                     search(newText)
                     return false
                 }
@@ -203,7 +202,13 @@ class SearchOverlaySubFragment {
 
     private val mRecyclerAdapter = object : RecyclerView.Adapter<SearchResultViewHolder>() {
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SearchResultViewHolder {
-            return SearchResultViewHolder(SearchResultItemBinding.inflate(LayoutInflater.from(parent.context), parent, false))
+            val binding = SearchResultItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+            SettingsVisuals.decorateRow(binding.root, parent.context, true)
+            val palette = SettingsVisuals.palette(parent.context, SettingsAppearanceItem.mode)
+            binding.title.setTextColor(palette.text)
+            binding.summary.setTextColor(palette.secondary)
+            binding.description.setTextColor(palette.secondary)
+            return SearchResultViewHolder(binding)
         }
 
         override fun onBindViewHolder(holder: SearchResultViewHolder, position: Int) {
@@ -251,8 +256,7 @@ class SearchOverlaySubFragment {
 
     private fun bindSearchResultItem(binding: SearchResultItemBinding, item: SearchResult) {
         val title: String = item.agent.uiItemAgent.titleProvider.invoke(item.agent.uiItemAgent)
-        val description: String = "[${item.score}] " +
-            (item.agent.uiItemAgent.summaryProvider?.invoke(item.agent.uiItemAgent, requireContext()) ?: "")
+        val description = item.agent.uiItemAgent.summaryProvider?.invoke(item.agent.uiItemAgent, requireContext()) ?: ""
         binding.title.text = title
         binding.summary.text = description
         val locationString = item.shownLocation!!.joinToString(separator = " > ")
@@ -425,8 +429,7 @@ class SearchOverlaySubFragment {
 
     private fun updateUiItemAgentLocation(item: SearchResult) {
         val agent = item.agent
-        val containerLocation: Array<String> = FunctionEntryRouter.resolveUiItemAnycastLocation(agent.uiItemLocation)
-            ?: agent.uiItemLocation
+        val containerLocation: Array<String> = FunctionEntryRouter.locationForProvider(agent)
         val fullLocation = arrayOf(*containerLocation, agent.itemAgentProviderUniqueIdentifier)
         item.location = fullLocation
         // translate the container location to human readable string
@@ -501,7 +504,7 @@ class SearchOverlaySubFragment {
         }
         if (targetFragmentLocation == null) {
             // tell user we are lost
-            AlertDialog.Builder(requireContext()).apply {
+            sumicya.qself.ui.InlineAlertDialogBuilder(requireContext()).apply {
                 setTitle("Navigation Error")
                 setMessage("We are lost, can't find the target fragment: " + absFullLocation.joinToString("."))
                 setPositiveButton(android.R.string.ok) { _, _ -> }
@@ -513,14 +516,19 @@ class SearchOverlaySubFragment {
             imm.hideSoftInputFromWindow(requireView().windowToken, 0)
             val fragment = SettingsMainFragment.newInstance(targetFragmentLocation, identifier)
             parent!!.onNavigateToOtherFragment()
-            settingsHostActivity!!.presentFragment(fragment)
+            sumicya.qself.ui.InlineSettings.resetAnchor(requireActivity())
+            val group = sumicya.qself.feature.consolidation.FeatureCatalog.groups.firstOrNull { it.path.contentEquals(targetFragmentLocation) }
+            if (group != null) sumicya.qself.ui.SettingsOptionSheet.show(settingsHostActivity!!, group = group.id, focus = identifier)
+            else settingsHostActivity!!.presentFragment(fragment)
         }
     }
 
     private fun doOnCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         binding = FragmentSettingSearchBinding.inflate(inflater, container, false).apply {
+            root.background = SettingsVisuals.backdrop(SettingsVisuals.palette(inflater.context, SettingsAppearanceItem.mode))
             searchSettingSearchResultRecyclerView.apply {
                 adapter = mRecyclerAdapter
+                SettingsVisuals.addListSpacing(this)
                 layoutManager = LinearLayoutManager(inflater.context).apply {
                     orientation = LinearLayoutManager.VERTICAL
                 }
@@ -541,7 +549,7 @@ class SearchOverlaySubFragment {
                 })
             }
             searchSettingClearHistory.setOnClickListener {
-                AlertDialog.Builder(requireContext()).apply {
+                sumicya.qself.ui.InlineAlertDialogBuilder(requireContext()).apply {
                     setTitle("清除历史记录")
                     setMessage("确定要清除所有历史记录吗？\n您也可以通过长按来删除单个历史记录。")
                     setPositiveButton(android.R.string.ok) { _, _ ->
@@ -569,6 +577,7 @@ class SearchOverlaySubFragment {
     }
 
     fun onDestroyView() {
+        mSearchView?.setOnQueryTextListener(null)
         binding = null
         mView = null
         mSearchView = null

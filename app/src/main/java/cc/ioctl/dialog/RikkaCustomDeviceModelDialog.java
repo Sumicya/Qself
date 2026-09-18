@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -33,7 +32,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import cc.ioctl.hook.chat.CustomMsgTimeFormat;
 import io.github.qauxv.R;
 import io.github.qauxv.config.ConfigManager;
@@ -190,7 +189,7 @@ public class RikkaCustomDeviceModelDialog {
                     //移除缓存文件
                     new File(ctx.getCacheDir().getParent()+"/app_x5webview/Default/Local Storage/leveldb","MANIFEST-000001").delete();
                     cfg.save();
-                    Toasts.success(ctx, "重启" + HostInfo.getAppName() + "生效!");
+                    Toasts.success(ctx, "重启" + HostInfo.getHostInfo().getHostName() + "生效!");
                     dialog.dismiss();
                     if (enableCustomDeviceModel) {
                         CustomMsgTimeFormat hook = CustomMsgTimeFormat.INSTANCE;
@@ -206,6 +205,6 @@ public class RikkaCustomDeviceModelDialog {
     }
 
     public String getName() {
-        return "自定义机型[需要重启" + HostInfo.getAppName() + "]";
+        return "自定义机型[需要重启" + HostInfo.getHostInfo().getHostName() + "]";
     }
 }

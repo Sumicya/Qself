@@ -562,7 +562,13 @@ abstract class NotificationProcessor(context: Context) {
         title: String? = null, text: String? = null, ticker: String? = null,
         shortcutInfo: ShortcutInfoCompat? = null
     ): Notification {
-        val channelId = getChannelId(channel)
+        // Inherit the ORIGINAL notification's channel so the user's system
+        // notification settings (sound / vibration / importance) apply as-is.
+        // The module's own channels force-set the default ringtone and thus
+        // played sound even when the user had silenced QQ in the system
+        // notification UI (device report 2026-09-07). Fallback to the module
+        // channel only when the original carries none (pre-O).
+        val channelId = original.channelId?.takeIf { it.isNotEmpty() } ?: getChannelId(channel)
 
         @Suppress("DEPRECATION")
         val builder = NotificationCompat.Builder(context, channelId)

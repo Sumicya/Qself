@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -36,9 +35,9 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.content.res.ResourcesCompat
-import cc.ioctl.util.LayoutHelper
-import cc.ioctl.util.LayoutHelperViewScope
-import cc.ioctl.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.LayoutHelper
+import io.github.qauxv.util.LayoutHelperViewScope
+import io.github.qauxv.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 
 class TextInfoCell @JvmOverloads constructor(context: Context, padding: Int = 21)
@@ -134,7 +133,7 @@ class TextInfoCell @JvmOverloads constructor(context: Context, padding: Int = 21
 
     init {
         textView = AppCompatTextView(context)
-        textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14f)
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
         textView.gravity = Gravity.START
         textView.setPadding(0, 10.dp, 0, 17.dp)
         textView.movementMethod = LinkMovementMethod.getInstance()

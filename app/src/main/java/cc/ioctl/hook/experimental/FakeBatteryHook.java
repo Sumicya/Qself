@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -35,7 +34,7 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.fragment.FakeBatteryConfigFragment;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.IEntityAgent;
 import io.github.qauxv.base.RuntimeErrorTracer;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
@@ -186,7 +185,7 @@ public class FakeBatteryHook extends BaseFunctionHook implements InvocationHandl
         // @MainProcess
         // 接下去是UI stuff, 给自己看的
         // 本来还想用反射魔改Binder/ActivityThread$ApplicationThread实现Xposed-less拦截广播onReceive的,太肝了,就不搞了
-        BatteryManager batmgr = (BatteryManager) HostInfo.getApplication().getSystemService(Context.BATTERY_SERVICE);
+        BatteryManager batmgr = (BatteryManager) HostInfo.getHostInfo().getApplication().getSystemService(Context.BATTERY_SERVICE);
         if (batmgr == null) {
             Log.e("Wtf, init FakeBatteryHook but BatteryManager is null!");
             return false;
@@ -247,7 +246,7 @@ public class FakeBatteryHook extends BaseFunctionHook implements InvocationHandl
             intent.putExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_DISCHARGING);
             intent.putExtra(BatteryManager.EXTRA_PLUGGED, 0);
         }
-        doPostReceiveEvent(recv, HostInfo.getApplication(), intent);
+        doPostReceiveEvent(recv, HostInfo.getHostInfo().getApplication(), intent);
     }
 
     private void scheduleReceiveBatteryStatus() {
@@ -271,7 +270,7 @@ public class FakeBatteryHook extends BaseFunctionHook implements InvocationHandl
             intent.putExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_DISCHARGING);
             intent.putExtra(BatteryManager.EXTRA_PLUGGED, 0);
         }
-        doPostReceiveEvent(recv, HostInfo.getApplication(), intent);
+        doPostReceiveEvent(recv, HostInfo.getHostInfo().getApplication(), intent);
     }
 
     @Override
@@ -367,7 +366,7 @@ public class FakeBatteryHook extends BaseFunctionHook implements InvocationHandl
     @NonNull
     @Override
     public String[] getUiItemLocation() {
-        return Auxiliary.EXPERIMENTAL_CATEGORY;
+        return Auxiliary.DISGUISE_AND_DEVICE_CATEGORY;
     }
 
     @Override

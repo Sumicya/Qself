@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,7 +22,7 @@ package io.github.qauxv.util.dexkit;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.util.Log;
 import io.github.qauxv.util.NonUiThread;
 import io.github.qauxv.util.QQVersion;
@@ -238,9 +237,9 @@ public class DexFlow {
         // on 9.1.50 ~ 9.2.27, it called Landroid/view/View;->setId(I)V
         // on 9.2.30+, it called Landroid/widget/TextView;->setId(I)V
         String targetMethodDesc = "Landroid/widget/TextView;->setId(I)V";
-        if (HostInfo.requireMinQQVersion(QQVersion.QQ_9_2_30)) {
+        if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_2_30)) {
             targetMethodDesc = "Landroid/widget/TextView;->setId(I)V";
-        } else if (HostInfo.requireMinQQVersion(QQVersion.QQ_9_1_50)) {
+        } else if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_1_50)) {
             targetMethodDesc = "Landroid/view/View;->setId(I)V";
         }
         Integer[] regObjType = new Integer[registersSize];

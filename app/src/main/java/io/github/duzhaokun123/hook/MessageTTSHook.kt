@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,13 +21,14 @@
 
 package io.github.duzhaokun123.hook
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.hostInfo
 import android.app.Activity
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.view.View
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.util.HostInfo
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.util.afterHookIfEnabled
 import com.xiaoniu.dispatcher.OnMenuBuilder
 import com.xiaoniu.util.ContextUtils
@@ -83,11 +83,11 @@ object MessageTTSHook : CommonSwitchFunctionHook(targets = arrayOf(AIOMsgItem_in
         }
         TTS.addInitCallback {
             if (it == TextToSpeech.ERROR) {
-                Toasts.error(HostInfo.getApplication(), "TTS 初始化失败")
+                Toasts.error(hostInfo.application, "TTS 初始化失败")
                 traceError(RuntimeException("TTS init failed"))
             }
         }
-        TTS.init(HostInfo.getApplication())
+        TTS.init(hostInfo.application)
         return true
     }
 

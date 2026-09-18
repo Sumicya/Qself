@@ -1,2 +1,3 @@
 cn.lliiooll.processors.FunctionItemProvider
 cn.lliiooll.processors.UiItemAgentEntryProcessorProvider
+cn.lliiooll.processors.SealedEnumProcessorProvider

@@ -90,7 +90,7 @@ class NotificationChannelManagerFragment : BaseRootLayoutFragment() {
                     addView(Button(context).apply {
                         text = "删除"
                         setOnClickListener {
-                            AlertDialog.Builder(context).setTitle("删除渠道组")
+                            sumicya.qself.ui.InlineAlertDialogBuilder(context).setTitle("删除渠道组")
                                 .setMessage("确认删除渠道组 ${group.name}(${group.id}) 及其所有子渠道吗？")
                                 .setNegativeButton("取消", null)
                                 .setPositiveButton("删除") { _, _ ->
@@ -138,7 +138,7 @@ class NotificationChannelManagerFragment : BaseRootLayoutFragment() {
             addView(Button(context).apply {
                 text = "删除"
                 setOnClickListener {
-                    AlertDialog.Builder(context).setTitle("删除渠道")
+                    sumicya.qself.ui.InlineAlertDialogBuilder(context).setTitle("删除渠道")
                         .setMessage("确认删除渠道 ${channel.name}(${channel.id}) 吗？")
                         .setNegativeButton("取消", null)
                         .setPositiveButton("删除") { _, _ ->

@@ -3,20 +3,18 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
- * and/or modify it under the terms of the qwq233 Universal License
- * as published on https://github.com/qwq233/license; either
- * version 2 of the License, or any later version and our EULA as published
- * by QAuxiliary contributors.
+ * This software is free software: you can redistribute it
+ * and/or modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the qwq233 Universal License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Affero General Public License for more details.
  *
- * See
- * <https://github.com/qwq233/license>
- * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 package cc.hicore.hook;
@@ -32,7 +30,7 @@ import android.widget.EditText;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
@@ -132,6 +130,37 @@ public class ReplyMsgWithImg extends CommonSwitchFunctionHook implements IBaseCh
 
     @Override
     protected boolean initOnce() throws Exception {
+        // 9.2.10 drift diagnostics (my-feature-set 06): which DexKit targets
+        // have a cached hit on this host - one INFO line per init, so the
+        // next logcat sweep names the exact targets needing new signatures.
+        StringBuilder diag = new StringBuilder("ReplyMsgWithImg diag:");
+        try {
+            io.github.qauxv.util.dexkit.DexKitTarget[] ts = {
+                    CGuildHelperProvider.INSTANCE, CGuildArkHelper.INSTANCE,
+                    CMessageRecordFactory.INSTANCE, CReplyMsgUtils.INSTANCE,
+                    CReplyMsgSender.INSTANCE, NPhotoListPanel_resetStatus.INSTANCE,
+                    NContactUtils_getDiscussionMemberShowName.INSTANCE,
+                    NContactUtils_getBuddyName.INSTANCE};
+            for (io.github.qauxv.util.dexkit.DexKitTarget t : ts) {
+                Object hit = null;
+                try {
+                    hit = io.github.qauxv.util.dexkit.DexKit.loadMethodFromCache(t);
+                } catch (Throwable ignored) {
+                }
+                if (hit == null) {
+                    try {
+                        hit = io.github.qauxv.util.dexkit.DexKit.loadClassFromCache(t);
+                    } catch (Throwable ignored) {
+                    }
+                }
+                diag.append(' ').append(t.getClass().getSimpleName())
+                        .append(hit != null ? "=hit" : "=miss");
+            }
+        } catch (Throwable t) {
+            diag.append(" builder-failed: ").append(t);
+        }
+        io.github.qauxv.util.Log.i(diag.toString());
+        sumicya.qself.feature.dev.DiagLog.w(diag.toString());
         kHelperProvider = Initiator.load("com.tencent.mobileqq.activity.aio.helper.HelperProvider");
         if (kHelperProvider == null) {
             kHelperProvider = Objects.requireNonNull(DexKit.loadClassFromCache(CGuildHelperProvider.INSTANCE), "CGuildHelperProvider.INSTANCE")

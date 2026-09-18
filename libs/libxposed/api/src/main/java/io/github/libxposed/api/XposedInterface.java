@@ -28,14 +28,30 @@ import io.github.libxposed.api.annotations.XposedHooker;
 @SuppressWarnings("unused")
 public interface XposedInterface {
 
-    /* API 101 */
+    /**
+     * API version 101.
+     *
+     * <p>API 101 is the first LibXposed API used by this module without the
+     * legacy Xposed entry points.</p>
+     */
+    @XposedApiMin(101)
+    int API_101 = 101;
+
+    /**
+     * API version 102: hot reload lifecycle, entry detach, and id-based hook
+     * replacement. Modules targeting 102 or higher can not call legacy
+     * {@code de.robv.android.xposed} APIs. Hot reload is supported only for
+     * modules that declare exactly one Java entry class.
+     */
+    @XposedApiMin(102)
+    int API_102 = 102;
 
     /**
      * The API version of this <b>library</b>. This is a static value for the framework.
      * Modules should use {@link #getApiVersion()} to check the API version at runtime.
      */
     @XposedApiMin(101)
-    int LIB_API = 101;
+    int LIB_API = API_102;
 
     /**
      * The framework has the capability to hook system_server and other system processes.
@@ -254,9 +270,15 @@ public interface XposedInterface {
      * }</pre>
      */
     interface Hooker {
-        // for API 100, the hooker interface is just a marker interface.
-        // The actual hook logic is implemented in the static methods annotated with @BeforeInvocation and @AfterInvocation.
-        // for API 101, the hooker interface is defined by modules and the actual hook logic is implemented in the intercept method.
+        // For API 100, the hooker interface is a marker interface and the
+        // actual hook logic is implemented by the annotated static methods.
+        // API 101+ hookers override this method. Keeping a default here
+        // preserves source compatibility with API 100 hooker classes while
+        // exposing the modern API method to the framework.
+        @XposedApiMin(101)
+        default Object intercept(@NonNull Chain chain) throws Throwable {
+            throw new UnsupportedOperationException("API 101 hooker did not implement intercept");
+        }
     }
 
     /**
@@ -511,6 +533,33 @@ public interface XposedInterface {
          * Cancels the hook. This method is idempotent. It is safe to call this method multiple times.
          */
         void unhook();
+
+        /**
+         * Gets the unique id of the hook, or null if the hook is not assigned with an id.
+         */
+        @XposedApiMin(102)
+        @Nullable
+        String getId();
+
+        /**
+         * Atomically replaces this hook with a new hooker and returns the new hook handle.
+         * <p>
+         * The replacement keeps the executable, priority, exception handling mode, and id of this
+         * hook. It is useful during hot reloading when new code receives old hook handles. After a
+         * successful replacement, this handle is no longer valid.
+         * </p>
+         * <p>The hook chain is snapshot based. Replacing a hook while a call is running does not
+         * affect that in-flight call.</p>
+         *
+         * @param hooker The new hooker object
+         * @return The new handle for the replaced hook
+         * @throws IllegalArgumentException if hooker is invalid
+         * @throws IllegalStateException    if this hook handle is no longer valid
+         * @throws io.github.libxposed.api.error.HookFailedError if replacement fails due to framework internal error
+         */
+        @XposedApiMin(102)
+        @NonNull
+        HookHandle replaceHook(@NonNull Hooker hooker);
     }
 
     /**
@@ -565,6 +614,21 @@ public interface XposedInterface {
          * @return The builder itself for chaining
          */
         HookBuilder setExceptionMode(@NonNull ExceptionMode mode);
+
+        /**
+         * Sets a unique id for the hook, default to {@code null}. An id is used for exclusively
+         * identifying a hook in the same module on the executable. A new hook with the same id in
+         * the same module on the executable will replace the old one atomically, and the old hook
+         * handle will be invalid. Hook ids are isolated between modules.
+         *
+         * <p>The hook chain is snapshot based. Replacing or adding a hook while a call is running
+         * does not affect that in-flight call.</p>
+         *
+         * @param id The id for the hook. It can be null if you don't care about replacing the hook later.
+         * @return The builder itself for chaining
+         */
+        @XposedApiMin(102)
+        HookBuilder setId(@Nullable String id);
 
         /**
          * Sets the hooker for the method / constructor and builds the hook.

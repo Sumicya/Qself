@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -45,9 +44,12 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.inputmethod.EditorInfoCompat;
 import androidx.core.view.inputmethod.InputConnectionCompat;
+import cc.hicore.QApp.QAppUtils;
 import cc.hicore.message.bridge.Chat_facade_bridge;
+import cc.hicore.message.chat.SessionUtils;
+import cc.hicore.message.common.MsgSender;
 import cc.ioctl.util.SendCacheUtils;
-import cc.ioctl.util.ui.FaultyDialog;
+import io.github.qauxv.util.ui.FaultyDialog;
 import io.github.duzhaokun123.activity.PictureEditProxyActivity;
 import io.github.duzhaokun123.util.AioChatPieClipPasteHookUtils;
 import io.github.duzhaokun123.util.CacheManager;
@@ -58,6 +60,7 @@ import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
 import io.github.qauxv.bridge.FaceImpl;
 import io.github.qauxv.bridge.SessionInfoImpl;
+import io.github.qauxv.bridge.kernelcompat.ContactCompat;
 import io.github.qauxv.databinding.DialogConfirmSendPictureBinding;
 import io.github.qauxv.dsl.FunctionEntryRouter;
 import io.github.qauxv.hook.CommonSwitchFunctionHook;
@@ -66,6 +69,7 @@ import io.github.qauxv.router.dispacher.InputButtonHookDispatcher;
 import io.github.qauxv.ui.CommonContextWrapper;
 import io.github.qauxv.util.Initiator;
 import io.github.qauxv.util.IoUtils;
+import io.github.qauxv.util.QQVersion;
 import io.github.qauxv.util.SyncUtils;
 import io.github.qauxv.util.dexkit.DexKitTarget;
 import io.github.qauxv.util.dexkit.NBaseChatPie_init;
@@ -80,6 +84,8 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import kotlin.Pair;
 import mqq.app.AppRuntime;
+
+import static io.github.qauxv.util.HostInfo.requireMinQQVersion;
 
 @FunctionHookEntry
 @UiItemAgentEntry
@@ -290,7 +296,7 @@ public class AioChatPieClipPasteHook extends CommonSwitchFunctionHook implements
         binding.ivPicture.setImageBitmap(bitmap);
         binding.tvName.setText(uin);
         FaceImpl.getInstance().setImageOrRegister(uinType == 1 ? FaceImpl.TYPE_TROOP : FaceImpl.TYPE_USER, uin, binding.ivAvatar);
-        new AlertDialog.Builder(ctx)
+        new sumicya.qself.ui.InlineAlertDialogBuilder(ctx)
                 .setTitle("发送给：")
                 .setView(binding.getRoot())
                 .setPositiveButton("发送", (dialog, which) -> executeSendMessage(context, session, data, aioRootView, rt))
@@ -322,7 +328,12 @@ public class AioChatPieClipPasteHook extends CommonSwitchFunctionHook implements
             @NonNull ViewGroup aioRootView, @NonNull AppRuntime rt) {
         try {
             File file = SendCacheUtils.saveAsCacheFile(context, data);
-            Chat_facade_bridge.sendPic(session, file);
+            if (QAppUtils.isQQnt() && requireMinQQVersion(QQVersion.QQ_9_2_30)) {
+                ContactCompat contact = SessionUtils.AIOParam2Contact(InputButtonHookDispatcher.AIOParam);
+                MsgSender.send_pic_by_contact(contact, file.getAbsolutePath());
+            } else {
+                Chat_facade_bridge.sendPic(session, file);
+            }
         } catch (IOException e) {
             FaultyDialog.show(context, e);
         }

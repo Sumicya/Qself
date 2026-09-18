@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,6 +21,8 @@
 
 package com.xiaoniu.hook
 
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.hostInfo
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.view.View
@@ -35,7 +36,6 @@ import androidx.core.view.setPadding
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import cc.hicore.QApp.QAppUtils
-import cc.ioctl.util.HostInfo
 import com.github.kyuubiran.ezxhelper.utils.ArgTypes
 import com.github.kyuubiran.ezxhelper.utils.Args
 import com.github.kyuubiran.ezxhelper.utils.hookBefore
@@ -121,7 +121,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
                         addView(etName)
                         addView(etUin)
                     }
-                    AlertDialog.Builder(context())
+                    sumicya.qself.ui.InlineAlertDialogBuilder(context())
                         .setTitle("添加群至分组“${items[bindingAdapterPosition].name}”")
                         .setView(l)
                         .setNegativeButton("取消", null)
@@ -132,7 +132,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
                         .show()
                 }
                 btnDelete.setOnClickListener {
-                    AlertDialog.Builder(context())
+                    sumicya.qself.ui.InlineAlertDialogBuilder(context())
                         .setTitle("删除分组")
                         .setMessage("确定删除分组“${items[bindingAdapterPosition].name}”吗？")
                         .setCancelable(false)
@@ -192,7 +192,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
             text = "添加分组"
             setOnClickListener {
                 val et = EditText(context)
-                AlertDialog.Builder(context)
+                sumicya.qself.ui.InlineAlertDialogBuilder(context)
                     .setTitle("分组名称")
                     .setView(et)
                     .setCancelable(false)
@@ -222,7 +222,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
             addView(layoutManageBtns)
             addView(recyclerView)
         }
-        AlertDialog.Builder(context()).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(context()).apply {
             setTitle("群聊分组")
             setView(mainView)
             setPositiveButton("确定", null)
@@ -252,7 +252,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
                             context.startActivity(intent)
                         }
                         tv.setOnLongClickListener {
-                            AlertDialog.Builder(context)
+                            sumicya.qself.ui.InlineAlertDialogBuilder(context)
                                 .setTitle("删除")
                                 .setMessage("确定删除“${tv.text}”吗？")
                                 .setNegativeButton("取消", null)
@@ -275,7 +275,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
                 }
             }
         }
-        AlertDialog.Builder(context()).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(context()).apply {
             setTitle(group.name)
             setView(recyclerView)
             setPositiveButton("确定", null)
@@ -289,7 +289,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
     data class TroopInfo(val name: String, val uin: String)
 
     private fun getGroupItems(): List<GroupItemData> {
-        val file = File(HostInfo.getApplication().filesDir, "qa_misc" + File.separator + "group.json")
+        val file = File(hostInfo.application.filesDir, "qa_misc" + File.separator + "group.json")
         if (file.exists()) {
             file.readText().let {
                 return try {
@@ -307,7 +307,7 @@ object TroopGroupHook : CommonSwitchFunctionHook(arrayOf(RecentPopup_onClickActi
 
     private fun writeGroupItems(list: List<GroupItemData>) {
         val json = Json.encodeToString(list)
-        File(IoUtils.mkdirsOrThrow(File(HostInfo.getApplication().filesDir, "qa_misc")), "group.json")
+        File(IoUtils.mkdirsOrThrow(File(hostInfo.application.filesDir, "qa_misc")), "group.json")
             .writeText(json)
     }
 

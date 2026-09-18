@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,12 +20,12 @@
  */
 package cc.ioctl.hook.chat;
 
-import static cc.ioctl.util.HostInfo.requireMinQQVersion;
+import io.github.qauxv.util.HostInfo;
 
 import androidx.annotation.NonNull;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
 import io.github.qauxv.dsl.FunctionEntryRouter.Locations.Simplify;
@@ -67,9 +66,9 @@ public class DisableDropSticker extends CommonSwitchFunctionHook {
     @Override
     public boolean initOnce() throws ReflectiveOperationException {
         String className;
-        if (requireMinQQVersion(QQVersion.QQ_9_0_60)) { // 9.0.60~9.0.70
+        if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_0_60)) { // 9.0.60~9.0.70
             className = "com.tencent.mobileqq.aio.animation.util.b";
-        } else if (requireMinQQVersion(QQVersion.QQ_9_0_15)) { // 9.0.15~9.0.56
+        } else if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_9_0_15)) { // 9.0.15~9.0.56
             className = "com.tencent.mobileqq.aio.animation.util.d";
         } else if (QAppUtils.isQQnt()) {
             className = "com.tencent.mobileqq.aio.animation.util.AioAnimationConfigHelper";

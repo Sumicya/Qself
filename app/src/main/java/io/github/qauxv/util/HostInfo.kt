@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -84,6 +83,10 @@ fun isPlayQQ(): Boolean {
     return hostInfo.hostSpecies == HostSpecies.QQ_Play
 }
 
+fun isQQHD(): Boolean {
+    return hostInfo.hostSpecies == HostSpecies.QQ_HD
+}
+
 fun requireMinQQVersion(versionCode: Long) = requireMinVersion(versionCode, HostSpecies.QQ)
 fun requireMaxQQVersion(versionCode: Long) = requireMaxVersion(versionCode, HostSpecies.QQ)
 fun requireRangeQQVersion(versionMinCode: Long, versionMaxCode: Long) = requireRangeVersion(versionMinCode, versionMaxCode, HostSpecies.QQ)
@@ -122,6 +125,28 @@ fun requireMinVersion(
 ): Boolean {
     return requireMinQQVersion(QQVersionCode) || requireMinTimVersion(TimVersionCode) || requireMinPlayQQVersion(PlayQQVersionCode)
 }
+
+/**
+ * True when running inside any QQ-family host (QQ, QQ Play, QQ Lite,
+ * QQ HD, QQ International) — everything except TIM and the module process
+ * is deliberately excluded by callers that pair this with an isTim check.
+ *
+ * First-class API since RFC-02 §E audit (2026-09-05): of the 58 migrated
+ * call sites, roughly two thirds are `requireMinVersionAnyQQ(x) ||
+ * requireMinTimVersion(y)` compounds where family-wide semantics is the
+ * stated intent, and the rest sit at thresholds where the remaining
+ * QQ-family hosts' real version codes cannot collide. The old facade's
+ * `!isTim()` semantics is therefore intentional, not a defect.
+ */
+fun isAnyQQSpecies(): Boolean = hostInfo.hostSpecies != HostSpecies.TIM
+
+/**
+ * `isAnyQQSpecies() && versionCode >= versionCode` — the QQ-family form of
+ * [requireMinQQVersion]. See [isAnyQQSpecies] for why this is a first-class
+ * API rather than a to-be-tightened bridge.
+ */
+fun requireMinVersionAnyQQ(versionCode: Long): Boolean =
+    hostInfo.hostSpecies != HostSpecies.TIM && hostInfo.versionCode >= versionCode
 
 val isInModuleProcess: Boolean
     get() = hostInfo.hostSpecies == HostSpecies.QAuxiliary

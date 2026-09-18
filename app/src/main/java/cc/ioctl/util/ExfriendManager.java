@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -20,6 +19,9 @@
  * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
  */
 package cc.ioctl.util;
+
+import io.github.qauxv.util.HostInfo;
+import io.github.qauxv.util.Reflex;
 
 import static cc.ioctl.util.DateTimeUtil.getRelTimeStrSec;
 
@@ -683,7 +685,7 @@ public class ExfriendManager {
     public void clearUnreadFlag() {
         mConfig.putInt("unread", 0);
         try {
-            NotificationManager nm = (NotificationManager) HostInfo.getApplication()
+            NotificationManager nm = (NotificationManager) HostInfo.getHostInfo().getApplication()
                     .getSystemService(Context.NOTIFICATION_SERVICE);
             nm.cancel(ID_EX_NOTIFY);
         } catch (Exception e) {
@@ -795,13 +797,13 @@ public class ExfriendManager {
         saveConfigure();
         try {
             if (isNotifyWhenDeleted() && ((int) ptr[0]) > 0) {
-                Context app = HostInfo.getApplication();
+                Context app = HostInfo.getHostInfo().getApplication();
                 Intent inner = SettingsUiFragmentHostActivity
                         .createStartActivityForFragmentIntent(app, ExfriendListFragment.class, null);
                 Intent wrapper = new Intent();
-                wrapper.setClassName(HostInfo.getApplication().getPackageName(), ActProxyMgr.STUB_DEFAULT_ACTIVITY);
+                wrapper.setClassName(HostInfo.getHostInfo().getApplication().getPackageName(), ActProxyMgr.STUB_DEFAULT_ACTIVITY);
                 wrapper.putExtra(ActProxyMgr.ACTIVITY_PROXY_INTENT, inner);
-                PendingIntent pi = PendingIntent.getActivity(HostInfo.getApplication(), 0, wrapper, PendingIntent.FLAG_IMMUTABLE);
+                PendingIntent pi = PendingIntent.getActivity(HostInfo.getHostInfo().getApplication(), 0, wrapper, PendingIntent.FLAG_IMMUTABLE);
                 NotificationManager nm = (NotificationManager) app.getSystemService(Context.NOTIFICATION_SERVICE);
                 Notification n = createNotiComp(nm, (String) ptr[1], (String) ptr[2], (String) ptr[3],
                         new long[]{100, 200, 200, 100}, pi);
@@ -825,7 +827,7 @@ public class ExfriendManager {
 
     public Notification createNotiComp(NotificationManager nm, String ticker, String title,
             String content, long[] vibration, PendingIntent pi) {
-        Application app = HostInfo.getApplication();
+        Application app = HostInfo.getHostInfo().getApplication();
         //Do not use NotificationCompat, NotificationCompat does NOT support setSmallIcon with Bitmap.
         Notification.Builder builder;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {

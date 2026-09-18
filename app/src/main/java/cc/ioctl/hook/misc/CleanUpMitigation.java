@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -27,7 +26,7 @@ import android.content.Context;
 import android.system.Os;
 import androidx.annotation.Nullable;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.hook.BasePersistBackgroundHook;
 import io.github.qauxv.util.IoUtils;
@@ -54,7 +53,7 @@ public class CleanUpMitigation extends BasePersistBackgroundHook {
     @SuppressLint("SdCardPath")
     @Override
     protected boolean initOnce() {
-        Context ctx = HostInfo.getApplication();
+        Context ctx = HostInfo.getHostInfo().getApplication();
         String packageName = ctx.getPackageName();
         // UserHandle.PER_USER_RANGE
         int userHandleIndex = Os.geteuid() / 100000;

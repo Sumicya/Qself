@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -36,8 +35,6 @@ import io.github.qauxv.util.xpcompat.XC_MethodHook
 import io.github.qauxv.util.xpcompat.XposedBridge
 import me.singleneuron.hook.decorator.CardMsgToText
 import me.singleneuron.hook.decorator.MiniAppToStruckMsg
-import me.singleneuron.hook.decorator.SimpleCheckIn
-import me.singleneuron.hook.decorator.SimpleReceiptMessage
 import java.lang.reflect.Method
 
 @FunctionHookEntry
@@ -51,10 +48,9 @@ object ItemBuilderFactoryHook : BaseHookDispatcher<IItemBuilderFactoryHookDecora
     // OPTIMIZE YOUR CODE, CACHE YOUR REFLECTION FIELDS AND METHODS FOR BETTER PERFORMANCE
     // *** Peak frequency: ~412 invocations per second
     override val decorators: Array<IItemBuilderFactoryHookDecorator> = arrayOf(
-        CardMsgToText,
+        // Specific transformation first; generic card-to-text is the fallback.
         MiniAppToStruckMsg,
-        SimpleCheckIn,
-        SimpleReceiptMessage,
+        CardMsgToText,
     )
 
     private var msgRecordParamIndex = -1

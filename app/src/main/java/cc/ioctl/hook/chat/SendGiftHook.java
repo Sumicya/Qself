@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -26,8 +25,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import cc.hicore.QApp.QAppUtils;
 import cc.ioctl.util.HookUtils;
-import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.HostInfo;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
 import io.github.qauxv.base.annotation.UiItemAgentEntry;
 import io.github.qauxv.dsl.FunctionEntryRouter.Locations.Simplify;
@@ -94,7 +93,7 @@ public class SendGiftHook extends CommonSwitchFunctionHook {
                 // 8.9.0/3060 com/tencent/mobileqq/activity/aio/rebuild/input/b/e
                 kQWalletTextChangeCallback = Initiator.load("com/tencent/mobileqq/activity/aio/rebuild/input/b/e");
             }
-            if (HostInfo.requireMinQQVersion(QQVersion.QQ_8_6_5)) {
+            if (HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_6_5)) {
                 Objects.requireNonNull(kQWalletTextChangeCallback, "kQWalletTextChangeCallback");
             }
             if (kQWalletTextChangeCallback != null) {

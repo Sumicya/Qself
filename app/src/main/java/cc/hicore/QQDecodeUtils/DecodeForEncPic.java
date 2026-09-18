@@ -3,26 +3,24 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
- * and/or modify it under the terms of the qwq233 Universal License
- * as published on https://github.com/qwq233/license; either
- * version 2 of the License, or any later version and our EULA as published
- * by QAuxiliary contributors.
+ * This software is free software: you can redistribute it
+ * and/or modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the qwq233 Universal License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Affero General Public License for more details.
  *
- * See
- * <https://github.com/qwq233/license>
- * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 package cc.hicore.QQDecodeUtils;
 
 import android.os.Environment;
-import cc.ioctl.util.HostInfo;
+import io.github.qauxv.util.HostInfo;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -41,9 +39,9 @@ public class DecodeForEncPic {
     private static final byte[] GIFMask = {0,1,0,1};
     public static String decodeGifForLocalPath(int dwTabID,byte[] sbufID){
         try{
-            String path = Environment.getExternalStorageDirectory()+"/Android/data/" + HostInfo.getPackageName() + "/Tencent/MobileQQ/.emotionsm/"+dwTabID+"/"
+            String path = Environment.getExternalStorageDirectory()+"/Android/data/" + HostInfo.getHostInfo().getPackageName() + "/Tencent/MobileQQ/.emotionsm/"+dwTabID+"/"
                     +bytesToHex(sbufID);
-            String cachePath = Environment.getExternalStorageDirectory()+"/Android/data/" + HostInfo.getPackageName() + "/cache/" +bytesToHex(sbufID);
+            String cachePath = Environment.getExternalStorageDirectory()+"/Android/data/" + HostInfo.getHostInfo().getPackageName() + "/cache/" +bytesToHex(sbufID);
             decodeGif(path,cachePath);
             return cachePath;
         }catch (Exception e){

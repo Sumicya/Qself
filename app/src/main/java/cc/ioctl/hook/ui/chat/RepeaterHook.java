@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,9 +20,9 @@
  */
 package cc.ioctl.hook.ui.chat;
 
-import static cc.ioctl.util.LayoutHelper.dip2px;
-import static cc.ioctl.util.Reflex.getFirstNSFByType;
-import static cc.ioctl.util.Reflex.setInstanceObject;
+import static io.github.qauxv.util.LayoutHelper.dip2px;
+import static io.github.qauxv.util.Reflex.getFirstNSFByType;
+import static io.github.qauxv.util.Reflex.setInstanceObject;
 import static io.github.qauxv.util.Initiator._MixedMsgItemBuilder;
 import static io.github.qauxv.util.Initiator._PicItemBuilder;
 import static io.github.qauxv.util.Initiator._PttItemBuilder;
@@ -49,9 +48,9 @@ import androidx.annotation.Nullable;
 import cc.ioctl.dialog.RepeaterIconSettingDialog;
 import cc.ioctl.util.HookUtils;
 import cc.ioctl.util.HookUtils.BeforeAndAfterHookedMethod;
-import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.LayoutHelper;
-import cc.ioctl.util.Reflex;
+import io.github.qauxv.util.HostInfo;
+import io.github.qauxv.util.LayoutHelper;
+import io.github.qauxv.util.Reflex;
 import io.github.qauxv.base.IEntityAgent;
 import io.github.qauxv.base.RuntimeErrorTracer;
 import io.github.qauxv.util.xpcompat.XC_MethodHook;
@@ -175,7 +174,7 @@ public class RepeaterHook extends BaseFunctionHook {
         //begin: pic
         for (Method m : _PicItemBuilder().getDeclaredMethods()) {
             Class<?>[] argt = m.getParameterTypes();
-            if (m.getReturnType() == View.class && m.getName().equalsIgnoreCase(HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_93) ? "F" : "a")) {
+            if (m.getReturnType() == View.class && m.getName().equalsIgnoreCase(HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_93) ? "F" : "a")) {
                 if (argt.length > 4 && argt[2] == View.class) {
                     getView = m;
                     listener2 = argt[4];
@@ -235,7 +234,7 @@ public class RepeaterHook extends BaseFunctionHook {
                     ChatActivityFacade.repeatMessage(app, session, param.args[0]);
                 } catch (Throwable e) {
                     traceError(e);
-                    Toasts.error(HostInfo.getApplication(), e.toString());
+                    Toasts.error(HostInfo.getHostInfo().getApplication(), e.toString());
                 }
             };
             imageView3.setOnClickListener(r0);
@@ -301,14 +300,14 @@ public class RepeaterHook extends BaseFunctionHook {
                         ChatActivityFacade.repeatMessage(app, session, param.args[0]);
                     } catch (Throwable e) {
                         traceError(e);
-                        Toasts.error(HostInfo.getApplication(), e.toString());
+                        Toasts.error(HostInfo.getHostInfo().getApplication(), e.toString());
                     }
                 };
                 imageView3.setOnClickListener(r0);
                 imageView4.setOnClickListener(r0);
             });
         } else {
-            Method m = _TextItemBuilder().getDeclaredMethod(HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_93) ? "F" : "a",
+            Method m = _TextItemBuilder().getDeclaredMethod(HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_93) ? "F" : "a",
                     ChatMessage, itemHolder, View.class, BaseChatItemLayout, listener2);
             HookUtils.hookBeforeAndAfterIfEnabled(this, m, 50, new BeforeAndAfterHookedMethod() {
                 @Override
@@ -329,10 +328,10 @@ public class RepeaterHook extends BaseFunctionHook {
                     RelativeLayout baseChatItemLayout = (RelativeLayout) param.args[3];
                     ImageView imageView = baseChatItemLayout.findViewById(
                             baseChatItemLayout.getResources().getIdentifier("cfx", "id",
-                                    HostInfo.getPackageName()));
+                                    HostInfo.getHostInfo().getPackageName()));
                     ImageView imageView2 = baseChatItemLayout.findViewById(
                             baseChatItemLayout.getResources().getIdentifier("cfw", "id",
-                                    HostInfo.getPackageName()));
+                                    HostInfo.getHostInfo().getPackageName()));
                     Bitmap repeat = RepeaterIconSettingDialog.getRepeaterIcon();
                     imageView.setImageBitmap(repeat);
                     imageView2.setImageBitmap(repeat);
@@ -344,7 +343,7 @@ public class RepeaterHook extends BaseFunctionHook {
                             ChatActivityFacade.repeatMessage(app, session, msg);
                         } catch (Throwable e) {
                             traceError(e);
-                            Toasts.error(HostInfo.getApplication(), e.toString());
+                            Toasts.error(HostInfo.getHostInfo().getApplication(), e.toString());
                         }
                     };
                     imageView.setOnClickListener(r0);
@@ -354,7 +353,7 @@ public class RepeaterHook extends BaseFunctionHook {
         }
         //end: text
         //begin: ptt
-        Method pttMethod = _PttItemBuilder().getDeclaredMethod(HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_93) ? "B0" : "a",
+        Method pttMethod = _PttItemBuilder().getDeclaredMethod(HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_93) ? "B0" : "a",
                 ChatMessage, itemHolder, View.class, BaseChatItemLayout, listener2);
         HookUtils.hookAfterIfEnabled(this, pttMethod, 51, param -> {
             ViewGroup convertView = (ViewGroup) param.getResult();
@@ -401,7 +400,7 @@ public class RepeaterHook extends BaseFunctionHook {
                 try {
                     ChatActivityFacade.repeatMessage(app, session, param.args[0]);
                 } catch (Throwable e) {
-                    Toasts.error(HostInfo.getApplication(), e.toString());
+                    Toasts.error(HostInfo.getHostInfo().getApplication(), e.toString());
                     traceError(e);
                 }
             };
@@ -409,9 +408,9 @@ public class RepeaterHook extends BaseFunctionHook {
             rightIcon.setOnClickListener(l);
         });
         //end: ptt
-        if(HostInfo.isQQ() && HostInfo.requireMinQQVersion(QQVersion.QQ_8_5_0)){
+        if(HostInfo.isAnyQQSpecies() && HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_5_0)){
             //start reply
-            Method replyMethod = _ReplyItemBuilder().getDeclaredMethod(HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_93) ? "F" : "a",
+            Method replyMethod = _ReplyItemBuilder().getDeclaredMethod(HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_93) ? "F" : "a",
                     ChatMessage, itemHolder, View.class, BaseChatItemLayout, listener2);
             HookUtils.hookAfterIfEnabled(this, replyMethod, 51, param -> {
                 ViewGroup relativeLayout = (ViewGroup) param.getResult();
@@ -492,14 +491,14 @@ public class RepeaterHook extends BaseFunctionHook {
                         ChatActivityFacade.repeatMessage(app, session, param.args[0]);
                     } catch (Throwable e) {
                         traceError(e);
-                        Toasts.error(HostInfo.getApplication(), e.toString());
+                        Toasts.error(HostInfo.getHostInfo().getApplication(), e.toString());
                     }
                 };
                 imageButton.setOnClickListener(r0);
             });
             //end: reply
             //start: mixedMsg
-            Method mixedMethod = _MixedMsgItemBuilder().getDeclaredMethod(HostInfo.requireMinQQVersion(QQVersion.QQ_8_8_93) ? "F" : "a",
+            Method mixedMethod = _MixedMsgItemBuilder().getDeclaredMethod(HostInfo.requireMinVersionAnyQQ(QQVersion.QQ_8_8_93) ? "F" : "a",
                     ChatMessage, itemHolder, View.class, BaseChatItemLayout, listener2);
             HookUtils.hookAfterIfEnabled(this, mixedMethod, 51, param -> {
                 ViewGroup relativeLayout = (ViewGroup) param.getResult();
@@ -581,7 +580,7 @@ public class RepeaterHook extends BaseFunctionHook {
                         ChatActivityFacade.repeatMessage(app, session, param.args[0]);
                     } catch (Throwable e) {
                         traceError(e);
-                        Toasts.error(HostInfo.getApplication(), e.toString());
+                        Toasts.error(HostInfo.getHostInfo().getApplication(), e.toString());
                     }
                 };
                 imageButton.setOnClickListener(r0);

@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -46,9 +45,9 @@ import xyz.nextalone.util.throwOrTrue
 @UiItemAgentEntry
 object Emoji2Sticker : CommonSwitchFunctionHook(arrayOf(EmoMsgUtils_isSingleLottie_QQNT)) {
 
-    override val name = "关闭大号Emoji"
+    override val name = "输入Emoji不转大表情"
     override val description = "禁用新版QQ输入单个Emoji后发送大表情"
-    override val uiItemLocation = FunctionEntryRouter.Locations.Entertainment.ENTERTAIN_CATEGORY
+    override val uiItemLocation = FunctionEntryRouter.Locations.Auxiliary.EMOTICON_AND_STICKER_CATEGORY
 
     override val isAvailable: Boolean
         get() = requireMinQQVersion(QQVersion.QQ_8_7_5) || requireMinTimVersion(TIMVersion.TIM_4_0_95_BETA)

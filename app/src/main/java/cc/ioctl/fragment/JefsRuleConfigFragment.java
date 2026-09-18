@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,7 +22,7 @@ package cc.ioctl.fragment;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
-import static cc.ioctl.util.LayoutHelper.dip2px;
+import static io.github.qauxv.util.LayoutHelper.dip2px;
 
 import android.content.Context;
 import android.graphics.Typeface;
@@ -42,10 +41,10 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
 import cc.ioctl.hook.misc.JumpController;
-import cc.ioctl.util.HostInfo;
-import cc.ioctl.util.LayoutHelper;
-import cc.ioctl.util.ui.ViewBuilder;
-import cc.ioctl.util.ui.drawable.HighContrastBorder;
+import io.github.qauxv.util.HostInfo;
+import io.github.qauxv.util.LayoutHelper;
+import io.github.qauxv.util.ui.ViewBuilder;
+import io.github.qauxv.util.ui.drawable.HighContrastBorder;
 import com.tencent.mobileqq.widget.BounceScrollView;
 import io.github.qauxv.R;
 import io.github.qauxv.fragment.BaseRootLayoutFragment;
@@ -99,7 +98,7 @@ public class JefsRuleConfigFragment extends BaseRootLayoutFragment implements Vi
             layoutDisplay.setOrientation(LinearLayout.VERTICAL);
             layoutDisplay.setId(R.id.jefsRulesDisplayLayout);
             {
-                String appLabel = HostInfo.getAppName();
+                String appLabel = HostInfo.getHostInfo().getHostName();
                 TextView _tmp_1 = new TextView(context);
 //                _tmp_1.setTextColor(ResUtils.skin_gray3);
                 _tmp_1.setText("本功能用于去除恼人的 \"即将离开" + appLabel + " 前往其他应用\" 对话框, " +

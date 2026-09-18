@@ -3,24 +3,25 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
- * and/or modify it under the terms of the qwq233 Universal License
- * as published on https://github.com/qwq233/license; either
- * version 2 of the License, or any later version and our EULA as published
- * by QAuxiliary contributors.
+ * This software is free software: you can redistribute it
+ * and/or modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the qwq233 Universal License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Affero General Public License for more details.
  *
- * See
- * <https://github.com/qwq233/license>
- * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package cc.ioctl.hook.ui.main
 
-import cc.ioctl.util.HostInfo
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
+import io.github.qauxv.util.hostInfo
+import io.github.qauxv.util.isTim
 import com.github.kyuubiran.ezxhelper.utils.findMethod
 import com.github.kyuubiran.ezxhelper.utils.hookAfter
 import com.github.kyuubiran.ezxhelper.utils.hookAllConstructorAfter
@@ -51,11 +52,11 @@ object HideMiniAppPullEntry : CommonSwitchFunctionHook(ConfigItems.qn_hide_msg_l
     override val name = "隐藏下拉小程序"
     override val description = "生成屏蔽下拉小程序解决方案"
     override val isApplicationRestartRequired = true
-    override val isAvailable: Boolean get() = !HostInfo.isTim()
+    override val isAvailable: Boolean get() = !isTim()
     override val uiItemLocation = Simplify.MAIN_UI_TITLE
 
     override fun initOnce(): Boolean {
-        if (HostInfo.isTim()) {
+        if (isTim()) {
             return false
         }
         val methodName = initMiniAppObfsName
@@ -82,6 +83,7 @@ object HideMiniAppPullEntry : CommonSwitchFunctionHook(ConfigItems.qn_hide_msg_l
                 // com.qqnt.widget.smartrefreshlayout.header.TwoLevelHeader
                 it.thisObject.javaClass.superclass.superclass.superclass.declaredFields.first { field ->// mEnableTwoLevel
                     field.name == when {// RefreshState.ReleaseToTwoLevel
+                        requireMinQQVersion(QQVersion.QQ_9_3_30) -> "t"
                         requireMinQQVersion(QQVersion.QQ_9_1_70) -> "I"// 9.1.70 ~ 9.1.75
                         requireMinQQVersion(QQVersion.QQ_9_1_30) -> "E"// 9.1.30 ~ 9.1.65
                         else -> "D"
@@ -92,8 +94,12 @@ object HideMiniAppPullEntry : CommonSwitchFunctionHook(ConfigItems.qn_hide_msg_l
 //                requireMinQQVersion(QQVersion.QQ_9_0_50) -> "c"
 //                else -> "a"
 //            }
-            clazz.findMethod { name == miniOldStyleHeaderNewMethod && paramCount == 3 }.hookAfter {
-                XposedHelpers.callMethod(it.args[0], "finishRefresh")
+            // QQ 9.3.30 starts the receiving indicator at RefreshReleased. Finishing
+            // here skips its completion event; disabling the second level is enough.
+            if (needsLegacyRefreshHook) {
+                clazz.findMethod { name == miniOldStyleHeaderNewMethod && paramCount == 3 }.hookAfter {
+                    XposedHelpers.callMethod(it.args[0], "finishRefresh")
+                }
             }
         } ?: run {
             Initiator.load("com.tencent.qqnt.chats.view.MiniOldStyleHeader")?.let {
@@ -146,7 +152,7 @@ object HideMiniAppPullEntry : CommonSwitchFunctionHook(ConfigItems.qn_hide_msg_l
             val cache = ConfigManager.getCache()
             val lastVersion = cache.getIntOrDefault("qn_hide_miniapp_v2_version_code", 0)
             val methodName = cache.getString("qn_hide_miniapp_v2_method_name")
-            return if (HostInfo.getVersionCode() == lastVersion) {
+            return if (hostInfo.versionCode32 == lastVersion) {
                 methodName
             } else null
         }
@@ -155,6 +161,9 @@ object HideMiniAppPullEntry : CommonSwitchFunctionHook(ConfigItems.qn_hide_msg_l
         get() {
             return ConfigManager.getCache().getString("qn_hide_miniapp_v2_mini_old_style_header_method_name")
         }
+
+    private val needsLegacyRefreshHook: Boolean
+        get() = !requireMinQQVersion(QQVersion.QQ_9_3_30)
 
     private val mStep: Step = object : Step {
 
@@ -175,18 +184,25 @@ object HideMiniAppPullEntry : CommonSwitchFunctionHook(ConfigItems.qn_hide_msg_l
     override fun makePreparationSteps() = arrayOf(mStep)
 
     override val isNeedFind: Boolean
-        get() = initMiniAppObfsName == null || (Initiator.load("com.tencent.qqnt.chats.view.MiniOldStyleHeaderNew") != null && miniOldStyleHeaderNewMethod == null)
+        get() = initMiniAppObfsName == null ||
+                (needsLegacyRefreshHook &&
+                        Initiator.load("com.tencent.qqnt.chats.view.MiniOldStyleHeaderNew") != null &&
+                        miniOldStyleHeaderNewMethod == null)
 
     override fun doFind(): Boolean {
         (getCurrentBackend() as DexKitDeobfs).use { dexKitDeobfs ->
 
-            dexKitDeobfs.getDexKitBridge().findMethod {
-                matcher {
-                    usingStrings("refreshLayout", "oldState", "newState")
-                    declaredClass("com.tencent.qqnt.chats.view.MiniOldStyleHeaderNew")
-                    paramCount = 3
+            if (needsLegacyRefreshHook) {
+                dexKitDeobfs.getDexKitBridge().findMethod {
+                    matcher {
+                        usingStrings("refreshLayout", "oldState", "newState")
+                        declaredClass("com.tencent.qqnt.chats.view.MiniOldStyleHeaderNew")
+                        paramCount = 3
+                    }
+                }.firstOrNull()?.let {
+                    ConfigManager.getCache().putString("qn_hide_miniapp_v2_mini_old_style_header_method_name", it.name)
                 }
-            }.firstOrNull()?.let { ConfigManager.getCache().putString("qn_hide_miniapp_v2_mini_old_style_header_method_name", it.name) }
+            }
 
             val clz = Initiator._Conversation() ?: return false
             val conversationClassName = clz.name
@@ -199,7 +215,7 @@ object HideMiniAppPullEntry : CommonSwitchFunctionHook(ConfigItems.qn_hide_msg_l
                 if (methodData.className == conversationClassName && "()V" == methodData.methodSign) {
                     // save and return
                     val cache = ConfigManager.getCache()
-                    cache.putInt("qn_hide_miniapp_v2_version_code", HostInfo.getVersionCode())
+                    cache.putInt("qn_hide_miniapp_v2_version_code", hostInfo.versionCode32)
                     cache.putString("qn_hide_miniapp_v2_method_name", methodData.name)
                     cache.save()
                     true

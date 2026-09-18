@@ -23,28 +23,17 @@
 package com.xiaoniu.dispatcher
 
 import cc.hicore.QApp.QAppUtils
+import sumicya.qself.feature.consolidation.HookInstallRegistry
+import io.github.qauxv.base.IDynamicHook
 import cc.hicore.hook.RepeaterPlus
-import cc.hicore.hook.stickerPanel.Hooker.StickerPanelEntryHooker
-import cc.ioctl.hook.msg.CopyCardMsg
-import cc.ioctl.hook.msg.PicMd5Hook
-import cc.ioctl.hook.msg.PttForwardHook
 import cc.ioctl.util.HookUtils
 import com.github.kyuubiran.ezxhelper.utils.isAbstract
-import io.github.duzhaokun123.hook.MessageCopyHook
-import io.github.duzhaokun123.hook.MessageTTSHook
 import io.github.qauxv.base.annotation.FunctionHookEntry
 import io.github.qauxv.hook.BasePersistBackgroundHook
 import io.github.qauxv.util.Initiator
 import io.github.qauxv.util.QQVersion
 import io.github.qauxv.util.requireMinQQVersion
 import io.github.qauxv.util.xpcompat.XC_MethodHook
-import me.hd.hook.menu.CopyMarkdown
-import me.hd.hook.menu.EditTextContent
-import me.hd.hook.menu.RecallMsgRecord
-import me.hd.hook.menu.RepeatToImg
-import me.ketal.hook.PicCopyToClipboard
-import me.qcuncle.hook.TranslateTextMsg
-import top.xunflash.hook.MiniAppDirectJump
 import xyz.nextalone.util.hookAfterAllConstructors
 import java.lang.reflect.Method
 
@@ -53,19 +42,12 @@ object MenuBuilderHook : BasePersistBackgroundHook() {
     // These hooks are called when the menu is being built.
     private val decorators: Array<OnMenuBuilder> = arrayOf(
         RepeaterPlus.INSTANCE,
-        StickerPanelEntryHooker.INSTANCE,
-        PicMd5Hook.INSTANCE,
-        PttForwardHook.INSTANCE,
-        CopyCardMsg,
-        MessageCopyHook,
-        PicCopyToClipboard,
-        MiniAppDirectJump,
-        CopyMarkdown,
-        MessageTTSHook,
-        EditTextContent,
-        TranslateTextMsg,
-        RecallMsgRecord,
-        RepeatToImg,
+        cc.ioctl.hook.msg.CopyCardMsg,
+        io.github.duzhaokun123.hook.MessageCopyHook,
+        cc.ioctl.hook.msg.PttForwardHook.INSTANCE,
+        cc.ioctl.hook.msg.PicMd5Hook.INSTANCE,
+        me.ketal.hook.PicCopyToClipboard,
+        me.hd.hook.menu.CopyMarkdown
     )
 
     override fun initOnce(): Boolean {
@@ -78,18 +60,20 @@ object MenuBuilderHook : BasePersistBackgroundHook() {
             val listMethodName: String = baseComponentClass.declaredMethods.first {
                 it.isAbstract && it.returnType == MutableList::class.java && it.parameterTypes.isEmpty()
             }.name
-            val hookedClasses = mutableSetOf<Class<*>>()
+            val hookedMethods = HookInstallRegistry<Method>()
             baseComponentClass.hookAfterAllConstructors {
-                val componentClass = it.thisObject.javaClass
-                if (componentClass in hookedClasses) return@hookAfterAllConstructors
-                hookedClasses.add(componentClass)
-                val target = componentClass.name
-                HookUtils.hookAfterAlways(this, componentClass.getMethod(listMethodName), 48) { param ->
-                    val msg = getMsgMethod.invoke(param.thisObject)!!
-                    for (decorator in decorators) {
-                        if (decorator.targetComponentTypes == null || target in decorator.targetComponentTypes!!) {
+                val menuMethod = it.thisObject.javaClass.getMethod(listMethodName)
+                hookedMethods.install(menuMethod) {
+                    HookUtils.hookAfterAlways(this, menuMethod, 48) { param ->
+                        val target = param.thisObject.javaClass.name
+                        val msg = getMsgMethod.invoke(param.thisObject)!!
+                        for (decorator in decorators) {
                             try {
-                                decorator.onGetMenuNt(msg, target, param)
+                                val hook = decorator as? IDynamicHook ?: continue
+                                if (!hook.isEnabled || !hook.isAvailable) continue
+                                if (decorator.targetComponentTypes == null || target in decorator.targetComponentTypes!!) {
+                                    decorator.onGetMenuNt(msg, target, param)
+                                }
                             } catch (e: Exception) {
                                 traceError(e)
                             }

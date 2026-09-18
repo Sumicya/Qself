@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 qwq233@qwq2333.top
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by QAuxiliary contributors.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,7 +20,7 @@
  */
 package io.github.qauxv.router.dispacher;
 
-import static cc.ioctl.util.Reflex.getFirstNSFByType;
+import static io.github.qauxv.util.Reflex.getFirstNSFByType;
 import static io.github.qauxv.util.Initiator._SessionInfo;
 
 import android.content.Context;
@@ -37,12 +36,7 @@ import cc.hicore.QApp.QAppUtils;
 import cc.hicore.hook.ReplyMsgWithImg;
 import cc.hicore.message.chat.SessionHooker;
 import cc.hicore.message.chat.SessionUtils;
-import cc.ioctl.hook.experimental.CardMsgSender;
-import cc.ioctl.hook.msg.AioChatPieClipPasteHook;
 import cc.ioctl.util.HookUtils;
-import com.xiaoniu.hook.CtrlEnterToSend;
-import io.github.duzhaokun123.hook.InputPlusButtonHook;
-import io.github.duzhaokun123.hook.SendTTSHook;
 import io.github.qauxv.R;
 import io.github.qauxv.base.annotation.EntityAgentEntry;
 import io.github.qauxv.base.annotation.FunctionHookEntry;
@@ -95,12 +89,9 @@ public class InputButtonHookDispatcher extends BaseHookDispatcher<IBaseChatPieDe
     }
 
     private static final IBaseChatPieDecorator[] DECORATORS = {
-            CardMsgSender.INSTANCE,
-            AioChatPieClipPasteHook.INSTANCE,
             ReplyMsgWithImg.INSTANCE,
-            SendTTSHook.INSTANCE,
-            CtrlEnterToSend.INSTANCE,
-            InputPlusButtonHook.INSTANCE
+            cc.ioctl.hook.msg.AioChatPieClipPasteHook.INSTANCE,
+            com.xiaoniu.hook.CtrlEnterToSend.INSTANCE
     };
 
     @NonNull

@@ -3,20 +3,18 @@
  * Copyright (C) 2019-2023 QAuxiliary developers
  * https://github.com/cinit/QAuxiliary
  *
- * This software is non-free but opensource software: you can redistribute it
- * and/or modify it under the terms of the qwq233 Universal License
- * as published on https://github.com/qwq233/license; either
- * version 2 of the License, or any later version and our EULA as published
- * by QAuxiliary contributors.
+ * This software is free software: you can redistribute it
+ * and/or modify it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the qwq233 Universal License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Affero General Public License for more details.
  *
- * See
- * <https://github.com/qwq233/license>
- * <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 package io.github.qauxv.fragment
@@ -30,7 +28,7 @@ import android.view.ViewGroup
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.content.res.ResourcesCompat
-import cc.ioctl.util.ui.ThemeAttrUtils
+import io.github.qauxv.util.ui.ThemeAttrUtils
 import io.github.qauxv.R
 import io.github.qauxv.databinding.FragmentHotUpdateConfigBinding
 import io.github.qauxv.util.hotupdate.HotUpdateManager
@@ -177,14 +175,14 @@ class HotUpdateConfigFragment : BaseRootLayoutFragment(), View.OnClickListener {
             updateViewStatus(binding!!)
         }
         if (channelId == HotUpdateManager.CHANNEL_BETA) {
-            AlertDialog.Builder(requireContext())
+            sumicya.qself.ui.InlineAlertDialogBuilder(requireContext())
                 .setTitle("警告")
                 .setMessage("您确定要切换到 Beta 测试频道吗？\n这个频道的更新可能不稳定，可能会导致应用崩溃。")
                 .setPositiveButton("确定") { _, _ -> fn() }
                 .setNegativeButton("取消", null)
                 .show()
         } else if (channelId == HotUpdateManager.CHANNEL_CANARY) {
-            AlertDialog.Builder(requireContext())
+            sumicya.qself.ui.InlineAlertDialogBuilder(requireContext())
                 .setTitle("严重警告")
                 .setMessage(
                     "您确定要切换到 Canary 测试频道吗？\n" +

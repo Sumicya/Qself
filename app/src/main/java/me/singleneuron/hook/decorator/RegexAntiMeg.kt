@@ -3,11 +3,10 @@
  * Copyright (C) 2019-2022 dmca@ioctl.cc
  * https://github.com/ferredoxin/QNotified
  *
- * This software is non-free but opensource software: you can redistribute it
+ * This software is free software: you can redistribute it
  * and/or modify it under the terms of the GNU Affero General Public License
  * as published by the Free Software Foundation; either
- * version 3 of the License, or any later version and our eula as published
- * by ferredoxin.
+ * version 3 of the License, or (at your option) any later version.
  *
  * This software is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -25,7 +24,7 @@ package me.singleneuron.hook.decorator
 import android.app.Activity
 import android.view.View
 import android.widget.EditText
-import cc.ioctl.util.Reflex
+import io.github.qauxv.util.Reflex
 import cc.ioctl.hook.notification.MessageInterception
 import cc.ioctl.util.msg.MessageReceiver
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -102,7 +101,7 @@ object RegexAntiMeg : CommonConfigFunctionHook(), MessageReceiver {
 
     override val onUiItemClickListener: (IUiItemAgent, Activity, View) -> Unit = { _, activity, _ ->
         val dialogContext = CommonContextWrapper.createMaterialDesignContext(activity)
-        MaterialAlertDialogBuilder(dialogContext).apply {
+        sumicya.qself.ui.InlineAlertDialogBuilder(dialogContext).apply {
             setTitle("设置正则表达式")
             setMessage("请输入正则表达式，以便屏蔽指定的卡片消息")
             val editTextPreference: EditText = EditText(dialogContext).apply {
