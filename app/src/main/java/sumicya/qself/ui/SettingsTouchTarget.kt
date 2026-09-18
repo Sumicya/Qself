@@ -33,10 +33,7 @@ object SettingsTouchTarget {
         onClick: () -> Unit,
     ) {
         view.tag = id
-        view.contentDescription = label
-        view.isFocusable = true
-        view.isClickable = true
-        view.minimumHeight = maxOf(view.minimumHeight, dp(view, 48))
+        prepare(view, label)
         view.setOnClickListener {
             // Proves the touch reached this target; a tap that lands here but
             // opens nothing means the dispatcher is the problem, not the view.
@@ -44,6 +41,18 @@ object SettingsTouchTarget {
             onClick()
         }
         announceAsButton(view)
+    }
+
+    /**
+     * Makes [view] a named, focusable 48dp target without wiring a click, for
+     * controls that carry their own richer click path (an accordion header
+     * announces expand/collapse rather than click).
+     */
+    fun prepare(view: View, label: String) {
+        view.contentDescription = label
+        view.isFocusable = true
+        view.isClickable = true
+        view.minimumHeight = maxOf(view.minimumHeight, dp(view, 48))
     }
 
     /** Screen readers hear a button, and its decorative children stay silent. */
