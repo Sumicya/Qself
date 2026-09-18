@@ -127,7 +127,9 @@ class SettingsErrorInteractionTest {
             activity.setContentView(root)
             InlineSettings.register(activity, root)
             val row = TitleValueCell(activity).apply { title = "行内设置" }
-            val card = SettingsAccordion(activity, "分类", "副标题") { row }
+            val card = SettingsAccordion(activity,
+                SettingsVisuals.palette(activity), "分类", "副标题",
+                io.github.qauxv.R.drawable.ic_settings) { row }
             root.addView(card)
             card.setExpanded(true, false)
             InlineSettings.anchor(row)
@@ -173,7 +175,9 @@ class SettingsErrorInteractionTest {
             activity.setContentView(root)
             InlineSettings.register(activity, root)
             val row = TitleValueCell(activity).apply { title = "行内设置" }
-            val card = SettingsAccordion(activity, "分类", "副标题") { row }
+            val card = SettingsAccordion(activity,
+                SettingsVisuals.palette(activity), "分类", "副标题",
+                io.github.qauxv.R.drawable.ic_settings) { row }
             root.addView(card)
             card.setExpanded(true, false)
             InlineSettings.anchor(row)

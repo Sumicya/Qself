@@ -507,7 +507,9 @@ public class SettingsVisualTest {
 
     @Test public void levelStackUnwindsNewestFirstAndScopesCascadesToTheirContainer() {
         Context context = context(false, 1f, 412, false);
-        SettingsAccordion card = new SettingsAccordion(context, "分类", "副标题", () -> new View(context));
+        SettingsAccordion card = new SettingsAccordion(context,
+                SettingsVisuals.INSTANCE.palette(context, 1), "分类", "副标题",
+                io.github.qauxv.R.drawable.ic_settings, () -> new View(context));
         View panelInsideTheCard = new View(context);
         View panelOutsideTheCard = new View(context);
         SettingsLevelStack stack = new SettingsLevelStack();
@@ -625,9 +627,10 @@ public class SettingsVisualTest {
         cell.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         cell.setTitle("RTL feature"); cell.setChecked(false);
         layout(cell, 380);
+        int slot = SettingsVisuals.INSTANCE.dp(cell.getContext(), SettingsVisuals.RAIL_WIDTH);
         // Trailing in RTL is the visual leading (left) edge.
         assertEquals(0, cell.getSwitchView().getLeft());
-        assertEquals(52, cell.getSwitchView().getRight());
+        assertEquals(slot, cell.getSwitchView().getRight());
         assertTrue(cell.isClickOnSwitch(0));
         assertFalse(cell.isClickOnSwitch(379));
     }
@@ -636,12 +639,14 @@ public class SettingsVisualTest {
         TitleValueCell cell = new TitleValueCell(context(false, 1f, 412, false));
         cell.setTitle("\u72ec\u7acb\u5f00\u5173"); cell.setChecked(false);
         layout(cell, 380);
-        // Trailing slot: a fixed 52dp square flush to the trailing card wall,
-        // filling the whole 52dp row height so neighbouring slots merge.
-        assertEquals(52, cell.getHeight());
-        assertEquals(52, cell.getSwitchView().getWidth());
-        assertEquals(52, cell.getSwitchView().getHeight());
-        assertEquals(328, cell.getSwitchView().getLeft());
+        // Trailing slot: a fixed square flush to the trailing card wall, filling
+        // the whole row height so neighbouring slots merge.
+        int slot = SettingsVisuals.INSTANCE.dp(cell.getContext(), SettingsVisuals.RAIL_WIDTH);
+        int row = SettingsVisuals.INSTANCE.dp(cell.getContext(), SettingsVisuals.ROW_HEIGHT);
+        assertEquals(row, cell.getHeight());
+        assertEquals(slot, cell.getSwitchView().getWidth());
+        assertEquals(row, cell.getSwitchView().getHeight());
+        assertEquals(380 - slot, cell.getSwitchView().getLeft());
         assertEquals(380, cell.getSwitchView().getRight());
         assertEquals(0, cell.getSwitchView().getTop());
         assertTrue(cell.getSwitchView().getLeft() > ((View) cell.getTitleView().getParent()).getRight());
