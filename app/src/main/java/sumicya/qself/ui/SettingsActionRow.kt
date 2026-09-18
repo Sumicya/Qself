@@ -42,8 +42,10 @@ class SettingsActionRow(context: Context, private val palette: SettingsVisuals.P
                     scaleType = ImageView.ScaleType.CENTER
                     setColorFilter(palette.onSelectedContainer)
                     importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-                }, LayoutParams(SettingsVisuals.dp(context, 24), SettingsVisuals.dp(context, 24), Gravity.CENTER))
-            }, LayoutParams(SettingsVisuals.dp(context, 40), SettingsVisuals.dp(context, 40)))
+                }, FrameLayout.LayoutParams(
+                    SettingsVisuals.dp(context, 24), SettingsVisuals.dp(context, 24), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(
+                SettingsVisuals.dp(context, 40), SettingsVisuals.dp(context, 40)))
             addView(LinearLayout(context).apply {
                 orientation = VERTICAL
                 importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -55,7 +57,7 @@ class SettingsActionRow(context: Context, private val palette: SettingsVisuals.P
                     SettingsVisuals.applyType(this, context, SettingsVisuals.TYPE_BODY_MEDIUM)
                     setTextColor(palette.secondary)
                 })
-            }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply {
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = SettingsVisuals.dp(context, 16)
             })
             addView(chevron.apply {
@@ -63,10 +65,10 @@ class SettingsActionRow(context: Context, private val palette: SettingsVisuals.P
                 scaleType = ImageView.ScaleType.CENTER
                 setColorFilter(palette.secondary)
                 importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-            }, LayoutParams(SettingsVisuals.dp(context, 24), SettingsVisuals.dp(context, 24)))
+            }, LinearLayout.LayoutParams(SettingsVisuals.dp(context, 24), SettingsVisuals.dp(context, 24)))
         }
-        addView(header, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        addView(inlineContent, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        addView(inlineContent, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
     }
 
     /**

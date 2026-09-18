@@ -189,7 +189,7 @@ object SettingsVisuals {
         container: Int = p.surfaceLow,
         clickable: Boolean = false,
     ): MaterialCardView = MaterialCardView(context).apply {
-        this.radius = dp(context, radius)
+        this.radius = dp(context, radius).toFloat()
         cardElevation = 0f
         strokeWidth = 0
         setCardBackgroundColor(container)

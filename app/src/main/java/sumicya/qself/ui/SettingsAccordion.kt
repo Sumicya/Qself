@@ -44,7 +44,7 @@ class SettingsAccordion(
     val header = LinearLayout(context)
 
     private val body = LinearLayout(context).apply {
-        orientation = VERTICAL
+        orientation = LinearLayout.VERTICAL
         visibility = GONE
     }
     private val arrow = ImageView(context).apply {
@@ -68,15 +68,17 @@ class SettingsAccordion(
         setCardBackgroundColor(palette.surfaceLow)
         setRippleColor(null)
         buildHeader(title, summary, iconRes)
-        addView(header, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        addView(body, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        addView(header, MaterialCardView.LayoutParams(
+            MaterialCardView.LayoutParams.MATCH_PARENT, MaterialCardView.LayoutParams.WRAP_CONTENT))
+        addView(body, MaterialCardView.LayoutParams(
+            MaterialCardView.LayoutParams.MATCH_PARENT, MaterialCardView.LayoutParams.WRAP_CONTENT))
     }
 
     /* ------------------------------------------------------------- header */
 
     private fun buildHeader(title: String, summary: String, iconRes: Int) {
         header.apply {
-            orientation = HORIZONTAL
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = SettingsVisuals.dp(context, SettingsVisuals.HEADER_HEIGHT + 16)
             setPadding(SettingsVisuals.dp(context, 16), SettingsVisuals.dp(context, 12),
@@ -105,9 +107,10 @@ class SettingsAccordion(
             if (Build.VERSION.SDK_INT >= 30) stateDescription = "已收起"
 
             // Leading icon in a tonal circle: the Material 3 expressive card header.
-            addView(iconBadge(iconRes), LayoutParams(SettingsVisuals.dp(context, 40), SettingsVisuals.dp(context, 40)))
+            addView(iconBadge(iconRes), LinearLayout.LayoutParams(
+                SettingsVisuals.dp(context, 40), SettingsVisuals.dp(context, 40)))
             val textColumn = LinearLayout(context).apply {
-                orientation = VERTICAL
+                orientation = LinearLayout.VERTICAL
                 addView(titleView.apply {
                     text = title
                     SettingsVisuals.applyType(this, context, SettingsVisuals.TYPE_TITLE_LARGE)
@@ -123,13 +126,13 @@ class SettingsAccordion(
                     })
                 }
             }
-            addView(textColumn, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply {
+            addView(textColumn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = SettingsVisuals.dp(context, 16)
             })
             addView(arrow.apply {
                 setColorFilter(palette.secondary)
                 importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-            }, LayoutParams(SettingsVisuals.dp(context, 24), SettingsVisuals.dp(context, 24)))
+            }, LinearLayout.LayoutParams(SettingsVisuals.dp(context, 24), SettingsVisuals.dp(context, 24)))
         }
     }
 
@@ -140,7 +143,7 @@ class SettingsAccordion(
             scaleType = ImageView.ScaleType.CENTER
             setColorFilter(palette.onSelectedContainer)
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LayoutParams(SettingsVisuals.dp(context, 24), SettingsVisuals.dp(context, 24), Gravity.CENTER))
+        }, FrameLayout.LayoutParams(SettingsVisuals.dp(context, 24), SettingsVisuals.dp(context, 24), Gravity.CENTER))
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
@@ -158,7 +161,7 @@ class SettingsAccordion(
             "${if (value) "expand" else "collapse"} animated=$animate interrupted=$interrupted")
 
         if (value && body.childCount == 0) {
-            body.addView(contentFactory(), LayoutParams(-1, -2))
+            body.addView(contentFactory(), LinearLayout.LayoutParams(-1, -2))
         }
         // An open card steps up the surface tier, the Material 3 container idiom.
         setCardBackgroundColor(if (value) palette.surfaceHigh else palette.surfaceLow)

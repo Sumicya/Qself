@@ -234,7 +234,7 @@ object InlineSettings {
         val row = view as? InlineHost ?: return false
         if (row.inlineContent.childCount == 0) return false
         if (hasProtectedContent(row.inlineContent)) return true // swallow
-        val activity = UiAgentItem.findActivity(row.context)
+        val activity = UiAgentItem.findActivity(view.context)
         val open = activity?.let { hosts[it]?.panels?.filter { p -> p.box.parent === row.inlineContent }?.toList() }
         if (!open.isNullOrEmpty()) {
             for (panel in open) panel.requestClose()
