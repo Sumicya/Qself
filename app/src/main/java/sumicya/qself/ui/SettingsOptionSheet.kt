@@ -11,7 +11,13 @@ object SettingsOptionSheet {
         show(activity, args.getString("home"), args.getString("currentGroup") ?: args.getString("group"), args.getString("focus"))
     }
     fun show(activity: FragmentActivity, home: String? = null, group: String? = null, focus: String? = null) {
-        if (focus == null && InlineSettings.collapseAnchor(activity)) return
+        if (focus == null && InlineSettings.collapseAnchor(activity)) {
+            // Probe: the tap toggled an already-open panel closed instead of
+            // opening a new one - the expected re-tap behaviour.
+            sumicya.qself.diagnostics.FeatureJournal.record("UI", "sheet.show", "collapsed-anchor home=$home group=$group")
+            return
+        }
+        sumicya.qself.diagnostics.FeatureJournal.record("UI", "sheet.show", "open home=$home group=$group focus=$focus")
         InlineSettings.show(activity, InlineFeatureList(activity, group, home, focus))
     }
 }

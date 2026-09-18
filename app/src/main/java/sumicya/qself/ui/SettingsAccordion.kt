@@ -96,7 +96,11 @@ class SettingsAccordion(context: Context, title: String, summary: String,
             arrow.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             addView(arrow, LayoutParams(SettingsVisuals.dp(context, SettingsVisuals.RAIL_WIDTH),
                 LayoutParams.MATCH_PARENT).apply { gravity = Gravity.CENTER_VERTICAL })
-            setOnClickListener { setExpanded(!expanded, true) }
+            setOnClickListener {
+                sumicya.qself.diagnostics.FeatureJournal.record("UI", "accordion.click",
+                    "tag=${header.tag} expanded=$expanded")
+                setExpanded(!expanded, true)
+            }
         }
     }
 

@@ -351,6 +351,10 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
         arguments?.getString(TARGET_UI_AGENT_IDENTIFIER) == null
 
     private fun openHomeAction(action: String) {
+        // Probe: the dispatcher entry. Paired with home.click upstream of it:
+        // click without action means the callback chain is broken, neither
+        // means the touch never reached the home view.
+        sumicya.qself.diagnostics.FeatureJournal.record("UI", "home.action", "action=$action")
         if (action.startsWith("group:")) {
             sumicya.qself.ui.SettingsOptionSheet.show(requireSettingsHostActivity(), group = action.removePrefix("group:"))
             return

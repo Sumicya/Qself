@@ -168,7 +168,11 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
             imageTintList = android.content.res.ColorStateList.valueOf(palette.secondary)
             contentDescription = label
             isFocusable = true
-            setOnClickListener { InlineSettings.anchor(this); dispatch(action) }
+            setOnClickListener {
+                sumicya.qself.diagnostics.FeatureJournal.record("UI", "home.click", "id=$action")
+                InlineSettings.anchor(this)
+                dispatch(action)
+            }
             exposeAsButton(this)
         }
 
@@ -186,7 +190,13 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         if (view is TitleValueCell) {
             view.foreground = SettingsVisuals.rowStateLayer(context, palette)
         }
-        view.setOnClickListener { InlineSettings.anchor(view); dispatch(id) }
+        view.setOnClickListener {
+            // Probe: proves the touch reached this target; if a tap lands
+            // here but the destination never opens, the dispatcher is broken.
+            sumicya.qself.diagnostics.FeatureJournal.record("UI", "home.click", "id=$id")
+            InlineSettings.anchor(view)
+            dispatch(id)
+        }
         exposeAsButton(view)
     }
 
