@@ -277,8 +277,14 @@ object InlineSettings {
     @JvmOverloads
     fun show(context: Context, content: View, onClose: Runnable? = null,
              cancelable: Boolean = true, onCancel: Runnable? = null): (() -> Unit)? {
-        val activity = UiAgentItem.findActivity(context) ?: return null
-        val fallback = fallbacks[activity]?.get()?.takeIf { it.isAttachedToWindow } ?: return null
+        val activity = UiAgentItem.findActivity(context) ?: run {
+            sumicya.qself.diagnostics.FeatureJournal.record("UI", "panel.open", "dead=no-activity")
+            return null
+        }
+        val fallback = fallbacks[activity]?.get()?.takeIf { it.isAttachedToWindow } ?: run {
+            sumicya.qself.diagnostics.FeatureJournal.record("UI", "panel.open", "dead=no-fallback")
+            return null
+        }
 
         // Single-panel contract: a new panel closes every existing one, so fast
         // taps across rows can never stack or drill through panels.

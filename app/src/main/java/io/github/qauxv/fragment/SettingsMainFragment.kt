@@ -392,23 +392,36 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
                 return
             }
             click.invoke(agent, requireSettingsHostActivity(), recyclerListView ?: return)
+            sumicya.qself.diagnostics.FeatureJournal.record("UI", "home.action", "diagnostics-opened")
             return
         }
         val id = when (action) {
             HomeCatalog.THEME -> "cfg-theme"
             HomeCatalog.BACKUP -> "cfg-backup-restore"
             HomeCatalog.ABOUT -> "other-about"
-            else -> return
+            else -> {
+                sumicya.qself.diagnostics.FeatureJournal.record("UI", "home.action", "dead=unknown action=$action")
+                return
+            }
         }
         if (id == "cfg-theme") {
             sumicya.qself.ui.SettingsOptionSheet.show(requireSettingsHostActivity(), group = id)
             return
         }
-        val location = FunctionEntryRouter.resolveUiItemAnycastLocation(arrayOf(FunctionEntryRouter.Locations.ANY_CAST_PREFIX, id)) ?: return
-        val desc = FunctionEntryRouter.findDescriptionByLocation(location) as? IDslFragmentNode ?: return
+        val location = FunctionEntryRouter.resolveUiItemAnycastLocation(arrayOf(FunctionEntryRouter.Locations.ANY_CAST_PREFIX, id))
+        if (location == null) {
+            sumicya.qself.diagnostics.FeatureJournal.record("UI", "home.action", "dead=no-location id=$id")
+            return
+        }
+        val desc = FunctionEntryRouter.findDescriptionByLocation(location) as? IDslFragmentNode
+        if (desc == null) {
+            sumicya.qself.diagnostics.FeatureJournal.record("UI", "home.action", "dead=no-description id=$id")
+            return
+        }
         val fragment = desc.getTargetFragmentClass(location).newInstance()
         fragment.arguments = desc.getTargetFragmentArguments(location)
         requireSettingsHostActivity().presentFragment(fragment)
+        sumicya.qself.diagnostics.FeatureJournal.record("UI", "home.action", "fragment-presented id=$id")
     }
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
