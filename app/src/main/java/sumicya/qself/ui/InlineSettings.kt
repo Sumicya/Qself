@@ -361,7 +361,7 @@ object InlineSettings {
                 setImageResource(io.github.qauxv.R.drawable.qself_expand_more)
                 rotation = 180f // down chevron -> up chevron
                 setColorFilter(palette.secondary)
-                importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, FrameLayout.LayoutParams(SettingsVisuals.dp(content.context, 24),
                 SettingsVisuals.dp(content.context, 24), Gravity.CENTER))
         }
