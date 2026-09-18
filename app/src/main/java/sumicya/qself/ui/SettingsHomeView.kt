@@ -113,8 +113,8 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         addView(title, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
         addView(icon(io.github.qauxv.R.drawable.ic_search_baseline, HomeCatalog.SEARCH, "搜索功能"),
             FrameLayout.LayoutParams(dp(48), dp(48), Gravity.START or Gravity.CENTER_VERTICAL))
-        addView(icon(io.github.qauxv.R.drawable.ic_settings, HomeCatalog.THEME, "主题与显示"),
-            FrameLayout.LayoutParams(dp(48), dp(48), Gravity.END or Gravity.CENTER_VERTICAL))
+        // No trailing gear: it duplicated the "主题与显示" row right below and
+        // read as "host settings" while actually opening the theme sheet.
     }
 
     private fun icon(res: Int, action: String, label: String): View = ImageView(context).apply {

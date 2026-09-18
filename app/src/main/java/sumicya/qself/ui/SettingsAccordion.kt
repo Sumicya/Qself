@@ -121,10 +121,14 @@ class SettingsAccordion(context: Context, title: String, summary: String,
                 body.layoutParams = body.layoutParams.apply { height = LayoutParams.WRAP_CONTENT }
             }
         } else if (animated) {
-            animation = null
-            SettingsMotion.shrinkBody(body) {
-                body.visibility = GONE
-                body.layoutParams = body.layoutParams.apply { height = LayoutParams.WRAP_CONTENT }
+            // Track the shrink so a rapid re-expand cancels it; the end callback
+            // only hides the body when the card is still meant to be collapsed,
+            // otherwise a cancelled shrink would swallow a fresh expansion.
+            animation = SettingsMotion.shrinkBody(body) {
+                if (!expanded) {
+                    body.visibility = GONE
+                    body.layoutParams = body.layoutParams.apply { height = LayoutParams.WRAP_CONTENT }
+                }
             }
         } else {
             animation = null

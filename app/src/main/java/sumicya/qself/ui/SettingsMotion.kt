@@ -33,8 +33,10 @@ object SettingsMotion {
         if (short) 200 else 300).toLong()
 
     /**
-     * Grow [view] from zero to its measured height, ending on WRAP_CONTENT.
+     * Grow [view] to its measured height, ending on WRAP_CONTENT.
      *
+     * Starts from the view's current height instead of zero, so rapid
+     * re-expansion mid-shrink tracks the finger instead of jumping.
      * Returns the running animator so a caller can cancel it, or null when the
      * view is not ready to animate (then it is simply shown).
      */
@@ -49,9 +51,15 @@ object SettingsMotion {
         val target = view.measuredHeight
         val params = view.layoutParams ?: return null
         if (target <= 0) return null
-        params.height = 0
+        val start = view.height.coerceIn(0, target)
+        if (start == target) {
+            params.height = ViewGroup.LayoutParams.WRAP_CONTENT
+            view.layoutParams = params
+            return null
+        }
+        params.height = start
         view.layoutParams = params
-        return ValueAnimator.ofInt(0, target).apply {
+        return ValueAnimator.ofInt(start, target).apply {
             duration = duration(view.context)
             interpolator = easing(view.context)
             addUpdateListener { params.height = it.animatedValue as Int; view.layoutParams = params }
@@ -65,11 +73,16 @@ object SettingsMotion {
         }
     }
 
-    /** Shrink [view] to zero height; [onEnd] always runs, exactly once. */
-    fun shrinkBody(view: View, onEnd: () -> Unit) {
+    /**
+     * Shrink [view] to zero height; [onEnd] always runs, exactly once.
+     *
+     * Returns the running animator so callers can cancel a shrink in flight
+     * (a rapid re-expand must not race against a half-finished collapse).
+     */
+    fun shrinkBody(view: View, onEnd: () -> Unit): ValueAnimator? {
         val params = view.layoutParams
-        if (!enabled() || !view.isAttachedToWindow || view.height <= 0 || params == null) { onEnd(); return }
-        ValueAnimator.ofInt(view.height, 0).apply {
+        if (!enabled() || !view.isAttachedToWindow || view.height <= 0 || params == null) { onEnd(); return null }
+        return ValueAnimator.ofInt(view.height, 0).apply {
             duration = duration(view.context, true)
             interpolator = easing(view.context)
             addUpdateListener { params.height = it.animatedValue as Int; view.layoutParams = params }

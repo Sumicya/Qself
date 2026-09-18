@@ -756,7 +756,10 @@ public final class LiquidGlassInstaller {
             final DropletPanel droplet = new DropletPanel(
                     ctx, backdrop, sTabRowRef.get(), density, night);
             droplet.setVisibility(View.INVISIBLE);
-            host.addView(droplet, new FrameLayout.LayoutParams(0, 0,
+            // The droplet must sit BELOW the host's own tab row: its surface is an
+            // opaque backdrop capture, and on top of the real tabs it would hide
+            // the selected tab's icon and label (seen on device as a blank disc).
+            host.addView(droplet, 1, new FrameLayout.LayoutParams(0, 0,
                     android.view.Gravity.TOP | android.view.Gravity.START));
             droplet.setPill(glass);
             sDropletRef = new WeakReference<>(droplet);
