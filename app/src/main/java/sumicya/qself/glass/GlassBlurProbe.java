@@ -1,15 +1,20 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 package sumicya.qself.glass;
 
+import android.app.Activity;
+import android.content.Context;
+import android.content.ContextWrapper;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
+import android.graphics.Rect;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.SystemClock;
 import android.view.PixelCopy;
+import android.view.Window;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -117,7 +122,7 @@ final class GlassBlurProbe {
             raw.recycle();
 
             // 3) what the user actually sees: composited pixels of the pill.
-            copyScreenRegion(surface, w, h, bw, bh, rawEnergy, blurMs,
+            copyScreenRegion(surface, pos, w, h, bw, bh, rawEnergy, blurMs,
                     softening);
         } catch (Throwable t) {
             FeatureJournal.record("GLASS", "blur.fail",
@@ -125,13 +130,52 @@ final class GlassBlurProbe {
         }
     }
 
-    /** PixelCopy of the pill's screen region, then energy comparison. */
-    private static void copyScreenRegion(GlassSurface surface, int w, int h,
-                                         int bw, int bh, float rawEnergy,
-                                         long blurMs, float softening) {
+    /**
+     * PixelCopy of the pill's screen region, then energy comparison. The source
+     * rect is translated into window coordinates, because {@link PixelCopy}
+     * reads a window, not a view.
+     */
+    private static void copyScreenRegion(GlassSurface surface, int[] screenPos,
+                                         int w, int h, int bw, int bh,
+                                         float rawEnergy, long blurMs,
+                                         float softening) {
+        Window window = windowOf(surface.getContext());
         Bitmap screen = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        if (window == null) {
+            screen.recycle();
+            FeatureJournal.record("GLASS", "blur.probe",
+                    "path=" + surface.renderPathName()
+                            + " raw=" + round(rawEnergy)
+                            + " softening=" + round(softening)
+                            + " blurMs=" + blurMs + " pixcopy=no-window");
+            return;
+        }
+        int[] windowPos = new int[2];
+        window.getDecorView().getLocationOnScreen(windowPos);
+        int left = screenPos[0] - windowPos[0];
+        int top = screenPos[1] - windowPos[1];
+        int dw = Math.max(1, window.getDecorView().getWidth());
+        int dh = Math.max(1, window.getDecorView().getHeight());
+        left = Math.max(0, Math.min(left, dw - 1));
+        top = Math.max(0, Math.min(top, dh - 1));
+        int cw = Math.min(w, dw - left);
+        int ch = Math.min(h, dh - top);
+        if (cw < 2 || ch < 2) {
+            screen.recycle();
+            FeatureJournal.record("GLASS", "blur.probe",
+                    "path=" + surface.renderPathName()
+                            + " raw=" + round(rawEnergy)
+                            + " pixcopy=clipped");
+            return;
+        }
+        if (cw != w || ch != h) {
+            screen.recycle();
+            screen = Bitmap.createBitmap(cw, ch, Bitmap.Config.ARGB_8888);
+        }
+        Rect source = new Rect(left, top, left + cw, top + ch);
+        final Bitmap capture = screen;
         try {
-            PixelCopy.request(surface, screen, result -> {
+            PixelCopy.request(window, source, capture, result -> {
                 try {
                     if (result != PixelCopy.SUCCESS) {
                         FeatureJournal.record("GLASS", "blur.probe",
@@ -143,7 +187,7 @@ final class GlassBlurProbe {
                         return;
                     }
                     Bitmap scaled = Bitmap.createScaledBitmap(
-                            screen, bw, bh, true);
+                            capture, bw, bh, true);
                     float screenEnergy = gradientEnergy(scaled);
                     scaled.recycle();
                     float screenSoft = 1f - screenEnergy / rawEnergy;
@@ -159,7 +203,7 @@ final class GlassBlurProbe {
                             "path=" + surface.renderPathName()
                                     + " pixcopy=decode-fail");
                 } finally {
-                    screen.recycle();
+                    capture.recycle();
                 }
             }, handler());
         } catch (Throwable t) {
@@ -170,6 +214,18 @@ final class GlassBlurProbe {
                             + " softening=" + round(softening)
                             + " blurMs=" + blurMs + " pixcopy=rejected");
         }
+    }
+
+    /** The window that hosts the pill; the view's context chain leads to it. */
+    private static Window windowOf(Context context) {
+        Context current = context;
+        while (current instanceof ContextWrapper) {
+            if (current instanceof Activity) {
+                return ((Activity) current).getWindow();
+            }
+            current = ((ContextWrapper) current).getBaseContext();
+        }
+        return null;
     }
 
     private static synchronized Handler handler() {
