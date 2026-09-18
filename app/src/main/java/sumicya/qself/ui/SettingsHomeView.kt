@@ -2,22 +2,31 @@
 package sumicya.qself.ui
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
-import android.view.accessibility.AccessibilityNodeInfo
-import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import io.github.qauxv.R
 import io.github.qauxv.dsl.cell.TitleValueCell
+import sumicya.qself.diagnostics.FeatureJournal
 
 /**
- * The settings-home dashboard: header (search + centered title), one accordion
- * card per feature section, one management card, one about row. All navigation
- * goes through the [dispatch] callback supplied by SettingsMainFragment.
+ * The settings home dashboard: a header with the centred title and the leading
+ * search icon, one accordion card per catalog section, one management card and
+ * one about row.
+ *
+ * Three contracts hold this view together:
+ *  - **one bind path** — every state change goes through [bind], which either
+ *    accepts the new state or rejects it as identical, so a rebind is never
+ *    done twice for the same state;
+ *  - **no rebuild while measuring** — a breakpoint flip posts a rebind instead
+ *    of re-entering layout from `onMeasure`, which used to freeze the screen;
+ *  - **one click path** — controls are built by [SettingsTouchTarget], so every
+ *    tap is journaled before it dispatches.
  */
 class SettingsHomeView(context: Context) : LinearLayout(context) {
 
@@ -37,8 +46,11 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         setPadding(dp(SettingsVisuals.SCREEN_SIDE), dp(6), dp(SettingsVisuals.SCREEN_SIDE), dp(24))
     }
 
+    /* ---------------------------------------------------------- breakpoints */
+
     private fun dp(value: Int) = SettingsVisuals.dp(context, value)
 
+    /** Narrow screens and large fonts get the roomier layout. */
     private fun compact(): Boolean =
         (if (availableWidth > 0) availableWidth / resources.displayMetrics.density
         else resources.configuration.screenWidthDp.toFloat()) < 360 ||
@@ -72,6 +84,8 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         }
     }
 
+    /* ---------------------------------------------------------------- bind */
+
     fun bind(state: State, mode: Int, action: (String) -> Unit) {
         dispatch = action
         val compact = compact()
@@ -83,11 +97,11 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         removeAllViews()
         // Probe: a rebind tears down and rebuilds the whole dashboard; the
         // journal shows when and in which breakpoint it happened.
-        sumicya.qself.diagnostics.FeatureJournal.record("UI", "home.bind",
+        FeatureJournal.record("UI", "home.bind",
             "compact=$compact mode=$mode sections=${HomeCatalog.sections.size}")
 
         addView(buildHeader(), LayoutParams(LayoutParams.MATCH_PARENT, dp(52)))
-        addView(hostLabel(state), lp(top = 2, bottom = 14))
+        addView(buildHostLabel(state), lp(bottom = 14))
         for (section in HomeCatalog.sections) {
             addView(buildSectionCard(section), lp(bottom = SettingsVisuals.CARD_GAP))
         }
@@ -95,34 +109,40 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         addView(buildAboutRow(), lp(top = 4))
     }
 
-    /* ------------------------------------------------------------- header */
+    /* -------------------------------------------------------------- pieces */
 
     private fun buildHeader(): View = FrameLayout(context).apply {
-        addView(text("Qself", 22, palette.text, medium = true).apply { gravity = Gravity.CENTER },
-            FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
-        // Search opens the global search overlay (SettingsMainFragment). The
-        // old trailing gear duplicated the theme row below and was removed.
-        addView(actionIcon(io.github.qauxv.R.drawable.ic_search_baseline, HomeCatalog.SEARCH, "搜索功能"),
-            FrameLayout.LayoutParams(dp(48), dp(48), Gravity.START or Gravity.CENTER_VERTICAL))
+        addView(title(), FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
+        addView(searchIcon(), FrameLayout.LayoutParams(dp(48), dp(48), Gravity.START or Gravity.CENTER_VERTICAL))
     }
 
-    private fun hostLabel(state: State): TextView =
-        text(state.hostLabel + if (state.safeMode) " · 安全模式" else "", 12, palette.secondary)
+    private fun title(): TextView =
+        text("Qself", 22, palette.text, medium = true).apply { gravity = Gravity.CENTER }
 
-    /* ------------------------------------------------------------ sections */
+    /** Search opens the global overlay; the old trailing gear duplicated the theme row. */
+    private fun searchIcon(): View = ImageView(context).apply {
+        setImageResource(R.drawable.ic_search_baseline)
+        scaleType = ImageView.ScaleType.CENTER
+        imageTintList = ColorStateList.valueOf(palette.secondary)
+        SettingsTouchTarget.attach(this, HomeCatalog.SEARCH, "搜索功能") {
+            InlineSettings.anchor(this)
+            dispatch(HomeCatalog.SEARCH)
+        }
+    }
+
+    private fun buildHostLabel(state: State): TextView =
+        text(state.hostLabel + if (state.safeMode) " · 安全模式" else "", 12, palette.secondary)
 
     private fun buildSectionCard(section: HomeCatalog.Section): SettingsAccordion =
         SettingsAccordion(context, section.title, section.summary) {
             InlineFeatureList(context, home = section.id)
         }.apply {
             header.tag = section.id
-            onExpandedChanged = { isOpen ->
-                if (isOpen) expandedSections.add(section.id) else expandedSections.remove(section.id)
+            onExpandedChanged = { open ->
+                if (open) expandedSections.add(section.id) else expandedSections.remove(section.id)
             }
             setExpanded(section.id in expandedSections)
         }
-
-    /* ---------------------------------------------------------- management */
 
     private fun buildManagementCard(state: State): View = card {
         navRow("功能开关与错误记录",
@@ -138,7 +158,12 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         text("QSELF · 关于与隐私", 11, palette.secondary).apply {
             gravity = Gravity.CENTER
             minimumHeight = dp(48)
-        }.also { makeButton(it, HomeCatalog.ABOUT, "关于与隐私", filled = false) }
+        }.also { row ->
+            SettingsTouchTarget.attach(row, HomeCatalog.ABOUT, "关于与隐私") {
+                InlineSettings.anchor(row)
+                dispatch(HomeCatalog.ABOUT)
+            }
+        }
 
     /* ---------------------------------------------------------- primitives */
 
@@ -156,66 +181,11 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
             isChevron = true
         }
         SettingsVisuals.decorateCardChild(row, palette, true)
-        makeButton(row, id, "$title，$subtitle")
-        addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-    }
-
-    private fun actionIcon(res: Int, action: String, label: String): View =
-        ImageView(context).apply {
-            tag = action
-            setImageResource(res)
-            scaleType = ImageView.ScaleType.CENTER
-            imageTintList = android.content.res.ColorStateList.valueOf(palette.secondary)
-            contentDescription = label
-            isFocusable = true
-            setOnClickListener {
-                sumicya.qself.diagnostics.FeatureJournal.record("UI", "home.click", "id=$action")
-                InlineSettings.anchor(this)
-                dispatch(action)
-            }
-            exposeAsButton(this)
-        }
-
-    /** Uniform click target: named, focusable, >=48dp, announced as a button. */
-    private fun makeButton(view: View, id: String, label: String, filled: Boolean = false) {
-        view.tag = id
-        view.contentDescription = label
-        view.isFocusable = true
-        view.isClickable = true
-        view.minimumHeight = maxOf(view.minimumHeight, dp(48))
-        if (filled) {
-            view.background = SettingsVisuals.surface(context, palette, SettingsVisuals.CARD_RADIUS, true, view)
-        }
-        // Rows inside an already-rounded card use a bounded state layer.
-        if (view is TitleValueCell) {
-            view.foreground = SettingsVisuals.rowStateLayer(context, palette)
-        }
-        view.setOnClickListener {
-            // Probe: proves the touch reached this target; if a tap lands
-            // here but the destination never opens, the dispatcher is broken.
-            sumicya.qself.diagnostics.FeatureJournal.record("UI", "home.click", "id=$id")
-            InlineSettings.anchor(view)
+        SettingsTouchTarget.attach(row, id, "$title，$subtitle") {
+            InlineSettings.anchor(row)
             dispatch(id)
         }
-        exposeAsButton(view)
-    }
-
-    private fun exposeAsButton(view: View) {
-        view.accessibilityDelegate = object : AccessibilityDelegate() {
-            override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
-                super.onInitializeAccessibilityNodeInfo(host, info)
-                info.className = Button::class.java.name
-            }
-        }
-        if (view is ViewGroup) hideDecorativeChildren(view)
-    }
-
-    private fun hideDecorativeChildren(parent: ViewGroup) {
-        for (i in 0 until parent.childCount) {
-            val child = parent.getChildAt(i)
-            child.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-            if (child is ViewGroup) hideDecorativeChildren(child)
-        }
+        addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
     }
 
     private fun text(value: String, size: Int, color: Int, medium: Boolean = false): TextView =
