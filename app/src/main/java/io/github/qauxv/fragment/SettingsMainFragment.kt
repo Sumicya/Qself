@@ -378,11 +378,20 @@ class SettingsMainFragment : BaseRootLayoutFragment() {
             return
         }
         if (action == HomeCatalog.DIAGNOSTICS) {
-            // Open the existing agent's real page and highlight it; never bypass its interaction contract.
+            // Open the diagnostics entry through its own click listener: the old
+            // sheet route derived a group id from the anycast location, which
+            // is not a catalog group - the panel opened empty and the row
+            // looked dead ("功能错误记录进不去"). The anchor row is already
+            // registered by the button, so the inline dialog mounts under it.
             val provider = FunctionEntryRouter.queryAnnotatedUiItemAgentEntries()
-                .firstOrNull { it.itemAgentProviderUniqueIdentifier == action } ?: return
-            val location = FunctionEntryRouter.locationForProvider(provider).dropLast(1).toTypedArray()
-            sumicya.qself.ui.SettingsOptionSheet.show(requireSettingsHostActivity(), group = location.lastOrNull(), focus = action)
+                .firstOrNull { it.itemAgentProviderUniqueIdentifier == action }
+            val agent = provider?.uiItemAgent
+            val click = agent?.onClickListener
+            if (agent == null || click == null) {
+                sumicya.qself.diagnostics.FeatureJournal.record("UI", "home.action", "diagnostics-missing")
+                return
+            }
+            click.invoke(agent, requireSettingsHostActivity(), recyclerListView ?: return)
             return
         }
         val id = when (action) {
