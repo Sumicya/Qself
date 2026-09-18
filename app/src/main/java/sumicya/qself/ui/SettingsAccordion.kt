@@ -99,7 +99,12 @@ class SettingsAccordion(context: Context, title: String, summary: String,
 
     fun setExpanded(value: Boolean, animate: Boolean = false) {
         if (value == expanded) return
-        animation?.removeAllListeners(); animation?.removeAllUpdateListeners(); animation?.cancel()
+        // Cancel in place: end callbacks must still run (expand finalises the
+        // height to WRAP_CONTENT; the shrink callback is state-guarded), so
+        // listeners are NOT stripped before cancelling - a frozen mid-height
+        // body was the symptom of the previous removeAllListeners dance.
+        animation?.cancel()
+        animation = null
         expanded = value
         if (value && body.childCount == 0) body.addView(contentFactory(), LayoutParams(-1, -2))
         if (android.os.Build.VERSION.SDK_INT >= 30) header.stateDescription = if (value) "已展开" else "已收起"
