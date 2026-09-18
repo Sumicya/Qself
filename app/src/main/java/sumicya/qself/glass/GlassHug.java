@@ -133,7 +133,7 @@ final class GlassHug {
      * Runs once after the first real layout.
      */
     void applyMeasuredRimTrim(final FrameLayout host,
-                              final LiquidGlassPanel glass, final ViewGroup row) {
+                              final GlassSurface glass, final ViewGroup row) {
         if (rimTrimDone || host == null || glass == null || row == null) {
             return;
         }

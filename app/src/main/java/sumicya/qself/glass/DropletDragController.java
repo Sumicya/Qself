@@ -371,10 +371,10 @@ final class DropletDragController implements LiquidGlassHostLayout.DragHandler {
             row.setPivotY(row.getHeight() * 0.5f);
             row.setScaleX(grow);
             row.setScaleY(grow);
-            if (pill instanceof LiquidGlassPanel) {
+            if (pill instanceof GlassSurface) {
                 float centreX = droplet.getLeft() + droplet.getTranslationX()
                         + dropletWidth * 0.5f - pill.getLeft() - parallax;
-                ((LiquidGlassPanel) pill).setInteraction(progress, centreX);
+                ((GlassSurface) pill).setInteraction(progress, centreX);
             }
         }
         row.setTranslationX(parallax);

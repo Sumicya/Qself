@@ -330,6 +330,7 @@ public final class LiquidGlassInstaller {
                                 .removeOnGlobalLayoutListener(this);
                         host.attach();
                         syncDropletSize(TabBarBridge.currentIndex(tabView));
+                        GlassBlurProbe.verify(glass);
                         PAGES.extendPagesToBottom(backdrop);
                         host.postDelayed(
                                 () -> PAGES.extendPagesToBottom(backdrop),
@@ -343,6 +344,8 @@ public final class LiquidGlassInstaller {
                                         + " hostH=" + host.getHeight()
                                         + " barH=" + tabView.getHeight()
                                         + " navInset=" + navigationInset
+                                        + " glassPath="
+                                        + glass.renderPathName()
                                         + " sdk=" + Build.VERSION.SDK_INT);
                     }
                 });
@@ -464,8 +467,8 @@ public final class LiquidGlassInstaller {
         try {
             boolean night = isNight(ctx);
 
-            final LiquidGlassPanel glass =
-                    new LiquidGlassPanel(ctx, backdrop, density, night);
+            final GlassSurface glass =
+                    new GlassSurface(ctx, backdrop, density, night);
             host.addView(glass, 0, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT));
@@ -523,7 +526,7 @@ public final class LiquidGlassInstaller {
             });
 
             LiquidGlassModule.log(android.util.Log.INFO,
-                    "renderer attached, supported=" + glass.isSupported()
+                    "renderer attached, path=" + glass.renderPathName()
                             + " drag=" + (tabRow != null));
         } catch (Throwable t) {
             LiquidGlassModule.logErr("glass renderer unavailable", t);

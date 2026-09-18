@@ -43,12 +43,18 @@ object DisableChatsCardContainer : CommonSwitchFunctionHook() {
     override val isAvailable = requireMinQQVersion(QQVersion.QQ_9_0_75)
 
     override fun initOnce(): Boolean {
-        // QQ 9.2.x removed this part class; toHostClass() then returns null and
-        // the old code called getDeclaredMethods() on it - the recurring
-        // CNFE+NPE pair in every boot's device log (sweep 2026-09-07). Nothing
-        // to disable on those versions: succeed as a no-op instead of failing.
-        val cls = "com.tencent.mobileqq.chatlist.MainChatsCardContainerPartImpl".toHostClass()
-            ?: return true
+        // QQ 9.2.x removed this part class and toHostClass() throws CNFE for
+        // it (device journal 2026-09-18: initOnce -> ClassNotFoundException).
+        // The earlier null-elvis guard could never fire because loadClass
+        // throws instead of returning null. Nothing to disable on those
+        // versions: swallow the lookup failure as the declared no-op.
+        val cls = try {
+            "com.tencent.mobileqq.chatlist.MainChatsCardContainerPartImpl".toHostClass()
+        } catch (e: ClassNotFoundException) {
+            return true
+        } catch (e: LinkageError) {
+            return true
+        }
         cls.singleMethod {
             parameters(Context::class.java, Boolean::class.java)
         }.hookBeforeIfEnabled(this) { param ->

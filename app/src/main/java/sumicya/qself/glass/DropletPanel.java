@@ -53,7 +53,7 @@ final class DropletPanel extends View {
     // Copyright 2025 Kyant, licensed under the Apache License 2.0.
     // Dispersion and the hairline rim light are the upstream signature.
     private static final String DISPERSION_PROGRAM = ""
-            + LiquidGlassPanel.SDF_SOURCE
+            + GlassShader.SDF_SOURCE
             + "uniform shader content;\n"
             + "uniform float2 size;\n"
             + "uniform float2 offset;\n"
@@ -112,7 +112,7 @@ final class DropletPanel extends View {
             + "}\n";
 
     private static final String EDGE_HIGHLIGHT_PROGRAM = ""
-            + LiquidGlassPanel.SDF_SOURCE
+            + GlassShader.SDF_SOURCE
             + "uniform float2 size;\n"
             + "uniform float4 cornerRadii;\n"
             + "layout(color) uniform half4 color;\n"
@@ -342,7 +342,7 @@ final class DropletPanel extends View {
         // Upstream places InteractiveHighlight on the container row and the
         // invisible tinted row only -- never on the droplet surface. The
         // tinted-row copy is recorded through the lens in recordTintedRow;
-        // the container copy is painted by LiquidGlassPanel.
+        // the container copy is painted by GlassSurface.
         canvas.restore();
 
         // 4) directional rim specular (press only, hairline)
