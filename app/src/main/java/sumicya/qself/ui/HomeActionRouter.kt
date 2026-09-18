@@ -46,7 +46,7 @@ class HomeActionRouter(
             action == HomeCatalog.THEME -> openGroup(GROUP_THEME)
             action == HomeCatalog.BACKUP -> presentAnycast(ID_BACKUP)
             action == HomeCatalog.ABOUT -> presentAnycast(ID_ABOUT)
-            else -> dead("unknown", "action=$action")
+            else -> dead("dead=unknown action=$action")
         }
     }
 
