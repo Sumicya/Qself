@@ -5,8 +5,6 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BlendMode;
 import android.graphics.Canvas;
-import android.graphics.ColorMatrix;
-import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RadialGradient;
@@ -22,22 +20,26 @@ import android.view.ViewGroup;
 import java.lang.ref.WeakReference;
 
 /**
- * The resting glass pill, rewritten as an explicit three-stage pipeline:
+ * The resting glass pill: capture, blur, surface.
  *
  * <ol>
  *   <li><b>Capture</b> — the backdrop pages behind the pill are drawn into a
- *       render node (GPU path) or a bitmap (CPU path), positioned so the pill
- *       window samples exactly what passes underneath.</li>
- *   <li><b>Blur</b> — the capture runs through a saturation lift and a blur,
- *       then a rim-only refraction lens; on hosts where the AGSL lens is
- *       rejected the capture is blurred on the CPU instead, so the pill still
- *       shows frosted content rather than a flat plate.</li>
- *   <li><b>Surface</b> — a faint material wash and a press highlight finish
- *       the plate; the rim outline clips everything.</li>
+ *       render node, positioned so the pill window samples what passes
+ *       underneath it.</li>
+ *   <li><b>Blur</b> — the capture always runs through a real blur. The AGSL
+ *       lens is an extra leaf effect on top; when it is unavailable the blur
+ *       alone still frosts the pill, and the saturation lift lives inside the
+ *       lens shader because {@code RenderEffect} chains at most two effects
+ *       (a deeper chain is rejected, which is what used to fall back to a flat
+ *       plate).</li>
+ *   <li><b>Surface</b> — a light material wash, a rim highlight and the press
+ *       highlight finish the plate; the rim outline clips everything.</li>
  * </ol>
  *
- * <p>Every stage reports through the feature journal; {@link GlassBlurProbe}
- * samples real pixels to prove the blur actually happened on device.
+ * <p>When the canvas is not hardware accelerated, or the effects cannot be
+ * built, the capture is blurred on the CPU instead. Every demotion records the
+ * reason in the feature journal, and {@link GlassBlurProbe} samples the real
+ * screen pixels to prove the blur happened.
  */
 final class GlassSurface extends View {
 
@@ -51,12 +53,15 @@ final class GlassSurface extends View {
     /** Rim band, in dp, inside which the lens bends samples. */
     private static final float RIM_DP = 24f;
     /** Blur radius in dp. */
-    private static final float BLUR_DP = 8f;
-    /** Saturation multiplier applied to the blurred backdrop. */
-    private static final float VIBRANCY = 1.5f;
-    /** Container surface at 40% alpha, light and dark. */
-    private static final int WASH_LIGHT = 0x66FAFAFA;
-    private static final int WASH_DARK = 0x66121212;
+    private static final float BLUR_DP = 12f;
+    /** Saturation lift applied to the frosted content. */
+    private static final float VIBRANCY = 1.6f;
+    /** Material wash over the blurred backdrop: light, not milky. */
+    private static final int WASH_LIGHT = 0x1FFFFFFF;
+    private static final int WASH_DARK = 0x1F121212;
+    /** Rim highlight, drawn as a hairline just inside the outline. */
+    private static final int RIM_LIGHT = 0x33FFFFFF;
+    private static final int RIM_DARK = 0x1Affffff;
     /** Press highlight: 8% flat wash plus a 15% radial at the droplet. */
     private static final float PRESS_WASH = 0.08f;
     private static final float PRESS_RIPPLE = 0.15f;
@@ -70,7 +75,6 @@ final class GlassSurface extends View {
 
     /* stage 1+2 GPU state */
     private final RenderNode captureNode = new RenderNode("qselfGlassCapture");
-    private final RenderEffect vibrancy;
     private RuntimeShader lens;
     private RenderEffect chain;
     private int chainW = -1;
@@ -84,8 +88,8 @@ final class GlassSurface extends View {
     /* stage 3 state */
     private final Paint materialWash = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint edgeWash = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint rimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint ripplePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private RadialGradient pressRipple;
     private final Path outline = new Path();
     private final Rect visibleRect = new Rect();
     private final int[] selfPos = new int[2];
@@ -103,14 +107,11 @@ final class GlassSurface extends View {
         this.backdropRef = new WeakReference<>(backdrop);
         this.density = density;
         this.samplePad = Math.round(RIM_DP * density);
-        ColorMatrix lift = new ColorMatrix();
-        lift.setSaturation(VIBRANCY);
-        this.vibrancy = RenderEffect.createColorFilterEffect(
-                new ColorMatrixColorFilter(lift));
         try {
             lens = new RuntimeShader(GlassShader.LENS_PROGRAM);
             path = PATH_GPU;
         } catch (Throwable t) {
+            lens = null;
             path = PATH_CPU;
             LiquidGlassModule.logErr("lens program rejected, cpu blur path", t);
         }
@@ -185,13 +186,14 @@ final class GlassSurface extends View {
                     ? GlassConfig.backgroundColor(night)
                     : (night ? WASH_DARK : WASH_LIGHT));
             canvas.drawRoundRect(0, 0, w, h, h * 0.5f, h * 0.5f, materialWash);
+            drawRim(canvas, w, h);
             drawPressHighlight(canvas, w, h);
         } finally {
             canvas.restoreToCount(layer);
         }
     }
 
-    /** Stage 1+2, GPU: capture into the render node, blur+lens the node. */
+    /** Stage 1+2, GPU: capture into the render node, blur (and lens) the node. */
     private void drawGpuBackdrop(Canvas canvas, int w, int h) {
         int captureW = w + samplePad * 2;
         int captureH = h + samplePad * 2;
@@ -242,26 +244,22 @@ final class GlassSurface extends View {
                     * CPU_SAMPLE_SCALE));
             int bh = Math.max(1, Math.round((h + samplePad * 2)
                     * CPU_SAMPLE_SCALE));
-            boolean refresh = cpuBuffer == null || cpuBuffer.isRecycled()
+            boolean resize = cpuBuffer == null || cpuBuffer.isRecycled()
                     || cpuBuffer.getWidth() != bw
-                    || cpuBuffer.getHeight() != bh
-                    || frameCount % CPU_REFRESH_EVERY == 0;
-            if (refresh) {
-                if (cpuBuffer == null || cpuBuffer.isRecycled()
-                        || cpuBuffer.getWidth() != bw
-                        || cpuBuffer.getHeight() != bh) {
-                    if (cpuBuffer != null && !cpuBuffer.isRecycled()) {
-                        cpuBuffer.recycle();
-                    }
-                    cpuBuffer = Bitmap.createBitmap(bw, bh,
-                            Bitmap.Config.ARGB_8888);
+                    || cpuBuffer.getHeight() != bh;
+            if (resize) {
+                if (cpuBuffer != null && !cpuBuffer.isRecycled()) {
+                    cpuBuffer.recycle();
                 }
+                cpuBuffer = Bitmap.createBitmap(bw, bh,
+                        Bitmap.Config.ARGB_8888);
+            }
+            if (resize || frameCount % CPU_REFRESH_EVERY == 0) {
                 Canvas c = new Canvas(cpuBuffer);
                 c.scale(CPU_SAMPLE_SCALE, CPU_SAMPLE_SCALE);
                 if (captureInto(c, w + samplePad * 2, h + samplePad * 2)) {
                     int radius = Math.max(1,
                             Math.round(BLUR_DP * density * CPU_SAMPLE_SCALE));
-                    GlassBlurProbe.boostSaturation(cpuBuffer);
                     StackBlur.blur(cpuBuffer, radius);
                 }
             }
@@ -312,14 +310,7 @@ final class GlassSurface extends View {
                 continue;
             }
             page.getLocationOnScreen(childPos);
-            float dx = samplePad - (selfPos[0] - childPos[0]);
-            float dy = samplePad - (selfPos[1] - childPos[1]);
-            int save = rc.save();
-            rc.translate(dx, dy);
-            rc.clipRect(-dx, -dy, -dx + captureW, -dy + captureH);
-            page.draw(rc);
-            rc.restoreToCount(save);
-            captured = true;
+            captured |= drawPage(rc, page, captureW, captureH);
         }
         if (!captured) {
             pager.getLocationOnScreen(childPos);
@@ -350,33 +341,72 @@ final class GlassSurface extends View {
                 continue;
             }
             page.getLocationOnScreen(childPos);
-            float dx = samplePad - (selfPos[0] - childPos[0]);
-            float dy = samplePad - (selfPos[1] - childPos[1]);
-            int save = c.save();
-            c.translate(dx, dy);
-            c.clipRect(-dx, -dy, -dx + captureW, -dy + captureH);
-            page.draw(c);
-            c.restoreToCount(save);
-            captured = true;
+            captured |= drawPage(c, page, captureW, captureH);
         }
         return captured;
     }
 
-    /** Blur + lens + vibrancy chain, rebuilt when the pill resizes. */
+    /** Draws one backdrop page at the capture geometry. */
+    private boolean drawPage(Canvas canvas, View page, int captureW, int captureH) {
+        float dx = samplePad - (selfPos[0] - childPos[0]);
+        float dy = samplePad - (selfPos[1] - childPos[1]);
+        int save = canvas.save();
+        canvas.translate(dx, dy);
+        canvas.clipRect(-dx, -dy, -dx + captureW, -dy + captureH);
+        page.draw(canvas);
+        canvas.restoreToCount(save);
+        return true;
+    }
+
+    /**
+     * Blur (always) plus the AGSL lens when it is available.
+     *
+     * <p>{@code RenderEffect} chains at most two effects, so this is the
+     * deepest legal chain: lens outer, blur inner. Everything else that used
+     * to be a third effect lives inside the lens shader. If the chain is
+     * rejected the blur alone is kept, which still frosts the pill — and the
+     * journal says so through {@code blur.fail reason=gpu-chain}.
+     */
     private void buildChain(int w, int h, float radius) {
-        lens.setFloatUniform("size", (float) w, (float) h);
-        lens.setFloatUniform("offset", (float) -samplePad, (float) -samplePad);
-        lens.setFloatUniform("cornerRadii", radius, radius, radius, radius);
-        lens.setFloatUniform("refractionHeight", RIM_DP * density);
-        lens.setFloatUniform("refractionAmount", -RIM_DP * density);
-        lens.setFloatUniform("depthEffect", 0f);
-        float blurRadius = BLUR_DP * density;
-        chain = RenderEffect.createChainEffect(
-                RenderEffect.createRuntimeShaderEffect(lens, "content"),
-                RenderEffect.createBlurEffect(blurRadius, blurRadius,
-                        vibrancy, Shader.TileMode.CLAMP));
+        float blurRadius = Math.max(1f, BLUR_DP * density);
+        RenderEffect blur = RenderEffect.createBlurEffect(blurRadius, blurRadius,
+                Shader.TileMode.CLAMP);
+        RenderEffect composed = blur;
+        if (lens != null) {
+            try {
+                lens.setFloatUniform("size", (float) w, (float) h);
+                lens.setFloatUniform("offset", (float) -samplePad, (float) -samplePad);
+                lens.setFloatUniform("cornerRadii", radius, radius, radius, radius);
+                lens.setFloatUniform("refractionHeight", RIM_DP * density);
+                lens.setFloatUniform("refractionAmount", -RIM_DP * density);
+                lens.setFloatUniform("depthEffect", 0f);
+                lens.setFloatUniform("saturation", VIBRANCY);
+                composed = RenderEffect.createChainEffect(
+                        RenderEffect.createRuntimeShaderEffect(lens, "content"),
+                        blur);
+            } catch (Throwable t) {
+                lens = null;
+                LiquidGlassModule.logErr("lens chain rejected, blur only", t);
+                sumicya.qself.diagnostics.FeatureJournal.record("GLASS",
+                        "blur.fail", "reason=gpu-chain "
+                                + t.getClass().getSimpleName());
+            }
+        }
+        chain = composed;
         chainW = w;
         chainH = h;
+    }
+
+    /** Hairline rim highlight just inside the outline. */
+    private void drawRim(Canvas canvas, int w, int h) {
+        rimPaint.setStyle(Paint.Style.STROKE);
+        rimPaint.setStrokeWidth(Math.max(1f, density));
+        rimPaint.setColor(night ? RIM_DARK : RIM_LIGHT);
+        rimPaint.setBlendMode(BlendMode.PLUS);
+        float inset = Math.max(1f, density);
+        android.graphics.RectF box = new android.graphics.RectF(
+                inset, inset, w - inset, h - inset);
+        canvas.drawRoundRect(box, h * 0.5f, h * 0.5f, rimPaint);
     }
 
     /** Stage 3: press highlight, verbatim InteractiveHighlight recipe. */
@@ -394,11 +424,10 @@ final class GlassSurface extends View {
                 : w * 0.5f;
         float radius = Math.min(w, h) * 1.5f;
         int core = Math.round(0xFF * PRESS_RIPPLE * press);
-        pressRipple = new RadialGradient(cx, h * 0.5f, radius,
+        ripplePaint.setShader(new RadialGradient(cx, h * 0.5f, radius,
                 new int[]{(core << 24) | 0x00FFFFFF,
                         (core << 24) | 0x00FFFFFF, 0x00FFFFFF},
-                new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP);
-        ripplePaint.setShader(pressRipple);
+                new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
         ripplePaint.setBlendMode(BlendMode.PLUS);
         canvas.drawRect(0, 0, w, h, ripplePaint);
         canvas.restoreToCount(save);

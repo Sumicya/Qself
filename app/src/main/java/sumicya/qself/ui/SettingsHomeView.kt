@@ -2,31 +2,29 @@
 package sumicya.qself.ui
 
 import android.content.Context
-import android.content.res.ColorStateList
-import android.graphics.Typeface
 import android.view.Gravity
 import android.view.View
-import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.TextView
-import io.github.qauxv.R
-import io.github.qauxv.dsl.cell.TitleValueCell
+import com.google.android.material.card.MaterialCardView
 import sumicya.qself.diagnostics.FeatureJournal
 
 /**
- * The settings home dashboard: a header with the centred title and the leading
- * search icon, one accordion card per catalog section, one management card and
- * one about row.
+ * The settings home dashboard, built entirely from Material 3 Expressive
+ * components:
+ *
+ * - a hero header — large title, host label, and a pill search field;
+ * - one [SettingsAccordion] card per catalog section (tonal container, large
+ *   corner, leading icon badge);
+ * - one management card of [SettingsActionRow]s;
+ * - one about row.
  *
  * Three contracts hold this view together:
  *  - **one bind path** — every state change goes through [bind], which either
- *    accepts the new state or rejects it as identical, so a rebind is never
- *    done twice for the same state;
+ *    accepts the new state or rejects it as identical;
  *  - **no rebuild while measuring** — a breakpoint flip posts a rebind instead
  *    of re-entering layout from `onMeasure`, which used to freeze the screen;
- *  - **one click path** — controls are built by [SettingsTouchTarget], so every
- *    tap is journaled before it dispatches.
+ *  - **one click path** — controls are built through [SettingsTouchTarget], so
+ *    every tap is journaled before it dispatches.
  */
 class SettingsHomeView(context: Context) : LinearLayout(context) {
 
@@ -43,7 +41,7 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
 
     init {
         orientation = VERTICAL
-        setPadding(dp(SettingsVisuals.SCREEN_SIDE), dp(6), dp(SettingsVisuals.SCREEN_SIDE), dp(24))
+        setPadding(dp(SettingsVisuals.SCREEN_SIDE), dp(4), dp(SettingsVisuals.SCREEN_SIDE), dp(24))
     }
 
     /* ---------------------------------------------------------- breakpoints */
@@ -100,41 +98,59 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         FeatureJournal.record("UI", "home.bind",
             "compact=$compact mode=$mode sections=${HomeCatalog.sections.size}")
 
-        addView(buildHeader(), LayoutParams(LayoutParams.MATCH_PARENT, dp(52)))
-        addView(buildHostLabel(state), lp(bottom = 14))
+        addView(buildHeader(state), lp(bottom = 16))
         for (section in HomeCatalog.sections) {
             addView(buildSectionCard(section), lp(bottom = SettingsVisuals.CARD_GAP))
         }
         addView(buildManagementCard(state), lp(bottom = SettingsVisuals.CARD_GAP))
-        addView(buildAboutRow(), lp(top = 4))
+        addView(buildAboutRow(), lp(top = 8))
     }
 
-    /* -------------------------------------------------------------- pieces */
+    /* -------------------------------------------------------------- header */
 
-    private fun buildHeader(): View = FrameLayout(context).apply {
-        addView(title(), FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
-        addView(searchIcon(), FrameLayout.LayoutParams(dp(48), dp(48), Gravity.START or Gravity.CENTER_VERTICAL))
+    private fun buildHeader(state: State): View = LinearLayout(context).apply {
+        orientation = VERTICAL
+        addView(SettingsVisuals.text(context, SettingsVisuals.TYPE_HEADLINE_SMALL, "Qself", palette.text))
+        val label = state.hostLabel + if (state.safeMode) " · 安全模式" else ""
+        addView(SettingsVisuals.text(context, SettingsVisuals.TYPE_LABEL_MEDIUM, label, palette.secondary).apply {
+            setPadding(0, dp(2), 0, dp(16))
+        })
+        addView(buildSearchField())
     }
 
-    private fun title(): TextView =
-        text("Qself", 22, palette.text, medium = true).apply { gravity = Gravity.CENTER }
-
-    /** Search opens the global overlay; the old trailing gear duplicated the theme row. */
-    private fun searchIcon(): View = ImageView(context).apply {
-        setImageResource(R.drawable.ic_search_baseline)
-        scaleType = ImageView.ScaleType.CENTER
-        imageTintList = ColorStateList.valueOf(palette.secondary)
-        SettingsTouchTarget.attach(this, HomeCatalog.SEARCH, "搜索功能") {
-            InlineSettings.anchor(this)
+    /**
+     * The search affordance is a Material 3 search bar: a pill-shaped tonal
+     * surface with a leading icon and a hint. The old bare icon gave no hint
+     * that it was tappable at all.
+     */
+    private fun buildSearchField(): View {
+        val field = SettingsVisuals.card(context, palette,
+            radius = SettingsVisuals.SHAPE_XL, container = palette.surfaceHigh, clickable = true)
+        field.addView(LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            addView(android.widget.ImageView(context).apply {
+                setImageResource(io.github.qauxv.R.drawable.ic_search_baseline)
+                setColorFilter(palette.secondary)
+                importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LayoutParams(dp(24), dp(24)))
+            addView(SettingsVisuals.text(context, SettingsVisuals.TYPE_BODY_LARGE, "搜索功能与设置", palette.secondary).apply {
+                setPadding(dp(16), 0, 0, 0)
+            }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        SettingsTouchTarget.attach(field, HomeCatalog.SEARCH, "搜索功能") {
+            InlineSettings.anchor(field)
             dispatch(HomeCatalog.SEARCH)
         }
+        return field
     }
 
-    private fun buildHostLabel(state: State): TextView =
-        text(state.hostLabel + if (state.safeMode) " · 安全模式" else "", 12, palette.secondary)
+    /* ------------------------------------------------------------ sections */
 
     private fun buildSectionCard(section: HomeCatalog.Section): SettingsAccordion =
-        SettingsAccordion(context, section.title, section.summary) {
+        SettingsAccordion(context, palette, section.title, section.summary, section.icon) {
             InlineFeatureList(context, home = section.id)
         }.apply {
             header.tag = section.id
@@ -144,58 +160,43 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
             setExpanded(section.id in expandedSections)
         }
 
-    private fun buildManagementCard(state: State): View = card {
-        navRow("功能开关与错误记录",
-            if (state.diagnosticEnabled) "本地功能记录 · 探针日志 · 可复制清空（记录已开）"
-            else "本地功能记录 · 探针日志 · 可复制清空",
-            HomeCatalog.DIAGNOSTICS)
-        navRow("主题与显示", "Material 3 Expressive · 玻璃与外观", HomeCatalog.THEME)
-        navRow("备份与恢复", "保留你的配置，放心调整", HomeCatalog.BACKUP)
-        navRow("功能与设置", "按场景合并，子项独立选择", HomeCatalog.CATALOG)
+    /* ---------------------------------------------------------- management */
+
+    private fun buildManagementCard(state: State): View {
+        val card = SettingsVisuals.card(context, palette, container = palette.surfaceLow)
+        card.addView(LinearLayout(context).apply {
+            orientation = VERTICAL
+            actionRow(io.github.qauxv.R.drawable.ic_warn, "功能开关与错误记录",
+                if (state.diagnosticEnabled) "本地功能记录 · 探针日志 · 可复制清空（记录已开）"
+                else "本地功能记录 · 探针日志 · 可复制清空",
+                HomeCatalog.DIAGNOSTICS)
+            actionRow(io.github.qauxv.R.drawable.ic_settings, "主题与显示", "Material 3 Expressive · 玻璃与外观", HomeCatalog.THEME)
+            actionRow(io.github.qauxv.R.drawable.ic_item_save_72dp, "备份与恢复", "保留你的配置，放心调整", HomeCatalog.BACKUP)
+            actionRow(io.github.qauxv.R.drawable.ic_filter_list, "功能与设置", "按场景合并，子项独立选择", HomeCatalog.CATALOG)
+        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        return card
     }
 
-    private fun buildAboutRow(): TextView =
-        text("QSELF · 关于与隐私", 11, palette.secondary).apply {
-            gravity = Gravity.CENTER
-            minimumHeight = dp(48)
-        }.also { row ->
-            SettingsTouchTarget.attach(row, HomeCatalog.ABOUT, "关于与隐私") {
-                InlineSettings.anchor(row)
-                dispatch(HomeCatalog.ABOUT)
+    private fun LinearLayout.actionRow(iconRes: Int, title: String, summary: String, id: String) {
+        addView(SettingsActionRow(context, palette).apply {
+            bind(iconRes, title, summary, id) {
+                InlineSettings.anchor(this)
+                dispatch(id)
             }
-        }
+        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+    }
+
+    private fun buildAboutRow(): View =
+        SettingsVisuals.text(context, SettingsVisuals.TYPE_LABEL_LARGE, "QSELF · 关于与隐私", palette.secondary)
+            .apply { gravity = Gravity.CENTER }
+            .also { row ->
+                SettingsTouchTarget.attach(row, HomeCatalog.ABOUT, "关于与隐私") {
+                    InlineSettings.anchor(row)
+                    dispatch(HomeCatalog.ABOUT)
+                }
+            }
 
     /* ---------------------------------------------------------- primitives */
-
-    private fun card(content: LinearLayout.() -> Unit): View = LinearLayout(context).apply {
-        orientation = VERTICAL
-        background = SettingsVisuals.surface(context, palette, SettingsVisuals.CARD_RADIUS, false)
-        SettingsVisuals.clipOutline(this, SettingsVisuals.CARD_RADIUS)
-        content()
-    }
-
-    private fun LinearLayout.navRow(title: String, subtitle: String, id: String) {
-        val row = TitleValueCell(context).apply {
-            this.title = title
-            summary = subtitle
-            isChevron = true
-        }
-        SettingsVisuals.decorateCardChild(row, palette, true)
-        SettingsTouchTarget.attach(row, id, "$title，$subtitle") {
-            InlineSettings.anchor(row)
-            dispatch(id)
-        }
-        addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-    }
-
-    private fun text(value: String, size: Int, color: Int, medium: Boolean = false): TextView =
-        TextView(context).apply {
-            text = value
-            textSize = size.toFloat() // SP: follows the user's font scale.
-            setTextColor(color)
-            typeface = Typeface.create(if (medium) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
-            includeFontPadding = false
-        }
 
     private fun lp(top: Int = 0, bottom: Int = 0) =
         LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {

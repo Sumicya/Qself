@@ -7,6 +7,11 @@ package sumicya.qself.glass;
  * <p>The refraction shader derives from Kyant0/AndroidLiquidGlass (android
  * branch), Copyright 2025 Kyant, Apache License 2.0. The signed-distance
  * helpers are the renderer-internal contract between the two surfaces.
+ *
+ * <p><b>Chain depth is 2.</b> {@code RenderEffect} may only chain two effects,
+ * so the lens is a leaf and the saturation lift lives inside the shader itself.
+ * A deeper chain is rejected by the platform, which is what used to send the
+ * pill to the flat fallback (and made the glass look like a plain plate).
  */
 final class GlassShader {
 
@@ -34,7 +39,11 @@ final class GlassShader {
             + "    return g;\n"
             + "}\n";
 
-    /** Rim-only refraction lens: the centre passes through untouched. */
+    /**
+     * Rim-only refraction lens with an in-shader saturation lift: the centre
+     * passes through untouched, the rim bends samples inward, and the frosted
+     * content keeps its colour without a third chained effect.
+     */
     static final String LENS_PROGRAM = ""
             + "uniform shader content;\n"
             + "uniform float2 size;\n"
@@ -43,18 +52,21 @@ final class GlassShader {
             + "uniform float refractionHeight;\n"
             + "uniform float refractionAmount;\n"
             + "uniform float depthEffect;\n"
+            + "uniform float saturation;\n"
             + SDF_SOURCE
             + "half4 main(float2 coord) {\n"
             + "    float2 halfExtent = size * 0.5;\n"
             + "    float2 local = (coord + offset) - halfExtent;\n"
             + "    float radius = radiusAt(coord, cornerRadii);\n"
             + "    float dist = sdRoundedRect(local, halfExtent, radius);\n"
-            + "    if (-dist >= refractionHeight) return content.eval(coord);\n"
-            + "    float rim = clamp(-dist / refractionHeight, 0.0, 1.0);\n"
+            + "    float rim = clamp(-dist / max(refractionHeight, 0.001), 0.0, 1.0);\n"
             + "    float bend = 1.0 - sqrt(max(0.0, 1.0 - rim * rim));\n"
             + "    float gradLimit = min(radius * 1.5, min(halfExtent.x, halfExtent.y));\n"
             + "    float2 normal = normalize(gradSdRoundedRect(local, halfExtent, gradLimit)\n"
             + "                             + depthEffect * normalize(local));\n"
-            + "    return content.eval(coord + bend * refractionAmount * normal);\n"
+            + "    half4 col = content.eval(coord + bend * refractionAmount * normal);\n"
+            + "    float luma = dot(col.rgb, half3(0.299, 0.587, 0.114));\n"
+            + "    col.rgb = clamp(mix(half3(luma), col.rgb, saturation), 0.0, 1.0);\n"
+            + "    return col;\n"
             + "}\n";
 }

@@ -15,7 +15,6 @@ import android.widget.LinearLayout
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import io.github.qauxv.R
-import io.github.qauxv.dsl.cell.TitleValueCell
 import io.github.qauxv.dsl.item.UiAgentItem
 import sumicya.qself.diagnostics.FeatureJournal
 import java.lang.ref.WeakReference
@@ -232,7 +231,7 @@ object InlineSettings {
      */
     @JvmStatic
     fun collapseRow(view: View): Boolean {
-        val row = view as? TitleValueCell ?: return false
+        val row = view as? InlineHost ?: return false
         if (row.inlineContent.childCount == 0) return false
         if (hasProtectedContent(row.inlineContent)) return true // swallow
         val activity = UiAgentItem.findActivity(row.context)
@@ -332,19 +331,25 @@ object InlineSettings {
         // A control inside a row anchors to the row, not its label column.
         var ancestor: View? = target
         while (ancestor != null) {
-            if (ancestor is TitleValueCell) {
+            if (ancestor is InlineHost) {
                 target = ancestor
                 break
             }
             ancestor = ancestor.parent as? View
         }
 
+        // The panel is a Material 3 card nested under its row: tonal surface,
+        // large corner, side inset so it reads as a child of the card.
         val box = LinearLayout(content.context).apply {
             orientation = LinearLayout.VERTICAL
             setTag(R.id.qself_inline_cancelable, cancelable)
-            setPadding(0, 0, 0, SettingsVisuals.dp(context, 6))
+            setPadding(0, SettingsVisuals.dp(context, 4), 0, SettingsVisuals.dp(context, 6))
+            background = SettingsVisuals.roundedFill(context,
+                SettingsVisuals.palette(context, SettingsAppearanceItem.mode).surfaceHigh,
+                SettingsVisuals.SHAPE_L)
             isClickable = true
         }
+        SettingsVisuals.clipOutline(box, SettingsVisuals.SHAPE_L)
         (content.parent as? ViewGroup)?.removeView(content)
         box.addView(content, LinearLayout.LayoutParams(-1, -2))
         if (cancelable) {
@@ -370,7 +375,7 @@ object InlineSettings {
 
     /** Mounts the box under its anchor; false when the anchor shape is unusable. */
     private fun mount(box: LinearLayout, target: View, fallback: View): Boolean = when {
-        target is TitleValueCell -> {
+        target is InlineHost -> {
             target.inlineContent.addView(box, LinearLayout.LayoutParams(-1, -2))
             true
         }

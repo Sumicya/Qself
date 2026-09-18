@@ -59,6 +59,11 @@ class InlineFeatureList(context: Context, groupId: String? = null, home: String?
             rail.addView(HeaderCell(context).apply {
                 title = group.title
                 SettingsVisuals.decorateCardChild(this, palette, false)
+                // Material 3 section label: its own inset band above the rows.
+                setPadding(SettingsVisuals.dp(context, SettingsVisuals.TEXT_START),
+                    SettingsVisuals.dp(context, 14),
+                    SettingsVisuals.dp(context, 16),
+                    SettingsVisuals.dp(context, 6))
             }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
             for (section in group.sections) {
                 for (id in section.features) addFeatureRow(rail, providers, id, focus)

@@ -180,6 +180,7 @@ final class GlassBlurProbe {
                     if (result != PixelCopy.SUCCESS) {
                         FeatureJournal.record("GLASS", "blur.probe",
                                 "path=" + surface.renderPathName()
+                                        + " rect=" + w + "x" + h
                                         + " raw=" + round(rawEnergy)
                                         + " softening=" + round(softening)
                                         + " blurMs=" + blurMs
@@ -193,6 +194,8 @@ final class GlassBlurProbe {
                     float screenSoft = 1f - screenEnergy / rawEnergy;
                     FeatureJournal.record("GLASS", "blur.probe",
                             "path=" + surface.renderPathName()
+                                    + " rect=" + w + "x" + h + "@"
+                                    + screenPos[0] + "," + screenPos[1]
                                     + " raw=" + round(rawEnergy)
                                     + " softening=" + round(softening)
                                     + " screen=" + round(screenEnergy)

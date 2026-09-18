@@ -351,6 +351,14 @@ public final class LiquidGlassInstaller {
                                         + " navInset=" + navigationInset
                                         + " glassPath=" + (glass == null ? "none"
                                                 : glass.renderPathName())
+                                        + " glassW=" + (glass == null ? 0
+                                                : glass.getWidth())
+                                        + " glassH=" + (glass == null ? 0
+                                                : glass.getHeight())
+                                        + " glassX=" + (glass == null ? 0
+                                                : glass.getLeft())
+                                        + " rowW=" + (sTabRowRef.get() == null ? 0
+                                                : sTabRowRef.get().getWidth())
                                         + " sdk=" + Build.VERSION.SDK_INT);
                     }
                 });

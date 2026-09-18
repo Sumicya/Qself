@@ -31,6 +31,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.LinearLayout
+import sumicya.qself.ui.InlineHost
 import sumicya.qself.ui.SquareStateControl
 import sumicya.qself.ui.SettingsVisuals
 import androidx.core.content.res.ResourcesCompat
@@ -43,7 +44,7 @@ import io.github.qauxv.R
 
 class TitleValueCell(
     context: Context,
-) : FrameLayout(context), LayoutHelperViewScope {
+) : FrameLayout(context), LayoutHelperViewScope, InlineHost {
 
     val titleView: TextView
     val summaryView: TextView
@@ -59,7 +60,7 @@ class TitleValueCell(
     private val textColumn = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     private var trailingWidth = 0
     private var headerHeight = 0
-    val inlineContent = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; isClickable = true }
+    override val inlineContent = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; isClickable = true }
 
     // Unified trailing slot geometry: a 52dp square flush to the trailing card wall.
     private val railWidth = SettingsVisuals.dp(context, SettingsVisuals.RAIL_WIDTH)

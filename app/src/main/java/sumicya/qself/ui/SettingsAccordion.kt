@@ -3,41 +3,42 @@ package sumicya.qself.ui
 
 import android.animation.ValueAnimator
 import android.content.Context
-import android.graphics.Outline
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
-import android.view.ViewOutlineProvider
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import io.github.qauxv.R
-import io.github.qauxv.dsl.item.UiAgentItem
+import com.google.android.material.card.MaterialCardView
 import sumicya.qself.diagnostics.FeatureJournal
 
 /**
- * One container card: header and expanded body share a single rounded surface;
- * the header never moves and expanding never opens a window.
+ * One Material 3 Expressive container card: a header row with a leading icon
+ * and title, and an expandable body inside the same card. The header never
+ * moves and expanding never opens a window.
  *
  * The class exists for one invariant — **at most one height animator, cancelled
  * in place**. A state change cancels the running animator without removing its
  * end callback, and every callback is guarded by [expanded], so a stale
- * completion can never contradict the current state. That is the historic
- * "never collapses" / "collapses on the second tap" bug class, and the journal
- * line carries `interrupted=` so a mid-motion toggle is visible on device.
+ * completion can never contradict the current state (the historic "never
+ * collapses" bug class). The journal line carries `interrupted=` so a
+ * mid-motion toggle is visible on device.
  *
- * Levels: an expanded card is one level on the host's stack, and a panel
- * opened inside it collapses before the card does.
+ * Levels: an expanded card is one level on the host's stack, and a panel opened
+ * inside it collapses before the card does.
  */
 class SettingsAccordion(
     context: Context,
+    private val palette: SettingsVisuals.Palette,
     title: String,
     summary: String,
+    iconRes: Int,
     private val contentFactory: () -> View,
-) : LinearLayout(context) {
+) : MaterialCardView(context) {
 
     /** The tappable header; callers tag it with the card's identity. */
     val header = LinearLayout(context)
@@ -47,10 +48,12 @@ class SettingsAccordion(
         visibility = GONE
     }
     private val arrow = ImageView(context).apply {
-        setImageResource(R.drawable.qself_expand_more)
+        setImageResource(io.github.qauxv.R.drawable.qself_expand_more)
         scaleType = ImageView.ScaleType.CENTER
+        rotation = 0f
     }
-    private val palette = SettingsVisuals.palette(context, 2)
+    private val titleView = TextView(context)
+    private val summaryView = TextView(context)
 
     private var animation: ValueAnimator? = null
 
@@ -59,34 +62,31 @@ class SettingsAccordion(
         private set
 
     init {
-        orientation = VERTICAL
-        background = SettingsVisuals.surface(context, palette, SettingsVisuals.CARD_RADIUS, false)
-        outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(v: View, outline: Outline) {
-                outline.setRoundRect(0, 0, v.width, v.height,
-                    SettingsVisuals.dp(context, SettingsVisuals.CARD_RADIUS).toFloat())
-            }
-        }
-        clipToOutline = true
-        buildHeader(title, summary)
+        radius = SettingsVisuals.dp(context, SettingsVisuals.CARD_RADIUS).toFloat()
+        cardElevation = 0f
+        strokeWidth = 0
+        setCardBackgroundColor(palette.surfaceLow)
+        setRippleColor(null)
+        buildHeader(title, summary, iconRes)
         addView(header, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(body, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
     }
 
     /* ------------------------------------------------------------- header */
 
-    private fun buildHeader(title: String, summary: String) {
+    private fun buildHeader(title: String, summary: String, iconRes: Int) {
         header.apply {
-            gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = SettingsVisuals.dp(context, SettingsVisuals.HEADER_HEIGHT)
             orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = SettingsVisuals.dp(context, SettingsVisuals.HEADER_HEIGHT + 16)
+            setPadding(SettingsVisuals.dp(context, 16), SettingsVisuals.dp(context, 12),
+                SettingsVisuals.dp(context, 12), SettingsVisuals.dp(context, 12))
             val label = if (summary.isBlank()) title else "$title，$summary"
             SettingsTouchTarget.prepare(this, label)
             setOnClickListener {
                 FeatureJournal.record("UI", MARKER, "tag=${header.tag} expanded=$expanded")
                 setExpanded(!expanded, true)
             }
-            // Announcement is expand/collapse, not click: the state is the point.
             accessibilityDelegate = object : View.AccessibilityDelegate() {
                 override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
                     super.onInitializeAccessibilityNodeInfo(host, info)
@@ -103,21 +103,45 @@ class SettingsAccordion(
                 }
             }
             if (Build.VERSION.SDK_INT >= 30) stateDescription = "已收起"
-            addView(TextView(context).apply {
-                text = title
-                textSize = 16f
-                setTextColor(palette.text)
-                includeFontPadding = false
-                importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-            }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = SettingsVisuals.dp(context, SettingsVisuals.TEXT_START)
-                marginEnd = SettingsVisuals.dp(context, 8)
+
+            // Leading icon in a tonal circle: the Material 3 expressive card header.
+            addView(iconBadge(iconRes), LayoutParams(SettingsVisuals.dp(context, 40), SettingsVisuals.dp(context, 40)))
+            val textColumn = LinearLayout(context).apply {
+                orientation = VERTICAL
+                addView(titleView.apply {
+                    text = title
+                    SettingsVisuals.applyType(this, context, SettingsVisuals.TYPE_TITLE_LARGE)
+                    setTextColor(palette.text)
+                    importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                })
+                if (summary.isNotBlank()) {
+                    addView(summaryView.apply {
+                        text = summary
+                        SettingsVisuals.applyType(this, context, SettingsVisuals.TYPE_BODY_MEDIUM)
+                        setTextColor(palette.secondary)
+                        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                    })
+                }
+            }
+            addView(textColumn, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = SettingsVisuals.dp(context, 16)
             })
-            arrow.setColorFilter(palette.secondary)
-            arrow.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-            addView(arrow, LayoutParams(SettingsVisuals.dp(context, SettingsVisuals.RAIL_WIDTH),
-                LayoutParams.MATCH_PARENT).apply { gravity = Gravity.CENTER_VERTICAL })
+            addView(arrow.apply {
+                setColorFilter(palette.secondary)
+                importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LayoutParams(SettingsVisuals.dp(context, 24), SettingsVisuals.dp(context, 24)))
         }
+    }
+
+    private fun iconBadge(iconRes: Int): FrameLayout = FrameLayout(context).apply {
+        background = SettingsVisuals.roundedFill(context, palette.selectedContainer, SettingsVisuals.SHAPE_M)
+        addView(ImageView(context).apply {
+            setImageResource(iconRes)
+            scaleType = ImageView.ScaleType.CENTER
+            setColorFilter(palette.onSelectedContainer)
+            importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LayoutParams(SettingsVisuals.dp(context, 24), SettingsVisuals.dp(context, 24), Gravity.CENTER))
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
     /* -------------------------------------------------------------- state */
@@ -136,12 +160,14 @@ class SettingsAccordion(
         if (value && body.childCount == 0) {
             body.addView(contentFactory(), LayoutParams(-1, -2))
         }
+        // An open card steps up the surface tier, the Material 3 container idiom.
+        setCardBackgroundColor(if (value) palette.surfaceHigh else palette.surfaceLow)
         if (Build.VERSION.SDK_INT >= 30) {
             header.stateDescription = if (value) "已展开" else "已收起"
         }
         rotateChevron(value, animate)
 
-        val activity = UiAgentItem.findActivity(context)
+        val activity = io.github.qauxv.dsl.item.UiAgentItem.findActivity(context)
         if (value) {
             activity?.let { InlineSettings.openLevel(it, this, null) { setExpanded(false, true); true } }
         } else {
@@ -158,7 +184,8 @@ class SettingsAccordion(
     private fun rotateChevron(value: Boolean, animate: Boolean) {
         arrow.animate().cancel()
         arrow.animate().rotation(if (value) 180f else 0f)
-            .setDuration(if (animate && SettingsMotion.enabled()) 200L else 0L)
+            .setDuration(if (animate && SettingsMotion.enabled()) SettingsMotion.duration(context) else 0L)
+            .setInterpolator(SettingsMotion.easing(context))
             .start()
     }
 
@@ -184,7 +211,7 @@ class SettingsAccordion(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         // A rebound home reuses its cards: an expanded card is still a level.
-        if (expanded) UiAgentItem.findActivity(context)?.let {
+        if (expanded) io.github.qauxv.dsl.item.UiAgentItem.findActivity(context)?.let {
             InlineSettings.openLevel(it, this, null) { setExpanded(false, true); true }
         }
     }
@@ -194,7 +221,7 @@ class SettingsAccordion(
         arrow.animate().cancel()
         // Leaving the tree must not strand a level: back would otherwise spend
         // a press on something the user cannot see.
-        UiAgentItem.findActivity(context)?.let { InlineSettings.closeLevel(it, this) }
+        io.github.qauxv.dsl.item.UiAgentItem.findActivity(context)?.let { InlineSettings.closeLevel(it, this) }
         super.onDetachedFromWindow()
     }
 
