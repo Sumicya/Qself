@@ -68,10 +68,10 @@ class SettingsAccordion(
         setCardBackgroundColor(palette.surfaceLow)
         setRippleColor(null)
         buildHeader(title, summary, iconRes)
-        addView(header, MaterialCardView.LayoutParams(
-            MaterialCardView.LayoutParams.MATCH_PARENT, MaterialCardView.LayoutParams.WRAP_CONTENT))
-        addView(body, MaterialCardView.LayoutParams(
-            MaterialCardView.LayoutParams.MATCH_PARENT, MaterialCardView.LayoutParams.WRAP_CONTENT))
+        addView(header, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+        addView(body, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
     }
 
     /* ------------------------------------------------------------- header */
