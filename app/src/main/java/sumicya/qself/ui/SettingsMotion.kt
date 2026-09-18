@@ -14,31 +14,38 @@ import com.google.android.material.motion.MotionUtils
 /**
  * The single expansion engine of the settings UI.
  *
- * Every level - a category card body and a row panel - grows and shrinks
- * through [expandBody] / [shrinkBody]. Exactly one motion exists: same
- * interpolator, same duration, same height animation. Before this was
- * centralised the card used its own ValueAnimator while panels added a second
- * fade/slide path, so the same gesture produced two different motions
- * ("动画种类问题").
+ * Every level — a category card body and a row panel — grows through
+ * [expandBody] and shrinks through [shrinkBody], so one gesture always produces
+ * one motion (same interpolator, same duration, same height animation). Before
+ * this was the only engine, a card and a panel animated differently for the
+ * same tap.
+ *
+ * Both methods return the running animator, or null when the view is not ready
+ * to animate (then the caller applies its static end state). Callers cancel the
+ * returned animator in place; the end callbacks are written to stay correct
+ * even when cancelled mid-flight.
  */
 object SettingsMotion {
-    fun enabled() = ValueAnimator.areAnimatorsEnabled()
+
+    fun enabled(): Boolean = ValueAnimator.areAnimatorsEnabled()
 
     fun easing(context: Context): TimeInterpolator = MotionUtils.resolveThemeInterpolator(
-        context, com.google.android.material.R.attr.motionEasingEmphasizedInterpolator, PathInterpolator(.2f, 0f, 0f, 1f))
+        context,
+        com.google.android.material.R.attr.motionEasingEmphasizedInterpolator,
+        PathInterpolator(.2f, 0f, 0f, 1f))
 
     fun duration(context: Context, short: Boolean = false): Long = MotionUtils.resolveThemeDuration(
         context,
-        if (short) com.google.android.material.R.attr.motionDurationShort4 else com.google.android.material.R.attr.motionDurationMedium2,
+        if (short) com.google.android.material.R.attr.motionDurationShort4
+        else com.google.android.material.R.attr.motionDurationMedium2,
         if (short) 200 else 300).toLong()
 
     /**
-     * Grow [view] to its measured height, ending on WRAP_CONTENT.
+     * Grows [view] to its measured height, ending on WRAP_CONTENT.
      *
-     * Starts from the view's current height instead of zero, so rapid
-     * re-expansion mid-shrink tracks the finger instead of jumping.
-     * Returns the running animator so a caller can cancel it, or null when the
-     * view is not ready to animate (then it is simply shown).
+     * Starts from the view's current height instead of zero, so a rapid
+     * re-expansion mid-shrink continues from where the shrink got to rather
+     * than jumping.
      */
     fun expandBody(view: View): ValueAnimator? {
         view.visibility = View.VISIBLE
@@ -46,7 +53,8 @@ object SettingsMotion {
         val parent = view.parent as? ViewGroup ?: return null
         val available = parent.width - parent.paddingStart - parent.paddingEnd
         if (available <= 0) return null
-        view.measure(View.MeasureSpec.makeMeasureSpec(available, View.MeasureSpec.EXACTLY),
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(available, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
         val target = view.measuredHeight
         val params = view.layoutParams ?: return null
@@ -62,7 +70,10 @@ object SettingsMotion {
         return ValueAnimator.ofInt(start, target).apply {
             duration = duration(view.context)
             interpolator = easing(view.context)
-            addUpdateListener { params.height = it.animatedValue as Int; view.layoutParams = params }
+            addUpdateListener {
+                params.height = it.animatedValue as Int
+                view.layoutParams = params
+            }
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     params.height = ViewGroup.LayoutParams.WRAP_CONTENT
@@ -74,21 +85,32 @@ object SettingsMotion {
     }
 
     /**
-     * Shrink [view] to zero height; [onEnd] always runs, exactly once.
-     *
-     * Returns the running animator so callers can cancel a shrink in flight
-     * (a rapid re-expand must not race against a half-finished collapse).
+     * Shrinks [view] to zero height; [onEnd] always runs, exactly once, from
+     * whichever of cancel/end arrives first.
      */
     fun shrinkBody(view: View, onEnd: () -> Unit): ValueAnimator? {
         val params = view.layoutParams
-        if (!enabled() || !view.isAttachedToWindow || view.height <= 0 || params == null) { onEnd(); return null }
+        if (!enabled() || !view.isAttachedToWindow || view.height <= 0 || params == null) {
+            onEnd()
+            return null
+        }
         return ValueAnimator.ofInt(view.height, 0).apply {
             duration = duration(view.context, true)
             interpolator = easing(view.context)
-            addUpdateListener { params.height = it.animatedValue as Int; view.layoutParams = params }
+            addUpdateListener {
+                params.height = it.animatedValue as Int
+                view.layoutParams = params
+            }
             addListener(object : AnimatorListenerAdapter() {
                 private var done = false
-                private fun finish() { if (!done) { done = true; onEnd() } }
+
+                private fun finish() {
+                    if (!done) {
+                        done = true
+                        onEnd()
+                    }
+                }
+
                 override fun onAnimationCancel(animation: Animator) = finish()
                 override fun onAnimationEnd(animation: Animator) = finish()
             })
@@ -96,7 +118,7 @@ object SettingsMotion {
         }
     }
 
-    /** Shrink a panel and detach it - the panel's own route out of the tree. */
+    /** Shrinks a panel and detaches it — the panel's own route out of the tree. */
     fun collapse(view: View, onEnd: () -> Unit) {
         shrinkBody(view) {
             (view.parent as? ViewGroup)?.removeView(view)

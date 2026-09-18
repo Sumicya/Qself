@@ -6,14 +6,14 @@ package sumicya.qself.ui
  *
  * A level is one thing the user opened and expects back to close: an expanded
  * category card or an expanded row panel. The order is the open order, so back
- * always unwinds the most recent level first - that is what "返回到该有的级别"
+ * always unwinds the most recent level first — that is what "返回到该有的级别"
  * means in practice, and it is the invariant this class exists to hold.
  *
  * Registration rules:
- *  - every level belongs to the container it lives in ([containerOf] may be null
- *    for a top-level panel);
- *  - collapsing a container collapses the levels inside it before the container
- *    itself, innermost first;
+ *  - every level belongs to the container it lives in ([containerOf] may be
+ *    null for a top-level panel);
+ *  - collapsing a container collapses the levels inside it before the
+ *    container itself, innermost first;
  *  - a level that closes by any route (header tap, back, re-tap, host detach)
  *    removes exactly its own entry.
  *
@@ -26,6 +26,7 @@ class SettingsLevelStack {
     private val entries = ArrayList<Entry>()
 
     val size: Int get() = entries.size
+
     val isEmpty: Boolean get() = entries.isEmpty()
 
     /** Opens a level; re-opening the same token keeps its original position. */
