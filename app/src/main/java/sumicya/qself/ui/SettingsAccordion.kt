@@ -111,9 +111,15 @@ class SettingsAccordion(context: Context, title: String, summary: String,
         if (value == expanded) return
         // Cancel in place. End callbacks must run: expand finalises the height
         // to WRAP_CONTENT, and the shrink callback is guarded by [expanded].
+        // Probe: an interrupt (a toggle landing mid-motion) is exactly the race
+        // the motion contract exists for; the journal makes it observable.
+        val interrupted = animation?.isRunning == true
         animation?.cancel()
         animation = null
         expanded = value
+        sumicya.qself.diagnostics.FeatureJournal.record("UI", "accordion." +
+            (header.tag ?: "card"),
+            "${if (value) "expand" else "collapse"} animated=$animate interrupted=$interrupted")
 
         if (value && body.childCount == 0) {
             body.addView(contentFactory(), LayoutParams(-1, -2))

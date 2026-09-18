@@ -763,6 +763,14 @@ public final class LiquidGlassInstaller {
                     android.view.Gravity.TOP | android.view.Gravity.START));
             droplet.setPill(glass);
             sDropletRef = new WeakReference<>(droplet);
+            // Probe: on-device evidence that the droplet sits BELOW the tab row
+            // (child order glass -> droplet -> tabBar). Visible in the module's
+            // diagnostics journal, copyable from Settings -> 功能开关与错误记录.
+            sumicya.qself.diagnostics.FeatureJournal.record("GLASS", "droplet.install",
+                    "children=" + host.getChildCount()
+                            + " dropletIndex=" + host.indexOfChild(droplet)
+                            + " glassIndex=" + host.indexOfChild(glass)
+                            + " sdk=" + Build.VERSION.SDK_INT);
             // The droplet scales past the pill while held; both clipping
             // defaults would shear the overflow off.
             host.setClipChildren(false);
@@ -890,7 +898,15 @@ public final class LiquidGlassInstaller {
             }
             sDropletBaseY = tab.getTop() + tabRow.getTop() + inset;
             droplet.setTranslationY(sDropletBaseY);
+            boolean firstShow = droplet.getVisibility() != View.VISIBLE;
             droplet.setVisibility(View.VISIBLE);
+            if (firstShow) {
+                // Probe: droplet live above the bar, sized to one tab slot.
+                sumicya.qself.diagnostics.FeatureJournal.record("GLASS", "droplet.show",
+                        "w=" + w + " h=" + h + " y=" + sDropletBaseY
+                                + " zIndex=" + ((android.view.ViewGroup) droplet.getParent())
+                                        .indexOfChild(droplet));
+            }
         } catch (Throwable t) {
             LiquidGlassModule.logErr("droplet sizing failed", t);
         }

@@ -304,6 +304,9 @@ final class DropletPanel extends View {
         } catch (Throwable t) {
             mUsable = false;
             LiquidGlassModule.logErr("droplet GPU path failed, flat fallback", t);
+            // Probe: the flat fallback must never be silent - it changes what
+            // the user sees on the bar.
+            sumicya.qself.diagnostics.FeatureJournal.error("droplet.gpuFallback", t);
             drawFallback(canvas, w, h);
         }
     }

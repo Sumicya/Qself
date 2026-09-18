@@ -47,14 +47,13 @@ object InlineSettings {
             }
         }
 
-        /**
-         * Animated close. The shrink animation may be cancelled by a host
+        /** Animated close. The shrink animation may be cancelled by a host
          * rebuild; the guard in the end callback keeps [closing] honest either
-         * way and [onClose] runs exactly once.
-         */
+         * way and [onClose] runs exactly once. */
         fun requestClose() {
             if (closing) return
             closing = true
+            sumicya.qself.diagnostics.FeatureJournal.record("UI", "panel.close", "animated=true")
             unregisterFrom(activity)
             SettingsMotion.collapse(box) { onClose?.run() }
         }
@@ -63,13 +62,17 @@ object InlineSettings {
         fun closeNow() {
             if (closing) return
             closing = true
+            sumicya.qself.diagnostics.FeatureJournal.record("UI", "panel.close", "animated=false")
             (box.parent as? ViewGroup)?.removeView(box)
             onClose?.run()
         }
 
         /** Back on this panel: protected panels refuse and consume the press. */
         fun back(): Boolean {
-            if (!cancelable) return false
+            if (!cancelable) {
+                sumicya.qself.diagnostics.FeatureJournal.record("UI", "panel.back", "refused=protected")
+                return false
+            }
             if (onCancel != null) onCancel.run() else requestClose()
             return true
         }
@@ -318,6 +321,10 @@ object InlineSettings {
         val panel = Panel(activity, box, cancelable, onClose, onCancel)
         panels.getOrPut(activity) { mutableListOf() }.add(panel)
         box.addOnAttachStateChangeListener(panel.detachListener)
+        // Probe: which anchor shape the panel attached to, so a wrong host
+        // (row vs card vs fallback) is visible in the journal.
+        sumicya.qself.diagnostics.FeatureJournal.record("UI", "panel.open",
+            "anchor=${target.javaClass.simpleName} cancelable=$cancelable")
         // The panel is a level inside the card it expanded, if any.
         openLevel(activity, box, expandedContainer(box)) { panel.back() }
 

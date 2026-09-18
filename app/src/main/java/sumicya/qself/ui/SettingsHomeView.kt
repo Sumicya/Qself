@@ -81,6 +81,10 @@ class SettingsHomeView(context: Context) : LinearLayout(context) {
         boundCompact = compact
         palette = SettingsVisuals.palette(context, mode)
         removeAllViews()
+        // Probe: a rebind tears down and rebuilds the whole dashboard; the
+        // journal shows when and in which breakpoint it happened.
+        sumicya.qself.diagnostics.FeatureJournal.record("UI", "home.bind",
+            "compact=$compact mode=$mode sections=${HomeCatalog.sections.size}")
 
         addView(buildHeader(), LayoutParams(LayoutParams.MATCH_PARENT, dp(52)))
         addView(hostLabel(state), lp(top = 2, bottom = 14))
