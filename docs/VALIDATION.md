@@ -128,6 +128,24 @@ su -c 'logcat -d -v threadtime | grep -E "Qself|lsplant|libqself|Debuggerd" | ta
 | 一行都没有 | 崩在框架注入或模块加载阶段，与本模块的 Java 代码无关 |
 | 有 `safe mode: boot skipped` 且仍崩溃 | 与本模块的钩子无关（注入/宿主/环境问题） |
 
+## 真机日志逐条判读（2026-09-19 13:09 那次）
+
+用户提供的 `Qself/` 日志（pid 2932）给出的结论：
+
+| 观察 | 结论 |
+|---|---|
+| 日志里有完整的 boot 链路，特性逐个 `init failed` / `-> ok` | **框架注入成功、模块类加载成功、boot 走到了特性安装** |
+| `at sumicya.qself.nativehook.NativeHooker.callback(NativeHookEngine.kt:81)` / `at LSPHooker_.callApplicationOnCreate(LSP)` | **自举钩子是原生引擎（LSPlant）装的** —— 新版本已改为框架引擎优先 |
+| 特性失败原因全是 `ClassNotFoundException: none of … found` | 崩不在这里：这些都是"目标类不存在 → 记日志 → 继续"的正常降级 |
+| `com.tencent.mobileqq.app.QQAppInterface`、`activity.aio.BaseChatItemLayout`、`upgrade.UpgradeController`、`statistics.StatisticCollector` 全部 not found | **该机是 NT 版 QQ（QQ 9.x）**：v1 特性清单里的旧 QQ 类在 NT 上不存在，所以特性会大面积空转（功能上"没生效"，但不崩） |
+
+配合崩溃签名，因果链收敛为：**LSPlant（原生引擎）在 Android 16 上工作异常**。
+上游 LSPlant 在我们 pin 的 `a96c7978`(2026-06-21) 之后有 9 个提交，含
+`Force stack alignment for restore_backup lambda`、`Fix native method hook
+signatures (#182)`、`Fix CloseGuard setup and add Knox check (#188)`、
+`bugfix: fix crash on android 17 gsi (#190)` 等崩溃修复；
+LSPosed 上游本身也是 `dobby + lsplant_static` 组合，故保留 Dobby、只升 LSPlant。
+
 ## 已验证 / 未验证
 
 已验证（CI 或静态检查）：
