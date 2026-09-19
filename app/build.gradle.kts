@@ -173,7 +173,13 @@ val verifyModuleApk by tasks.registering {
                 val names = dexDefinedClasses(zip.getInputStream(zip.getEntry(dex)).readBytes())
                 defined.addAll(names)
                 if (names.contains(descriptor)) entryIn = dex
-                summary.append("  $dex: ${names.size} classes defined\n")
+                summary.append("  $dex: ${names.size} classes")
+                if (names.size <= 8) {
+                    summary.append(" -> ${names.joinToString(" ")}")
+                } else {
+                    summary.append(" (e.g. ${names.take(3).joinToString(" ")})")
+                }
+                summary.append("\n")
             }
             if (entryIn == null) {
                 problems.add("entry class $entryClass is not defined in any dex (${dexes.joinToString()})")
@@ -181,15 +187,24 @@ val verifyModuleApk by tasks.registering {
                 summary.append("  entry class $entryClass -> $entryIn\n")
             }
 
+            val ours = defined.filter { it.startsWith("Lsumicya/qself/") }
+            summary.append("  sumicya/qself classes defined: ${ours.size}\n")
+            for (name in ours.take(40)) summary.append("    $name\n")
+            for (probe in listOf("Lsumicya/qself/QselfModule10x;", "Lsumicya/qself/ui/MainActivity;")) {
+                summary.append("  probe $probe defined: ${defined.contains(probe)}\n")
+            }
+            val stubsFound = defined.filter {
+                it.startsWith("Lio/github/libxposed/") || it.startsWith("Lde/robv/android/xposed/")
+            }
+            for (name in stubsFound.take(10)) summary.append("    stub: $name\n")
+
             val uiLibs = defined.count {
                 it.startsWith("Landroidx/") || it.startsWith("Lcom/google/android/material/")
             }
             summary.append("  AndroidX/Material classes defined: $uiLibs\n")
             if (uiLibs != 0) problems.add("$uiLibs AndroidX/Material classes are bundled")
 
-            val stubs = defined.count {
-                it.startsWith("Lio/github/libxposed/") || it.startsWith("Lde/robv/android/xposed/")
-            }
+            val stubs = stubsFound.size
             summary.append("  framework API stub classes defined: $stubs\n")
             if (stubs != 0) problems.add("$stubs framework API stub classes are bundled")
         }
