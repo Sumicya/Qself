@@ -21,7 +21,7 @@ import java.io.File
  * | flag | effect |
  * |---|---|
  * | `safe-mode` | the module loads and logs, and then does **nothing** — no boot trigger, no engine, no feature hooks. It isolates "the framework injected our classes" from "our code ran". |
- * | `no-native` | everything runs, but the native engine (LSPlant/Dobby) is never used: the framework's Java engine installs the hooks instead. |
+ * | `use-native` | opt *in* to the native engine (LSPlant/Dobby). Without this file the framework\'s Java engine does all hooking, which is the safe default: LSPlant patches ART internals, and an ART (or PAC/JIT configuration) it was not verified against can take the host down. |
  *
  * Deleting the file restores normal behaviour.
  */
@@ -29,11 +29,12 @@ object BootFlags {
 
     private const val DIR = "files/qself"
     const val SAFE_MODE = "safe-mode"
-    const val NO_NATIVE = "no-native"
+    const val USE_NATIVE = "use-native"
 
     fun safeMode(dataDir: String?): Boolean = exists(dataDir, SAFE_MODE)
 
-    fun noNative(dataDir: String?): Boolean = exists(dataDir, NO_NATIVE)
+    /** Opt-in: the native engine is experimental until device-verified. */
+    fun useNative(dataDir: String?): Boolean = exists(dataDir, USE_NATIVE)
 
     private fun exists(dataDir: String?, name: String): Boolean = try {
         dataDir != null && File(File(dataDir, DIR), name).exists()

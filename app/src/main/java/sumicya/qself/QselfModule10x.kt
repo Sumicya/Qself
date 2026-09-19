@@ -17,7 +17,6 @@ import sumicya.qself.gen.QselfFeatures
 import sumicya.qself.hook.BootFlags
 import sumicya.qself.hook.BootHook
 import sumicya.qself.hook.HookEngines
-import sumicya.qself.libxposed.LibXposedHookEngine
 import sumicya.qself.log.QLog
 import sumicya.qself.util.HostInfoProvider
 import sumicya.qself.xp.HookEngine
@@ -113,14 +112,13 @@ class QselfModule10x : XposedModule {
         if (Qself.isBooted) {
             return
         }
-        val noNative = BootFlags.noNative(application.dataDir)
-        val engine = if (noNative) {
-            QLog.w("Qself", "no-native flag set: using the framework Java engine")
-            LibXposedHookEngine(this)
-        } else {
-            HookEngines.forModernFramework(this)
-        }
-        QLog.i("Qself", "booting $packageName proc=$processName engine=$engine")
+        val useNative = BootFlags.useNative(application.dataDir)
+        val engine = HookEngines.forModernFramework(this, preferNative = useNative)
+        QLog.i(
+            "Qself",
+            "booting $packageName proc=$processName engine=$engine " +
+                "(native ${if (useNative) "opted in" else "off"})",
+        )
         try {
             Qself.boot(
                 Qself.BootParam(

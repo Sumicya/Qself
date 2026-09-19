@@ -22,10 +22,25 @@ import sumicya.qself.xp.HookEngine
  */
 object HookEngines {
 
-    fun forModernFramework(xposed: XposedInterface): HookEngine =
-        nativeOrNull() ?: LibXposedHookEngine(xposed).also {
+    /**
+     * The framework engine by default.
+     *
+     * The native engine patches ART internals, so it stays opt-in until it is
+     * verified on a real device (see BootFlags.USE_NATIVE and
+     * docs/VALIDATION.md): a module that boots is worth more than one that
+     * hooks through LSPlant on an ART that was never tested. With the flag
+     * present the native engine is preferred and the framework engine remains
+     * the fallback.
+     */
+    fun forModernFramework(xposed: XposedInterface, preferNative: Boolean): HookEngine {
+        val framework = LibXposedHookEngine(xposed)
+        if (!preferNative) {
+            return framework
+        }
+        return nativeOrNull() ?: framework.also {
             QLog.w("Qself", "native engine unavailable; using the framework engine")
         }
+    }
 
     /**
      * The native engine, or null when it cannot come up (no library for this

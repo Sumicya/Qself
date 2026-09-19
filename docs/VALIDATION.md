@@ -67,8 +67,27 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
 ```bash
 Q=/data/data/com.tencent.mobileqq/files/qself
 su -c "mkdir -p $Q && touch $Q/safe-mode"   # 模块只加载不装钩子
-su -c "touch $Q/no-native"                  # 只用框架 Java 引擎
+su -c "touch $Q/use-native"                 # 启用原生引擎（默认不启用）
 ```
+
+### 真机崩溃日志（2026-09-19，用户提供）
+
+```
+signal 11 (SIGSEGV), code 2 (SEGV_ACCERR), Cause: trying to execute non-executable memory
+tid: XEvent_async   （QQ 自有线程）
+pac_enabled_keys: PR_PAC_APIAKEY, APIBKEY, APDAKEY, APDBKEY
+#00 pc ... /apex/com.android.art/lib64/libart.so (art::Thread_currentThread(_JNIEnv*, _jclass*))
+#01 pc ... <anonymous:7be1088000>          （JIT 代码映射）
+设备: OnePlus PLC110, Android 16 (BP2A.250605.015)
+```
+
+判读：**执行流跳进了不可执行内存**，栈里有 JIT 代码与 libart JNI stub —— 典型的
+"ART 内部被 inline hook / JIT 入口点失效"特征。嫌疑排序：① LSPlant 在该 ART
+（Android 16 + PAC）上 patch 出错；② 设备上其他同样 hook ART 的模块（例如残留的
+旧模块）；③ LSPosed 自身在该 ROM 上的兼容性。
+
+据此的**产品级决定**：原生引擎由默认改为**可选**（`use-native` 开关），
+默认走框架引擎 —— 装上即用，不拿宿主稳定性冒险。
 
 **定位闪退需要的日志**（Termux + root，QQ 崩溃后立刻执行）：
 

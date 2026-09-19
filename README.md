@@ -24,8 +24,10 @@ Qself 把旧 QAuxiliary 分支的屎山一次铲平：
   （LSPosed 10.x 入口 + 经典 API 引擎 + native 引擎，见 `docs/NATIVE-LOADING.md`）。
 - **原生化**：纯 Android 原生 UI（`android.app.Activity` + `ListView`，无 AndroidX、
   无 Material、无 WebView）；随包分发 Dobby（inline hook）+ LSPlant（ART Java
-  hook）原生引擎 —— 进程里**优先用原生引擎装钩子**，libart.so 符号由自研解析器
-  提供，框架只当加载器；引擎不可用时自动回退到框架的 Java 引擎。
+  hook）原生引擎，libart.so 符号由自研解析器提供。
+  **默认走框架引擎**（稳定优先）；原生引擎用 `use-native` 开关启用
+  （见「诊断开关」）—— 它会 patch ART 内部结构，在未经真机验证的 ART/PAC 环境下
+  可能把宿主带崩，因此在验证前不作为默认。
 
 ## 使用方法
 
@@ -72,16 +74,16 @@ su -c 'logcat -b crash -d -v threadtime | tail -200 > /sdcard/qself-crash.txt'
 ```bash
 Q=/data/data/com.tencent.mobileqq/files/qself   # TIM 换成 com.tencent.tim
 su -c "mkdir -p $Q && touch $Q/safe-mode"   # 只加载、只记日志，不装任何钩子
-su -c "touch $Q/no-native"                  # 只用框架 Java 引擎，完全不用 LSPlant/Dobby
-su -c "rm -f $Q/safe-mode $Q/no-native"     # 恢复正常
+su -c "touch $Q/use-native"                 # 启用 LSPlant/Dobby 原生引擎（实验）
+su -c "rm -f $Q/safe-mode $Q/use-native"    # 恢复正常（= 框架引擎）
 ```
 
 | 配置 | 结果 | 结论 |
 |---|---|---|
-| `safe-mode` | 仍崩 | 与我们的钩子无关：框架注入本身 / 宿主 / 环境问题 |
-| 只有 `no-native` | 仍崩 | 崩在框架引擎或 Java 逻辑（原生引擎无辜） |
-| 只有 `no-native` | 正常 | 崩在原生层（LSPlant/Dobby/libsart 符号） |
-| 正常运行 | 正常 | 一切正常 |
+| `safe-mode` | 仍崩 | 与我们的钩子无关：框架注入本身 / 宿主 / 其他模块 / 环境问题 |
+| 默认（框架引擎） | 仍崩 | 崩在框架引擎或 Java 逻辑，或根本不是本模块（见上） |
+| `use-native` | 崩 | 崩在原生层（LSPlant/Dobby/libsart 符号 / ART 兼容性） |
+| `use-native` | 不崩 | 原生引擎在你的 ROM 上可用，可以继续往「原生加载」推进 |
 
 ## 开发
 

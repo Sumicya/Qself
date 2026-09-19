@@ -154,8 +154,11 @@ features ──► HookEngine（core 抽象）
   特性的 handler 只看到参数；参数被 in-place 修改时用新数组调用 backup；
   `InvocationTargetException` 会被解包，宿主看到的是原始异常。构造器同样
   支持（backup 按 `Method` 调用在正在初始化的实例上）。
-- **引擎选择**：`HookEngines` 优先用 native，LSPlant 起不来（ABI 不支持、
-  libart 符号缺失、`lsplant::Init` 失败）时回退框架引擎——降级而不是罢工。
+- **引擎选择**：`HookEngines` **默认用框架引擎**；`:app` 的 `use-native` 文件开关
+  才把原生引擎提到前面（此时 LSPlant 起不来会回退框架引擎——降级而不是罢工）。
+  这一默认值是 2026-09-19 真机崩溃后改的：LSPlant 会 patch ART 内部结构，
+  在未经真机验证的 ART 版本（该机为 Android 16，且开启了 PAC）上，出问题的代价是
+  **宿主闪退**，而模块"能用"比"全原生"重要。验证通过后再把默认翻回去。
 - 设置页「引擎自检」里 `java=` 是 `NativeJavaSelfTest` 的结果：它用 LSPlant
   hook 一个模块自有的探测类，检查替换体生效、unhook 后原方法恢复。
 - **自举**：模块的第一个正式钩子就是 `Instrumentation#callApplicationOnCreate`
