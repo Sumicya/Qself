@@ -6,22 +6,29 @@
 # moves the CI workflow from docs/ci/ into .github/workflows/ and pushes it
 # with your own credentials (which DO have the scope).
 #
-# Usage:
+# Usage (from inside a clone of the repo):
 #   pkg install git        # once, if you haven't already
-#   termux-setup-storage   # once, if you want the repo in shared storage
-#   cd ~/Qself             # or wherever you cloned the repo
-#   git fetch origin arena/01a0b583-qself
 #   bash docs/ci/bootstrap.sh
+#
+# The script fetches the branch and checks it out itself, so it works right
+# after a fresh `git clone` (which leaves you on main).
 
 set -euo pipefail
 
 BRANCH="arena/01a0b583-qself"
+TARGET_REF="refs/remotes/origin/$BRANCH"
 
-git checkout "$BRANCH"
-git reset --hard "origin/$BRANCH"
+git fetch origin "$BRANCH:$TARGET_REF"
+git checkout -B "$BRANCH" "$TARGET_REF"
 
-git rm -r -q .github/workflows
-git mv docs/ci/ci.yml .github/workflows/ci.yml
+if [ ! -f docs/ci/ci.yml ]; then
+    echo "ERROR: docs/ci/ci.yml not found — are you on $BRANCH?" >&2
+    exit 1
+fi
+
+mkdir -p .github/workflows
+git rm -r -q --ignore-unmatch .github/workflows
+git mv -f docs/ci/ci.yml .github/workflows/ci.yml
 
 git commit -m "ci: enable Qself CI (workflow bootstrap)"
 git push origin "$BRANCH"
