@@ -37,6 +37,8 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
 | 35417217679 | `c7cc2df` | ❌ | LSPlant 的 C++23 模块目标被 CMake 拒绝：AGP 自带 Ninja 1.10.2 < 1.11 |
 | 35417497954 | `681dddb` | ❌ | Ninja 覆盖生效（LSPlant 132 个编译步骤全部通过），只剩 `duplicate symbol qself::art::Status()` |
 | **35417673671** | `439a1ef` | ✅ | **LSPlant 从源码编译、链接进 `libqself_hook.so`，APK 10.3 → 14.5 MB** |
+| **35417868352** | `cb1978c` | ✅ | 文档收敛（LSPlant 集成写入 ARCHITECTURE/NATIVE-LOADING/README）后仍全绿 |
+| 35418167724 | `549ade7` | ❌ 25s | 配置阶段瞬时故障：KSP 插件 marker 解析失败（`not found in any of the following sources:` 后为空列表）。同一份 `settings.gradle.kts` 在 14 分钟前的运行里正常，属 runner/仓库侧抖动 |
 
 ## 已验证 / 未验证
 
@@ -56,6 +58,14 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
 - C++：LSPlant 的 C++23 模块目标（`lsplant_static`、`dex_builder_static`）
   与 Dobby 一起在 NDK r29 + CMake 3.31.0 + Ninja 1.11（系统包）下编译链接，
   arm64-v8a 与 armeabi-v7a 均通过。
+- 静态检查：Kotlin 括号配平、`R.id` / `R.string` / `R.layout` 与 `res/` 双向比对、
+  所有 XML 良构、依赖目录里无残留失效别名（`549ade7` 之前逐项跑过）。
+- "纯 framework UI" 的机器证据：`docs/ci/verify-apk.sh` 会数 dex 里的
+  `Landroidx/*` 与 `Lcom/google/android/material/*`，要求为 0。脚本已在合成
+  APK 上双向彩排（干净包 → `OK no AndroidX/Material classes` 且 exit 0；
+  混入 androidx/material/框架 stub → `BUNDLED …` 且 exit 1）。
+  **注意**：该脚本属于 `docs/ci/` 暂存区，要跑一次 `bash docs/ci/bootstrap.sh`
+  才会在 CI 里生效（当前 live 的 workflow 是用户自己那份自包含版本）。
 
 **未验证（必须在真机确认）**：
 
