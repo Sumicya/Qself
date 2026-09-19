@@ -1,11 +1,14 @@
 /*
  * Qself native hook engine — JNI surface.
  *
- * Wraps LSPlant (ART inline hooks) and Dobby (PLT hooks) behind a tiny
- * JNI API. In v1 the engine is initialized at module boot and exercised by
- * a self-test so diagnostics can prove the engine works on the device;
- * Java-level features use the Xposed API. Native-level feature hooking
- * builds on this surface in later releases.
+ * v1 ships Dobby: native inline hooks for arbitrary function addresses plus
+ * import-table (PLT) replacement, both driven from Java. Initialization and
+ * a real self-test are exposed so the settings UI can prove the engine
+ * works on the device.
+ *
+ * LSPlant (ART-level Java method hooking) is wired in v1.1: it needs a
+ * libart.so symbol resolver injected through its InitInfo callback, which
+ * is a separate piece of work — see docs/NATIVE-LOADING.md.
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -16,47 +19,30 @@
 #include <string>
 
 #include "dobby.h"
-#include "lsplant/lsplant.h"
 
 namespace {
 
-enum State {
-    STATE_UNINIT = 0,
-    STATE_READY = 1,
-};
-
-std::atomic<int> g_state{STATE_UNINIT};
+std::atomic<bool> g_initialized{false};
 
 /* --- self-test target ----------------------------------------------------- */
 
-int g_marker_calls = 0;
-bool g_marker_hooked = false;
+volatile int g_marker_calls = 0;
 
-int Marker() {
+__attribute__((noinline)) int Marker() {
     g_marker_calls++;
-    if (g_marker_hooked) {
-        return 1;
-    }
     return 0;
 }
 
-int MarkerReplace() {
-    g_marker_hooked = true;
-    return Marker();
+int (*g_marker_origin)() = nullptr;
+
+__attribute__((noinline)) int MarkerReplace() {
+    // call the original through Dobby's trampoline: proves both the
+    // replacement and the trampoline are functional
+    return (g_marker_origin != nullptr ? g_marker_origin() : -1) + 1;
 }
 
-bool SelfTestInline() {
-    uintptr_t target = reinterpret_cast<uintptr_t>(&Marker);
-    lsplant::TrampolineContext *ctx = nullptr;
-    if (!lsplant::HookInline(
-            target,
-            reinterpret_cast<uintptr_t>(&MarkerReplace),
-            &ctx)) {
-        return false;
-    }
-    bool ok = Marker() == 1;
-    lsplant::UnhookInline(target);
-    return ok;
+void *MarkerAddress() {
+    return reinterpret_cast<void *>(&Marker);
 }
 
 }  // namespace
@@ -65,78 +51,92 @@ extern "C" {
 
 JNIEXPORT jint JNICALL
 Java_sumicya_qself_native_HookNative_nativeInit(JNIEnv *, jobject) {
-    int expected = STATE_UNINIT;
-    if (g_state.compare_exchange_strong(expected, STATE_READY)) {
-        lsplant::Init();
-        return 1;
-    }
-    return g_state.load();
+    g_initialized.store(true);
+    return 1;
 }
 
 JNIEXPORT jstring JNICALL
 Java_sumicya_qself_native_HookNative_nativeVersion(JNIEnv *env, jobject) {
-    std::string version = "lsplant+dobbyte-state-";
-    version += std::to_string(g_state.load());
-    return env->NewStringUTF(version.c_str());
+    const char *version = DobbyGetVersion();
+    return env->NewStringUTF(version != nullptr ? version : "dobby");
 }
 
 /*
- * Hook our own Marker() with an inline hook, call it, expect the replaced
- * behaviour, unhook again. Proves the engine end to end without touching
- * the host app.
+ * Hook Marker() with Dobby, verify the replacement runs and the trampoline
+ * still reaches the original, then restore it.
  *
- * @return 0 on success, non-zero on failure
+ * @return 0 on success, negative error code otherwise
  */
 JNIEXPORT jint JNICALL
 Java_sumicya_qself_native_HookNative_nativeSelfTest(JNIEnv *, jobject) {
-    if (g_state.load() != STATE_READY) {
+    if (!g_initialized.load()) {
         return -1;
     }
-    g_marker_hooked = false;
-    int baseline = Marker();
-    if (baseline != 0) {
+    if (g_marker_origin != nullptr) {
+        // a previous run left the hook installed
+        DobbyDestroy(MarkerAddress());
+        g_marker_origin = nullptr;
+    }
+    if (Marker() != 0) {
         return -2;
     }
-    if (!SelfTestInline()) {
+    if (DobbyHook(MarkerAddress(),
+                  reinterpret_cast<dobby_dummy_func_t>(&MarkerReplace),
+                  reinterpret_cast<dobby_dummy_func_t *>(&g_marker_origin)) != 0) {
         return -3;
     }
-    g_marker_hooked = false;
-    int after = Marker();
-    if (after != 0) {
+    if (g_marker_origin == nullptr) {
+        DobbyDestroy(MarkerAddress());
         return -4;
+    }
+    const int hooked = Marker();
+    const int destroyed = DobbyDestroy(MarkerAddress());
+    g_marker_origin = nullptr;
+    if (hooked != 1) {
+        return -5;
+    }
+    if (destroyed != 0) {
+        return -6;
+    }
+    if (Marker() != 0) {
+        return -7;
     }
     return 0;
 }
 
 /*
- * Dobby PLT hook surface (for future native features / diagnostics).
- * All addresses are provided by the caller; no symbol lookup happens here
- * (Dobby's symbol resolver is disabled on purpose).
+ * Import-table (PLT) replacement for callers that resolve the addresses
+ * themselves. Dobby's symbol resolver is disabled on purpose, so no symbol
+ * lookup happens here.
  *
- * @return 0 on success, non-zero on failure
+ * @return 0 on success, negative error code otherwise
  */
 JNIEXPORT jint JNICALL
-Java_sumicya_qself_native_HookNative_nativePltHook(
-        JNIEnv *,
+Java_sumicya_qself_native_HookNative_nativePltReplace(
+        JNIEnv *env,
         jobject,
-        jlong target,
-        jlong replace,
-        jlong origOut) {
-    void **orig = origOut != 0 ? reinterpret_cast<void **>(origOut) : nullptr;
-    if (dobby::PLTHook(reinterpret_cast<void *>(target),
-                       reinterpret_cast<void *>(replace), orig)
-        != 0) {
+        jstring imageName,
+        jstring symbolName,
+        jlong fakeFunc,
+        jlong originOut) {
+    if (imageName == nullptr || symbolName == nullptr || fakeFunc == 0 || originOut == 0) {
         return -1;
     }
-    return 0;
-}
-
-JNIEXPORT jint JNICALL
-Java_sumicya_qself_native_HookNative_nativePltUnhook(JNIEnv *, jobject, jlong target) {
-    if (dobby::PLTHookRestore(reinterpret_cast<void *>(target)) != 0) {
-        return -1;
+    const char *image = env->GetStringUTFChars(imageName, nullptr);
+    const char *symbol = env->GetStringUTFChars(symbolName, nullptr);
+    if (image == nullptr || symbol == nullptr) {
+        if (image != nullptr) env->ReleaseStringUTFChars(imageName, image);
+        if (symbol != nullptr) env->ReleaseStringUTFChars(symbolName, symbol);
+        return -2;
     }
-    return 0;
+    int result = DobbyImportTableReplace(
+            const_cast<char *>(image),
+            const_cast<char *>(symbol),
+            reinterpret_cast<dobby_dummy_func_t>(fakeFunc),
+            reinterpret_cast<dobby_dummy_func_t *>(originOut));
+    env->ReleaseStringUTFChars(imageName, image);
+    env->ReleaseStringUTFChars(symbolName, symbol);
+    return result;
 }
 
 }  // extern "C"

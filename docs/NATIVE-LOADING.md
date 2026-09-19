@@ -5,8 +5,10 @@
 
 ## 阶段 0（v1，已完成）
 
-- `libqself_hook.so`：LSPlant + Dobby 初始化 + 自检（见 ARCHITECTURE.md）。
+- `libqself_hook.so`：Dobby 引擎 + 原生自检 + PLT 替换表面
+  （见 ARCHITECTURE.md「原生引擎」）。
 - 所有 Java 特性经 `HookEngine` 抽象隔离，替换引擎不动特性代码。
+- LSPlant 子模块已登记，但 v1 不参与编译。
 
 ## 阶段 1（v1.1）：LSPosed 10.x Java 引擎
 
@@ -15,9 +17,12 @@
 - 在 LSPosed 1.x / 经典 Xposed 环境声明 `QselfModule`（`xposed_init`），
   复用已实现的 `ClassicHookEngine`。
 
-## 阶段 2：native 级特性
+## 阶段 2：native 级特性 + LSPlant
 
-- 用 `HookNative` 的 PLT/inline 表面实现不经过 ART Java 层的 hook
+- 接入 LSPlant：实现 libart.so 符号解析器（需同时支持 .dynsym 与 .symtab），
+  用 Dobby 的 `DobbyHook` 作为 `InitInfo.inline_hooker`，初始化后即可 hook ART
+  Java 方法 → 这条路径是摆脱 Xposed 框架的关键一步。
+- 用 `HookNative.pltReplace` 实现不经过 ART Java 层的 hook
   （如 libc 层拦截、`statfs`/`__system_property_get` 伪装等）。
 - 每个 native 特性自带开关，走同一套 `SettingsBridge`。
 

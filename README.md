@@ -21,7 +21,7 @@ Qself 把旧 QAuxiliary 分支的屎山一次铲平：
 - **自由化**：代码 **GPL-3.0-or-later**（旧 EULA 作废）；运行时不绑定单一框架
   （LSPosed 10.x 入口 + 经典 API 引擎 + native 引擎，见 `docs/NATIVE-LOADING.md`）。
 - **原生化**：纯 Android 原生 UI 组件（无 WebView、无第三方 UI 库）；
-  LSPlant + Dobby 原生 hook 引擎随包分发并自检。
+  Dobby 原生 hook 引擎随包分发并自检（LSPlant 的 ART 层接入见 v1.1 路线图）。
 
 ## 使用方法
 

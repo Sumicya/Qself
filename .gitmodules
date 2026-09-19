@@ -1,9 +1,3 @@
-[submodule "libs/stub/qq-stub"]
-	path = libs/stub/qq-stub
-	url = https://github.com/LuckyPray/qq-stub
-[submodule "libs/dexkit/DexKit"]
-	path = libs/dexkit/DexKit
-	url = https://github.com/LuckyPray/DexKit
 [submodule "libs/Dobby"]
 	path = libs/Dobby
 	url = https://github.com/LSPosed/Dobby

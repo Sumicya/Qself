@@ -6,7 +6,6 @@
 package sumicya.qself
 
 import android.app.Application
-import android.os.Build
 import androidx.annotation.Keep
 import androidx.annotation.RequiresApi
 import io.github.libxposed.api.XposedInterface

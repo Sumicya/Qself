@@ -8,16 +8,16 @@ package sumicya.qself.native
 import sumicya.qself.log.QLog
 
 /**
- * JNI surface of the native hook engine (LSPlant + Dobby).
+ * JNI surface of the native hook engine (Dobby).
  *
- * Loaded lazily: a failure here (e.g. a device without a supported ABI)
- * must never take the module down — the Java-level Xposed path is
- * independent.
+ * Loaded lazily: a failure (e.g. an unsupported ABI) must never take the
+ * module down — the Java-level hooking path is independent of this.
  */
 object HookNative {
 
     private const val LIB_NAME = "qself_hook"
 
+    /** True when libqself_hook.so loaded. */
     val available: Boolean = try {
         System.loadLibrary(LIB_NAME)
         true
@@ -26,21 +26,41 @@ object HookNative {
         false
     }
 
-    val initialized: Boolean
-        get() = available && init()
+    private var initialized = false
 
-    /** Run the engine self-test. 0 = ok. */
-    val selfTestResult: Int
-        get() = if (initialized) nativeSelfTest() else -100
-
-    val version: String
-        get() = if (available) nativeVersion() else "unavailable"
-
+    @Synchronized
     fun init(): Boolean {
         if (!available) {
             return false
         }
-        return nativeInit() == 1
+        if (!initialized) {
+            initialized = nativeInit() == 1
+        }
+        return initialized
+    }
+
+    /** Underlying engine version (Dobby's), or "unavailable". */
+    val version: String
+        get() = if (available) nativeVersion() else "unavailable"
+
+    /** Self-test result: 0 = the engine hooked and restored correctly. */
+    val selfTestResult: Int
+        get() = if (init()) nativeSelfTest() else -100
+
+    /**
+     * Replace the import-table entry of [symbolName] in [imageName]
+     * (e.g. "libc.so", "open"). Addresses are provided by the caller;
+     * no symbol lookup happens in native code.
+     *
+     * @return the previous function address, or 0 on failure
+     */
+    fun pltReplace(imageName: String, symbolName: String, replacement: Long): Long {
+        if (!init()) {
+            return 0L
+        }
+        val holder = LongArray(1)
+        val result = nativePltReplace(imageName, symbolName, replacement, holder)
+        return if (result == 0) holder[0] else 0L
     }
 
     private external fun nativeInit(): Int
@@ -49,7 +69,10 @@ object HookNative {
 
     private external fun nativeSelfTest(): Int
 
-    private external fun nativePltHook(target: Long, replace: Long, origOut: Long): Int
-
-    private external fun nativePltUnhook(target: Long): Int
+    private external fun nativePltReplace(
+        imageName: String,
+        symbolName: String,
+        fakeFunc: Long,
+        originOut: LongArray,
+    ): Int
 }

@@ -16,7 +16,7 @@ import android.content.SharedPreferences
 class Settings(context: Context) {
 
     private val prefs: SharedPreferences =
-        context.createSharedPreferences(NAME, Context.MODE_PRIVATE)
+        context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
 
     fun getBoolean(key: String, defaultValue: Boolean): Boolean =
         prefs.getBoolean(key, defaultValue)

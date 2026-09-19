@@ -8,11 +8,11 @@
 Qself/
 ├── app/        # 模块 APK：Xposed 入口 + 设置 UI + 功能（Kotlin）
 ├── core/       # 运行时：特性引擎 / Host 解析 / 配置桥 / 日志（Kotlin，无 UI 依赖）
-├── native/     # C++：LSPlant + Dobby 原生 hook 引擎，JNI 表面
+├── native/     # C++：Dobby 原生 hook 引擎（v1），JNI 表面
 ├── tools/ksp/  # KSP 处理器：@QselfFeature → 生成的特性注册表
 ├── libs/
-│   ├── Dobby/            # submodule：PLT/inline hook
-│   ├── LSPlant/          # submodule：ART inline hook 引擎
+│   ├── Dobby/            # submodule：native inline hook + PLT（v1 使用）
+│   ├── LSPlant/          # submodule：ART Java 方法 hook（v1.1 接入）
 │   └── libxposed/api/    # LSPosed 10.x API stub（compileOnly）
 └── docs/
 ```
@@ -81,15 +81,17 @@ object AntiUpdate : SwitchFeature() {          // 或 ActionFeature
 | Frida | v1 移除 loader，见 `NATIVE-LOADING.md` 路线图 |
 | 纯 native 注入 | 路线图最后一站 |
 
-## 原生引擎（原生化 ①）
+## 原生引擎（原生化 ③）
 
-`native/` 打包 `libqself_hook.so`（LSPlant + Dobby）：
+`native/` 打包 `libqself_hook.so`（v1 = Dobby，静态链接进同一 .so）：
 
-- `HookNative.init()` 在模块启动时初始化 LSPlant。
-- `nativeSelfTest()`：hook 自己的 C 函数 → 验证 → 还原，端到端自检
-  （设置页「诊断」可见结果）。
-- PLT hook 表面已导出，供后续 native 级特性使用。
-- Java 级特性目前走 Xposed API；native 引擎是 v1.1+ 摆脱框架依赖的基础。
+- `HookNative.init()` / `DobbyGetVersion()`：引擎初始化与版本，设置页「诊断」可见。
+- `selfTestResult`：用 DobbyHook 钩自己的 C 函数 → 验证替换体与 trampoline 都工作
+  → `DobbyDestroy` 还原 → 再验证恢复原状；0 表示端到端通过。
+- `pltReplace(image, symbol, addr)`：Dobby 的 import table 替换（等价 PLT hook），
+  符号解析刻意留在 Java 侧（Dobby 的 symbol resolver 一旦链接就会到处崩）。
+- **LSPlant（ART Java 方法 hook）在 v1.1 接入**：它需要通过 `InitInfo` 注入
+  libart.so 符号解析器，属于独立工作量，见 `NATIVE-LOADING.md`。
 
 ## UI（原生化 ② + 现代化）
 

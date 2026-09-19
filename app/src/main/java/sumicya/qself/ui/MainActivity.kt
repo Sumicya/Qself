@@ -10,7 +10,6 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.dynamiccolors.DynamicColors
@@ -19,14 +18,13 @@ import sumicya.qself.BuildConfig
 import sumicya.qself.Qself
 import sumicya.qself.R
 import sumicya.qself.config.Settings
-import sumicya.qself.feature.FeatureCategory
 import sumicya.qself.feature.ActionFeature
+import sumicya.qself.feature.FeatureCategory
 import sumicya.qself.feature.QselfFeature
 import sumicya.qself.gen.QselfFeatures
 import sumicya.qself.log.QLog
 import sumicya.qself.native.HookNative
 import sumicya.qself.util.HostInfoProvider
-import java.io.File
 
 /**
  * The module's settings screen. Runs in the module's own process; the
@@ -139,16 +137,6 @@ class MainActivity : AppCompatActivity() {
             }
             .setPositiveButton(android.R.string.ok, null)
             .show()
-    }
-
-    private fun dumpLogsToFile(): File? {
-        return try {
-            val file = File(filesDir, "qself-logs.txt")
-            QLog.dumpToFile(file)
-            file
-        } catch (t: Throwable) {
-            null
-        }
     }
 
     companion object {

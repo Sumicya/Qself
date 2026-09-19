@@ -1,12 +1,11 @@
 /*
- * LSPosed 10.x API stubs (from the libxposed/api submodule sources).
+ * LSPosed 10.x API stubs (from the libxposed/api sources).
  * Compile-time only; the framework provides these classes at runtime.
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
 }
 
 android {

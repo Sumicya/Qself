@@ -1,11 +1,10 @@
 /*
- * Qself — the module APK (Xposed entry + settings UI + features).
+ * Qself — a free, modern Xposed module for QQ.
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
 }
 
@@ -24,6 +23,20 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+        }
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    // Kotlin is compiled by AGP's built-in Kotlin support
+    // (android.builtInKotlin=true), so KSP output has to be registered as an
+    // AGP Kotlin source directory explicitly.
+    sourceSets {
+        configureEach {
+            kotlin.directories +=
+                layout.buildDirectory.dir("generated/ksp/$name/kotlin").get().asFile.absolutePath
         }
     }
 
@@ -51,7 +64,6 @@ dependencies {
 
     implementation(libs.androidx.annotation)
     implementation(libs.androidx.appcompat)
-    implementation(libs.androidx.activity)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.recyclerview)
     implementation(libs.androidx.constraintlayout)

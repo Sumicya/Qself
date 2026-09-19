@@ -11,7 +11,6 @@ import sumicya.qself.annotation.QselfFeature
 import sumicya.qself.feature.FeatureCategory
 import sumicya.qself.feature.FeatureContext
 import sumicya.qself.feature.SwitchFeature
-import sumicya.qself.log.QLog
 import sumicya.qself.xp.Hooks
 
 @QselfFeature(

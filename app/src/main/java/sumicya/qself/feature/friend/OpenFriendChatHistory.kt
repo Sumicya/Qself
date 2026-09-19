@@ -19,7 +19,6 @@ import sumicya.qself.annotation.QselfFeature
 import sumicya.qself.feature.ActionFeature
 import sumicya.qself.feature.FeatureCategory
 import sumicya.qself.util.HostInfoProvider
-import sumicya.qself.util.QQVersion
 
 @QselfFeature(
     id = "friend.open_chat_history",
@@ -59,39 +58,39 @@ object OpenFriendChatHistory : ActionFeature {
             .setCancelable(true)
             .setPositiveButton(R.string.confirm, null)
             .setNegativeButton(R.string.cancel, null)
-            .setOnShowListener { dialog ->
-                dialog.getPositiveButton().setOnClickListener {
-                    val text = input.text.toString().trim()
-                    val handled = when {
-                        text.isEmpty() -> {
-                            toast(ctx, R.string.input_required)
-                            true
-                        }
-                        text.toLongOrNull() != null -> {
-                            val uin = text.toLong()
-                            if (uin < 10000) {
-                                toast(ctx, R.string.invalid_uin)
-                                true
-                            } else {
-                                startChatHistory(ctx, uin.toString())
-                                false
-                            }
-                        }
-                        text.startsWith("u_") && text.length == 24 -> {
-                            startUidHistory(ctx, text)
-                            false
-                        }
-                        else -> {
-                            toast(ctx, R.string.invalid_uid)
-                            true
-                        }
-                    }
-                    if (handled) {
-                        dialog.dismiss()
-                    }
+            .create()
+            .apply {
+                setOnShowListener { _ ->
+                    getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
+                        ?.setOnClickListener { submit(ctx, input, this) }
                 }
             }
             .show()
+    }
+
+    private fun submit(
+        ctx: Context,
+        input: EditText,
+        dialog: androidx.appcompat.app.AlertDialog,
+    ) {
+        val text = input.text.toString().trim()
+        when {
+            text.isEmpty() -> toast(ctx, R.string.input_required)
+            text.toLongOrNull() != null -> {
+                val uin = text.toLong()
+                if (uin < 10000) {
+                    toast(ctx, R.string.invalid_uin)
+                } else {
+                    startChatHistory(ctx, uin.toString())
+                    dialog.dismiss()
+                }
+            }
+            text.startsWith("u_") && text.length == 24 -> {
+                startUidHistory(ctx, text)
+                dialog.dismiss()
+            }
+            else -> toast(ctx, R.string.invalid_uid)
+        }
     }
 
     private fun startChatHistory(ctx: Context, uin: String) {
