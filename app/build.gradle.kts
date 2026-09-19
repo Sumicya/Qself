@@ -10,7 +10,11 @@ plugins {
 
 android {
     namespace = "sumicya.qself"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 0
+        }
+    }
 
     defaultConfig {
         applicationId = "sumicya.qself"
@@ -21,7 +25,7 @@ android {
     }
 
     buildTypes {
-        release {
+        getByName("release") {
             isMinifyEnabled = false
         }
     }
@@ -46,9 +50,13 @@ android {
     }
 
     packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
+        resources.excludes.addAll(
+            arrayOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "kotlin/**",
+                "kotlin-tooling-metadata.json",
+            ),
+        )
     }
 }
 

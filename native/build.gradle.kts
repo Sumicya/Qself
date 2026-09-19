@@ -10,7 +10,11 @@ plugins {
 
 android {
     namespace = "sumicya.qself.native"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 0
+        }
+    }
 
     // Pinned NDK: the native engine is built against the version this
     // project is tested with (and LSPlant, wired in v1.1, needs r29+).
