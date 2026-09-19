@@ -29,10 +29,27 @@ app / core 的第三方依赖只剩两个 *compileOnly* 的框架 API stub
 ## 启动流程
 
 ```
-LSPosed 10.x ──(META-INF/xposed/*)──► QselfModule10x ──► Qself.boot(param, features, HookEngines.forModernFramework)
-经典 Xposed ──(assets/xposed_init, 默认不声明)──► QselfModule ──┘（ClassicHookEngine）
-设置 UI（模块自身进程）──────────────────────────────► Qself.bootUi(context, hostPackage, settings)
+LSPosed 10.x ──(META-INF/xposed/*)──► QselfModule10x.onPackageReady
+                                          │  （此刻 Application 尚未创建）
+                                          ▼
+                              BootHook：用原生引擎 hook 公共 API
+                              Instrumentation#callApplicationOnCreate
+                                          │  宿主创建 Application 的那一瞬间
+                                          ▼
+                              Qself.boot(param, features, engine)
+经典 Xposed ──(assets/xposed_init, 默认不声明)──► QselfModule ──► Qself.boot（ClassicHookEngine）
+设置 UI（模块自身进程）──────────────────────────────────────► Qself.bootUi(context, hostPackage, settings)
 ```
+
+**为什么要有 BootHook**：libxposed 的 `onPackageReady` 在 *Application 存在之前*
+触发（官方文档："ready to create Application"），此时没有任何 Application 可以
+boot；而 `AppGlobals` / `ActivityThread.currentApplication()` 这类取 Application 的
+老办法既是隐藏 API（Android 9+ 反射会被拦），时机也太早。于是 Qself **用自己的
+原生引擎 hook `Instrumentation#callApplicationOnCreate(Application)`**（公共 API，
+API 1 起存在）——模块靠自己打 ART 补丁完成自举，这就是"原生加载"真正在干活。
+钩子只挂 before-handler，原方法照常执行（`skip()` 未被调用），宿主启动不受影响；
+钩子安装失败或框架把回调投递得较晚时，还有一条 `AppGlobals` 兜底路径，
+`Qself.boot` 自身幂等。
 
 ### 现代 API 契约（`tools/moduleprop`）
 
@@ -89,6 +106,11 @@ object AntiUpdate : SwitchFeature() {          // 或 ActionFeature
 - `method / requireMethod / methods / field / constructor`：一次解析，终身缓存。
 - 特性代码只拿 `Class/Method/Field` 引用，之后完全不再反射。
 
+除 Host 解析层外，模块里只剩两处反射，都在**启动路径且只跑一次**：
+`BootHook` 解析 `Instrumentation#callApplicationOnCreate` 这个公共方法；
+`QselfModule10x.initialApplication()` 是取 Application 的兜底（隐藏 API，可能失败，
+失败即忽略）。热路径（hook 回调、开关读取、UI）零反射。
+
 ## 跨进程配置（SettingsBridge）
 
 权威配置 = 宿主 `filesDir/qself/settings.json`（单文件 JSON）：
@@ -143,6 +165,8 @@ features ──► HookEngine（core 抽象）
   libart 符号缺失、`lsplant::Init` 失败）时回退框架引擎——降级而不是罢工。
 - 设置页「引擎自检」里 `java=` 是 `NativeJavaSelfTest` 的结果：它用 LSPlant
   hook 一个模块自有的探测类，检查替换体生效、unhook 后原方法恢复。
+- **自举**：模块的第一个正式钩子就是 `Instrumentation#callApplicationOnCreate`
+  （见「启动流程」）——没有框架 API 参与，引擎不可用时才退回框架引擎。
 
 ```
 诊断行示例
@@ -169,6 +193,17 @@ Native 引擎：<dobby 版本> / ready / libart ok: 58xxx symbols (dynsym …, s
   `androidx.annotation`，且只有 vendored 的 libxposed API stub（compileOnly）
   用它 —— **app 的运行时类路径上没有 AndroidX/Material**
   （`docs/ci/verify-apk.sh` 会在 dex 里硬校验这一点）。
+
+## 构建期契约自检（app/build.gradle.kts 的 verifyModuleApk）
+
+`assembleDebug` 的 finalizer 会在打包后直接读 APK，违约即让构建失败：
+
+| 检查 | 为什么编译器抓不到 |
+|---|---|
+| `META-INF/xposed/{module.prop,java_init.list,scope.list}` 与两个 ABI 的 `libqself_hook.so` | 路径写错 = "装上但永不加载" |
+| 入口类定义在**任意** dex 里（用 SDK 的 `dexdump` 读 class_defs） | debug 包有 ~19 个 dex，只扫 `classes.dex` 会假阴性 |
+| dex 里 0 个 `Landroidx/*` / `Lcom/google/android/material/*` 类 | "纯 framework UI" 的可机器校验部分 |
+| dex 里 0 个框架 stub 类 | compileOnly stub 若被打包会遮蔽框架实现 |
 
 ## 许可（自由化 ③）
 

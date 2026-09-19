@@ -39,6 +39,10 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
 | **35417673671** | `439a1ef` | ✅ | **LSPlant 从源码编译、链接进 `libqself_hook.so`，APK 10.3 → 14.5 MB** |
 | **35417868352** | `cb1978c` | ✅ | 文档收敛（LSPlant 集成写入 ARCHITECTURE/NATIVE-LOADING/README）后仍全绿 |
 | 35418167724 | `549ade7` | ❌ 25s | 配置阶段瞬时故障：KSP 插件 marker 解析失败（`not found in any of the following sources:` 后为空列表）。同一份 `settings.gradle.kts` 在 14 分钟前的运行里正常，属 runner/仓库侧抖动 |
+| **35418314404** | `8c13153` | ✅ | **纯 framework UI 打包成功**；APK 14.47 MB → **8.49 MB**（去掉 appcompat/material/recyclerview/constraintlayout） |
+| 35418545709 / 35419076461 | `b41759a` / `544dc212` | ❌ 41-48s | 新增的 Gradle 自检脚本编译失败（`tasks.named("assembleDebug")` 在 AGP 9 里找不到任务；裸 `java.*` 又被解析成 Gradle 扩展）——两次都是构建脚本自身的问题，不是模块代码 |
+| 35418636348 / 35419180533 | `afdbf7ee` / `544dc212` | ❌ | 自检"探针"按计划失败，但把答案带回来了：APK 有 **19 个 dex**，`dexdump` 数出 dex 里 **0 个 AndroidX/Material 类、0 个框架 stub 类** |
+| **35419379475** | `65b6d9e3` | ✅ | **构建期契约自检（`verifyModuleApk`）全绿**：入口类确实定义在某个 dex（旧检查只扫 `classes.dex`，属假阴性）、零 AndroidX/Material、零 stub；模块源码全部编译打包 |
 
 ## 已验证 / 未验证
 
@@ -60,6 +64,13 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
   arm64-v8a 与 armeabi-v7a 均通过。
 - 静态检查：Kotlin 括号配平、`R.id` / `R.string` / `R.layout` 与 `res/` 双向比对、
   所有 XML 良构、依赖目录里无残留失效别名（`549ade7` 之前逐项跑过）。
+- **构建期自检**（`app/build.gradle.kts` 的 `verifyModuleApk`，随 `assembleDebug`
+  自动跑，不依赖 workflow）：必需 zip 条目齐全、入口类定义在**任意** dex、
+  dex 里 0 个 AndroidX/Material 类、0 个框架 stub 类。35419379475 全绿。
+- **关于入口类的假阴性**：debug APK 有 19 个 `classes*.dex`，入口类不在
+  `classes.dex` 里，所以 live workflow 那句 `MISSING entry class in dex` 是它只扫
+  单个 dex 的已知假阴性；`dexdump` 的全 dex 扫描（本次自检 + 暂存的
+  `docs/ci/verify-apk.sh`）都能正确判定。
 - "纯 framework UI" 的机器证据：`docs/ci/verify-apk.sh` 会数 dex 里的
   `Landroidx/*` 与 `Lcom/google/android/material/*`，要求为 0。脚本已在合成
   APK 上双向彩排（干净包 → `OK no AndroidX/Material classes` 且 exit 0；

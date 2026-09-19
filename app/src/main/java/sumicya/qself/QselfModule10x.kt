@@ -12,6 +12,7 @@ import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 import io.github.libxposed.api.annotations.XposedApiMin
 import sumicya.qself.gen.QselfFeatures
+import sumicya.qself.hook.BootHook
 import sumicya.qself.hook.HookEngines
 import sumicya.qself.log.QLog
 import sumicya.qself.util.HostInfoProvider
@@ -28,7 +29,9 @@ import sumicya.qself.util.HostInfoProvider
  * the framework always instantiates the no-argument form.
  *
  * The framework is only the *loader* here: which engine actually installs the
- * hooks is decided in [HookEngines] (native LSPlant when available).
+ * hooks is decided in [HookEngines] (native LSPlant when available), and the
+ * boot itself is triggered by a hook Qself installs on the host's Application
+ * creation ([BootHook]) — the Application does not exist yet at this point.
  */
 class QselfModule10x : XposedModule {
 
@@ -45,23 +48,33 @@ class QselfModule10x : XposedModule {
         if (param.packageName !in HostInfoProvider.HOST_PACKAGES) {
             return
         }
-        val app = currentApplication()
-        if (app == null) {
-            QLog.w("Qself", "no application available yet; cannot boot")
-            return
-        }
         val processName = processName(param)
-        QLog.i("Qself", "booting ${param.packageName} proc=$processName")
-        Qself.boot(
-            Qself.BootParam(
-                application = app,
-                packageName = param.packageName,
-                processName = processName,
-                framework = FrameworkKind.LSPosed_10X,
-            ),
-            QselfFeatures.features,
-            HookEngines.forModernFramework(this),
-        )
+        val engine = HookEngines.forModernFramework(this)
+        QLog.i("Qself", "package ready: ${param.packageName} proc=$processName engine=$engine")
+
+        val boot: (Application) -> Unit = { application ->
+            Qself.boot(
+                Qself.BootParam(
+                    application = application,
+                    packageName = param.packageName,
+                    processName = processName,
+                    framework = FrameworkKind.LSPosed_10X,
+                ),
+                QselfFeatures.features,
+                engine,
+            )
+        }
+
+        // This callback fires before the Application exists, so the hook on
+        // Instrumentation#callApplicationOnCreate is the real entry point.
+        val armed = BootHook.install(engine, boot)
+        // Belt and braces: a framework that delivers this callback late (so
+        // the Application does exist already) boots right here instead.
+        // Qself.boot() ignores a second boot, so both paths are safe.
+        initialApplication()?.let(boot)
+        if (!armed && !Qself.isBooted) {
+            QLog.w("Qself", "no way to reach the Application in this process; module idle")
+        }
     }
 
     /**
@@ -74,7 +87,12 @@ class QselfModule10x : XposedModule {
         return info.processName ?: param.packageName
     }
 
-    private fun currentApplication(): Application? {
+    /**
+     * Fallback only. `AppGlobals` is hidden API (Android 9+ blocks it for
+     * normal apps), and at this point in the lifecycle the Application usually
+     * does not exist yet — [BootHook] is the path that actually works.
+     */
+    private fun initialApplication(): Application? {
         return try {
             Class.forName("android.app.AppGlobals")
                 .getMethod("getInitialApplication")
