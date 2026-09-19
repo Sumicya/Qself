@@ -113,12 +113,16 @@ class QselfModule10x : XposedModule {
         if (Qself.isBooted) {
             return
         }
-        val useNative = BootFlags.useNative(application.dataDir?.absolutePath)
+        val dataDir = application.dataDir?.absolutePath
+        val useNative = BootFlags.useNative(dataDir)
+        val noFeatures = BootFlags.noFeatures(dataDir)
         val engine = HookEngines.forModernFramework(this, preferNative = useNative)
+        val features = if (noFeatures) emptyList() else QselfFeatures.features
         QLog.i(
             "Qself",
             "booting $packageName proc=$processName engine=$engine " +
-                "(native ${if (useNative) "opted in" else "off"})",
+                "(native ${if (useNative) "opted in" else "off"}, " +
+                "features ${if (noFeatures) "suppressed by flag" else "${features.size}"})",
         )
         try {
             Qself.boot(
@@ -128,7 +132,7 @@ class QselfModule10x : XposedModule {
                     processName = processName,
                     framework = FrameworkKind.LSPosed_10X,
                 ),
-                QselfFeatures.features,
+                features,
                 engine,
             )
         } catch (t: Throwable) {

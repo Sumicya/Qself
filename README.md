@@ -74,16 +74,18 @@ su -c 'logcat -b crash -d -v threadtime | tail -200 > /sdcard/qself-crash.txt'
 ```bash
 Q=/data/data/com.tencent.mobileqq/files/qself   # TIM 换成 com.tencent.tim
 su -c "mkdir -p $Q && touch $Q/safe-mode"   # 只加载、只记日志，不装任何钩子
+su -c "touch $Q/no-features"                # 正常启动，但不装任何特性钩子
 su -c "touch $Q/use-native"                 # 启用 LSPlant/Dobby 原生引擎（实验）
-su -c "rm -f $Q/safe-mode $Q/use-native"    # 恢复正常（= 框架引擎）
+su -c "rm -f $Q/safe-mode $Q/no-features $Q/use-native"   # 恢复正常
 ```
 
 | 配置 | 结果 | 结论 |
 |---|---|---|
-| `safe-mode` | 仍崩 | 与我们的钩子无关：框架注入本身 / 宿主 / 其他模块 / 环境问题 |
-| 默认（框架引擎） | 仍崩 | 崩在框架引擎或 Java 逻辑，或根本不是本模块（见上） |
-| `use-native` | 崩 | 崩在原生层（LSPlant/Dobby/libsart 符号 / ART 兼容性） |
-| `use-native` | 不崩 | 原生引擎在你的 ROM 上可用，可以继续往「原生加载」推进 |
+| `safe-mode` | 仍崩 | 与我们的钩子无关（框架注入 / 宿主 / 其他模块 / 环境） |
+| `no-features` | 仍崩 | 崩在自举钩子或引擎本身，而不是某个特性 |
+| `no-features` | 不崩 | 崩在某个特性（当前默认开启的只有「禁用崩溃日志上报」） |
+| `use-native` | 崩 | 崩在原生层（LSPlant/Dobby/ART 兼容性） |
+| `use-native` | 不崩 | 原生引擎在你的 ROM 上可用 |
 
 ## 开发
 

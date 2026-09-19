@@ -30,11 +30,19 @@ object BootFlags {
     private const val DIR = "files/qself"
     const val SAFE_MODE = "safe-mode"
     const val USE_NATIVE = "use-native"
+    const val NO_FEATURES = "no-features"
 
     fun safeMode(dataDir: String?): Boolean = exists(dataDir, SAFE_MODE)
 
     /** Opt-in: the native engine is experimental until device-verified. */
     fun useNative(dataDir: String?): Boolean = exists(dataDir, USE_NATIVE)
+
+    /**
+     * Boot normally (settings, host, engine selection, the boot hook) but
+     * install **no feature hooks**: separates "the trigger hook" from "what
+     * the features do to the host".
+     */
+    fun noFeatures(dataDir: String?): Boolean = exists(dataDir, NO_FEATURES)
 
     private fun exists(dataDir: String?, name: String): Boolean = try {
         dataDir != null && File(File(dataDir, DIR), name).exists()
