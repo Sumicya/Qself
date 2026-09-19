@@ -65,7 +65,12 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += listOf(
-                    "-DANDROID_STL=c++_shared",
+                    // Static STL on purpose: this library is loaded *inside
+                    // the host app (QQ ships its own libc++_shared.so), and two
+                    // different libc++_shared.so revisions in one process is a
+                    // classic instant-crash when a native module is injected.
+                    // Self-contained is the only safe option here.
+                    "-DANDROID_STL=c++_static",
                     "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
                 )
                 if (ninjaOverride != null) {

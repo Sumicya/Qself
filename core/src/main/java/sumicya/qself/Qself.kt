@@ -94,6 +94,20 @@ object Qself {
             QLog.w("Qself", "already booted; ignoring second boot")
             return
         }
+        try {
+            bootInternal(param, features, engine)
+        } catch (t: Throwable) {
+            // The host must survive a broken boot: log it, stay idle, and let
+            // the next process start try again.
+            QLog.e("Qself", "boot aborted; module idle in this process", t)
+            _booted = false
+            _features = emptyList()
+            _engine = null
+        }
+    }
+
+    @Synchronized
+    private fun bootInternal(param: BootParam, features: List<QselfFeature>, engine: HookEngine) {
         _booted = true
         _application = param.application
         _packageName = param.packageName
@@ -105,7 +119,7 @@ object Qself {
             hostFilesDir = param.application.filesDir,
             localCache = _settings,
         )
-        bridge.load()
+        val sharedLoaded = bridge.load()
         _bridge = bridge
         _host = Host(param.packageName)
         _engine = engine
@@ -115,7 +129,9 @@ object Qself {
         QLog.i(
             "Qself",
             "boot: pkg=${param.packageName} proc=${param.processName} " +
-                "framework=${param.framework.displayName} engine=$engine features=${features.size}",
+                "framework=${param.framework.displayName} engine=$engine features=${features.size} " +
+                "host=${_hostInfo!!.versionName} " +
+                "settings=${if (sharedLoaded) "shared" else "local"}",
         )
 
         if (!engine.supported) {
@@ -139,6 +155,7 @@ object Qself {
                 QLog.e("Feature", "init failed: ${feature.id}", t)
             }
         }
+        QLog.i("Qself", "boot complete: ${_featureResults.count { it.value }}/${_featureResults.size} features ok")
     }
 
     // ---- module (UI) process ----------------------------------------------

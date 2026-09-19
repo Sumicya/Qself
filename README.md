@@ -49,6 +49,24 @@ Qself 把旧 QAuxiliary 分支的屎山一次铲平：
 - **不收集、不上传任何数据。**
 - 详见 `app/src/main/assets/eula.md`。
 
+## 出问题怎么办
+
+先用设置页**诊断**行看结论（`版本 / lsplant / libart / dobby= / java=`），
+再看 QQ 进程的日志：
+
+```bash
+# 本模块自己的日志（tag 以 Qself 开头）
+su -c 'logcat -d -v threadtime | grep -E "Qself|lsplant|libqself" | tail -200'
+# 崩溃日志
+su -c 'logcat -b crash -d -v threadtime | tail -200 > /sdcard/qself-crash.txt'
+```
+
+启动路径每一层都有日志：`onPackageReady` → `boot trigger engine:` →
+`boot hook armed ...` → `native library available:` → `hook engine:` →
+`boot: pkg=... engine=...` → `boot complete: N/M features ok`。
+**哪一行是最后一行，就说明崩在那一步之后**；`docs/VALIDATION.md` 里有一张判定表。
+模块设计成崩不掉宿主：任何一步失败都只让本进程保持 idle 并记日志。
+
 ## 开发
 
 ```

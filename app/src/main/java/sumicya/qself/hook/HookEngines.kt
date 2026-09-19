@@ -22,16 +22,24 @@ import sumicya.qself.xp.HookEngine
  */
 object HookEngines {
 
-    fun forModernFramework(xposed: XposedInterface): HookEngine {
-        if (HookNative.lsplantReady) {
-            QLog.i("Qself", "hook engine: ${HookNative.lsplantStatus} (native)")
-            return NativeHookEngine()
+    fun forModernFramework(xposed: XposedInterface): HookEngine =
+        nativeOrNull() ?: LibXposedHookEngine(xposed).also {
+            QLog.w("Qself", "native engine unavailable; using the framework engine")
         }
-        QLog.w(
-            "Qself",
-            "native engine unavailable (${HookNative.lsplantStatus}); " +
-                "falling back to the framework engine",
-        )
-        return LibXposedHookEngine(xposed)
+
+    /**
+     * The native engine, or null when it cannot come up (no library for this
+     * ABI, libart symbols missing, LSPlant init refused). Loading and
+     * initialising are logged here, because this is the first place the
+     * process touches native code.
+     */
+    fun nativeOrNull(): HookEngine? {
+        QLog.i("Qself", "native library available: ${HookNative.available}")
+        if (!HookNative.lsplantReady) {
+            QLog.w("Qself", "native engine not ready: ${HookNative.lsplantStatus}")
+            return null
+        }
+        QLog.i("Qself", "hook engine: ${HookNative.lsplantStatus} (native)")
+        return NativeHookEngine()
     }
 }

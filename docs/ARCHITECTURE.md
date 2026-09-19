@@ -29,14 +29,20 @@ app / core 的第三方依赖只剩两个 *compileOnly* 的框架 API stub
 ## 启动流程
 
 ```
+```
 LSPosed 10.x ──(META-INF/xposed/*)──► QselfModule10x.onPackageReady
                                           │  （此刻 Application 尚未创建）
                                           ▼
-                              BootHook：用原生引擎 hook 公共 API
-                              Instrumentation#callApplicationOnCreate
+                         BootHook：hook 公共 API
+                         Instrumentation#callApplicationOnCreate
+                         ├─ 首选：框架引擎（PROTECTIVE —— 我们抛异常也不会
+                         │        传到宿主；只是"谁来触发"，不装任何特性钩子）
+                         └─ 兜底：自研原生引擎（无框架 API 的环境 / 框架拒绝时）
                                           │  宿主创建 Application 的那一瞬间
                                           ▼
-                              Qself.boot(param, features, engine)
+                         Handler(main).post →  Qself.boot(param, features, engine)
+                                          ▲  不在建 Application 的钩子回调里干重活
+                                          │  （宿主自己的 Application.onCreate 先跑）
 经典 Xposed ──(assets/xposed_init, 默认不声明)──► QselfModule ──► Qself.boot（ClassicHookEngine）
 设置 UI（模块自身进程）──────────────────────────────────────► Qself.bootUi(context, hostPackage, settings)
 ```
@@ -44,34 +50,21 @@ LSPosed 10.x ──(META-INF/xposed/*)──► QselfModule10x.onPackageReady
 **为什么要有 BootHook**：libxposed 的 `onPackageReady` 在 *Application 存在之前*
 触发（官方文档："ready to create Application"），此时没有任何 Application 可以
 boot；而 `AppGlobals` / `ActivityThread.currentApplication()` 这类取 Application 的
-老办法既是隐藏 API（Android 9+ 反射会被拦），时机也太早。于是 Qself **用自己的
-原生引擎 hook `Instrumentation#callApplicationOnCreate(Application)`**（公共 API，
-API 1 起存在）——模块靠自己打 ART 补丁完成自举，这就是"原生加载"真正在干活。
-钩子只挂 before-handler，原方法照常执行（`skip()` 未被调用），宿主启动不受影响；
-钩子安装失败或框架把回调投递得较晚时，还有一条 `AppGlobals` 兜底路径，
-`Qself.boot` 自身幂等。
+老办法既是隐藏 API（Android 9+ 反射会被拦），时机也太早。于是 Qself hook
+`Instrumentation#callApplicationOnCreate(Application)`（公共 API，API 1 起存在），
+在宿主创建 Application 的瞬间拿到实例——等同经典 `handleLoadPackage` 的时机。
 
-### 现代 API 契约（`tools/moduleprop`）
+**三条安全规则**（真机闪退后定下的）：
 
-模块能被框架加载，靠的是 APK 里的三个文件（全部由 `:tools:moduleprop` 这个
-无代码 Android library 打进 `META-INF/xposed/`）：
-
-| 文件 | 内容 | 作用 |
-|---|---|---|
-| `module.prop` | `minApiVersion=101` `targetApiVersion=101` `staticScope=true` | 声明这是一个 API 101 模块且作用域静态 |
-| `java_init.list` | `sumicya.qself.QselfModule10x` | 入口类（**缺了它模块会安装但永不加载**） |
-| `scope.list` | `com.tencent.mobileqq` / `com.tencent.tim` | 注入范围，用户无需手动勾选 |
-
-对应地，清单里只有 `android:label`（模块名）与 `android:description`
-（模块说明），**不再有** `xposedmodule` / `xposedminversion` / `xposedscope`
-这些旧元数据。CI 会在打包后自检这些文件与 dex 入口类（见 `docs/ci/ci.yml`）。
-
-### 切回经典 API（可选）
-
-想同时支持 Xposed / EdXposed / LSPosed 1.x 时，追加两处声明即可，代码无需改动：
-
-1. `app/src/main/assets/xposed_init` 写入 `sumicya.qself.QselfModule`；
-2. 清单里补回 `xposedmodule=true` / `xposedminversion=93` / `xposedscope` 数组。
+1. **触发钩子优先用框架引擎**：它跑在每个 app 启动都依赖的核心框架方法上，
+   框架的 `ExceptionMode.PROTECTIVE` 保证我们出错只写日志、不会把宿主带崩。
+   原生引擎仍是所有*特性钩子*的默认实现，也仍是触发钩子的兜底
+   （未来无框架加载时就是它）。钩子只挂 before-handler，原方法照常执行。
+2. **重活不在钩子回调里干**：拿到的 Application 立刻 `Handler(main).post`，
+   等 `handleBindApplication` 走完（宿主 `Application.onCreate` 已执行）再
+   `Qself.boot`——避免在核心框架方法的替换体里再去装别的钩子。
+3. **每一层都不许把异常丢给宿主**：钩子回调、`Qself.boot`、每个特性的 init
+   各自 try/catch；boot 失败就本进程保持 idle 并记日志，QQ 照常运行。
 
 `Qself.boot` 顺序：
 

@@ -46,6 +46,37 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
 | **35419634655** | `e0453bb` | ✅ | **自举钩子（`BootHook`）编译打包通过，契约自检仍全绿**；APK 8,493,185 B，artifact `qself-debug` 3,667,255 B（重写前 8,429,106 B） |
 | **35419379475** | `65b6d9e3` | ✅ | **构建期契约自检（`verifyModuleApk`）全绿**：入口类确实定义在某个 dex（旧检查只扫 `classes.dex`，属假阴性）、零 AndroidX/Material、零 stub；模块源码全部编译打包 |
 
+## 真机反馈：QQ 启动即闪退（2026-09-19）
+
+首次真机试装（`e0453bb` 系列构建）反馈：进入 QQ 立即闪退，尚无崩溃日志。
+据此做的加固（**在拿到日志前就明显更安全，且都不改变功能**）：
+
+| 加固 | 原因（按嫌疑排序） |
+|---|---|
+| `ANDROID_STL=c++_static`（原 `c++_shared`） | 注入型 native 模块最经典的瞬时闪退：宿主 QQ 自带 `libc++_shared.so`，我们的 APK 又带一份，同 soname 撞车 → 现在 `.so` 自包含，不再依赖共享 STL |
+| 触发钩子改用**框架引擎**（PROTECTIVE），原生引擎降为兜底 | 触发钩子装在 `Instrumentation#callApplicationOnCreate` 这种核心方法上；PROTECTIVE 模式下我们抛异常只写日志，宿主不受影响 |
+| `Qself.boot` 用 `Handler(main).post` 延后 | 不在核心框架方法的钩子回调里再装（嵌套）钩子，也不在 bind 过程中强制初始化 QQ 的类 |
+| `Qself.boot` / 特性 init / 钩子回调 全链路 try-catch | boot 失败只让本进程 idle，绝不让异常穿透到宿主 |
+| `onPackageReady` 第一行就写日志；引擎选择、boot 各阶段都写日志 | 崩溃时能直接看出死在哪一步（见下） |
+
+**定位闪退需要的日志**（Termux + root，QQ 崩溃后立刻执行）：
+
+```bash
+su -c 'logcat -b crash -d -v threadtime | tail -200 > /sdcard/qself-crash.txt'
+su -c 'logcat -d -v threadtime | grep -E "Qself|lsplant|libqself|Debuggerd" | tail -200'
+```
+
+判定表：
+
+| 现象 | 结论 |
+|---|---|
+| 日志里有 `Qself: onPackageReady` | 框架注入成功、模块类已加载 |
+| 再往下有 `boot trigger engine:` / `boot hook armed ...` | 触发钩子装上了 |
+| 再往下有 `native library available:` 与 `hook engine:` | `libqself_hook.so` 加载并（或未）完成 LSPlant 初始化 |
+| 再往下有 `boot: pkg=... engine=...` | 引擎与运行时都起来了，崩溃在特性安装或之后 |
+| 只有到 `onPackageReady` 就断 | 崩在原生库加载 / LSPlant Init（native SIGSEGV，Java 层抓不到） |
+| 一行都没有 | 崩在框架注入或模块加载阶段，与本模块的 Java 代码无关 |
+
 ## 已验证 / 未验证
 
 已验证（CI 或静态检查）：
