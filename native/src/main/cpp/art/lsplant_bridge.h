@@ -18,23 +18,23 @@
 namespace qself::art {
 
 /** True once LSPlant initialized successfully. */
-bool Ready();
+bool LsplantReady();
 
 /** Idempotent; returns whether LSPlant is usable afterwards. */
-bool Init(JNIEnv* env);
+bool LsplantInit(JNIEnv* env);
 
 /** Human-readable state for the settings diagnostics. */
-const char* Status();
+const char* LsplantStatus();
 
-/** Hook a Method/Constructor; returns the backup executable, or null. */
-jobject Hook(JNIEnv* env, jobject target, jobject hooker, jobject callback);
+/** LsplantHook a Method/Constructor; returns the backup executable, or null. */
+jobject LsplantHook(JNIEnv* env, jobject target, jobject hooker, jobject callback);
 
-bool Unhook(JNIEnv* env, jobject target);
+bool LsplantUnhook(JNIEnv* env, jobject target);
 
-bool IsHooked(JNIEnv* env, jobject target);
+bool LsplantIsHooked(JNIEnv* env, jobject target);
 
-/** Deoptimize so inlined call sites stop using the old body. */
-bool Deoptimize(JNIEnv* env, jobject target);
+/** LsplantDeoptimize so inlined call sites stop using the old body. */
+bool LsplantDeoptimize(JNIEnv* env, jobject target);
 
 }  // namespace qself::art
 

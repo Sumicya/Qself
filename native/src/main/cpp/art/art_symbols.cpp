@@ -251,7 +251,7 @@ std::size_t SymbolCount() {
     return EnsureLoaded().symbols.size();
 }
 
-const char* Status() {
+const char* ResolverStatus() {
     return EnsureLoaded().status.c_str();
 }
 

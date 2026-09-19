@@ -28,10 +28,10 @@ std::atomic<bool> g_initialized{false};
 
 /* --- self-test target ----------------------------------------------------- */
 
-volatile int g_marker_calls = 0;
+std::atomic<int> g_marker_calls{0};
 
 __attribute__((noinline)) int Marker() {
-    g_marker_calls++;
+    g_marker_calls.fetch_add(1, std::memory_order_relaxed);
     return 0;
 }
 
@@ -121,7 +121,7 @@ Java_sumicya_qself_engine_HookNative_nativeArtSymbolCount(JNIEnv *, jobject) {
 /** Resolver state, e.g. "ok: 58421 symbols (dynsym 1203, symtab 57218)". */
 JNIEXPORT jstring JNICALL
 Java_sumicya_qself_engine_HookNative_nativeArtSymbolStatus(JNIEnv *env, jobject) {
-    return ToJString(env, qself::art::Status());
+    return ToJString(env, qself::art::ResolverStatus());
 }
 
 /* --- LSPlant (ART Java method hooking) ------------------------------------ */
@@ -129,12 +129,12 @@ Java_sumicya_qself_engine_HookNative_nativeArtSymbolStatus(JNIEnv *env, jobject)
 /** @return 1 when LSPlant is ready, 0 otherwise. */
 JNIEXPORT jint JNICALL
 Java_sumicya_qself_engine_HookNative_nativeLsplantInit(JNIEnv *env, jobject) {
-    return qself::art::Init(env) ? 1 : 0;
+    return qself::art::LsplantInit(env) ? 1 : 0;
 }
 
 JNIEXPORT jstring JNICALL
 Java_sumicya_qself_engine_HookNative_nativeLsplantStatus(JNIEnv *env, jobject) {
-    return ToJString(env, qself::art::Status());
+    return ToJString(env, qself::art::LsplantStatus());
 }
 
 /**
@@ -146,22 +146,22 @@ JNIEXPORT jobject JNICALL
 Java_sumicya_qself_engine_HookNative_nativeHookJava(JNIEnv *env, jobject,
                                                     jobject target, jobject hooker,
                                                     jobject callback) {
-    return qself::art::Hook(env, target, hooker, callback);
+    return qself::art::LsplantHook(env, target, hooker, callback);
 }
 
 JNIEXPORT jboolean JNICALL
 Java_sumicya_qself_engine_HookNative_nativeUnhookJava(JNIEnv *env, jobject, jobject target) {
-    return qself::art::Unhook(env, target) ? JNI_TRUE : JNI_FALSE;
+    return qself::art::LsplantUnhook(env, target) ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jboolean JNICALL
 Java_sumicya_qself_engine_HookNative_nativeIsHookedJava(JNIEnv *env, jobject, jobject target) {
-    return qself::art::IsHooked(env, target) ? JNI_TRUE : JNI_FALSE;
+    return qself::art::LsplantIsHooked(env, target) ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jboolean JNICALL
 Java_sumicya_qself_engine_HookNative_nativeDeoptimizeJava(JNIEnv *env, jobject, jobject target) {
-    return qself::art::Deoptimize(env, target) ? JNI_TRUE : JNI_FALSE;
+    return qself::art::LsplantDeoptimize(env, target) ? JNI_TRUE : JNI_FALSE;
 }
 
 }  // extern "C"

@@ -23,7 +23,7 @@ namespace qself::art {
 std::size_t SymbolCount();
 
 /** Human-readable state, e.g. "ok: 58421 symbols (dynsym 1203, symtab 57218)". */
-const char* Status();
+const char* ResolverStatus();
 
 /** Exact symbol lookup (dynsym first, then symtab). Null when absent. */
 void* Resolve(std::string_view name);

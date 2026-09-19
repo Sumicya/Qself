@@ -39,7 +39,7 @@ bool DobbyInlineUnhook(void* func) {
 
 void InitInternal(JNIEnv* env) {
     if (SymbolCount() == 0) {
-        g_status = std::string("no libart symbols: ") + Status();
+        g_status = std::string("no libart symbols: ") + LsplantStatus();
         return;
     }
     const lsplant::InitInfo info{
@@ -56,11 +56,11 @@ void InitInternal(JNIEnv* env) {
 
 }  // namespace
 
-bool Ready() {
+bool LsplantReady() {
     return g_ready;
 }
 
-bool Init(JNIEnv* env) {
+bool LsplantInit(JNIEnv* env) {
     if (env == nullptr) {
         g_status = "no JNIEnv";
         return false;
@@ -69,32 +69,32 @@ bool Init(JNIEnv* env) {
     return g_ready;
 }
 
-const char* Status() {
+const char* LsplantStatus() {
     return g_status.c_str();
 }
 
-jobject Hook(JNIEnv* env, jobject target, jobject hooker, jobject callback) {
+jobject LsplantHook(JNIEnv* env, jobject target, jobject hooker, jobject callback) {
     if (!g_ready || target == nullptr || hooker == nullptr || callback == nullptr) {
         return nullptr;
     }
     return lsplant::Hook(env, target, hooker, callback);
 }
 
-bool Unhook(JNIEnv* env, jobject target) {
+bool LsplantUnhook(JNIEnv* env, jobject target) {
     if (!g_ready || target == nullptr) {
         return false;
     }
     return lsplant::UnHook(env, target);
 }
 
-bool IsHooked(JNIEnv* env, jobject target) {
+bool LsplantIsHooked(JNIEnv* env, jobject target) {
     if (!g_ready || target == nullptr) {
         return false;
     }
     return lsplant::IsHooked(env, target);
 }
 
-bool Deoptimize(JNIEnv* env, jobject target) {
+bool LsplantDeoptimize(JNIEnv* env, jobject target) {
     if (!g_ready || target == nullptr) {
         return false;
     }
