@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.EditText
 import android.widget.ListView
 import android.widget.Switch
 import android.widget.Toast
@@ -210,10 +211,31 @@ class MainActivity : Activity() {
      * `su`), hence the thread.
      */
     private fun dumpClasses() {
+        val input = EditText(this).apply {
+            setText(ClassDump.DEFAULT_PREFIXES)
+            setPadding(48, 24, 48, 0)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dump_classes)
+            .setMessage(R.string.dump_prefixes_hint)
+            .setView(input)
+            .setPositiveButton(R.string.dump_start) { _, _ ->
+                val prefixes = input.text.toString()
+                    .split(',', '\n')
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .map { "L" + it.replace('.', '/') }
+                runDump(prefixes)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun runDump(prefixes: List<String>) {
         toast(R.string.dump_running)
         Thread {
             val result = try {
-                ClassDump.dump(this, hostPackage())
+                ClassDump.dump(this, hostPackage(), prefixes)
             } catch (t: Throwable) {
                 QLog.e("ClassDump", "dump failed", t)
                 "导出失败：${t.javaClass.simpleName}"

@@ -57,6 +57,20 @@ grep -a -o 'Lcom/tencent/qqnt/[A-Za-z0-9_/$]*;' classes*.dex \
 | 内核消息 | `com.tencent.qqnt.kernel.api.AIOSendMsgResultData`、`kernel.aio.msg.a` |
 | 上报 | `com.tencent.qqnt.aio.adapter.api.impl.AIOReportImpl`、`ReportControllerApiImpl` |
 
+### 从 dump 得到的第一批可攻目标（按可行性排序）
+
+| 目标 | 真实类名 | 说明 |
+|---|---|---|
+| 热修复 | `com.tencent.mobileqq.qfix.Relax`（含 `$ApplyResult`/`$AssertDisableInstallStubsForClass`/`$RelaxHolder`）、`qfix.common.classloader.DexClassLoaderUtil`、`qfix.redirect.PatchRedirectCenter`、`qfix.redirect.IPatchRedirector`、`common.app.QFixApplicationImpl(Proxy)` | NT 的补丁机制（Tencent QFix + redirect），比旧版 `rfix.lib.*` 更明确 |
+| 崩溃上报 | `com.tencent.feedback.eup.CrashReport`(+`$a`)、`com.tencent.bugly.library.Bugly`、`bugly.crashreport.crash.jni.NativeCrashHandler`、`bugly.impl.BuglyInitializer`、`bugly.crashreport.common.config.CrashConfigCreator` | NT 走 Bugly；旧版 hook 的 `StatisticCollector`/`QQCrashReportManager` 已不存在 |
+| 聊天界面 | `com.tencent.qqnt.aio.SplashAIOFragment`、`aio.holder.template.BubbleLayoutCompatPress`、`aio.audiopanel.AudioPanelAdapter`、`aio.bottombord...`、**`com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.state.MsgListState`** | `com.tencent.aio.*` 是 NT 的消息列表框架（AIO），`qqnt.aio.*` 是界面层 |
+| 启动 | `com.tencent.qqnt.startup.NtStartup(Dispatcher)`、`startup.task.NtTask` | 早期 hook 点（需要时可用） |
+
+**下一步：方法签名**。类名只能定位，hook 需要方法名与参数类型，所以工具已升级为
+"导出方法签名"：对给定**类名前缀**输出每个类的
+`m <flags> 方法名(参数类型): 返回类型` 与字段列表，写到
+`/sdcard/qself-methods.txt`。
+
 ## 在设备上取真实类名（模块内置工具）
 
 设置页菜单 → **导出宿主类名**：
@@ -67,6 +81,10 @@ grep -a -o 'Lcom/tencent/qqnt/[A-Za-z0-9_/$]*;' classes*.dex \
   upgrade/rfix/crash/statistic/…）的条目，排序写文件；
 - 输出：`/sdcard/qself-classes.txt`（同时写到模块外部目录一份），
   对话框显示类数与 dex 数。
+
+工具里还可以直接填**类名前缀**导出方法签名（默认预填 `com.tencent.mobileqq.qfix.,`
+`com.tencent.feedback.eup.,com.tencent.bugly.crashreport.,com.tencent.qqnt.startup.`），
+输出 `/sdcard/qself-methods.txt`。
 
 拿到文件后，判断某个特性能不能做只需一条命令：
 

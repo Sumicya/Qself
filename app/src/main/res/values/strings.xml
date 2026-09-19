@@ -9,7 +9,9 @@
     <string name="copy_logs">复制日志</string>
     <string name="diag_actions_hint">点按本卡片：复制日志 · 导出宿主类名 · 关于</string>
     <string name="dump_classes">导出宿主类名</string>
-    <string name="dump_running">正在读取宿主 APK 并解析类名…</string>
+    <string name="dump_running">正在读取宿主 APK 并解析…（大包需要十几秒）</string>
+    <string name="dump_prefixes_hint">要导出方法签名的类名前缀（逗号或换行分隔）：</string>
+    <string name="dump_start">开始</string>
     <string name="logs_empty">（暂无日志）</string>
     <string name="logs_copied">日志已复制</string>
     <string name="copy">复制</string>

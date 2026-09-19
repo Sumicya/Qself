@@ -6,60 +6,67 @@
 package sumicya.qself.ui
 
 import android.content.Context
-import sumicya.qself.config.SettingsBridge
 import sumicya.qself.log.QLog
-import java.io.File
 import java.io.InputStream
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
 
 /**
- * Exports the host app's *real* class names, so NT-QQ support can be built
- * against what is actually on the device instead of guessed names.
+ * Dumps the host APK's classes and their **method signatures**.
  *
- * The module runs inside QQ, where `Application.getClassLoader()` sees the
- * host's classes — but listing them is not possible reflectively, and
- * obfuscated names cannot be enumerated from memory cheaply. Reading the
- * installed APK works everywhere instead: `su cp` the base.apk out, then
- * parse each DEX image's class-defs table. That needs no framework hooking,
- * no root-only APIs beyond the copy, and gives exact, version-specific names.
+ * Class names alone cannot be hooked — a hook needs the method name and its
+ * parameter types. NT QQ (9.x) moved everything under `com.tencent.qqnt.*` and
+ * `com.tencent.mobileqq.qfix.*`, so the pre-NT feature set has to be rebuilt
+ * against real signatures (docs/NT-ADAPTATION.md). Those signatures only exist
+ * in the APK on the device, hence this tool: `su cp` the base.apk out, then
+ * parse class_defs / class_data / method_ids with [DexReader].
  *
- * The result is filtered to `com.tencent` classes whose names look relevant
- * and written next to the app plus `/sdcard/qself-classes.txt`, so `grep`
- * on the device answers "what is the NT class for X" in seconds.
+ * Two outputs, both written next to the module and copied to `/sdcard`:
+ *
+ * - `qself-classes.txt` — every `com.tencent.*` class whose name looks relevant;
+ * - `qself-methods.txt` — for classes matching the given prefixes, every
+ *   method (`flags name(params): return`) and field.
  */
 object ClassDump {
 
     private const val TAG = "ClassDump"
-    private const val OUT_NAME = "qself-classes.txt"
+    private const val OUT_CLASSES = "qself-classes.txt"
+    private const val OUT_METHODS = "qself-methods.txt"
     private const val MAX_LINES = 40_000
-    private const val COPY_TIMEOUT_SECONDS = 120L
+    private const val MAX_METHODS_PER_CLASS = 80
+    private const val MAX_DEX_BYTES = 120L * 1024 * 1024
+    private const val COPY_TIMEOUT_SECONDS = 180L
+
+    /** Prefixes that matter for the pre-NT → NT port, prefilled in the UI. */
+    const val DEFAULT_PREFIXES =
+        "com.tencent.mobileqq.qfix.,com.tencent.feedback.eup.," +
+            "com.tencent.bugly.crashreport.,com.tencent.qqnt.startup."
 
     /** Class-name fragments worth keeping (case-insensitive). */
     private val KEYWORDS = listOf(
         "nt", "kernel", "chat", "msg", "message", "aio", "troop", "friend",
         "contact", "avatar", "redpacket", "wallet", "qzone", "qwallet",
-        "upgrade", "update", "rfix", "hotpatch", "patch", "crash", "report",
-        "statistic", "setting", "config", "startup", "splash", "camera",
-        "sign", "signin", "tianshu", "qcircle", "emotion", "flash", "gag",
-        "gray", "tip", "revoke", "recall",
+        "upgrade", "update", "rfix", "qfix", "hotpatch", "patch", "crash",
+        "report", "statistic", "setting", "config", "startup", "splash",
+        "camera", "sign", "signin", "tianshu", "qcircle", "emotion", "flash",
+        "gag", "gray", "tip", "revoke", "recall",
     )
 
     /**
-     * Copies the host APK with root, parses its class names and writes the
-     * filtered list. **Blocking** (runs `su`), so call it off the main thread.
+     * Copies the host APK with root, then writes both dumps. **Blocking**
+     * (runs `su` and parses up to ~400 MB of APK), so call it off the main
+     * thread. Returns a human-readable summary for the dialog.
      */
-    fun dump(context: Context, hostPackage: String): String {
-        val dir = File(context.cacheDir, "classdump").apply { mkdirs() }
-        val apk = File(dir, "base.apk")
+    fun dump(context: Context, hostPackage: String, prefixes: List<String>): String {
+        val dir = java.io.File(context.cacheDir, "classdump").apply { mkdirs() }
+        val apk = java.io.File(dir, "base.apk")
         apk.delete()
-
-        val copied = copyApk(hostPackage, apk)
-        if (!copied) {
+        if (!copyApk(hostPackage, apk)) {
             return "导出失败：无法用 su 复制 $hostPackage 的 APK（root 授予了吗？）"
         }
 
-        val classes = LinkedHashSet<String>()
+        val allClasses = LinkedHashSet<String>()
+        val details = ArrayList<DexClass>()
         var dexCount = 0
         try {
             ZipFile(apk).use { zip ->
@@ -69,49 +76,114 @@ object ClassDump {
                     .sorted()
                     .toList()
                 for (name in dexes) {
+                    val entry = zip.getEntry(name) ?: continue
+                    if (entry.size > MAX_DEX_BYTES) {
+                        QLog.w(TAG, "skipping $name (${entry.size} bytes, too large to parse safely)")
+                        continue
+                    }
                     dexCount++
-                    val bytes = zip.getInputStream(zip.getEntry(name)).use(InputStream::readBytes)
-                    collectClasses(bytes, classes)
+                    val bytes = zip.getInputStream(entry).use(InputStream::readBytes)
+                    val reader = DexReader(bytes)
+                    if (!reader.valid) continue
+                    allClasses.addAll(reader.classDescriptors())
+                    for (descriptor in reader.matchingDescriptors(prefixes)) {
+                        reader.classDetail(descriptor)?.let { details.add(it) }
+                    }
                 }
             }
         } catch (t: Throwable) {
             QLog.e(TAG, "failed to parse the host APK", t)
-            return "导出失败：解析 DEX 出错（${t.javaClass.simpleName}）"
+            return "导出失败：解析 DEX 出错（${t.javaClass.simpleName}: ${t.message}）"
         } finally {
             apk.delete()
         }
 
+        val classesText = buildClassList(hostPackage, dexCount, allClasses)
+        val methodsText = buildMethodList(hostPackage, prefixes, details)
+
+        val classesFile = write(context, OUT_CLASSES, classesText)
+        val methodsFile = write(context, OUT_METHODS, methodsText)
+        val published = publish(listOf(classesFile to "/sdcard/$OUT_CLASSES", methodsFile to "/sdcard/$OUT_METHODS"))
+
+        return buildString {
+            append("类名：${allClasses.size} 个（扫描 $dexCount 个 dex）\n")
+            append("方法签名：${details.size} 个类匹配前缀\n")
+            append("  方法 ${details.sumOf { it.methods.size }} / 字段 ${details.sumOf { it.fields.size }}\n")
+            append("文件：\n  ${classesFile.absolutePath}\n  ${methodsFile.absolutePath}\n")
+            append(if (published) "已复制到 /sdcard/" else "（/sdcard 复制失败，用上面的路径）")
+        }
+    }
+
+    private fun buildClassList(
+        hostPackage: String,
+        dexCount: Int,
+        classes: Set<String>,
+    ): String {
         val matches = classes.filter { descriptor ->
             descriptor.startsWith("Lcom/tencent/") &&
                 KEYWORDS.any { descriptor.contains(it, ignoreCase = true) }
         }.map { it.substring(1, it.length - 1).replace('/', '.') }.sorted()
-
-        val truncated = matches.size > MAX_LINES
         val body = StringBuilder()
         body.append("# Qself class dump — $hostPackage\n")
         body.append("# dex images scanned: $dexCount\n")
-        body.append("# classes with relevant names: ${matches.size}")
-        if (truncated) body.append(" (truncated to $MAX_LINES)")
-        body.append("\n")
+        body.append("# classes with relevant names: ${matches.size}\n")
         for (line in matches.take(MAX_LINES)) body.append(line).append('\n')
+        return body.toString()
+    }
 
-        val local = File(context.getExternalFilesDir(null) ?: context.filesDir, OUT_NAME)
-        local.writeText(body.toString())
-        val published = publishToSdcard(local)
-        QLog.i(TAG, "dumped ${classes.size} classes, ${matches.size} relevant -> $local")
+    private fun buildMethodList(
+        hostPackage: String,
+        prefixes: List<String>,
+        details: List<DexClass>,
+    ): String {
+        val body = StringBuilder()
+        body.append("# Qself method dump — $hostPackage\n")
+        body.append("# prefixes: ${prefixes.joinToString()}\n")
+        body.append("# usage: look up the exact method to hook\n")
+        for (cls in details.sortedBy { it.descriptor }) {
+            body.append('\n')
+            body.append("class ${cls.descriptor.substring(1, cls.descriptor.length - 1).replace('/', '.')}\n")
+            for (m in cls.methods.take(MAX_METHODS_PER_CLASS)) {
+                body.append("  m ${DexReader.methodFlags(m.flags)} ${m.name}${m.signature}\n")
+            }
+            if (cls.methods.size > MAX_METHODS_PER_CLASS) {
+                body.append("  # … ${cls.methods.size - MAX_METHODS_PER_CLASS} more methods\n")
+            }
+            for (f in cls.fields) {
+                body.append("  f ${DexReader.fieldFlags(f.flags)} ${f.name}\n")
+            }
+        }
+        return body.toString()
+    }
 
-        return "已导出 ${matches.size} 个相关类名（共扫描 $dexCount 个 dex）\n" +
-            if (published) "文件：/sdcard/$OUT_NAME" else "文件：${local.absolutePath}"
+    private fun write(context: Context, name: String, text: String): java.io.File {
+        val file = java.io.File(context.getExternalFilesDir(null) ?: context.filesDir, name)
+        file.writeText(text)
+        return file
+    }
+
+    /** Best effort: publishing to /sdcard is a convenience, not a requirement. */
+    private fun publish(pairs: List<Pair<java.io.File, String>>): Boolean {
+        val script = pairs.joinToString(" && ") { (from, to) ->
+            "cp '${from.absolutePath}' '$to'"
+        }
+        return try {
+            val process = ProcessBuilder("su", "0", "-c", "sh -c ${quote(script)}")
+                .redirectErrorStream(true).start()
+            process.inputStream.bufferedReader().use { it.readText() }
+            process.waitFor(COPY_TIMEOUT_SECONDS, TimeUnit.SECONDS) && process.exitValue() == 0
+        } catch (t: Throwable) {
+            false
+        }
     }
 
     /** Finds the host's APK path (`pm path`) and copies it out with root. */
-    private fun copyApk(hostPackage: String, destination: File): Boolean {
+    private fun copyApk(hostPackage: String, destination: java.io.File): Boolean {
         val command = "pm path $hostPackage | head -1 | sed 's/^package://' | " +
             "xargs -r cp '$destination'"
         return try {
-            val process = ProcessBuilder(
-                "su", "0", "-c", "sh -c ${quote(command)}",
-            ).redirectErrorStream(true).start()
+            val process = ProcessBuilder("su", "0", "-c", "sh -c ${quote(command)}")
+                .redirectErrorStream(true).start()
             process.inputStream.bufferedReader().use { it.readText() }
             if (!process.waitFor(COPY_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 process.destroyForcibly()
@@ -127,96 +199,5 @@ object ClassDump {
         }
     }
 
-    private fun publishToSdcard(local: File): Boolean = try {
-        val target = "/sdcard/$OUT_NAME"
-        val process = ProcessBuilder(
-            "su", "0", "-c", "sh -c ${quote("cp '${local.absolutePath}' '$target'")}",
-        ).redirectErrorStream(true).start()
-        process.inputStream.bufferedReader().use { it.readText() }
-        process.waitFor(COPY_TIMEOUT_SECONDS, TimeUnit.SECONDS) && process.exitValue() == 0
-    } catch (t: Throwable) {
-        false
-    }
-
-    private fun quote(value: String): String =
-        "'" + value.replace("'", "'\\''") + "'"
-
-    // ---- DEX parsing ------------------------------------------------------
-
-    /**
-     * Adds every `class_defs` descriptor of one DEX image to [out]. Only the
-     * header, the string-id table and the class-defs table are touched, so a
-     * 40 MB dex costs a few MB of transient memory.
-     */
-    private fun collectClasses(bytes: ByteArray, out: MutableSet<String>) {
-        if (bytes.size < 0x70) return
-        if (bytes[0] != 'd'.code.toByte() || bytes[1] != 'e'.code.toByte() ||
-            bytes[2] != 'x'.code.toByte() || bytes[3] != 0x0A.toByte()
-        ) {
-            return
-        }
-        val stringIdsSize = u32(bytes, 0x38)
-        val stringIdsOff = u32(bytes, 0x3C)
-        val classDefsSize = u32(bytes, 0x60)
-        val classDefsOff = u32(bytes, 0x64)
-        for (i in 0 until classDefsSize) {
-            val classIdx = u32(bytes, classDefsOff + i * 32)
-            if (classIdx < 0 || classIdx >= stringIdsSize) continue
-            val dataOff = u32(bytes, stringIdsOff + classIdx * 4)
-            out.add(readString(bytes, dataOff) ?: continue)
-        }
-    }
-
-    private fun u32(bytes: ByteArray, offset: Int): Int {
-        if (offset < 0 || offset + 4 > bytes.size) return -1
-        return (bytes[offset].toInt() and 0xFF) or
-            ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
-            ((bytes[offset + 2].toInt() and 0xFF) shl 16) or
-            ((bytes[offset + 3].toInt() and 0xFF) shl 24)
-    }
-
-    /**
-     * Reads a MUTF-8 string: uleb128 length, then the classic 1/2/3-byte
-     * sequences terminated by NUL. Surrogate halves decode as-is, which is
-     * exactly what a Java String holds.
-     */
-    private fun readString(bytes: ByteArray, offset: Int): String? {
-        if (offset < 0 || offset >= bytes.size) return null
-        var p = offset
-        // uleb128 (the length itself is not needed: the NUL terminates it)
-        var guard = 0
-        while (p < bytes.size && (bytes[p].toInt() and 0x80) != 0 && guard < 5) {
-            p++
-            guard++
-        }
-        p++
-        if (p >= bytes.size) return null
-        val out = StringBuilder(48)
-        while (p < bytes.size && bytes[p].toInt() != 0) {
-            val b = bytes[p].toInt() and 0xFF
-            when {
-                b < 0x80 -> {
-                    out.append(b.toChar())
-                    p++
-                }
-                b and 0xE0 == 0xC0 -> {
-                    if (p + 1 >= bytes.size) return null
-                    out.append((((b and 0x1F) shl 6) or (bytes[p + 1].toInt() and 0x3F)).toChar())
-                    p += 2
-                }
-                else -> {
-                    if (p + 2 >= bytes.size) return null
-                    out.append(
-                        (
-                            ((b and 0x0F) shl 12) or
-                                ((bytes[p + 1].toInt() and 0x3F) shl 6) or
-                                (bytes[p + 2].toInt() and 0x3F)
-                            ).toChar(),
-                    )
-                    p += 3
-                }
-            }
-        }
-        return out.toString().takeIf { it.startsWith("L") && it.endsWith(";") }
-    }
+    private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 }
