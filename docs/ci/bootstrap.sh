@@ -7,27 +7,42 @@
 # with your own credentials (which DO have the scope).
 #
 # Usage (from inside a clone of the repo):
-#   pkg install git        # once, if you haven't already
 #   bash docs/ci/bootstrap.sh
 #
-# The script fetches the branch and checks it out itself, so it works right
-# after a fresh `git clone` (which leaves you on main).
+# Notes:
+#   - The script fetches and checks out the branch itself, so it works right
+#     after a fresh `git clone` (which leaves you on main) and is safe to
+#     re-run after a failed attempt.
+#   - Local modifications to tracked files are discarded (`git checkout -f`).
+#     Do not run it if you have uncommitted work you care about.
 
 set -euo pipefail
 
 BRANCH="arena/01a0b583-qself"
 TARGET_REF="refs/remotes/origin/$BRANCH"
 
+if [ ! -d .git ]; then
+    echo "ERROR: run this from the repository root." >&2
+    exit 1
+fi
+
 git fetch origin "$BRANCH:$TARGET_REF"
-git checkout -B "$BRANCH" "$TARGET_REF"
+git checkout -f -B "$BRANCH" "$TARGET_REF"
 
 if [ ! -f docs/ci/ci.yml ]; then
+    if [ -f .github/workflows/ci.yml ]; then
+        echo "CI is already bootstrapped on $BRANCH."
+        exit 0
+    fi
     echo "ERROR: docs/ci/ci.yml not found — are you on $BRANCH?" >&2
     exit 1
 fi
 
+# Remove the old workflows first: `git rm -r` also deletes the directory
+# once its last file is gone, so `mkdir` has to come after it or the
+# following `git mv` fails with "renaming ... No such file or directory".
+git rm -r -q -f --ignore-unmatch .github/workflows
 mkdir -p .github/workflows
-git rm -r -q --ignore-unmatch .github/workflows
 git mv -f docs/ci/ci.yml .github/workflows/ci.yml
 
 git commit -m "ci: enable Qself CI (workflow bootstrap)"
