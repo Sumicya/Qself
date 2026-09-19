@@ -211,3 +211,12 @@ I Qself/Qself: boot: pkg=com.tencent.mobileqq proc=com.tencent.mobileqq framewor
 
 真机验证步骤见 README「使用方法」；诊断信息（引擎版本、自检结果、共享配置状态）
 直接在设置页首行显示，出问题时先看那里和 `QLog`（设置 → 日志）。
+
+## v2（NT-only 收敛）
+
+- 删除全部旧世代特性与它们的版本分支表（`QQVersion` 常量表、`HostInfo.isAtLeast`、
+  `FeatureCategory` 的未用分组），模块从此只面向 NT QQ。
+- 启动时机从 `onPackageReady` 提前到 `onPackageLoaded`（前者到达时宿主 Application 已存在，
+  装在那里的触发钩子永远不会被调用——真机三次进程启动全都是"armed 之后无下文"）。
+- 设置入口按上游做法重写：QQ 设置列表里插一行，行本身从 live list 现场发现；
+  候选 provider 全 miss 时由 `HostDex` 在宿主 APK 里按方法形状发现（结果缓存）。

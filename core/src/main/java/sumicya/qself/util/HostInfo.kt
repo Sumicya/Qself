@@ -21,8 +21,6 @@ class HostInfo(
 
     val isTim: Boolean
         get() = packageName == HostInfoProvider.PACKAGE_NAME_TIM
-
-    fun isAtLeast(version: Long): Boolean = versionCode >= version
 }
 
 object HostInfoProvider {

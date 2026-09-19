@@ -21,7 +21,6 @@
     <string name="sync_running">正在写入宿主设置（需要 root）…</string>
     <string name="restart_host">重启 QQ</string>
     <string name="restart_running">正在停止 QQ（需要 root）…</string>
-    <string name="feature_summary_not_applicable">%1$s（该开关仅对%2$s生效，当前宿主不需要它）</string>
     <string name="diagnostics">诊断</string>
     <string name="takes_effect_on_restart">开关在 QQ 下次重启后生效</string>
 
@@ -33,13 +32,4 @@
 
     <string name="about_text" formatted="false">Qself %1$s\n\n一个自由、现代、原生的 QQ 增强模块。\n\n许可：GNU GPL-3.0-or-later\n项目地址：https://github.com/Sumicya/Qself\n\n一切开发旨在学习，请勿用于非法用途。\n本模块免费开源，无任何收费。</string>
 
-    <!-- OpenFriendChatHistory -->
-    <string name="input_uin_title">请输入对方 QQ 号或 uid</string>
-    <string name="confirm">确认</string>
-    <string name="cancel">取消</string>
-    <string name="input_required">请输入</string>
-    <string name="invalid_uin">请输入有效的 QQ 号（≥5 位）</string>
-    <string name="invalid_uid">请输入有效的 uid（u_ 开头，24 位）</string>
-    <string name="nt_not_supported">暂不支持 NT 版 QQ，敬请期待</string>
-    <string name="start_failed">打开失败，请查看日志</string>
 </resources>

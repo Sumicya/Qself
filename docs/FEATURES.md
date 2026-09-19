@@ -1,44 +1,47 @@
-# v1 功能清单
+# 功能清单（NT QQ）
 
-v1 目标：**少而稳**。每个功能都是从旧实现移植并重构到
-`Host` + `Hooks` 新架构的；旧仓库中依赖插件体系
-（qwallet/troop 插件 APK）、DexKit 或 QQNT 内部 API 的功能推迟到 v1.1+。
+目标平台只有一个：**NT QQ（9.x，`com.tencent.qqnt.*`）**。旧世代（8.x / TIM）的
+功能在 v2 里**整体删除**——它们的类在 NT 上不存在，留着只会让"开关没反应"这件事
+重复发生（用户明确：旧版功能集不值得移植，那些开关要么没用要么早就失效）。
 
-## 已实现（v1）
+每个功能一个 `object`，一个包路径（`feature/<category>/`），`@QselfFeature` 注解注册，
+`initOnce` 里 `host.resolve` 拿类 → `Hooks.*IfEnabled` 装钩子；钩子 handler 内不再反射。
+**只 hook void 方法和 boolean 判定**（hook 返回对象的方法会在宿主里造成空指针）。
+
+## 已实现
 
 | id | 名称 | 分类 | 说明 |
 |---|---|---|---|
-| `misc.anti_update` | 屏蔽更新 | 其他 | 升级弹窗 / 横幅 / UpgradeController 全静默 |
-| `misc.disable_crash_report` | 禁用崩溃日志上报 | 其他 | 默认开启（隐私）；QQCrashReportManager 与旧版 StatisticCollector 双路径 |
-| `misc.disable_hot_patch` | 禁用热补丁 | 其他 | rfix 引擎 + 旧版 ConfigServlet（type=46 剔除）+ PatchReporter + 远古 hotpatch 类 |
-| `chat.show_self_msg_left` | 自己的消息居左显示 | 消息 | `BaseChatItemLayout.setHearIconPosition` 置空 |
-| `ui.remove_daily_sign` | 移除侧滑栏左上角打卡 | 界面 | 8.8.11 ~ 9.1.70 字段名映射 + NT V9 变体（尽力而为） |
-| `ui.remove_camera_button` | 屏蔽标题栏相机按钮 | 界面 | 按版本选择混淆方法名；9.0.8+ / TIM 不可用 |
-| `friend.open_chat_history` | 打开好友聊天记录 | 好友 | UI 动作：输入 uin 启动 ChatHistoryActivity（`setClassName`，旧版 QQ）；NT/uid 路径 v1.1 |
-| `qzone.hide_title_bar_entrance` | 隐藏空间动态"此刻" | 空间 | 主路径（QZMTitleBarEntranceManager）+ 横幅路径（FeedxTopEntrance）；beta |
-| `ui.inqq_entry` | QQ 内设置入口 | 界面 | 上游做法：把 Qself 作为一行插进 QQ 自己的设置列表（hook provider 的 `List getItemProcessList(Context)`，行本身从 live list 现场发现）；provider 改名时由 DexKit 式运行时发现补上 |
+| `misc.disable_hot_patch_nt` | 禁用热补丁（NT） | 其他 | QFix `PatchRedirectCenter.apply` 直接返回 `CODE_SUCCESS`、`getRedirector` 返回 null、`Relax.apply*` 返回 `K_APPLY_SUCCESS`（8 个钩子） |
+| `misc.disable_crash_report_nt` | 禁用崩溃上报（NT） | 其他 | Bugly / feedback.eup 的初始化、`post*`、上传、native 处理器注册（26 个钩子） |
+| `misc.anti_update_nt` | 屏蔽更新（NT） | 其他 | 判定(4)/请求(1)/提示(4)/下载(5)/横幅(4) 五层 |
+| `ui.inqq_entry` | QQ 内设置入口 | 界面 | 上游做法：hook 设置列表 provider 的 `List getItemProcessList(Context)`，把 Qself 作为一行插进 QQ 自己的设置列表；provider 改名时走 `HostDex` 运行时发现；都失败才退悬浮按钮 |
 
-## 推迟（v1.1 候选，按优先级）
+## 基础设施（不属于功能，但决定功能能不能跑）
 
-| 功能 | 推迟原因 |
+| 组件 | 位置 | 作用 |
+|---|---|---|
+| `HostDex` | core/host | 宿主进程内读宿主 APK，按**方法形状**找被混淆的类（上游 DexKit 那一步），结果缓存到 `files/qself/hostdex.txt` |
+| `DexReader` | core/dex | DEX 解析（class_defs / class_data / method_ids），零依赖 |
+| `Host` | core/host | 类/方法/字段解析与缓存，宿主 ClassLoader 优先 |
+| `Hooks` / `HookEngine` | core/xp | 唯一 hooking 接口；框架引擎与自研原生引擎共用同一抽象 |
+| `SettingsBridge` | core/config | 权威配置 = 宿主 `files/qself/settings.json`；宿主进程内同 uid 直写，跨进程走 su 桥 |
+| `HostRestart` | core/util | 设置生效即重启：跨进程 `su am force-stop`，宿主进程内 `killProcess(myPid())` |
+
+## 明确不做
+
+| 方向 | 原因 |
 |---|---|
-| QQ 钱包相关（FakeBalance / QWalletNoAD） | 依赖旧插件体系（qwallet_plugin + PROC_TOOL）；需用 native 引擎或独立方案重做 |
-| 频道复制卡片消息（GuildCopyCardMsg） | 需要 CustomMenu 构造工具；中等工作量 |
-| 群文件转存永久（TroopFileSaveLasting） | 泛型签名 + 版本分支多，稳定性待验证 |
-| 显示历史好友入口 | 依赖 QQ 内自绘列表页（ExfriendListFragment），UI 体系重做后再议 |
-| 消息拦截 / 免打扰（AntiMessage 等） | 通知管线改动面大 |
-| 图片自定义摘要（ImageCustomSummary） | 依赖消息数据对象深度反射 |
-| 侧滑栏精简（SimplifyQQSettingMe） | 版本分支多 |
-| 多开头像（MultiForwardAvatarHook） | 413 行复杂逻辑 |
-| ~~DexKit 类名发现~~ | **已落地（v1.1 提前）**：`HostDex` + `DexReader`（已移入 core）在宿主进程内直接读宿主 APK，按**方法形状**找类并把结果缓存到 `files/qself/hostdex.txt`。设置入口的 provider 是第一个使用者 |
-| 设置入口的 pre-NT 路径（`QQSettingSettingActivity/Fragment`） | 目标是 NT QQ（用户明确要求不做旧版），上游那两条类名在 NT 上不存在，故不移植 |
+| 旧世代（8.x / TIM）功能移植 | 目标是 NT；旧类不存在，移植等于重写另一个模块 |
+| pre-NT 设置页路径（`QQSettingSettingActivity/Fragment`） | NT 上不存在；上游那两条分支是给老版本用的 |
+| 依赖 QQ 插件体系（qwallet 插件 APK）、DexKit 原生库的功能 | 插件体系已消失；DexKit 的能力由 `HostDex` 以更小的代价覆盖 |
+| LSPosed 1.x / classic Xposed 支持 | 用户明确放弃（"lsp1 已经没人用了"）；`ClassicHookEngine` 只作为休眠的编译期兜底 |
 
-## 移植约定
+## 移植/新增约定
 
-- 每个功能一个 `object`，一个包路径（`feature/<category>/`）。
-- `initOnce` 里：`host.require/resolve` 拿类 → `Hooks.beforeIfEnabled/afterIfEnabled`
-  装钩子。钩子 handler 内**不允许**再做反射。
-- 版本分支用 `QQVersion` 常量表（`core/util/QQVersion.kt`，与旧表同步）。
-- 功能失败（类缺失等）只影响自己：`Qself.featureErrors` 记录，UI 诊断可见。
-- 会被 QQ 混淆/改名的类：先用 FQCN 候选，候选全miss后走 `HostDex` 运行时发现
-  （按方法形状验证，命中后写入缓存）。**不把"猜的类名"直接写进钩子。**
+- 新功能只写 NT 路径；`hostGeneration = NT`，`defaultEnabled = false`，`experimental = true`，
+  真机验证过再把默认值翻过来。
+- 需要"改名也不怕"的类，先 FQCN 候选，候选全 miss 时用 `HostDex` 按形状发现，
+  命中后缓存；**永远不要把猜到的类名直接写进钩子**。
+- 功能失败只影响自己：`Qself.featureErrors` 记录，启动日志里每个 id 一行
+  `features: <id>=ok|skip|fail/<on|off>`。

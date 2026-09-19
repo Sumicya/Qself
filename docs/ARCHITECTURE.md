@@ -96,7 +96,7 @@ Application）。日志会点名是哪一条生效（`boot trigger fired: …`�
 
 ```kotlin
 @QselfFeature(id = "misc.anti_update", name = "屏蔽更新", ...)
-object AntiUpdate : SwitchFeature() {          // 或 ActionFeature
+object NtAntiUpdate : SwitchFeature() {        // 或 ActionFeature
     override fun initOnce(ctx: FeatureContext): Boolean { ... }
 }
 ```
