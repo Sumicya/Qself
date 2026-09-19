@@ -1,14 +1,14 @@
 /*
  * Qself native hook engine — JNI surface.
  *
- * v1 ships Dobby: native inline hooks for arbitrary function addresses plus
- * import-table (PLT) replacement, both driven from Java. Initialization and
- * a real self-test are exposed so the settings UI can prove the engine
- * works on the device.
+ * Two layers:
+ *  - Dobby: inline hooks on arbitrary native addresses, plus a real
+ *    self-test that proves the replacement and the trampoline both work.
+ *  - LSPlant: ART-level Java method hooking (see art/lsplant_bridge), driven
+ *    by libart.so symbols resolved from the on-disk ELF image.
  *
- * LSPlant (ART-level Java method hooking) is wired in v1.1: it needs a
- * libart.so symbol resolver injected through its InitInfo callback, which
- * is a separate piece of work — see docs/NATIVE-LOADING.md.
+ * Every entry point is defensive: a failure here must degrade to the
+ * framework's Java-level engine, never take the host down.
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -18,6 +18,8 @@
 #include <atomic>
 #include <string>
 
+#include "art/art_symbols.h"
+#include "art/lsplant_bridge.h"
 #include "dobby.h"
 
 namespace {
@@ -43,6 +45,10 @@ __attribute__((noinline)) int MarkerReplace() {
 
 void *MarkerAddress() {
     return reinterpret_cast<void *>(&Marker);
+}
+
+jstring ToJString(JNIEnv *env, const char *value) {
+    return env->NewStringUTF(value != nullptr ? value : "");
 }
 
 }  // namespace
@@ -102,6 +108,60 @@ Java_sumicya_qself_engine_HookNative_nativeSelfTest(JNIEnv *, jobject) {
         return -7;
     }
     return 0;
+}
+
+/* --- libart.so symbols ---------------------------------------------------- */
+
+/** Number of indexed libart.so symbols (0 = resolver failed). */
+JNIEXPORT jlong JNICALL
+Java_sumicya_qself_engine_HookNative_nativeArtSymbolCount(JNIEnv *, jobject) {
+    return static_cast<jlong>(qself::art::SymbolCount());
+}
+
+/** Resolver state, e.g. "ok: 58421 symbols (dynsym 1203, symtab 57218)". */
+JNIEXPORT jstring JNICALL
+Java_sumicya_qself_engine_HookNative_nativeArtSymbolStatus(JNIEnv *env, jobject) {
+    return ToJString(env, qself::art::Status());
+}
+
+/* --- LSPlant (ART Java method hooking) ------------------------------------ */
+
+/** @return 1 when LSPlant is ready, 0 otherwise. */
+JNIEXPORT jint JNICALL
+Java_sumicya_qself_engine_HookNative_nativeLsplantInit(JNIEnv *env, jobject) {
+    return qself::art::Init(env) ? 1 : 0;
+}
+
+JNIEXPORT jstring JNICALL
+Java_sumicya_qself_engine_HookNative_nativeLsplantStatus(JNIEnv *env, jobject) {
+    return ToJString(env, qself::art::Status());
+}
+
+/**
+ * Hooks a java.lang.reflect.Executable (Method or Constructor).
+ *
+ * @return the backup executable to call the original, or null on failure
+ */
+JNIEXPORT jobject JNICALL
+Java_sumicya_qself_engine_HookNative_nativeHookJava(JNIEnv *env, jobject,
+                                                    jobject target, jobject hooker,
+                                                    jobject callback) {
+    return qself::art::Hook(env, target, hooker, callback);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_sumicya_qself_engine_HookNative_nativeUnhookJava(JNIEnv *env, jobject, jobject target) {
+    return qself::art::Unhook(env, target) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_sumicya_qself_engine_HookNative_nativeIsHookedJava(JNIEnv *env, jobject, jobject target) {
+    return qself::art::IsHooked(env, target) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_sumicya_qself_engine_HookNative_nativeDeoptimizeJava(JNIEnv *env, jobject, jobject target) {
+    return qself::art::Deoptimize(env, target) ? JNI_TRUE : JNI_FALSE;
 }
 
 }  // extern "C"

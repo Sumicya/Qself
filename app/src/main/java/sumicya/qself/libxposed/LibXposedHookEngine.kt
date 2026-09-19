@@ -10,6 +10,7 @@ import io.github.libxposed.api.annotations.XposedHooker
 import java.lang.reflect.Executable
 import java.lang.reflect.Member
 import sumicya.qself.xp.HookEngine
+import sumicya.qself.xp.MutableHookParam
 
 /**
  * [HookEngine] backed by the libxposed interceptor API (LSPosed 10.x and any
@@ -66,10 +67,10 @@ class QselfInterceptor(
         // them through proceed(args).
         val original = chain.args.toTypedArray()
         val args = original.copyOf()
-        val param = QselfHookParam(executable, chain, args)
+        val param = object : MutableHookParam(executable, chain.thisObject, args) {}
 
         if (onBefore != null) {
-            param.after = false
+            param.afterPhase = false
             onBefore(param)
             if (param.skipped) {
                 return param.resultValue
@@ -83,7 +84,7 @@ class QselfInterceptor(
         } catch (t: Throwable) {
             param.throwableValue = t
             if (onAfter != null) {
-                param.after = true
+                param.afterPhase = true
                 onAfter(param)
                 param.throwableValue?.takeIf { it !== t }?.let { throw it }
             }
@@ -92,43 +93,10 @@ class QselfInterceptor(
 
         param.resultValue = result
         if (onAfter != null) {
-            param.after = true
+            param.afterPhase = true
             onAfter(param)
         }
         return param.resultValue
     }
 }
 
-/** [HookEngine.HookParam] view over one libxposed invocation. */
-private class QselfHookParam(
-    override val member: Member,
-    private val chain: XposedInterface.Chain,
-    override val args: Array<Any?>,
-) : HookEngine.HookParam {
-
-    var after = false
-    var skipped = false
-    var resultValue: Any? = null
-    var throwableValue: Throwable? = null
-
-    override val thisObject: Any?
-        get() = chain.thisObject
-
-    override val isAfter: Boolean
-        get() = after
-
-    override val result: Any?
-        get() = resultValue
-
-    override val exception: Throwable?
-        get() = throwableValue
-
-    override fun skip(result: Any?) {
-        skipped = true
-        resultValue = result
-    }
-
-    override fun setException(throwable: Throwable?) {
-        throwableValue = throwable
-    }
-}

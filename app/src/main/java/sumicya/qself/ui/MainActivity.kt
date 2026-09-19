@@ -26,6 +26,7 @@ import sumicya.qself.feature.QselfFeature
 import sumicya.qself.gen.QselfFeatures
 import sumicya.qself.log.QLog
 import sumicya.qself.engine.HookNative
+import sumicya.qself.engine.NativeJavaSelfTest
 import sumicya.qself.util.HostInfoProvider
 
 /**
@@ -104,8 +105,10 @@ class MainActivity : AppCompatActivity() {
             version = BuildConfig.VERSION_NAME,
             hostPackage = hostPackage(),
             sharedSettings = if (Qself.uiHasSharedSettings) "loaded" else "local cache (su unavailable)",
-            nativeEngine = HookNative.version,
-            nativeSelfTest = HookNative.selfTestResult.toString(),
+            nativeEngine = "${HookNative.version} / " +
+                "${HookNative.lsplantStatus} / libart ${HookNative.artSymbolStatus}",
+            nativeSelfTest = "dobby=${HookNative.selfTestResult} " +
+                "java=${javaSelfTest} (${NativeJavaSelfTest.explain(javaSelfTest)})",
         )
         val byCategory = LinkedHashMap<FeatureCategory, MutableList<QselfFeature>>()
         for (feature in QselfFeatures.features) {
@@ -153,6 +156,9 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(android.R.string.ok, null)
             .show()
     }
+
+    /** Hooks a probe class through LSPlant; run once, it is the real proof. */
+    private val javaSelfTest: Int by lazy { NativeJavaSelfTest.run() }
 
     companion object {
         private const val MENU_ABOUT = 1

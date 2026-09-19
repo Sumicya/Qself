@@ -115,7 +115,7 @@ object Qself {
         QLog.i(
             "Qself",
             "boot: pkg=${param.packageName} proc=${param.processName} " +
-                "framework=${param.framework.displayName} features=${features.size}",
+                "framework=${param.framework.displayName} engine=$engine features=${features.size}",
         )
 
         if (!engine.supported) {

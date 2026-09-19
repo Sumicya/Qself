@@ -14,7 +14,7 @@ import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 import io.github.libxposed.api.annotations.XposedApiMin
 import sumicya.qself.gen.QselfFeatures
-import sumicya.qself.libxposed.LibXposedHookEngine
+import sumicya.qself.hook.HookEngines
 import sumicya.qself.log.QLog
 import sumicya.qself.util.HostInfoProvider
 
@@ -28,6 +28,9 @@ import sumicya.qself.util.HostInfoProvider
  *
  * The class has one constructor on purpose: the module targets API 101, so
  * the framework always instantiates the no-argument form.
+ *
+ * The framework is only the *loader* here: which engine actually installs the
+ * hooks is decided in [HookEngines] (native LSPlant when available).
  */
 @Keep
 class QselfModule10x : XposedModule {
@@ -63,7 +66,7 @@ class QselfModule10x : XposedModule {
                 framework = FrameworkKind.LSPosed_10X,
             ),
             QselfFeatures.features,
-            LibXposedHookEngine(this),
+            HookEngines.forModernFramework(this),
         )
     }
 

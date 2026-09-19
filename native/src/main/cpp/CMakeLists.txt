@@ -1,4 +1,4 @@
-# Qself native hook engine (Dobby).
+# Qself native hook engine: Dobby (inline hooks) + LSPlant (ART Java hooks).
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.28)
@@ -12,9 +12,9 @@ endmacro()
 
 enable_language(CXX C)
 
-# Dobby is linked as a static library into a shared one; Android requires all
-# code to be position independent, and Dobby's own CMakeLists does not ask for
-# it. Same for 16KB-page devices.
+# Everything is linked as static archives into one shared library; Android
+# requires all code to be position independent, and neither upstream project
+# asks for it. Same for 16KB-page devices.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
@@ -33,26 +33,42 @@ if ("${ANDROID_ABI}" STREQUAL "armeabi-v7a")
     target_compile_options(dobby PRIVATE -fomit-frame-pointer)
 endif ()
 
+# --- LSPlant -----------------------------------------------------------------
+# ART-level Java method hooking. Its CMakeLists is written to be included
+# (it calls project() and sets C++23 + CXX modules for its own targets), and
+# the static target is what gets linked in.
+SET_OPTION(LSPLANT_BUILD_SHARED OFF)
+add_subdirectory(
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../../libs/LSPlant/lsplant/src/main/jni
+        lsplant_build
+)
+
 # --- Qself JNI surface -------------------------------------------------------
 add_library(qself_hook SHARED
         jni/qself_hook.cpp
+        art/art_symbols.cpp
+        art/lsplant_bridge.cpp
 )
 
 set_target_properties(qself_hook PROPERTIES
-        CXX_STANDARD 17
+        # C++20 is enough for our own code; LSPlant's targets carry C++23.
+        CXX_STANDARD 20
         CXX_STANDARD_REQUIRED ON
 )
 
-# Dobby publishes its include directory on the target; being explicit keeps
-# the header lookup working if the upstream CMake changes.
 target_include_directories(qself_hook PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        # Being explicit keeps header lookup working if upstream CMake changes.
         ${CMAKE_CURRENT_SOURCE_DIR}/../../../../libs/Dobby
         ${CMAKE_CURRENT_SOURCE_DIR}/../../../../libs/Dobby/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../../libs/LSPlant/lsplant/src/main/jni/include
 )
 
 target_link_libraries(qself_hook PRIVATE
         dobby
+        lsplant_static
         ${ANDROID_LIBS}
+        dl
 )
 
 # keep the .so relocatable on 16KB-page devices
