@@ -7,6 +7,7 @@ package sumicya.qself
 
 import android.app.Application
 import android.content.pm.ApplicationInfo
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import io.github.libxposed.api.XposedModule
@@ -36,9 +37,12 @@ import sumicya.qself.xp.HookEngine
  * Boot sequence (see docs/ARCHITECTURE.md):
  *  1. `onPackageReady` — the framework is only the *loader*; no Application
  *     exists yet, so nothing heavy happens here.
- *  2. [BootHook] arms a before-hook on `Instrumentation#callApplicationOnCreate`
- *     (the framework engine when available: it cannot propagate our failures
- *     into the host; the native engine otherwise).
+ *  2. [BootHook] arms a hook on every framework call site that hands over the
+ *     Application (Instrumentation#callApplicationOnCreate / #newApplication,
+ *     AppComponentFactory#instantiateApplication, Application#onCreate), with
+ *     the first Activity as the last resort. One single entry point is not
+ *     enough: on the device the armed `callApplicationOnCreate` hook never
+ *     fired once, and with one trigger the module simply stayed dead.
  *  3. That hook captures the Application and posts the real boot to the main
  *     looper, so heavy work (Settings/Host/features/LSPlant) never runs inside
  *     a hook callback for a core framework method, and the host's own
@@ -88,7 +92,7 @@ class QselfModule10x : XposedModule {
             }
         }
 
-        var armed = BootHook.install(trigger, onCreated)
+        var armed = BootHook.install(trigger, appComponentFactory(param), onCreated)
         if (!armed) {
             // No framework hooking: fall back to our own engine as the trigger.
             HookEngines.nativeOrNull()?.let { native ->
@@ -146,6 +150,17 @@ class QselfModule10x : XposedModule {
      * application info carries it (falling back to the package name, which is
      * the main process).
      */
+    /**
+     * The factory LSPosed is about to use for the Application (Android 10+).
+     * Passing it in is what lets [BootHook] hook the real creation site
+     * instead of assuming `Instrumentation` is the only way in.
+     */
+    private fun appComponentFactory(param: PackageReadyParam): Any? = try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) param.appComponentFactory else null
+    } catch (t: Throwable) {
+        null
+    }
+
     /** The host's data dir (`/data/data/<pkg>`), used for the diagnostic flags. */
     private fun dataDirOf(param: PackageReadyParam): String? = try {
         param.applicationInfo.dataDir

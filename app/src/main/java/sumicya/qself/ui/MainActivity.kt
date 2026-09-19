@@ -142,14 +142,20 @@ class MainActivity : Activity() {
         Thread {
             val message = Qself.syncSharedSettings()
             runOnUiThread {
-                // The switch that gets skipped by hand is the restart; offer it
-                // right where the sync result is shown.
-                AlertDialog.Builder(this)
-                    .setTitle(R.string.sync_settings)
-                    .setMessage(message)
-                    .setPositiveButton(R.string.restart_host) { _, _ -> restartHost() }
-                    .setNegativeButton(android.R.string.ok) { _, _ -> adapter.submit(buildRows()) }
-                    .show()
+                adapter.submit(buildRows())
+                if (message.startsWith("已写入")) {
+                    // No manual step: the settings only apply at host startup, so
+                    // the module stops QQ itself and the user just re-opens it.
+                    toast(message)
+                    restartHost()
+                } else {
+                    AlertDialog.Builder(this)
+                        .setTitle(R.string.sync_settings)
+                        .setMessage(message)
+                        .setPositiveButton(R.string.restart_host) { _, _ -> restartHost() }
+                        .setNegativeButton(android.R.string.ok, null)
+                        .show()
+                }
             }
         }.start()
     }

@@ -136,7 +136,7 @@ grep -a -o 'Lcom/tencent/qqnt/[A-Za-z0-9_/$]*;' classes*.dex \
 | 禁用热补丁（NT） | `misc.disable_hot_patch_nt` | `PatchRedirectCenter.apply` + `getRedirector`×2、`Relax.apply*`/`applyPatch`/`applyInternal`/native `relax` | 关（实验） | 补丁流程"报成功但不生效"，已装补丁的 redirector 查不到 → 原方法体执行 |
 | 禁用崩溃上报（NT） | `misc.disable_crash_report_nt` | init/上报/上传/native 注册 四层 | 关（实验） | 不初始化上报器；丢弃 post；阻断上传；不注册 native/ANR 处理器 |
 | 屏蔽更新（NT） | `misc.anti_update_nt` | 判定(4)/请求(1)/提示(4)/下载(5)/横幅(4) 五层 | 关（实验） | 判定恒 false → 不产生"有新版本"；请求派发被跳过 → 不下包；提示与横幅不出现 |
-| QQ 内设置面板 | `ui.inqq_panel` | `Instrumentation#callActivityOnResume` → 页名含 setting/about/config 时挂一个 Qself 悬浮按钮 | 开 | **不需要 root**：面板在 QQ 进程内直写 `files/qself/settings.json`；「重启 QQ」= `Process.killProcess(myPid())`，一键完成 |
+| QQ 内设置入口 | `ui.inqq_entry` | 上游做法：hook 设置列表 provider 的 `List getItemProcessList(Context)`，把 Qself 作为一行插进 QQ 自己的设置列表；provider 找不到时退回悬浮按钮 | 开 | 入口就在 QQ 设置里，点开是 Qself 设置页；改完由模块自己重启 QQ |
 
 ### 入口与重启的设计取舍
 
@@ -146,9 +146,41 @@ grep -a -o 'Lcom/tencent/qqnt/[A-Za-z0-9_/$]*;' classes*.dex \
 - **为什么仍然需要重启**：热补丁应用、崩溃上报初始化、升级检查都发生在**首个窗口出现之前**，
   钩子必须在那之前就位；对已经跑起来的进程改开关，这几件事必然无效。面板把这一步做成
   一个按钮，而不是假装热开关可行。
-- **为什么不 hook QQ 设置页的具体类**：类名一旦被混淆/改名就失效。改用框架的
-  `callActivityOnResume` + 页面名特征匹配，任何 QQ 版本都能挂上，且完全不依赖 QQ 的布局结构
-  （只是往 decorView 加一个小按钮）。
+- **入口照上游做**：上游（QAuxiliary `SettingEntryHook`）不往 QQ 上浮一个按钮，而是 hook 设置
+  列表的 provider，把模块作为**一行**插进 QQ 自己的设置列表——看起来就是 QQ 自己的条目。Qself
+  照这个做：候选只有 provider 的类名（`setting.main.NewSettingConfigProvider` /
+  `MainSettingConfigProvider` / 混淆后的 `setting.main.b`），**行本身（item 类、构造器、点击
+  setter、分组包装器）全部从 QQ 刚构建出来的那个 list 里现场发现**，所以没有任何一个"猜"的
+  类名会进到钩子里。候选 provider 都找不到时，才退回 `callActivityOnResume` + 页名特征匹配的
+  悬浮按钮（日志会写明是哪一条生效），保证任何版本都进得去。
+- **点击后开什么**：开 Qself 自己的设置页（上游也是开自己的设置页），不是自制的浮动对话框。
+- **设置怎么生效**：设置页写入宿主 `files/qself/settings.json`（root 桥，已验证可用），写成功
+  后由模块执行 `am force-stop` 重启 QQ——不再要求用户自己重启。
+- **为什么仍然需要重启**：热补丁应用、崩溃上报初始化、升级检查都发生在**首个窗口出现之前**，
+  钩子必须在那之前就位；对已经跑起来的进程改开关，这几件事必然无效。
+
+### 宿主进程的启动触发（为什么有 5 个 hook）
+
+`onPackageReady` 之后模块必须拿到 `Application` 才能初始化。只用
+`Instrumentation#callApplicationOnCreate` 一个入口时，设备日志出现的是：三次进程启动都停在
+`boot hook armed on Instrumentation#callApplicationOnCreate`，**之后一行都没有**——钩子装上了，
+但那个方法再没走到我们的 handler（框架完全可以在 `handleBindApplication` 很晚的时候才派发
+`onPackageReady`，此时该调用已经发生；宿主也可以自己有 Instrumentation 子类）。
+
+所以现在同时装 5 个触发点，谁先到就用谁，并在日志里点名：
+
+1. `Instrumentation#callApplicationOnCreate(Application)`
+2. `Instrumentation#newApplication(ClassLoader,String,Context)`（after，读 result）
+3. `Instrumentation#newApplication(Class,Context)`（after，读 result）
+4. `AppComponentFactory#instantiateApplication`（Android 10+ 真正创建 Application 的地方，
+   用 `onPackageReady` 交过来的 factory 实例）
+5. `Application#onCreate`
+
+全部落空时还有最后一层：第一个 Activity 一定带着 Application（`Activity#getApplication`），
+`Instrumentation#callActivityOnCreate` 会把它交出来。这时日志会写明
+`late: first Activity#onCreate`——对启动期特性来说太晚，但设置入口和懒加载钩子照常工作，
+而且**日志能说出是哪一条生效**，比"模块什么都不做也不出声"强得多。
+`boot probe: first activity <类名>` 这行则是钩子引擎是否活着的证据。
 
 两个特性都声明 `hostGeneration = NT`，在旧版 QQ 上会被直接跳过（不会失败）。
 未在真机验证前保持默认关闭；开起来后看：

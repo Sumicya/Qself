@@ -33,8 +33,10 @@ app / core 的第三方依赖只剩两个 *compileOnly* 的框架 API stub
 LSPosed 10.x ──(META-INF/xposed/*)──► QselfModule10x.onPackageReady
                                           │  （此刻 Application 尚未创建）
                                           ▼
-                         BootHook：hook 公共 API
-                         Instrumentation#callApplicationOnCreate
+                         BootHook：同时 hook 5 个框架触发点
+                         callApplicationOnCreate / newApplication ×2 /
+                         AppComponentFactory#instantiateApplication /
+                         Application#onCreate（+ 首个 Activity 兜底）
                          ├─ 首选：框架引擎（PROTECTIVE —— 我们抛异常也不会
                          │        传到宿主；只是"谁来触发"，不装任何特性钩子）
                          └─ 兜底：自研原生引擎（无框架 API 的环境 / 框架拒绝时）
@@ -50,9 +52,20 @@ LSPosed 10.x ──(META-INF/xposed/*)──► QselfModule10x.onPackageReady
 **为什么要有 BootHook**：libxposed 的 `onPackageReady` 在 *Application 存在之前*
 触发（官方文档："ready to create Application"），此时没有任何 Application 可以
 boot；而 `AppGlobals` / `ActivityThread.currentApplication()` 这类取 Application 的
-老办法既是隐藏 API（Android 9+ 反射会被拦），时机也太早。于是 Qself hook
-`Instrumentation#callApplicationOnCreate(Application)`（公共 API，API 1 起存在），
-在宿主创建 Application 的瞬间拿到实例——等同经典 `handleLoadPackage` 的时机。
+老办法既是隐藏 API（Android 9+ 反射会被拦），时机也太早。于是 Qself 在宿主创建
+Application 的瞬间把它接过来——等同经典 `handleLoadPackage` 的时机。
+
+**为什么是 5 个触发点而不是 1 个**：只用 `Instrumentation#callApplicationOnCreate`
+时，真机日志是"三次进程启动都停在 `boot hook armed on …`、之后一行都没有"——钩子
+装上但方法再没进我们的 handler（框架可以很晚才派发 `onPackageReady`，此时该调用
+已经发生；宿主也可能有自己覆写的 Instrumentation）。现在同时装
+`callApplicationOnCreate`、两个 `newApplication` 重载（after，只读 result）、
+`AppComponentFactory#instantiateApplication`（Android 10+ 真正创建 Application 的
+地方，用 `onPackageReady` 交过来的 factory 实例）、`Application#onCreate`，外加
+`Instrumentation#callActivityOnCreate` 作为**最后兜底**（第一个 Activity 一定带着
+Application）。日志会点名是哪一条生效（`boot trigger fired: …`）；全部落空时兜底
+那一层会写 `late: first Activity#onCreate`，此时启动期特性已太晚，但设置入口和懒
+钩子照常工作。`boot probe: first activity <类名>` 用于证明钩子引擎本身是活的。
 
 **三条安全规则**（真机闪退后定下的）：
 
@@ -100,7 +113,8 @@ object AntiUpdate : SwitchFeature() {          // 或 ActionFeature
 - 特性代码只拿 `Class/Method/Field` 引用，之后完全不再反射。
 
 除 Host 解析层外，模块里只剩两处反射，都在**启动路径且只跑一次**：
-`BootHook` 解析 `Instrumentation#callApplicationOnCreate` 这个公共方法；
+`BootHook` 解析那几个公共方法（`Instrumentation#callApplicationOnCreate` /
+`#newApplication` / `#callActivityOnCreate`、`Application#onCreate`）；
 `QselfModule10x.initialApplication()` 是取 Application 的兜底（隐藏 API，可能失败，
 失败即忽略）。热路径（hook 回调、开关读取、UI）零反射。
 
@@ -161,8 +175,8 @@ features ──► HookEngine（core 抽象）
   **宿主闪退**，而模块"能用"比"全原生"重要。验证通过后再把默认翻回去。
 - 设置页「引擎自检」里 `java=` 是 `NativeJavaSelfTest` 的结果：它用 LSPlant
   hook 一个模块自有的探测类，检查替换体生效、unhook 后原方法恢复。
-- **自举**：模块的第一个正式钩子就是 `Instrumentation#callApplicationOnCreate`
-  （见「启动流程」）——没有框架 API 参与，引擎不可用时才退回框架引擎。
+- **自举**：模块的第一个正式钩子就是那一组 Application 触发点
+  （见「启动流程」）——只读不替换，任何一个先到都能把 Application 交出来。
 
 ```
 诊断行示例
