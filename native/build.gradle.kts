@@ -1,8 +1,13 @@
 /*
- * Qself native hook engine (Dobby), JNI surface for diagnostics and future
- * native-level features.
+ * Qself native hook engine (Dobby + LSPlant), JNI surface for diagnostics and
+ * the native hooking paths.
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
+
+// Explicit imports: inside a Kotlin DSL script bare `java` resolves to Gradle's
+// java extension, not to the JDK package.
+import java.io.File
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.library)
@@ -18,20 +23,20 @@ plugins {
  * Falling back to a `ninja` on PATH keeps this working on machines (and CI
  * images) that already ship a recent one.
  */
-val localProperties = java.util.Properties().apply {
+val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) {
-        file.inputStream().use { load(it) }
+        file.inputStream().use { stream -> load(stream) }
     }
 }
 
 /** First executable named [name] on PATH, without spawning a process. */
 fun findOnPath(name: String): String? =
     System.getenv("PATH")
-        ?.split(java.io.File.pathSeparator)
+        ?.split(File.pathSeparator)
         ?.asSequence()
-        ?.map { java.io.File(it, name) }
-        ?.firstOrNull { it.canExecute() }
+        ?.map { directory -> File(directory, name) }
+        ?.firstOrNull { candidate -> candidate.canExecute() }
         ?.absolutePath
 
 val ninjaOverride: String? = localProperties.getProperty("qself.ninja.path")
@@ -46,8 +51,8 @@ android {
         }
     }
 
-    // Pinned NDK: the native engine is built against the version this
-    // project is tested with (and LSPlant, wired in v1.1, needs r29+).
+    // Pinned NDK: the engine is built against the version this project is
+    // tested with, and LSPlant's CMake needs the NDK's C++23 toolchain.
     ndkVersion = "29.0.13599879"
 
     defaultConfig {
