@@ -104,39 +104,4 @@ Java_sumicya_qself_engine_HookNative_nativeSelfTest(JNIEnv *, jobject) {
     return 0;
 }
 
-/*
- * Import-table (PLT) replacement for callers that resolve the addresses
- * themselves. Dobby's symbol resolver is disabled on purpose, so no symbol
- * lookup happens here.
- *
- * @return 0 on success, negative error code otherwise
- */
-JNIEXPORT jint JNICALL
-Java_sumicya_qself_engine_HookNative_nativePltReplace(
-        JNIEnv *env,
-        jobject,
-        jstring imageName,
-        jstring symbolName,
-        jlong fakeFunc,
-        jlong originOut) {
-    if (imageName == nullptr || symbolName == nullptr || fakeFunc == 0 || originOut == 0) {
-        return -1;
-    }
-    const char *image = env->GetStringUTFChars(imageName, nullptr);
-    const char *symbol = env->GetStringUTFChars(symbolName, nullptr);
-    if (image == nullptr || symbol == nullptr) {
-        if (image != nullptr) env->ReleaseStringUTFChars(imageName, image);
-        if (symbol != nullptr) env->ReleaseStringUTFChars(symbolName, symbol);
-        return -2;
-    }
-    int result = DobbyImportTableReplace(
-            const_cast<char *>(image),
-            const_cast<char *>(symbol),
-            reinterpret_cast<dobby_dummy_func_t>(fakeFunc),
-            reinterpret_cast<dobby_dummy_func_t *>(originOut));
-    env->ReleaseStringUTFChars(imageName, image);
-    env->ReleaseStringUTFChars(symbolName, symbol);
-    return result;
-}
-
 }  // extern "C"

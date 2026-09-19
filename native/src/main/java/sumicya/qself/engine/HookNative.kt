@@ -47,32 +47,9 @@ object HookNative {
     val selfTestResult: Int
         get() = if (init()) nativeSelfTest() else -100
 
-    /**
-     * Replace the import-table entry of [symbolName] in [imageName]
-     * (e.g. "libc.so", "open"). Addresses are provided by the caller;
-     * no symbol lookup happens in native code.
-     *
-     * @return the previous function address, or 0 on failure
-     */
-    fun pltReplace(imageName: String, symbolName: String, replacement: Long): Long {
-        if (!init()) {
-            return 0L
-        }
-        val holder = LongArray(1)
-        val result = nativePltReplace(imageName, symbolName, replacement, holder)
-        return if (result == 0) holder[0] else 0L
-    }
-
     private external fun nativeInit(): Int
 
     private external fun nativeVersion(): String
 
     private external fun nativeSelfTest(): Int
-
-    private external fun nativePltReplace(
-        imageName: String,
-        symbolName: String,
-        fakeFunc: Long,
-        originOut: LongArray,
-    ): Int
 }

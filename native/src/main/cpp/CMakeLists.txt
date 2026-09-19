@@ -23,8 +23,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
 SET_OPTION(DOBBY_GENERATE_SHARED OFF)
 # Do not use Dobby's symbol resolver: link it once and it crashes everywhere.
 SET_OPTION(Plugin.SymbolResolver OFF)
-# Import-table (PLT) replacement is exposed through the JNI surface.
-SET_OPTION(Plugin.ImportTableReplace ON)
+# Note: Dobby's import-table replacement (DobbyImportTableReplace) is
+# Darwin-only upstream — on Android the symbol is declared but never
+# implemented, so the build must not reference it.
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../libs/Dobby dobby_build)
 
 # Dobby needs -fomit-frame-pointer on ARM32 (see upstream/previous setups)
