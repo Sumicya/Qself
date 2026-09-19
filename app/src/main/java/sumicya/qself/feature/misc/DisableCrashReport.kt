@@ -10,6 +10,8 @@ import sumicya.qself.annotation.QselfFeature
 import sumicya.qself.feature.FeatureCategory
 import sumicya.qself.feature.FeatureContext
 import sumicya.qself.feature.SwitchFeature
+import sumicya.qself.util.isPublic
+import sumicya.qself.util.isStatic
 import sumicya.qself.xp.Hooks
 
 @QselfFeature(

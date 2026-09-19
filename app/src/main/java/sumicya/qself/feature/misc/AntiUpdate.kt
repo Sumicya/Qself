@@ -92,7 +92,7 @@ object AntiUpdate : SwitchFeature() {
             if (m.returnType == Void.TYPE) {
                 m.isAccessible = true
                 Hooks.beforeIfEnabled(this, m) { it.skip() }
-            } else if (m.returnType == java.lang.Boolean::class.javaPrimitiveType) {
+            } else if (m.returnType == java.lang.Boolean.TYPE) {
                 m.isAccessible = true
                 Hooks.beforeIfEnabled(this, m) { it.skip(false) }
             }

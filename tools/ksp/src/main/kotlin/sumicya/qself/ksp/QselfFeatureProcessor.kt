@@ -44,7 +44,7 @@ class QselfFeatureProcessor(
         val seen = HashSet<String>()
         val qualified = ArrayList<String>(symbols.size)
         for (symbol in symbols) {
-            val qname = symbol.qualifiedName?.getShortName()
+            val qname = symbol.qualifiedName?.asString()
             if (qname == null) {
                 logger.error("feature without qualified name: ${symbol.simpleName.asString()}")
                 continue

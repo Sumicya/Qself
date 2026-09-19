@@ -16,6 +16,7 @@ import sumicya.qself.feature.FeatureContext
 import sumicya.qself.feature.SwitchFeature
 import sumicya.qself.log.QLog
 import sumicya.qself.util.QQVersion
+import sumicya.qself.util.isStatic
 import sumicya.qself.xp.Hooks
 
 @QselfFeature(

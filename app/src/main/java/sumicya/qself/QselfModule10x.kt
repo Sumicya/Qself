@@ -66,7 +66,7 @@ class QselfModule10x : XposedModule {
         val processName = param.applicationInfo.processName ?: param.packageName
         QLog.i("Qself", "10x: booting for ${param.packageName} proc=$processName")
         Qself.boot(
-            BootParam(
+            Qself.BootParam(
                 application = app,
                 packageName = param.packageName,
                 processName = processName,

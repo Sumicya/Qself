@@ -12,7 +12,7 @@ import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.dynamiccolors.DynamicColors
+import com.google.android.material.color.DynamicColors
 import com.google.android.material.snackbar.Snackbar
 import sumicya.qself.BuildConfig
 import sumicya.qself.Qself

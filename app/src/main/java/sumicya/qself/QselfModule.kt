@@ -36,7 +36,7 @@ class QselfModule : IXposedHookLoadPackage {
             "classic entry: ${lpparam.packageName} proc=${lpparam.processName}",
         )
         Qself.boot(
-            BootParam(
+            Qself.BootParam(
                 application = app,
                 packageName = lpparam.packageName,
                 processName = lpparam.processName,

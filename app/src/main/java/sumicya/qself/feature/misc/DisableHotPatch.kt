@@ -11,6 +11,7 @@ import sumicya.qself.annotation.QselfFeature
 import sumicya.qself.feature.FeatureCategory
 import sumicya.qself.feature.FeatureContext
 import sumicya.qself.feature.SwitchFeature
+import sumicya.qself.util.isStatic
 import sumicya.qself.xp.Hooks
 
 @QselfFeature(
@@ -54,7 +55,7 @@ object DisableHotPatch : SwitchFeature() {
 
         // below 9.0.35
         host.resolve("com.tencent.mobileqq.msf.core.net.utils.MsfHandlePatchUtils")?.let { cls ->
-            host.method(cls, "handlePatchConfig", Int::class.javaPrimitiveType, java.util.List::class.java)
+            host.method(cls, "handlePatchConfig", Integer.TYPE, java.util.List::class.java)
                 ?.let { m ->
                     m.isAccessible = true
                     Hooks.beforeIfEnabled(this, m) { it.skip() }
@@ -90,7 +91,7 @@ object DisableHotPatch : SwitchFeature() {
                 it.parameterTypes[2] == Intent::class.java &&
                 it.parameterTypes[3] == java.util.List::class.java &&
                 it.parameterTypes[4] == IntArray::class.java &&
-                it.parameterTypes[5] == java.lang.Boolean::class.javaPrimitiveType
+                it.parameterTypes[5] == java.lang.Boolean.TYPE
         } ?: return
         m1.isAccessible = true
         Hooks.beforeIfEnabled(this, m1) { param ->
@@ -106,12 +107,14 @@ object DisableHotPatch : SwitchFeature() {
         }
     }
 
-    private fun readConfigList(respGetConfig: Any): ArrayList<Any?>? {
+    /** The protobuf list inside RespGetConfig; the type is erased at runtime. */
+    @Suppress("UNCHECKED_CAST")
+    private fun readConfigList(respGetConfig: Any): MutableList<Any?>? {
         return try {
             val field = respGetConfig.javaClass.getDeclaredField("config_list")
             field.isAccessible = true
             val pb = field.get(respGetConfig) ?: return null
-            pb.javaClass.getMethod("get").invoke(pb) as? ArrayList<*>
+            pb.javaClass.getMethod("get").invoke(pb) as? MutableList<Any?>
         } catch (t: Throwable) {
             null
         }

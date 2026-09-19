@@ -31,7 +31,7 @@ object ShowSelfMsgByLeft : SwitchFeature() {
     override fun initOnce(ctx: FeatureContext): Boolean {
         val host = ctx.host
         val cls = host.require("com.tencent.mobileqq.activity.aio.BaseChatItemLayout")
-        val method = host.requireMethod(cls, "setHearIconPosition", Int::class.javaPrimitiveType)
+        val method = host.requireMethod(cls, "setHearIconPosition", Integer.TYPE)
         Hooks.beforeIfEnabled(this, method) { it.skip() }
         return true
     }
