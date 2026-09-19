@@ -199,4 +199,8 @@ val verifyModuleApk by tasks.registering {
     }
 }
 
-tasks.named("assembleDebug") { finalizedBy(verifyModuleApk) }
+// matching + configureEach: AGP 9 registers its assemble* tasks lazily, so
+// tasks.named("assembleDebug") would not find anything at configuration time.
+tasks.matching { it.name == "assembleDebug" }.configureEach {
+    finalizedBy(verifyModuleApk)
+}
