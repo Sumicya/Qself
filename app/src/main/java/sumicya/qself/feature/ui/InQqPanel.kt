@@ -92,6 +92,9 @@ object InQqPanel : SwitchFeature() {
             if (activity.packageName != ctx.context.packageName) return@beforeIfEnabled
             val page = activity.javaClass.name.lowercase()
             if (PAGE_MARKERS.none { page.contains(it) }) return@beforeIfEnabled
+            // Logged so "the chip did not show up" can be answered from a log
+            // instead of a guess about which page is the settings page.
+            QLog.d(TAG, "settings-like page resumed: ${activity.javaClass.name}")
             QselfPanel.attach(activity)
         }
         QLog.i(TAG, "entry armed on pages matching ${PAGE_MARKERS.joinToString("/")}")
@@ -148,6 +151,9 @@ private object QselfPanel {
     private fun show(activity: Activity) {
         try {
             val generation = Qself.host.generation
+            // In the host process this is a plain file write under QQ's own
+            // files/ — the whole point of the panel: no su anywhere.
+            val where = Qself.bridge.sharedFile?.absolutePath ?: "（没有可用路径）"
             val features = QselfFeatures.features.filter { it !is ActionFeature }
             val labels = features.map { feature ->
                 val note = if (HostGeneration.mismatches(feature.hostGeneration, generation)) {
@@ -159,14 +165,16 @@ private object QselfPanel {
             }.toTypedArray()
             val checked = BooleanArray(features.size) { features[it].isEnabled }
             AlertDialog.Builder(activity)
-                .setTitle("Qself（改完点「重启 QQ」生效）")
+                .setTitle("Qself 开关（改完点「重启 QQ」）")
+                .setMessage("写入 $where\n补丁类开关必须重启 QQ 才生效（它们在首个窗口出现前就已执行）。")
                 .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
                     // Straight into files/qself/settings.json — same uid, no su.
+                    QLog.i(TAG, "toggle ${features[which].id}=$isChecked")
                     Qself.bridge.setEnabled(features[which].id, isChecked)
                 }
-                .setPositiveButton("重启 QQ") { _, _ -> HostRestart.killSelf() }
-                .setNegativeButton("复制日志") { _, _ -> copyLogs(activity) }
-                .setNeutralButton("关闭", null)
+                .setPositiveButton("立即重启 QQ") { _, _ -> HostRestart.killSelf() }
+                .setNegativeButton("稍后") { _, _ -> QLog.i(TAG, "restart deferred") }
+                .setNeutralButton("复制日志") { _, _ -> copyLogs(activity) }
                 .show()
         } catch (t: Throwable) {
             QLog.w(TAG, "could not show the panel", t)
