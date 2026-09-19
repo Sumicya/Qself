@@ -32,7 +32,7 @@ sealed class UiRow {
 }
 
 class FeatureAdapter(
-    private val rows: List<UiRow>,
+    private var rows: List<UiRow>,
     private val onToggle: (QselfFeature, Boolean) -> Unit,
     private val onFeatureClick: (QselfFeature) -> Unit,
     private val onCopyLogs: () -> Unit,
@@ -69,6 +69,12 @@ class FeatureAdapter(
 
     override fun getItemCount(): Int = rows.size
 
+    /** Replaces the rows (used after the shared settings finished loading). */
+    fun submit(updated: List<UiRow>) {
+        rows = updated
+        notifyDataSetChanged()
+    }
+
     inner class DiagnosticsViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val tvVersion = view.findViewById<TextView>(R.id.diag_version)
         private val tvHost = view.findViewById<TextView>(R.id.diag_host)
@@ -82,6 +88,8 @@ class FeatureAdapter(
             tvSettings.text = itemView.context.getString(R.string.diag_settings, row.sharedSettings)
             tvEngine.text = itemView.context.getString(R.string.diag_engine, row.nativeEngine)
             tvSelfTest.text = itemView.context.getString(R.string.diag_self_test, row.nativeSelfTest)
+            // Convenience: the diagnostics row doubles as "copy logs".
+            itemView.setOnClickListener { onCopyLogs() }
         }
     }
 

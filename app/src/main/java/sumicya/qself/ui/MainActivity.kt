@@ -5,6 +5,8 @@
 
 package sumicya.qself.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.Menu
@@ -48,7 +50,7 @@ class MainActivity : AppCompatActivity() {
 
         val list = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.list)
         list.layoutManager = LinearLayoutManager(this)
-        list.adapter = FeatureAdapter(
+        val adapter = FeatureAdapter(
             rows = buildRows(),
             onToggle = { feature, value ->
                 Qself.bridge.setEnabled(feature.id, value)
@@ -60,9 +62,22 @@ class MainActivity : AppCompatActivity() {
                 }
             },
             onCopyLogs = {
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(
+                    ClipData.newPlainText("qself-logs", QLog.snapshot()),
+                )
                 Snackbar.make(list, R.string.logs_copied, Snackbar.LENGTH_SHORT).show()
             },
         )
+        list.adapter = adapter
+
+        // The authoritative settings live in the host's files dir behind `su`;
+        // reading them can wait on a root prompt, so never do it on the UI
+        // thread. The list is redrawn once the answer is in.
+        Thread {
+            Qself.refreshSharedSettings()
+            runOnUiThread { adapter.submit(buildRows()) }
+        }.start()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {

@@ -159,15 +159,29 @@ object Qself {
         _framework = FrameworkKind.UNKNOWN
         _process = ProcessKind.OTHER
         _settings = localCache
-        val bridge = SettingsBridge(
+        _bridge = SettingsBridge(
             hostPackage = hostPackage,
             hostFilesDir = File("/data/data/$hostPackage/files"),
             localCache = localCache,
+            useSuBridge = true,
         )
-        _bridge = bridge
         _hostInfo = HostInfoProvider.load(context, hostPackage)
+        QLog.i("Qself", "bootUi: host=$hostPackage (shared settings load deferred)")
+    }
+
+    /**
+     * Read the authoritative settings copy. **Blocking** — it may run `su` —
+     * so UI callers run it off the main thread and refresh when it returns.
+     */
+    @Synchronized
+    fun refreshSharedSettings(): Boolean {
+        val bridge = _bridge ?: return false
         _uiSharedLoaded = bridge.load()
-        QLog.i("Qself", "bootUi: host=$hostPackage sharedSettings=${if (_uiSharedLoaded) "loaded" else "fallback to local cache"}")
+        QLog.i(
+            "Qself",
+            "shared settings: ${if (_uiSharedLoaded) "loaded" else "unavailable (local cache)"}",
+        )
+        return _uiSharedLoaded
     }
 
     /** Whether the UI could reach the authoritative settings copy. */
