@@ -27,13 +27,14 @@ Qself 把旧 QAuxiliary 分支的屎山一次铲平：
 
 1. root + [LSPosed](https://github.com/LSPosed/LSPosed)（v1 目标环境）。
 2. 安装本模块 APK（CI 产出的 debug 包已签名，可直接安装）。
-3. LSPosed 中启用模块，作用域勾选 `com.tencent.mobileqq`，重启 QQ。
+3. LSPosed 中启用模块即可——作用域由 APK 内的 `META-INF/xposed/scope.list`
+   静态声明（QQ / TIM），无需手动勾选；启用后重启 QQ。
 4. 在 LSPosed 模块列表打开 **Qself** 设置（或从启动器图标进入）。
 5. 开关保存后**重启 QQ** 生效（v1 契约）。
 
 支持：
 
-- Android ≥ 7.0（API 24）
+- Android ≥ 8.0（API 26；libxposed 框架本身要求 8.1+）
 - QQ（`com.tencent.mobileqq`）；其他宿主（TIM 等）v1.1
 - arm64-v8a / armeabi-v7a
 
@@ -54,7 +55,8 @@ JDK 21 + Android SDK（platform 37, cmake, ndk）
 - 架构说明：[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - v1 功能清单与推迟项：[`docs/FEATURES.md`](docs/FEATURES.md)
 - 加载方式路线图（native 注入）：[`docs/NATIVE-LOADING.md`](docs/NATIVE-LOADING.md)
-- CI：`docs/ci/bootstrap.sh`（一次性，把 workflow 落到 `.github/workflows/`）
+- 构建验证记录（含 CI 运行历史与"已验证/未验证"清单）：[`docs/VALIDATION.md`](docs/VALIDATION.md)
+- CI：`bash docs/ci/bootstrap.sh`（把 `docs/ci/ci.yml` 同步到 `.github/workflows/`）
 
 添加一个功能 = 一个带 `@QselfFeature` 的 `object`（见 `docs/FEATURES.md` 移植约定），
 无需注册表、无需改 UI。

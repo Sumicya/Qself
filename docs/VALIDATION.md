@@ -1,0 +1,59 @@
+# 验证记录
+
+本仓库的构建验证全部走 GitHub Actions（本机没有 Android SDK/JDK 环境）。
+CI 的日志下载在当前开发环境不可用（`results-receiver.actions.githubusercontent.com`
+不可达），所以 workflow 把失败信息、工具链报告和 APK 自检结果都写进
+**check-run annotations**（workflow 里的 python 片段负责转换），再用 `gh api` 读取。
+
+## 读取某次运行的结果
+
+```bash
+# 最新一次运行
+gh api "repos/Sumicya/Qself/actions/runs?branch=arena/01a0b583-qself&per_page=1" \
+  --jq '.workflow_runs[0] | "\(.id) \(.status) \(.conclusion) \(.head_sha[0:8])"'
+
+# 该运行的构建步骤结论 + 注解（失败原因、APK 自检、工具链报告）
+JOB=$(gh api repos/Sumicya/Qself/actions/runs/<RUN_ID>/jobs --jq '.jobs[0].id')
+gh api repos/Sumicya/Qself/actions/runs/<RUN_ID>/jobs \
+  --jq '.jobs[0].steps[] | "\(.conclusion)\t\(.name)"'
+gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
+```
+
+## 里程碑
+
+| 运行 | 提交 | 结果 | 证明了什么 |
+|---|---|---|---|
+| 35409855538 | `b97d65a` 之前 | ❌ 17s | 版本目录格式错误（`TomlCatalogFileParser`） |
+| 35415018363 | `2aa6f67` | ❌ | KSP 依赖被解析成 `KspExtension` |
+| 35415110017 | `9ec517e` | ❌ | `native` 是 Java 关键字，不能做包名 |
+| 35415220293 | `77ad147` | ❌ | core 的 Kotlin 编译错误（SAM、嵌套类型导入等） |
+| 35415408783 | `167474c` | ❌ 2.5min | core+native 编译通过，卡在 app |
+| 35415583623 | `b6b2ef0` | ❌ | **Kotlin 全部通过**，`ld.lld: undefined symbol: DobbyImportTableReplace` |
+| 35415766091 | `99601b5` | ❌ | native 链接通过、KSP 生成成功；app 剩 14 处编译错误 |
+| **35415983117** | `64362d8` | ✅ 3min | **首次打包成功**：`qself-debug.apk` 7.53 MB |
+| **35416221194** | `c63c1e5` | ✅ | 现代 API 入口 + `LibXposedHookEngine` 打包成功 |
+
+## 已验证 / 未验证
+
+已验证（CI 或静态检查）：
+
+- Gradle 9.7.1 + AGP 9.3.1 + Kotlin 2.4.20 + KSP 2.3.12 全量编译通过（Debug）。
+- C++：Dobby 静态链接进 `libqself_hook.so`，arm64-v8a 与 armeabi-v7a 均通过
+  NDK 29 + CMake 3.31 编译链接（16KB 页对齐、`-fPIC`）。
+- KSP 生成的 `sumicya.qself.gen.QselfFeatures` 被 app 编译消费（8 个特性）。
+- 资源引用完整性：Kotlin 里所有 `R.id/R.string/R.layout` 都能在 `res/` 找到
+  （脚本比对过的结论，见提交说明）。
+- APK 元数据自检（workflow 的 *Verify APK* 步骤，结果以注解回传）：
+  `META-INF/xposed/{module.prop,java_init.list,scope.list}`、两个 ABI 的
+  `libqself_hook.so`、dex 中的入口类。
+
+**未验证（必须在真机确认）**：
+
+- 模块在 LSPosed 10.x 上被识别、注入 QQ、`onPackageReady` 被调用。
+- 钩子实际生效（例如"屏蔽更新"是否真的没有弹窗）。
+- `HookNative.selfTestResult` 是否为 `0`（Dobby 自检端到端）。
+- 设置界面的 `su` 桥在真实 root 环境下的读写。
+- 各 QQ 版本上混淆类/方法名命中的比例（`docs/FEATURES.md` 的移植约定里有版本分支）。
+
+真机验证步骤见 README「使用方法」；诊断信息（引擎版本、自检结果、共享配置状态）
+直接在设置页首行显示，出问题时先看那里和 `QLog`（设置 → 日志）。

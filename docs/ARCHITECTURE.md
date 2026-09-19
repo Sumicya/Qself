@@ -25,10 +25,32 @@ build-logic 复合构建、develocity、协议插件全部移除。
 ## 启动流程
 
 ```
-LSPosed 10x ──(module.prop 发现)──► QselfModule10x ──► Qself.boot(param, features, engine)
-经典 Xposed ──(xposed_init, v1 未声明)──► QselfModule ──┘
-设置 UI（模块自身进程）─────────────────────► Qself.bootUi(context, hostPackage, settings)
+LSPosed 10.x ──(META-INF/xposed/*)──► QselfModule10x ──► Qself.boot(param, features, LibXposedHookEngine)
+经典 Xposed ──(assets/xposed_init, 默认不声明)──► QselfModule ──┘（ClassicHookEngine）
+设置 UI（模块自身进程）──────────────────────────────► Qself.bootUi(context, hostPackage, settings)
 ```
+
+### 现代 API 契约（`tools/moduleprop`）
+
+模块能被框架加载，靠的是 APK 里的三个文件（全部由 `:tools:moduleprop` 这个
+无代码 Android library 打进 `META-INF/xposed/`）：
+
+| 文件 | 内容 | 作用 |
+|---|---|---|
+| `module.prop` | `minApiVersion=101` `targetApiVersion=101` `staticScope=true` | 声明这是一个 API 101 模块且作用域静态 |
+| `java_init.list` | `sumicya.qself.QselfModule10x` | 入口类（**缺了它模块会安装但永不加载**） |
+| `scope.list` | `com.tencent.mobileqq` / `com.tencent.tim` | 注入范围，用户无需手动勾选 |
+
+对应地，清单里只有 `android:label`（模块名）与 `android:description`
+（模块说明），**不再有** `xposedmodule` / `xposedminversion` / `xposedscope`
+这些旧元数据。CI 会在打包后自检这些文件与 dex 入口类（见 `docs/ci/ci.yml`）。
+
+### 切回经典 API（可选）
+
+想同时支持 Xposed / EdXposed / LSPosed 1.x 时，追加两处声明即可，代码无需改动：
+
+1. `app/src/main/assets/xposed_init` 写入 `sumicya.qself.QselfModule`；
+2. 清单里补回 `xposedmodule=true` / `xposedminversion=93` / `xposedscope` 数组。
 
 `Qself.boot` 顺序：
 
@@ -76,8 +98,8 @@ object AntiUpdate : SwitchFeature() {          // 或 ActionFeature
 
 | 环境 | v1 状态 |
 |---|---|
-| LSPosed 10.x | ✅ 入口已实现；Java hook 引擎在 v1.1（当前 NoopEngine：只报诊断，不装钩子，不崩宿主） |
-| Xposed / EdXposed / LSPosed 1.x | `ClassicHookEngine` 已实现，`QselfModule` 入口待 manifest 声明（v1.1） |
+| LSPosed 10.x | ✅ 已可用：`LibXposedHookEngine`（`hook()` → `HookBuilder` → `Chain`）真正安装钩子 |
+| Xposed / EdXposed / LSPosed 1.x | `ClassicHookEngine` 已实现；`QselfModule` 入口默认不声明（见上文两行声明） |
 | Frida | v1 移除 loader，见 `NATIVE-LOADING.md` 路线图 |
 | 纯 native 注入 | 路线图最后一站 |
 
@@ -88,8 +110,9 @@ object AntiUpdate : SwitchFeature() {          // 或 ActionFeature
 - `HookNative.init()` / `DobbyGetVersion()`：引擎初始化与版本，设置页「诊断」可见。
 - `selfTestResult`：用 DobbyHook 钩自己的 C 函数 → 验证替换体与 trampoline 都工作
   → `DobbyDestroy` 还原 → 再验证恢复原状；0 表示端到端通过。
-- `pltReplace(image, symbol, addr)`：Dobby 的 import table 替换（等价 PLT hook），
-  符号解析刻意留在 Java 侧（Dobby 的 symbol resolver 一旦链接就会到处崩）。
+- v1 **不提供** PLT/import-table 替换：Dobby 的 `DobbyImportTableReplace` 只在
+  Darwin 上编译（其实现没有接入 Android 源文件列表），链接会直接失败。需要该能力
+  时在 v1.1 自行接 `builtin-plugin/ImportTableReplace`。
 - **LSPlant（ART Java 方法 hook）在 v1.1 接入**：它需要通过 `InitInfo` 注入
   libart.so 符号解析器，属于独立工作量，见 `NATIVE-LOADING.md`。
 

@@ -5,15 +5,16 @@
 
 ## 阶段 0（v1，已完成）
 
-- `libqself_hook.so`：Dobby 引擎 + 原生自检 + PLT 替换表面
-  （见 ARCHITECTURE.md「原生引擎」）。
+- `libqself_hook.so`：Dobby 引擎 + 原生自检（见 ARCHITECTURE.md「原生引擎」）。
+- `LibXposedHookEngine`：现代 API 的 Java 级引擎，LSPosed 10.x 开箱即用。
 - 所有 Java 特性经 `HookEngine` 抽象隔离，替换引擎不动特性代码。
 - LSPlant 子模块已登记，但 v1 不参与编译。
 
-## 阶段 1（v1.1）：LSPosed 10.x Java 引擎
+## 阶段 1（v1.1）：把 Java 引擎做厚
 
-- 实现 `LibXposed10xEngine`（`io.github.libxposed.api` 的
-  `XposedModule.hook(Member, priority, HookerClass)` + 静态分发 hooker）。
+- `LibXposedHookEngine` 已完成（`hook()` → `HookBuilder.setPriority/
+  setExceptionMode` → `Chain.proceed(新参数)`），剩余的是补齐参数改写与
+  异常语义的回归测试。
 - 在 LSPosed 1.x / 经典 Xposed 环境声明 `QselfModule`（`xposed_init`），
   复用已实现的 `ClassicHookEngine`。
 
@@ -22,8 +23,8 @@
 - 接入 LSPlant：实现 libart.so 符号解析器（需同时支持 .dynsym 与 .symtab），
   用 Dobby 的 `DobbyHook` 作为 `InitInfo.inline_hooker`，初始化后即可 hook ART
   Java 方法 → 这条路径是摆脱 Xposed 框架的关键一步。
-- 用 `HookNative.pltReplace` 实现不经过 ART Java 层的 hook
-  （如 libc 层拦截、`statfs`/`__system_property_get` 伪装等）。
+- 需要 PLT 级拦截时，把 Dobby 的 `builtin-plugin/ImportTableReplace`
+  （目前只在 Darwin 编译）接进 Android 源文件列表，再经 JNI 暴露。
 - 每个 native 特性自带开关，走同一套 `SettingsBridge`。
 
 ## 阶段 3：纯 native 注入（摆脱框架）
