@@ -146,6 +146,23 @@ signatures (#182)`、`Fix CloseGuard setup and add Knox check (#188)`、
 `bugfix: fix crash on android 17 gsi (#190)` 等崩溃修复；
 LSPosed 上游本身也是 `dobby + lsplant_static` 组合，故保留 Dobby、只升 LSPlant。
 
+## 真机验证：崩溃已解决（2026-09-19 14:07）
+
+用户设备（OnePlus PLC110 / Android 16 / ColorOS，QQ **9.2.10 = NT**）实测：
+
+```
+I Qself/Qself: boot hook armed on Instrumentation#callApplicationOnCreate via libxposed (API 101)
+I Qself/Qself: booting com.tencent.mobileqq proc=com.tencent.mobileqq engine=libxposed (API 101) (native off, features 8)
+I Qself/Qself: boot: pkg=com.tencent.mobileqq proc=com.tencent.mobileqq framework=LSPosed 10.x engine=libxposed (API 101) features=8 host=9.2.10 settings=local
+```
+
+- **QQ 正常启动**，`engine=libxposed (API 101) (native off)` —— 默认框架引擎生效，崩溃不再出现；
+- `safe-mode` 下模块只记录不装钩子、亦不崩溃 → 早前的崩溃确由原生引擎（LSPlant）引起；
+- 诊断：宿主版本 9.2.10 明确是 NT，故 pre-NT 特性全部空转（不是故障）。
+
+另：ColorOS 不渲染框架 ActionBar 溢出菜单，导致"导出宿主类名"入口不可达 →
+改为**点诊断卡片**弹出操作对话框（菜单保留），入口不再依赖 ActionBar。
+
 ## 已验证 / 未验证
 
 已验证（CI 或静态检查）：

@@ -34,7 +34,30 @@ QAuxiliary 自己也公开说明过"未能对 NT 版本完整适配"（见其频
 
 这些只是"骨架"。每个特性真正要 hook 的类，必须在**设备上**取。
 
-## 在设备上取真实类名（已内置工具）
+## 在设备上取真实类名（已实测）
+
+**用户设备实测（QQ 9.2.10）**：APK 389,611,416 字节、**37 个 dex**，
+grep 出 **17,389 个 `com.tencent.qqnt.*` 类名**。Termux 一行即可（不依赖模块）：
+
+```bash
+su -c 'cp "$(pm path com.tencent.mobileqq | head -1 | cut -d: -f2)" /sdcard/qq-base.apk'
+mkdir -p ~/qqdex && cd ~/qqdex && unzip -o /sdcard/qq-base.apk 'classes*.dex' >/dev/null
+grep -a -o 'Lcom/tencent/qqnt/[A-Za-z0-9_/$]*;' classes*.dex \
+  | sed 's/^[^:]*://' | sort -u | sed 's/^L//; s/;$//; s#/#.#g' > /sdcard/qqnt-classes.txt
+```
+
+注意 `grep -a`（dex 是二进制）；`-i` 会把 `dispatch*` 之类误匹配进 `patch` 结果。
+
+### 已从 dump 中看到的真实结构
+
+| 领域 | 真实类名（示例） |
+|---|---|
+| 聊天界面 | `com.tencent.qqnt.aio.SplashAIOFragment`、`aio.InputChangeEvent`、`aio.MsgRevokeEvent`、`aio.AIOLifeCycleEvent` |
+| 聊天历史 | `com.tencent.qqnt.chathistory.service.KernelServiceKt`、`chathistory.ui.document.data.datasource.PlatformSearchDocumentSource` |
+| 内核消息 | `com.tencent.qqnt.kernel.api.AIOSendMsgResultData`、`kernel.aio.msg.a` |
+| 上报 | `com.tencent.qqnt.aio.adapter.api.impl.AIOReportImpl`、`ReportControllerApiImpl` |
+
+## 在设备上取真实类名（模块内置工具）
 
 设置页菜单 → **导出宿主类名**：
 
