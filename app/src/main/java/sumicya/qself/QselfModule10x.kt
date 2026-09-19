@@ -14,6 +14,7 @@ import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 import io.github.libxposed.api.annotations.XposedApiMin
 import sumicya.qself.gen.QselfFeatures
+import sumicya.qself.hook.BootFlags
 import sumicya.qself.hook.BootHook
 import sumicya.qself.hook.HookEngines
 import sumicya.qself.libxposed.LibXposedHookEngine
@@ -65,6 +66,14 @@ class QselfModule10x : XposedModule {
         // earlier (framework injection / module load).
         QLog.i("Qself", "onPackageReady: ${param.packageName}")
 
+        // Diagnostic escape hatch (see BootFlags): with this file present the
+        // module logs and does nothing else, which separates "injection alone
+        // breaks the host" from "our code breaks the host".
+        if (BootFlags.safeMode(dataDirOf(param))) {
+            QLog.w("Qself", "safe mode: boot skipped for ${param.packageName}")
+            return
+        }
+
         val processName = processName(param)
         val frameworkEngine = LibXposedHookEngine(this)
         val trigger: HookEngine = frameworkEngine
@@ -104,7 +113,13 @@ class QselfModule10x : XposedModule {
         if (Qself.isBooted) {
             return
         }
-        val engine = HookEngines.forModernFramework(this)
+        val noNative = BootFlags.noNative(application.dataDir)
+        val engine = if (noNative) {
+            QLog.w("Qself", "no-native flag set: using the framework Java engine")
+            LibXposedHookEngine(this)
+        } else {
+            HookEngines.forModernFramework(this)
+        }
         QLog.i("Qself", "booting $packageName proc=$processName engine=$engine")
         try {
             Qself.boot(
@@ -128,6 +143,13 @@ class QselfModule10x : XposedModule {
      * application info carries it (falling back to the package name, which is
      * the main process).
      */
+    /** The host's data dir (`/data/data/<pkg>`), used for the diagnostic flags. */
+    private fun dataDirOf(param: PackageReadyParam): String? = try {
+        param.applicationInfo.dataDir
+    } catch (t: Throwable) {
+        null
+    }
+
     private fun processName(param: PackageReadyParam): String {
         return try {
             val info: ApplicationInfo = param.applicationInfo

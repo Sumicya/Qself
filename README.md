@@ -67,6 +67,22 @@ su -c 'logcat -b crash -d -v threadtime | tail -200 > /sdcard/qself-crash.txt'
 **哪一行是最后一行，就说明崩在那一步之后**；`docs/VALIDATION.md` 里有一张判定表。
 模块设计成崩不掉宿主：任何一步失败都只让本进程保持 idle 并记日志。
 
+### 诊断开关（root，文件即开关，无需重编译）
+
+```bash
+Q=/data/data/com.tencent.mobileqq/files/qself   # TIM 换成 com.tencent.tim
+su -c "mkdir -p $Q && touch $Q/safe-mode"   # 只加载、只记日志，不装任何钩子
+su -c "touch $Q/no-native"                  # 只用框架 Java 引擎，完全不用 LSPlant/Dobby
+su -c "rm -f $Q/safe-mode $Q/no-native"     # 恢复正常
+```
+
+| 配置 | 结果 | 结论 |
+|---|---|---|
+| `safe-mode` | 仍崩 | 与我们的钩子无关：框架注入本身 / 宿主 / 环境问题 |
+| 只有 `no-native` | 仍崩 | 崩在框架引擎或 Java 逻辑（原生引擎无辜） |
+| 只有 `no-native` | 正常 | 崩在原生层（LSPlant/Dobby/libsart 符号） |
+| 正常运行 | 正常 | 一切正常 |
+
 ## 开发
 
 ```

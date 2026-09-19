@@ -62,6 +62,14 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
 | `Qself.boot` / 特性 init / 钩子回调 全链路 try-catch | boot 失败只让本进程 idle，绝不让异常穿透到宿主 |
 | `onPackageReady` 第一行就写日志；引擎选择、boot 各阶段都写日志 | 崩溃时能直接看出死在哪一步（见下） |
 
+诊断开关（文件即开关，见 README「诊断开关」）：
+
+```bash
+Q=/data/data/com.tencent.mobileqq/files/qself
+su -c "mkdir -p $Q && touch $Q/safe-mode"   # 模块只加载不装钩子
+su -c "touch $Q/no-native"                  # 只用框架 Java 引擎
+```
+
 **定位闪退需要的日志**（Termux + root，QQ 崩溃后立刻执行）：
 
 ```bash
@@ -79,6 +87,7 @@ su -c 'logcat -d -v threadtime | grep -E "Qself|lsplant|libqself|Debuggerd" | ta
 | 再往下有 `boot: pkg=... engine=...` | 引擎与运行时都起来了，崩溃在特性安装或之后 |
 | 只有到 `onPackageReady` 就断 | 崩在原生库加载 / LSPlant Init（native SIGSEGV，Java 层抓不到） |
 | 一行都没有 | 崩在框架注入或模块加载阶段，与本模块的 Java 代码无关 |
+| 有 `safe mode: boot skipped` 且仍崩溃 | 与本模块的钩子无关（注入/宿主/环境问题） |
 
 ## 已验证 / 未验证
 
