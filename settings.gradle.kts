@@ -1,5 +1,10 @@
 @file:Suppress("UnstableApiUsage")
 
+// Type-safe project accessors (`projects.core`, `projects.tools.ksp`).
+// They produce ProjectDependency, which also keeps dependency-invocation
+// names from clashing with plugin extensions (e.g. KSP's `ksp`).
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
 pluginManagement {
     repositories {
         google()

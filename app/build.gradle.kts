@@ -61,13 +61,13 @@ android {
 }
 
 dependencies {
-    implementation(project(":core"))
-    implementation(project(":native"))
+    implementation(projects.core)
+    implementation(projects.native)
     // META-INF/xposed/module.prop (LSPosed 10.x metadata)
-    implementation(project(":tools:moduleprop"))
+    implementation(projects.tools.moduleprop)
 
     // provided by the framework at runtime; never bundled
-    compileOnly(project(":libs:libxposed:api"))
+    compileOnly(projects.libs.libxposed.api)
     compileOnly(libs.xposed.api)
 
     implementation(libs.androidx.annotation)
@@ -78,4 +78,4 @@ dependencies {
     implementation(libs.material)
 }
 
-ksp(project(":tools:ksp"))
+ksp(projects.tools.ksp)

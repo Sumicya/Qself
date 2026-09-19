@@ -28,7 +28,7 @@ android {
 dependencies {
     // Both Xposed APIs are provided by the framework at runtime; never bundled.
     compileOnly(libs.xposed.api)
-    compileOnly(project(":libs:libxposed:api"))
+    compileOnly(projects.libs.libxposed.api)
 
     implementation(libs.androidx.annotation)
 }
