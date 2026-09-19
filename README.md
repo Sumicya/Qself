@@ -56,6 +56,9 @@ JDK 21 + Android SDK（platform 37, cmake, ndk）
 ./gradlew assembleDebug
 ```
 
+- 打包后自动跑契约自检（`verifyModuleApk`，`assembleDebug` 的 finalizer）：
+  必需条目齐全、入口类定义在**任意** dex、dex 里 0 个 AndroidX/Material 类、
+  0 个框架 stub 类；违约直接构建失败。
 - 架构说明：[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - v1 功能清单与推迟项：[`docs/FEATURES.md`](docs/FEATURES.md)
 - 加载方式路线图（native 注入）：[`docs/NATIVE-LOADING.md`](docs/NATIVE-LOADING.md)

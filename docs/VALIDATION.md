@@ -42,6 +42,7 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
 | **35418314404** | `8c13153` | ✅ | **纯 framework UI 打包成功**；APK 14.47 MB → **8.49 MB**（去掉 appcompat/material/recyclerview/constraintlayout） |
 | 35418545709 / 35419076461 | `b41759a` / `544dc212` | ❌ 41-48s | 新增的 Gradle 自检脚本编译失败（`tasks.named("assembleDebug")` 在 AGP 9 里找不到任务；裸 `java.*` 又被解析成 Gradle 扩展）——两次都是构建脚本自身的问题，不是模块代码 |
 | 35418636348 / 35419180533 | `afdbf7ee` / `544dc212` | ❌ | 自检"探针"按计划失败，但把答案带回来了：APK 有 **19 个 dex**，`dexdump` 数出 dex 里 **0 个 AndroidX/Material 类、0 个框架 stub 类** |
+| **35419634655** | `e0453bb` | ✅ | **自举钩子（`BootHook`）编译打包通过，契约自检仍全绿**；APK 8,493,185 B，artifact `qself-debug` 3,667,255 B（重写前 8,429,106 B） |
 | **35419379475** | `65b6d9e3` | ✅ | **构建期契约自检（`verifyModuleApk`）全绿**：入口类确实定义在某个 dex（旧检查只扫 `classes.dex`，属假阴性）、零 AndroidX/Material、零 stub；模块源码全部编译打包 |
 
 ## 已验证 / 未验证
