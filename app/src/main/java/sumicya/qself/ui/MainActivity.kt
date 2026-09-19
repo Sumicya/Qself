@@ -339,6 +339,11 @@ class MainActivity : Activity() {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
+    /** Same, for messages that carry a result (su output, failure reason). */
+    private fun toast(message: CharSequence) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+
     /** Hooks a probe class through LSPlant; run once, it is the real proof. */
     private val javaSelfTest: Int by lazy { NativeJavaSelfTest.run() }
 
