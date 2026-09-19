@@ -172,6 +172,7 @@ val verifyModuleApk = tasks.register("verifyModuleApk") {
         var stubs = 0
         var ourClasses = emptyList<String>()
         var dexdumpUsed = false
+        var packedLibsSummary = ""
 
         ZipFile(apk).use { zip ->
             for (entry in listOf(
@@ -183,6 +184,22 @@ val verifyModuleApk = tasks.register("verifyModuleApk") {
             )) {
                 if (zip.getEntry(entry) == null) problems.add("missing $entry")
             }
+
+            // The module is injected into the host process: shipping our own
+            // libc++_shared.so next to the host's copy is a classic instant
+            // crash (same soname, different revision). The engine is built
+            // with a static STL on purpose - keep it that way.
+            val packedLibs = zip.entries().asSequence()
+                .map { it.name }
+                .filter { it.startsWith("lib/") && it.endsWith(".so") }
+                .sorted()
+                .toList()
+            for (lib in packedLibs) {
+                if (lib.contains("libc++_shared")) {
+                    problems.add("shared STL bundled ($lib) - the host ships its own copy")
+                }
+            }
+            packedLibsSummary = packedLibs.joinToString(", ")
 
             entryClass = zip.getEntry("META-INF/xposed/java_init.list")
                 ?.let { zip.getInputStream(it).bufferedReader().readText() }
@@ -242,6 +259,7 @@ val verifyModuleApk = tasks.register("verifyModuleApk") {
         report.append("  entry class: $entryClass -> $where\n")
         report.append("  dexdump: ${if (dexdumpUsed) dexdumpBinary?.absolutePath else "unavailable (class-definition checks skipped)"}\n")
         report.append("  dexes: $dexSizes\n")
+        report.append("  packed libs: $packedLibsSummary\n")
         report.append("  androidx/material classes: $uiLibs, framework stubs: $stubs\n")
         if (entryIn == null) {
             report.append("  qself classes defined: ${ourClasses.size}\n")
