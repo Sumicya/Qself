@@ -30,7 +30,12 @@ sealed class UiRow {
 
     data class Header(val title: String) : UiRow()
 
-    data class Feature(val feature: QselfFeature) : UiRow()
+    /**
+     * [applicable] is false when the feature targets the other QQ generation
+     * (a pre-NT switch is a no-op on NT QQ). The switch stays usable — the
+     * module skips the feature anyway — but the row says so.
+     */
+    data class Feature(val feature: QselfFeature, val applicable: Boolean) : UiRow()
 }
 
 /**
@@ -96,8 +101,15 @@ class FeatureAdapter(
         val feature = row.feature
         view.findViewById<TextView>(R.id.feature_title).text = feature.name
         view.findViewById<TextView>(R.id.feature_summary).text = feature.summary
-        view.findViewById<TextView>(R.id.feature_tag)
-            .visibility = if (feature.experimental) View.VISIBLE else View.GONE
+        val tag = view.findViewById<TextView>(R.id.feature_tag)
+        val labels = ArrayList<String>(2)
+        if (feature.experimental) labels += context.getString(R.string.experimental)
+        if (!row.applicable) labels += context.getString(R.string.tag_other_generation)
+        tag.text = labels.joinToString(" · ")
+        tag.visibility = if (labels.isEmpty()) View.GONE else View.VISIBLE
+        // Recycled rows keep the previous colour, so set it on every bind:
+        // theme accent for "beta", a fixed amber for "not for this QQ".
+        tag.setTextColor(if (row.applicable) accentColor else NOT_APPLICABLE_COLOR)
 
         val switchView = view.findViewById<Switch>(R.id.feature_switch)
         if (feature is ActionFeature) {
@@ -121,7 +133,15 @@ class FeatureAdapter(
         else -> R.layout.item_feature
     }
 
+    private val accentColor: Int = android.util.TypedValue().let { value ->
+        context.theme.resolveAttribute(android.R.attr.colorAccent, value, true)
+        value.data
+    }
+
     private companion object {
+        /** Amber, so "this switch does nothing here" cannot be mistaken for a beta tag. */
+        const val NOT_APPLICABLE_COLOR = 0xFFFFA000.toInt()
+
         const val TYPE_DIAGNOSTICS = 0
         const val TYPE_HEADER = 1
         const val TYPE_FEATURE = 2

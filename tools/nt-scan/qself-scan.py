@@ -262,7 +262,7 @@ def normalise_prefix(text):
 
 
 def scan(files, prefixes, verbose=True):
-    full, per_class, anomalies = [], [], []
+    full, per_class, blocks, anomalies = [], [], [], []
     matched = 0
     for position, path in enumerate(files, start=1):
         name = os.path.basename(path)
@@ -289,31 +289,39 @@ def scan(files, prefixes, verbose=True):
                 fields, methods = dex.members(data_off)
             except Anomaly as error:
                 anomalies.append((name, java, error, dex))
-                full.append("class %s  (undecodable: %s)" % (java, error))
+                note = "class %s  (undecodable: %s)" % (java, error)
+                full.append(note)
+                blocks.append((java, [note]))
                 continue
             full.append("class " + java)
+            block = ["class " + java]
             class_methods = []
             for field_name, field_type, access in fields:
-                full.append("  f %s %s: %s" % (flags(access, FLAG_F), field_name,
-                                               pretty(field_type)))
+                line = "  f %s %s: %s" % (flags(access, FLAG_F), field_name,
+                                          pretty(field_type))
+                full.append(line)
+                block.append(line)
             for method_name, ret, params, access in methods:
                 joined = ", ".join(pretty(p) for p in params)
                 line = "m %s %s(%s): %s" % (flags(access, FLAG_M), method_name,
                                             joined, pretty(ret))
                 full.append("  " + line)
+                block.append("  " + line)
                 class_methods.append(line)
             per_class.append((java, class_methods))
-    return full, per_class, anomalies, matched
+            blocks.append((descriptor.lstrip("L").replace("/", "."), block))
+    return full, per_class, blocks, anomalies, matched
 
 
-def tag_from_prefixes(prefixes):
-    """`Lcom/tencent/mobileqq/upgrade/` -> `mobileqq-upgrade`."""
-    if not prefixes:
-        return None
-    parts = [p for p in prefixes[0].strip("L").split("/") if p]
-    if not parts:
-        return None
-    return "-".join(parts[-2:])
+def dotted(prefix):
+    """`Lcom/tencent/qqnt/aio/` -> `com.tencent.qqnt.aio`"""
+    return prefix.lstrip("L").replace("/", ".").rstrip(".")
+
+
+def tag_for(prefix):
+    """`Lcom/tencent/mobileqq/upgrade/` -> `mobileqq-upgrade`"""
+    parts = [part for part in prefix.lstrip("L").split("/") if part]
+    return "-".join(parts[-2:]) if parts else "scan"
 
 
 def write_text(path, text):
@@ -329,15 +337,24 @@ def write_text(path, text):
         return fallback
 
 
-def write_dump(full, matched, files, tag=None):
-    """Writes the dump, plus a per-prefix copy so runs do not clobber each other."""
-    text = ("# Qself method dump\n# files: %d\n# matched classes: %d\n\n"
-            % (len(files), matched) + "\n".join(full) + "\n")
+def write_dump(full, matched, files, prefixes, blocks):
+    """Combined dump plus one file per prefix, so scans of different areas never
+    overwrite each other's results (that mix-up cost one round trip already)."""
+    header = "# Qself method dump\n# files: %d\n# matched classes: %d\n" % (len(files), matched)
+    text = header + "\n" + "\n".join(full) + "\n"
     target = write_text("/sdcard/qself-methods.txt", text)
-    extra = None
-    if tag:
-        extra = write_text("/sdcard/qself-methods-%s.txt" % tag, text)
-    return target, extra, text.count("\n")
+    extras = []
+    for prefix in prefixes:
+        wanted = dotted(prefix)
+        selected = [block for name, block in blocks if name.startswith(wanted)]
+        if not selected:
+            continue
+        lines = [line for block in selected for line in block]
+        body = (header.replace("matched classes: %d" % matched,
+                               "matched classes: %d (prefix %s)" % (len(selected), wanted))
+                + "\n" + "\n".join(lines) + "\n")
+        extras.append(write_text("/sdcard/qself-methods-%s.txt" % tag_for(prefix), body))
+    return target, extras, text.count("\n")
 
 
 def diagnose(path):
@@ -396,12 +413,12 @@ def main(argv):
         return 1
 
     sys.setrecursionlimit(10000)
-    full, per_class, anomalies, matched = scan(files, prefixes)
-    target, extra, lines = write_dump(full, matched, files, tag_from_prefixes(prefixes))
+    full, per_class, blocks, anomalies, matched = scan(files, prefixes)
+    target, extras, lines = write_dump(full, matched, files, prefixes, blocks)
 
     print("matched classes: %d   dex files: %d" % (matched, len(files)))
     print("full dump -> %s (%d lines)" % (target, lines))
-    if extra:
+    for extra in extras:
         print("              %s" % extra)
     if anomalies:
         print("undecodable classes: %d  (skipped, listed below)" % len(anomalies))

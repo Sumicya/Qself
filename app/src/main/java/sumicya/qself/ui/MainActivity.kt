@@ -27,6 +27,7 @@ import sumicya.qself.engine.NativeJavaSelfTest
 import sumicya.qself.feature.ActionFeature
 import sumicya.qself.feature.FeatureCategory
 import sumicya.qself.feature.QselfFeature
+import sumicya.qself.util.HostGeneration
 import sumicya.qself.gen.QselfFeatures
 import sumicya.qself.log.QLog
 import sumicya.qself.util.HostInfoProvider
@@ -137,6 +138,7 @@ class MainActivity : Activity() {
     private fun buildRows(): List<UiRow> {
         val rows = ArrayList<UiRow>()
         val host = hostPackage()
+        val hostGeneration = hostGeneration()
         rows += UiRow.Diagnostics(
             version = BuildConfig.VERSION_NAME,
             hostPackage = "$host ${hostDetails(host)}",
@@ -155,28 +157,41 @@ class MainActivity : Activity() {
             features.sortBy { it.name }
             rows += UiRow.Header(category.title)
             for (feature in features) {
-                rows += UiRow.Feature(feature)
+                rows += UiRow.Feature(
+                    feature = feature,
+                    applicable = !HostGeneration.mismatches(feature.hostGeneration, hostGeneration),
+                )
             }
         }
         return rows
     }
 
+    /** Installed host version name, or null when it cannot be read. */
+    private fun hostVersionName(host: String): String? = try {
+        packageManager.getPackageInfo(host, 0).versionName
+    } catch (t: Throwable) {
+        null
+    }
+
     /**
-     * Host version plus a rough NT verdict. v1's features target the pre-NT
-     * QQ, so "this is a 9.x (NT) build" is the single most useful thing the
-     * diagnostics row can say on such a device (see docs/NT-ADAPTATION.md).
+     * Host version plus the QQ generation it belongs to. Which generation the
+     * host is decides whether half of the switches can do anything at all
+     * (see docs/NT-ADAPTATION.md), so the card states it outright instead of
+     * ending in a question mark.
      */
     private fun hostDetails(host: String): String {
-        return try {
-            val info = packageManager.getPackageInfo(host, 0)
-            val name = info.versionName ?: "?"
-            val nt = name.startsWith("9") || name.startsWith("8.9.6") ||
-                name.startsWith("8.9.7") || name.startsWith("8.9.8") || name.startsWith("8.9.9")
-            name + if (nt) " (NT?)" else ""
-        } catch (t: Throwable) {
-            "?"
+        val name = hostVersionName(host) ?: return "?"
+        val generation = HostGeneration.fromVersion(name)
+        val suffix = when (generation) {
+            HostGeneration.NT -> "（NT）"
+            HostGeneration.PRE_NT -> "（旧版）"
+            else -> ""
         }
+        return name + suffix
     }
+
+    /** Detected host generation, or null when the version is unreadable. */
+    private fun hostGeneration(): HostGeneration? = HostGeneration.fromVersion(hostVersionName(hostPackage()))
 
     private fun hostPackage(): String {
         return try {

@@ -38,8 +38,33 @@ enum class HostGeneration(val title: String) {
             "com.tencent.qqnt.kernel.api.IEmoticonService",
         )
 
+        /**
+         * Version names that start with these were still pre-NT, everything
+         * from 9.0.0 on is NT. Used by the settings UI, which runs in the
+         * module's own process and therefore cannot probe for QQ classes.
+         */
+        private val PRE_NT_PREFIXES = arrayOf("8.9.6", "8.9.7", "8.9.8", "8.9.9")
+
         /** Numbers of dex files that existed for the dumped 9.2.10 build, for the doc trail. */
         fun detect(resolve: (String) -> Class<*>?): HostGeneration =
             if (NT_MARKERS.any { resolve(it) != null }) NT else PRE_NT
+
+        /**
+         * Best-effort verdict from the installed host's version name alone.
+         * QQ 9.x is NT; the 8.9.6-8.9.9 builds were its previews. Returns null
+         * when the version cannot be read, in which case callers should not
+         * claim anything.
+         */
+        fun fromVersion(versionName: String?): HostGeneration? {
+            val version = versionName?.trim().orEmpty()
+            if (version.isEmpty()) return null
+            if (PRE_NT_PREFIXES.any { version.startsWith(it) }) return PRE_NT
+            val major = version.substringBefore('.').toIntOrNull() ?: return null
+            return if (major >= 9) NT else PRE_NT
+        }
+
+        /** True when [feature] was not written for [host]. */
+        fun mismatches(feature: HostGeneration, host: HostGeneration?): Boolean =
+            host != null && feature != ANY && feature != host
     }
 }
