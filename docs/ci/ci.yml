@@ -115,6 +115,24 @@ jobs:
           else
             report="${report}MISSING entry class in dex%0A"
           fi
+
+          # io.github.libxposed.* and de.robv.android.xposed.* are compileOnly
+          # stubs (their bodies throw AssertionError("STUB")); bundling them
+          # would shadow the framework's implementation at runtime.
+          DEXDUMP=$(ls "$ANDROID_HOME"/build-tools/*/dexdump 2>/dev/null | sort -V | tail -1 || true)
+          if [ -n "$DEXDUMP" ]; then
+            unzip -o -q "$APK" 'classes*.dex' -d dex-check
+            STUBS=$("$DEXDUMP" dex-check/classes*.dex 2>/dev/null \
+              | grep -c "Class descriptor.*Lio/github/libxposed/\|Class descriptor.*Lde/robv/android/xposed/" || true)
+            if [ "$STUBS" -eq 0 ]; then
+              report="${report}OK no framework API classes bundled%0A"
+            else
+              report="${report}BUNDLED ${STUBS} framework API classes%0A"
+              fail=1
+            fi
+          else
+            report="${report}SKIP dexdump unavailable%0A"
+          fi
           echo -e "$report"
           echo "::notice title=apk-contents::$(stat -c%s "$APK") bytes%0A${report}"
           echo "::notice title=module.prop::$(sed -e 's/$/%0A/' tools/moduleprop/src/main/resources/META-INF/xposed/module.prop)"
