@@ -108,9 +108,10 @@ class MainActivity : Activity() {
 
     private fun buildRows(): List<UiRow> {
         val rows = ArrayList<UiRow>()
+        val host = hostPackage()
         rows += UiRow.Diagnostics(
             version = BuildConfig.VERSION_NAME,
-            hostPackage = hostPackage(),
+            hostPackage = "$host ${hostDetails(host)}",
             sharedSettings = if (Qself.uiHasSharedSettings) "loaded" else "local cache (su unavailable)",
             nativeEngine = "${HookNative.version} / " +
                 "${HookNative.lsplantStatus} / libart ${HookNative.artSymbolStatus}",
@@ -130,6 +131,23 @@ class MainActivity : Activity() {
             }
         }
         return rows
+    }
+
+    /**
+     * Host version plus a rough NT verdict. v1's features target the pre-NT
+     * QQ, so "this is a 9.x (NT) build" is the single most useful thing the
+     * diagnostics row can say on such a device (see docs/NT-ADAPTATION.md).
+     */
+    private fun hostDetails(host: String): String {
+        return try {
+            val info = packageManager.getPackageInfo(host, 0)
+            val name = info.versionName ?: "?"
+            val nt = name.startsWith("9") || name.startsWith("8.9.6") ||
+                name.startsWith("8.9.7") || name.startsWith("8.9.8") || name.startsWith("8.9.9")
+            name + if (nt) " (NT?)" else ""
+        } catch (t: Throwable) {
+            "?"
+        }
     }
 
     private fun hostPackage(): String {
