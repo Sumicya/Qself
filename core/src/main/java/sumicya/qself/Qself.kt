@@ -100,12 +100,13 @@ object Qself {
         _framework = param.framework
         _process = ProcessState.classify(param.packageName, param.processName)
         _settings = Settings(param.application)
-        _bridge = SettingsBridge(
+        val bridge = SettingsBridge(
             hostPackage = param.packageName,
             hostFilesDir = param.application.filesDir,
             localCache = _settings,
         )
-        _bridge.load()
+        bridge.load()
+        _bridge = bridge
         _host = Host(param.packageName)
         _engine = engine
         _features = features
@@ -158,13 +159,14 @@ object Qself {
         _framework = FrameworkKind.UNKNOWN
         _process = ProcessKind.OTHER
         _settings = localCache
-        _bridge = SettingsBridge(
+        val bridge = SettingsBridge(
             hostPackage = hostPackage,
             hostFilesDir = File("/data/data/$hostPackage/files"),
             localCache = localCache,
         )
+        _bridge = bridge
         _hostInfo = HostInfoProvider.load(context, hostPackage)
-        _uiSharedLoaded = _bridge.load()
+        _uiSharedLoaded = bridge.load()
         QLog.i("Qself", "bootUi: host=$hostPackage sharedSettings=${if (_uiSharedLoaded) "loaded" else "fallback to local cache"}")
     }
 

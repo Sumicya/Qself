@@ -7,6 +7,8 @@ package sumicya.qself.xp
 
 import java.lang.reflect.Executable
 import sumicya.qself.log.QLog
+import sumicya.qself.xp.HookEngine.Handle
+import sumicya.qself.xp.HookEngine.HookParam
 
 /**
  * Engine that refuses every hook with a clear log entry. Used when the

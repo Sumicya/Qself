@@ -17,10 +17,10 @@ class HostInfo(
     val versionCode: Long,
 ) {
     val isQq: Boolean
-        get() = packageName == PACKAGE_NAME_QQ
+        get() = packageName == HostInfoProvider.PACKAGE_NAME_QQ
 
     val isTim: Boolean
-        get() = packageName == PACKAGE_NAME_TIM
+        get() = packageName == HostInfoProvider.PACKAGE_NAME_TIM
 
     fun isAtLeast(version: Long): Boolean = versionCode >= version
 }

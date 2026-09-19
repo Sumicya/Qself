@@ -61,7 +61,7 @@ object ViewOps {
     fun nameOf(view: View): String {
         return try {
             val id = view.id
-            if (id == View.NO_ID) "" else view.resources?.getEntryName(id) ?: ""
+            if (id == View.NO_ID) "" else view.resources.getResourceEntryName(id)
         } catch (t: Throwable) {
             ""
         }

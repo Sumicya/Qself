@@ -150,12 +150,12 @@ class Host(private val packageName: String) {
         override fun equals(other: Any?): Boolean =
             other is MethodKey && other.cls == cls && other.name == name && other.params == params
 
-        override fun hashCode(): Int = (cls * 31 + name) * 31 + params.hashCode()
+        override fun hashCode(): Int = (cls.hashCode() * 31 + name.hashCode()) * 31 + params.hashCode()
     }
 
     private class FieldKey(val cls: String, val name: String) {
         override fun equals(other: Any?): Boolean = other is FieldKey && other.cls == cls && other.name == name
 
-        override fun hashCode(): Int = cls * 31 + name
+        override fun hashCode(): Int = cls.hashCode() * 31 + name.hashCode()
     }
 }

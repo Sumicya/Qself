@@ -5,7 +5,7 @@
 
 package sumicya.qself.engine
 
-import sumicya.qself.log.QLog
+import android.util.Log
 
 /**
  * JNI surface of the native hook engine (Dobby).
@@ -22,7 +22,7 @@ object HookNative {
         System.loadLibrary(LIB_NAME)
         true
     } catch (t: Throwable) {
-        QLog.w("Native", "hook engine not available", t)
+        Log.w("Qself/Native", "hook engine not available", t)
         false
     }
 

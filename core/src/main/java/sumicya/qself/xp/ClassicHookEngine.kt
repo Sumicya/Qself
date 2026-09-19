@@ -9,6 +9,8 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import java.lang.reflect.Executable
 import sumicya.qself.log.QLog
+import sumicya.qself.xp.HookEngine.Handle
+import sumicya.qself.xp.HookEngine.HookParam
 
 /**
  * [HookEngine] backed by the classic Xposed API (XposedBridge). This works
@@ -46,7 +48,9 @@ class ClassicHookEngine : HookEngine {
         }
     }
 
-    private class BeforeView(private val param: MethodHookParam) : HookParam {
+    private class BeforeView(
+        private val param: XC_MethodHook.MethodHookParam,
+    ) : HookParam {
         override val member: java.lang.reflect.Member get() = param.method
         override val thisObject: Any? get() = param.thisObject
         override val args: Array<Any?> get() = param.args
@@ -64,7 +68,9 @@ class ClassicHookEngine : HookEngine {
         }
     }
 
-    private class AfterView(private val param: MethodHookParam) : HookParam {
+    private class AfterView(
+        private val param: XC_MethodHook.MethodHookParam,
+    ) : HookParam {
         override val member: java.lang.reflect.Member get() = param.method
         override val thisObject: Any? get() = param.thisObject
         override val args: Array<Any?> get() = param.args

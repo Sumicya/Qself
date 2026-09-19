@@ -26,8 +26,10 @@ object QLog {
     private val timeFormat = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
 
     fun d(tag: String, msg: String) = write(Log.DEBUG, tag, msg, null)
+    fun d(tag: String, msg: String, t: Throwable?) = write(Log.DEBUG, tag, msg, t)
     fun i(tag: String, msg: String) = write(Log.INFO, tag, msg, null)
     fun w(tag: String, msg: String) = write(Log.WARN, tag, msg, null)
+    fun w(tag: String, msg: String, t: Throwable?) = write(Log.WARN, tag, msg, t)
     fun e(tag: String, msg: String, t: Throwable? = null) = write(Log.ERROR, tag, msg, t)
 
     fun error(t: Throwable) =
