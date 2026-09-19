@@ -9,6 +9,7 @@
 #   python3 qself-scan.py [dex-dir] [prefix1,prefix2,...]   # default prefixes
 #   python3 qself-scan.py --diag FILE.dex                  # structural report
 #   python3 qself-scan.py --all  [dex-dir]                 # every class
+#   python3 qself-scan.py --full [dex-dir] [prefixes]       # no per-class caps
 #
 # Output: candidate entry points on stdout, full dump in /sdcard/qself-methods.txt
 # No dependencies. Nothing is uploaded anywhere.
@@ -305,18 +306,38 @@ def scan(files, prefixes, verbose=True):
     return full, per_class, anomalies, matched
 
 
-def write_dump(full, matched, files):
+def tag_from_prefixes(prefixes):
+    """`Lcom/tencent/mobileqq/upgrade/` -> `mobileqq-upgrade`."""
+    if not prefixes:
+        return None
+    parts = [p for p in prefixes[0].strip("L").split("/") if p]
+    if not parts:
+        return None
+    return "-".join(parts[-2:])
+
+
+def write_text(path, text):
+    """Write to /sdcard, falling back to the current directory."""
+    try:
+        with open(path, "w") as handle:
+            handle.write(text)
+        return path
+    except OSError:
+        fallback = os.path.abspath(os.path.basename(path))
+        with open(fallback, "w") as handle:
+            handle.write(text)
+        return fallback
+
+
+def write_dump(full, matched, files, tag=None):
+    """Writes the dump, plus a per-prefix copy so runs do not clobber each other."""
     text = ("# Qself method dump\n# files: %d\n# matched classes: %d\n\n"
             % (len(files), matched) + "\n".join(full) + "\n")
-    target = "/sdcard/qself-methods.txt"
-    try:
-        with open(target, "w") as handle:
-            handle.write(text)
-    except OSError:
-        target = os.path.abspath("qself-methods.txt")
-        with open(target, "w") as handle:
-            handle.write(text)
-    return target, text.count("\n")
+    target = write_text("/sdcard/qself-methods.txt", text)
+    extra = None
+    if tag:
+        extra = write_text("/sdcard/qself-methods-%s.txt" % tag, text)
+    return target, extra, text.count("\n")
 
 
 def diagnose(path):
@@ -359,6 +380,7 @@ def main(argv):
     if "--diag" in argv:
         return diagnose(argv[argv.index("--diag") + 1])
     everything = "--all" in argv
+    full_report = "--full" in argv
     args = [a for a in argv[1:] if not a.startswith("--")]
     dex_dir = args[0] if args else "."
     if len(args) > 1:
@@ -375,10 +397,12 @@ def main(argv):
 
     sys.setrecursionlimit(10000)
     full, per_class, anomalies, matched = scan(files, prefixes)
-    target, lines = write_dump(full, matched, files)
+    target, extra, lines = write_dump(full, matched, files, tag_from_prefixes(prefixes))
 
     print("matched classes: %d   dex files: %d" % (matched, len(files)))
     print("full dump -> %s (%d lines)" % (target, lines))
+    if extra:
+        print("              %s" % extra)
     if anomalies:
         print("undecodable classes: %d  (skipped, listed below)" % len(anomalies))
         for name, java, error, _dex in anomalies[:6]:
@@ -386,21 +410,24 @@ def main(argv):
             print("      %s" % " ".join("%s=%s" % kv for kv in error.context.items()))
     else:
         print("undecodable classes: 0")
+    class_cap = None if full_report else MAX_CLASSES_REPORTED
+    method_cap = None if full_report else MAX_METHODS_REPORTED
+
     print("")
     print("=== 匹配类的方法（把这一段贴回来即可）===")
     if not per_class:
         print("(no class matched — 试更宽的前缀，或先用 --all 看全部类名)")
     # Obfuscated hosts name their methods `a`, `b`, `c`: filtering by keyword
     # would hide exactly the method that has to be hooked, so every matched
-    # class is listed. The full list stays in the dump file.
-    for java, methods in per_class[:MAX_CLASSES_REPORTED]:
+    # class is listed. --full drops the per-class and per-report caps.
+    for java, methods in per_class[:class_cap]:
         print("class " + java)
-        for line in methods[:MAX_METHODS_REPORTED]:
+        for line in methods[:method_cap]:
             print("    " + line)
-        if len(methods) > MAX_METHODS_REPORTED:
-            print("    # … %d more methods (见 dump 文件)" % (len(methods) - MAX_METHODS_REPORTED))
-    if len(per_class) > MAX_CLASSES_REPORTED:
-        print("# … %d more matched classes (见 dump 文件)" % (len(per_class) - MAX_CLASSES_REPORTED))
+        if method_cap is not None and len(methods) > method_cap:
+            print("    # … %d more methods (见 dump 文件)" % (len(methods) - method_cap))
+    if class_cap is not None and len(per_class) > class_cap:
+        print("# … %d more matched classes (见 dump 文件)" % (len(per_class) - class_cap))
     print("")
     print("# 完整列表：%s" % target)
     return 0
