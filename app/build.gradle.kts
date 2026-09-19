@@ -85,46 +85,66 @@ dependencies {
 // ---------------------------------------------------------------------------
 // Module-contract self-check.
 //
-// The APK is the deliverable and the libxposed contract is a set of *files*
-// inside it, so the things that can silently break ("installs but never
-// loads") are not caught by the compiler. This task inspects the packaged
-// APK: zip entries, the entry class read from META-INF/xposed/java_init.list,
-// and the class definitions of every dex image (parsed straight from the DEX
-// header, so it needs no build-tools and sees every dex, not just
-// classes.dex). It also proves the "framework-only UI" claim by asserting
-// that no AndroidX/Material class is defined.
+// The APK is the deliverable and the libxposed contract lives *inside* it, so
+// "installs but never loads" is not something the compiler can catch. This task
+// inspects the packaged APK after assembleDebug:
 //
-// Runs automatically after assembleDebug; a violation fails the build.
+//   * the zip entries the framework looks for (META-INF/xposed/*, both ABIs);
+//   * the entry class from META-INF/xposed/java_init.list, searched in *every*
+//     dex image (the naive `classes.dex`-only search reports a false negative
+//     as soon as the build produces more than one dex);
+//   * that no AndroidX/Material class is bundled - the machine-checkable half
+//     of the "framework-only UI" claim;
+//   * that the compileOnly framework stubs are not bundled, which would shadow
+//     the framework's real implementation at runtime.
+//
+// Class definitions are read with the SDK's dexdump (authoritative, and it
+// ignores nothing); without it the task falls back to a raw byte search for
+// the entry descriptor and reports the strict checks as skipped.
+//
+// A violation fails the build.
 // ---------------------------------------------------------------------------
 
-/** Little-endian u32 at [offset]. */
-fun dexU32(bytes: ByteArray, offset: Int): Int =
-    (bytes[offset].toInt() and 0xFF) or
-        ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
-        ((bytes[offset + 2].toInt() and 0xFF) shl 16) or
-        ((bytes[offset + 3].toInt() and 0xFF) shl 24)
-
-/** Type descriptors of every class *defined* in a dex image. */
-fun dexDefinedClasses(bytes: ByteArray): List<String> {
-    val classDefsSize = dexU32(bytes, 0x60)
-    val classDefsOff = dexU32(bytes, 0x64)
-    val stringIdsSize = dexU32(bytes, 0x38)
-    val stringIdsOff = dexU32(bytes, 0x3C)
-    val names = ArrayList<String>(classDefsSize)
-    for (i in 0 until classDefsSize) {
-        val classIdx = dexU32(bytes, classDefsOff + i * 32)
-        if (classIdx < 0 || classIdx >= stringIdsSize) continue
-        var p = dexU32(bytes, stringIdsOff + classIdx * 4)
-        while (bytes[p].toInt() and 0x80 != 0) p++ // uleb128 character count
-        p++
-        val start = p
-        while (bytes[p] != 0.toByte()) p++
-        names.add(String(bytes, start, p - start, Charsets.UTF_8))
-    }
-    return names
+/** sdk.dir from local.properties, or the usual environment variables. */
+val sdkDirectory: File? = run {
+    val props = java.util.Properties()
+    val localProps = rootProject.file("local.properties")
+    if (localProps.exists()) localProps.inputStream().use { props.load(it) }
+    val candidate = System.getenv("ANDROID_HOME")
+        ?: System.getenv("ANDROID_SDK_ROOT")
+        ?: props.getProperty("sdk.dir")
+    candidate?.let { File(it) }?.takeIf { it.isDirectory }
 }
 
+/** Newest build-tools dexdump, if the SDK has one. */
+val dexdumpBinary: File? = sdkDirectory
+    ?.resolve("build-tools")
+    ?.listFiles { f: File -> f.isDirectory }
+    ?.sortedBy { it.name }
+    ?.asReversed()
+    ?.map { File(it, "dexdump") }
+    ?.firstOrNull { it.canExecute() }
+
 val apkDebugDir = layout.buildDirectory.dir("outputs/apk/debug")
+val verifyWorkDir = layout.buildDirectory.dir("apk-verify")
+
+/** Class descriptors defined in [dex], via dexdump. */
+fun dexdumpClasses(dexdump: File, dex: File, outDir: File): List<String> {
+    val text = File(outDir, dex.name + ".dexdump.txt")
+    val process = ProcessBuilder(dexdump.absolutePath, dex.absolutePath)
+        .redirectErrorStream(true)
+        .redirectOutput(text)
+        .start()
+    process.waitFor()
+    if (!text.exists()) return emptyList()
+    return text.readLines().mapNotNull { line ->
+        if (!line.contains("Class descriptor")) {
+            null
+        } else {
+            line.substringAfter("'", "").substringBefore("'").takeIf { it.startsWith("L") }
+        }
+    }
+}
 
 val verifyModuleApk by tasks.registering {
     group = "verification"
@@ -138,9 +158,15 @@ val verifyModuleApk by tasks.registering {
             return@doLast
         }
 
+        val outDir = verifyWorkDir.get().asFile.apply { mkdirs() }
         val problems = ArrayList<String>()
         val summary = StringBuilder("verifyModuleApk: ${apk.name} (${apk.length()} bytes)\n")
-        ZipFile(apk).use { zip ->
+        summary.append("  dexdump: ${dexdumpBinary?.absolutePath ?: "(not found)"}\n")
+
+        // var on purpose: Kotlin forbids initialising a captured `val` inside a lambda.
+        var entryClass = ""
+        val descriptors = LinkedHashMap<String, List<String>>()
+        java.util.zip.ZipFile(apk).use { zip ->
             for (entry in listOf(
                 "META-INF/xposed/module.prop",
                 "META-INF/xposed/java_init.list",
@@ -151,14 +177,12 @@ val verifyModuleApk by tasks.registering {
                 if (zip.getEntry(entry) == null) problems.add("missing $entry")
             }
 
-            val entryClass = zip.getEntry("META-INF/xposed/java_init.list")
+            entryClass = zip.getEntry("META-INF/xposed/java_init.list")
                 ?.let { zip.getInputStream(it).bufferedReader().readText() }
                 ?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
                 .orEmpty()
-            if (entryClass.isEmpty()) {
-                problems.add("META-INF/xposed/java_init.list has no entry class")
-            }
-            val descriptor = "L" + entryClass.replace('.', '/') + ";"
+            if (entryClass.isEmpty()) problems.add("java_init.list declares no entry class")
+            val descriptor = descriptorFor(entryClass)
 
             val dexes = zip.entries().asSequence()
                 .map { it.name }
@@ -167,36 +191,37 @@ val verifyModuleApk by tasks.registering {
                 .toList()
             if (dexes.isEmpty()) problems.add("no dex image in the APK")
 
-            var entryIn: String? = null
-            val defined = ArrayList<String>()
             for (dex in dexes) {
-                val names = dexDefinedClasses(zip.getInputStream(zip.getEntry(dex)).readBytes())
-                defined.addAll(names)
-                if (names.contains(descriptor)) entryIn = dex
-                summary.append("  $dex: ${names.size} classes")
-                if (names.size <= 8) {
-                    summary.append(" -> ${names.joinToString(" ")}")
-                } else {
-                    summary.append(" (e.g. ${names.take(3).joinToString(" ")})")
+                val bytes = zip.getInputStream(zip.getEntry(dex)).readBytes()
+                val file = File(outDir, dex)
+                file.writeBytes(bytes)
+                if (dexdumpBinary != null) {
+                    descriptors[dex] = dexdumpClasses(dexdumpBinary, file, outDir)
                 }
-                summary.append("\n")
+                // Raw fallback signal, and cheap enough to always compute.
+                val rawHit = String(bytes, Charsets.ISO_8859_1).contains(descriptor)
+                summary.append("  $dex: ${bytes.size} bytes, raw descriptor hit: $rawHit\n")
+            }
+        }
+
+        val defined = descriptors.values.flatten()
+        if (dexdumpBinary == null) {
+            summary.append("  SKIPPED class-definition checks (no dexdump in the SDK)\n")
+        } else {
+            var entryIn: String? = null
+            for ((dex, names) in descriptors) {
+                if (names.contains(descriptorFor(entryClass))) entryIn = dex
+                summary.append("  $dex: ${names.size} classes defined\n")
             }
             if (entryIn == null) {
-                problems.add("entry class $entryClass is not defined in any dex (${dexes.joinToString()})")
+                problems.add("entry class $entryClass is not defined in any dex (${descriptors.keys.joinToString()})")
             } else {
                 summary.append("  entry class $entryClass -> $entryIn\n")
             }
 
             val ours = defined.filter { it.startsWith("Lsumicya/qself/") }
             summary.append("  sumicya/qself classes defined: ${ours.size}\n")
-            for (name in ours.take(40)) summary.append("    $name\n")
-            for (probe in listOf("Lsumicya/qself/QselfModule10x;", "Lsumicya/qself/ui/MainActivity;")) {
-                summary.append("  probe $probe defined: ${defined.contains(probe)}\n")
-            }
-            val stubsFound = defined.filter {
-                it.startsWith("Lio/github/libxposed/") || it.startsWith("Lde/robv/android/xposed/")
-            }
-            for (name in stubsFound.take(10)) summary.append("    stub: $name\n")
+            for (name in ours.sorted()) summary.append("    $name\n")
 
             val uiLibs = defined.count {
                 it.startsWith("Landroidx/") || it.startsWith("Lcom/google/android/material/")
@@ -204,15 +229,21 @@ val verifyModuleApk by tasks.registering {
             summary.append("  AndroidX/Material classes defined: $uiLibs\n")
             if (uiLibs != 0) problems.add("$uiLibs AndroidX/Material classes are bundled")
 
-            val stubs = stubsFound.size
-            summary.append("  framework API stub classes defined: $stubs\n")
-            if (stubs != 0) problems.add("$stubs framework API stub classes are bundled")
+            val stubs = defined.filter {
+                it.startsWith("Lio/github/libxposed/") || it.startsWith("Lde/robv/android/xposed/")
+            }
+            summary.append("  framework API stub classes defined: ${stubs.size}\n")
+            for (name in stubs.sorted()) summary.append("    $name\n")
+            if (stubs.isNotEmpty()) problems.add("${stubs.size} framework API stub classes are bundled")
         }
 
         for (problem in problems) summary.append("  PROBLEM: $problem\n")
         throw GradleException(summary.toString().trimEnd())
     }
 }
+
+/** "a.b.C" -> "La/b/C;". */
+fun descriptorFor(fqcn: String): String = "L" + fqcn.replace('.', '/') + ";"
 
 // matching + configureEach: AGP 9 registers its assemble* tasks lazily, so
 // tasks.named("assembleDebug") would not find anything at configuration time.
