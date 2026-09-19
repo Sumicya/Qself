@@ -235,6 +235,6 @@ class SettingsBridge(
 
     companion object {
         const val ENABLED_PREFIX = "feature.enabled."
-        private const val SU_TIMEOUT_SECONDS = 10L
+        const val SU_TIMEOUT_SECONDS = 30L
     }
 }

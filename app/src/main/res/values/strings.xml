@@ -5,6 +5,8 @@
 
     <string name="about">关于</string>
     <string name="logs">日志</string>
+    <string name="dump_classes">导出宿主类名</string>
+    <string name="dump_running">正在读取宿主 APK 并解析类名…</string>
     <string name="logs_empty">（暂无日志）</string>
     <string name="logs_copied">日志已复制</string>
     <string name="copy">复制</string>

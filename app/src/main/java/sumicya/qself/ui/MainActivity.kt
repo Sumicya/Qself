@@ -77,6 +77,7 @@ class MainActivity : Activity() {
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menu.add(0, MENU_ABOUT, 0, R.string.about)
         menu.add(0, MENU_LOGS, 0, R.string.logs)
+        menu.add(0, MENU_DUMP, 1, R.string.dump_classes)
         return true
     }
 
@@ -87,6 +88,10 @@ class MainActivity : Activity() {
         }
         MENU_LOGS -> {
             showLogs()
+            true
+        }
+        MENU_DUMP -> {
+            dumpClasses()
             true
         }
         else -> super.onOptionsItemSelected(item)
@@ -154,6 +159,30 @@ class MainActivity : Activity() {
             .show()
     }
 
+    /**
+     * Exports the host's real class names (see [ClassDump]) so NT-QQ support
+     * can be written against the device instead of guesses. Blocking (runs
+     * `su`), hence the thread.
+     */
+    private fun dumpClasses() {
+        toast(R.string.dump_running)
+        Thread {
+            val result = try {
+                ClassDump.dump(this, hostPackage())
+            } catch (t: Throwable) {
+                QLog.e("ClassDump", "dump failed", t)
+                "导出失败：${t.javaClass.simpleName}"
+            }
+            runOnUiThread {
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.dump_classes)
+                    .setMessage(result)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        }.start()
+    }
+
     private fun copyLogs(text: String = QLog.snapshot()) {
         val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("qself-logs", text))
@@ -170,5 +199,6 @@ class MainActivity : Activity() {
     private companion object {
         const val MENU_ABOUT = 1
         const val MENU_LOGS = 2
+        const val MENU_DUMP = 3
     }
 }
