@@ -23,7 +23,7 @@ import sumicya.qself.feature.FeatureCategory
 import sumicya.qself.feature.QselfFeature
 import sumicya.qself.gen.QselfFeatures
 import sumicya.qself.log.QLog
-import sumicya.qself.native.HookNative
+import sumicya.qself.engine.HookNative
 import sumicya.qself.util.HostInfoProvider
 
 /**

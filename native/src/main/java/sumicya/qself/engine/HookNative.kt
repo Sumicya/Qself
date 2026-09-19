@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-package sumicya.qself.native
+package sumicya.qself.engine
 
 import sumicya.qself.log.QLog
 

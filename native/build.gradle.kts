@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "sumicya.qself.native"
+    namespace = "sumicya.qself.engine"
     compileSdk {
         version = release(37) {
             minorApiLevel = 0
@@ -29,7 +29,10 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments += listOf("-DANDROID_STL=c++_shared")
+                arguments += listOf(
+                    "-DANDROID_STL=c++_shared",
+                    "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
+                )
             }
         }
     }

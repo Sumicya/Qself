@@ -12,6 +12,13 @@ endmacro()
 
 enable_language(CXX C)
 
+# Dobby is linked as a static library into a shared one; Android requires all
+# code to be position independent, and Dobby's own CMakeLists does not ask for
+# it. Same for 16KB-page devices.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+
 # --- Dobby -------------------------------------------------------------------
 SET_OPTION(DOBBY_GENERATE_SHARED OFF)
 # Do not use Dobby's symbol resolver: link it once and it crashes everywhere.
@@ -19,6 +26,11 @@ SET_OPTION(Plugin.SymbolResolver OFF)
 # Import-table (PLT) replacement is exposed through the JNI surface.
 SET_OPTION(Plugin.ImportTableReplace ON)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../libs/Dobby dobby_build)
+
+# Dobby needs -fomit-frame-pointer on ARM32 (see upstream/previous setups)
+if ("${ANDROID_ABI}" STREQUAL "armeabi-v7a")
+    target_compile_options(dobby PRIVATE -fomit-frame-pointer)
+endif ()
 
 # --- Qself JNI surface -------------------------------------------------------
 add_library(qself_hook SHARED

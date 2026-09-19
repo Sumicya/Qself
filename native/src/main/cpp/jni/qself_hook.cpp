@@ -50,13 +50,13 @@ void *MarkerAddress() {
 extern "C" {
 
 JNIEXPORT jint JNICALL
-Java_sumicya_qself_native_HookNative_nativeInit(JNIEnv *, jobject) {
+Java_sumicya_qself_engine_HookNative_nativeInit(JNIEnv *, jobject) {
     g_initialized.store(true);
     return 1;
 }
 
 JNIEXPORT jstring JNICALL
-Java_sumicya_qself_native_HookNative_nativeVersion(JNIEnv *env, jobject) {
+Java_sumicya_qself_engine_HookNative_nativeVersion(JNIEnv *env, jobject) {
     const char *version = DobbyGetVersion();
     return env->NewStringUTF(version != nullptr ? version : "dobby");
 }
@@ -68,7 +68,7 @@ Java_sumicya_qself_native_HookNative_nativeVersion(JNIEnv *env, jobject) {
  * @return 0 on success, negative error code otherwise
  */
 JNIEXPORT jint JNICALL
-Java_sumicya_qself_native_HookNative_nativeSelfTest(JNIEnv *, jobject) {
+Java_sumicya_qself_engine_HookNative_nativeSelfTest(JNIEnv *, jobject) {
     if (!g_initialized.load()) {
         return -1;
     }
@@ -112,7 +112,7 @@ Java_sumicya_qself_native_HookNative_nativeSelfTest(JNIEnv *, jobject) {
  * @return 0 on success, negative error code otherwise
  */
 JNIEXPORT jint JNICALL
-Java_sumicya_qself_native_HookNative_nativePltReplace(
+Java_sumicya_qself_engine_HookNative_nativePltReplace(
         JNIEnv *env,
         jobject,
         jstring imageName,
