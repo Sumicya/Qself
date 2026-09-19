@@ -1,0 +1,66 @@
+name: Qself CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: qself-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "true"
+
+      # Everything below is a script in docs/ci/: this workflow only wires the
+      # steps up. CI logic therefore changes in a normal commit instead of
+      # requiring an edit here — the account that maintains this repo cannot
+      # push to .github/workflows (the GitHub App lacks the scope), so keeping
+      # this file as thin as possible is what keeps CI editable.
+      #
+      # Sync this file from docs/ci/ci.yml with: bash docs/ci/bootstrap.sh
+      - name: Config submodules
+        run: bash docs/ci/config-submodules.sh
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+
+      - name: Setup SDK
+        run: bash docs/ci/setup-sdk.sh
+
+      - name: Report toolchain
+        run: bash docs/ci/report-toolchain.sh
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: bash docs/ci/build.sh
+
+      - name: Verify APK
+        if: success()
+        run: bash docs/ci/verify-apk.sh
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qself-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore
