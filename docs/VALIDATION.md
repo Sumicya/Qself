@@ -32,6 +32,8 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
 | 35415766091 | `99601b5` | ❌ | native 链接通过、KSP 生成成功；app 剩 14 处编译错误 |
 | **35415983117** | `64362d8` | ✅ 3min | **首次打包成功**：`qself-debug.apk` 7.53 MB |
 | **35416221194** | `c63c1e5` | ✅ | 现代 API 入口 + `LibXposedHookEngine` 打包成功 |
+| **35416420537** | `4fc809a` | ✅ | CI 增加 APK 自检（入口文件 / dex 入口类 / 两个 ABI 的 .so / 不打包框架 stub） |
+| **35416632275** | `13371f0` | ✅ | settings 桥重写（su 读取、非阻塞写入、10s 超时）后仍全绿 |
 
 ## 已验证 / 未验证
 
@@ -54,6 +56,7 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
 - `HookNative.selfTestResult` 是否为 `0`（Dobby 自检端到端）。
 - 设置界面的 `su` 桥在真实 root 环境下的读写。
 - 各 QQ 版本上混淆类/方法名命中的比例（`docs/FEATURES.md` 的移植约定里有版本分支）。
+- `su` 桥首次授权的交互（Magisk/KernelSU 弹窗）与实际读写结果。
 
 真机验证步骤见 README「使用方法」；诊断信息（引擎版本、自检结果、共享配置状态）
 直接在设置页首行显示，出问题时先看那里和 `QLog`（设置 → 日志）。
