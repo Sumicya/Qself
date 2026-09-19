@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.WindowInsets
 import android.widget.EditText
 import android.widget.ListView
 import android.widget.Switch
@@ -70,6 +71,8 @@ class MainActivity : Activity() {
             }
         }
 
+        applyWindowInsets()
+
         // The authoritative settings live in the host's files dir behind `su`;
         // reading them can wait on a root prompt, so never do it on the UI
         // thread. The list is redrawn once the answer is in.
@@ -77,6 +80,26 @@ class MainActivity : Activity() {
             Qself.refreshSharedSettings()
             runOnUiThread { adapter.submit(buildRows()) }
         }.start()
+    }
+
+    /**
+     * Android 15+ (targetSdk 35/36) draws every app edge-to-edge, so a list
+     * that starts at the top of the window ends up under the status bar — on
+     * this device the diagnostics card was simply not visible. Padding the
+     * list by the system bars/cutout keeps the content out of them while
+     * `clipToPadding=false` lets it scroll underneath.
+     */
+    private fun applyWindowInsets() {
+        val list = findViewById<View>(R.id.list) ?: return
+        val base = list.paddingBottom
+        list.setOnApplyWindowInsetsListener { view, insets ->
+            val bars = insets.getInsets(
+                WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout(),
+            )
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom + base)
+            insets
+        }
+        list.requestApplyInsets()
     }
 
     /**

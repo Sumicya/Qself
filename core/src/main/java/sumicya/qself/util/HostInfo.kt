@@ -56,7 +56,10 @@ object HostInfoProvider {
                 versionCode = longVersionCode(info),
             )
         } catch (t: Throwable) {
-            QLog.e("HostInfo", "failed to load host info for $packageName", t)
+            // A missing package (or one hidden by Android 11+ package
+            // visibility) is a normal state, not a crash: warn once, without a
+            // stack trace, and let the callers show "?".
+            QLog.w("HostInfo", "host info unavailable for $packageName (${t.javaClass.simpleName})")
             HostInfo(packageName, "", 0)
         }
     }

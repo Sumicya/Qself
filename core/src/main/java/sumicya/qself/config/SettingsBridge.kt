@@ -132,7 +132,17 @@ class SettingsBridge(
                 return text
             }
         }
-        QLog.d("Settings", "shared settings unreadable through any path (no su?)")
+        // Two very different situations used to produce the same log line:
+        // the file not existing yet (normal before the first sync — the host
+        // has never been told anything) and `su` not working at all.
+        lastError = if (lastStderr.contains("No such file") || lastStderr.contains("not found")) {
+            "宿主还没有设置文件（点「同步设置到 QQ」创建）"
+        } else if (lastStderr.isEmpty()) {
+            "su 不可用（root 未授权或无 su）"
+        } else {
+            "su 读取失败：${lastStderr.lineSequence().first()}"
+        }
+        QLog.d("Settings", "shared settings unreadable: $lastError")
         return null
     }
 
@@ -281,6 +291,9 @@ class SettingsBridge(
 
     private var lastStdout: String = ""
 
+    /** stderr of the last `su` call, used to tell "not created yet" from "no su". */
+    private var lastStderr: String = ""
+
     /**
      * Runs `su 0 -c <command>`; returns the exit code, or null when `su` is
      * unavailable. Capped by [SU_TIMEOUT_SECONDS] so a pending root prompt
@@ -302,6 +315,7 @@ class SettingsBridge(
             }
             lastStdout = stdout.use { it.readText() }
             val errors = stderr.use { it.readText() }
+            lastStderr = errors.trim()
             if (errors.isNotEmpty()) {
                 QLog.d("Settings", "su stderr: ${errors.trim()}")
             }

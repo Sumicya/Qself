@@ -27,7 +27,9 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 20001
-        versionName = "2.0.0-alpha01"
+        // CI appends the commit so an installed build is identifiable from the
+        // diagnostics card ("did I actually install the fix?" cost a round trip).
+        versionName = "2.0.0-alpha01" + (System.getenv("GITHUB_SHA")?.take(7)?.let { "-$it" } ?: "")
     }
 
     buildTypes {

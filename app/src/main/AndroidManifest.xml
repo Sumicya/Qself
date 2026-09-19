@@ -1,6 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      Android 11+ package visibility: without this the module's own process
+      cannot see the host package at all, which silently breaks the version
+      read (NameNotFoundException) and with it the NT/generation detection in
+      the settings screen. The host process itself runs under QQ's uid and is
+      unaffected.
+    -->
+    <queries>
+        <package android:name="com.tencent.mobileqq" />
+        <package android:name="com.tencent.mobileqqi" />
+        <package android:name="com.tencent.qqlite" />
+        <package android:name="com.tencent.minihd.qq" />
+        <package android:name="com.tencent.tim" />
+    </queries>
+
+
     <application
         android:allowBackup="false"
         android:description="@string/xposeddescription"
