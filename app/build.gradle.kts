@@ -6,6 +6,7 @@
 // Explicit import: inside a Kotlin DSL script bare `java` is Gradle's java
 // extension, not the JDK package.
 import java.io.File
+import java.util.Properties
 import java.util.zip.ZipFile
 
 plugins {
@@ -107,7 +108,7 @@ dependencies {
 
 /** sdk.dir from local.properties, or the usual environment variables. */
 val sdkDirectory: File? = run {
-    val props = java.util.Properties()
+    val props = Properties()
     val localProps = rootProject.file("local.properties")
     if (localProps.exists()) localProps.inputStream().use { props.load(it) }
     val candidate = System.getenv("ANDROID_HOME")
@@ -146,7 +147,7 @@ fun dexdumpClasses(dexdump: File, dex: File, outDir: File): List<String> {
     }
 }
 
-val verifyModuleApk by tasks.registering {
+val verifyModuleApk = tasks.register("verifyModuleApk") {
     group = "verification"
     description = "Checks the packaged APK against the libxposed module contract."
     doLast {
@@ -166,7 +167,7 @@ val verifyModuleApk by tasks.registering {
         // var on purpose: Kotlin forbids initialising a captured `val` inside a lambda.
         var entryClass = ""
         val descriptors = LinkedHashMap<String, List<String>>()
-        java.util.zip.ZipFile(apk).use { zip ->
+        ZipFile(apk).use { zip ->
             for (entry in listOf(
                 "META-INF/xposed/module.prop",
                 "META-INF/xposed/java_init.list",
