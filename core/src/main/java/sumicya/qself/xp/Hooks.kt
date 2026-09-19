@@ -33,7 +33,7 @@ object Hooks {
         if (!feature.isEnabled) {
             return NoopHandle
         }
-        return before(executable, handler)
+        return before(executable, handler).also { HookStats.installed(feature.id) }
     }
 
     fun before(
@@ -51,7 +51,7 @@ object Hooks {
         if (!feature.isEnabled) {
             return NoopHandle
         }
-        return after(executable, handler)
+        return after(executable, handler).also { HookStats.installed(feature.id) }
     }
 
     fun after(
@@ -67,7 +67,7 @@ object Hooks {
         handler: (HookEngine.HookParam) -> Unit,
     ): List<HookEngine.Handle> {
         if (!feature.isEnabled) return emptyList()
-        return allConstructors(cls, handler)
+        return allConstructors(cls, handler).onEach { HookStats.installed(feature.id) }
     }
 
     fun allConstructors(
@@ -89,7 +89,7 @@ object Hooks {
         handler: (HookEngine.HookParam) -> Unit,
     ): List<HookEngine.Handle> {
         if (!feature.isEnabled) return emptyList()
-        return allMethods(cls, name, handler)
+        return allMethods(cls, name, handler).onEach { HookStats.installed(feature.id) }
     }
 
     fun allMethods(

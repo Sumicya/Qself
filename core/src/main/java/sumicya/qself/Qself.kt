@@ -15,6 +15,7 @@ import sumicya.qself.log.QLog
 import sumicya.qself.util.HostInfo
 import sumicya.qself.util.HostInfoProvider
 import sumicya.qself.xp.HookEngine
+import sumicya.qself.xp.HookStats
 import java.io.File
 
 /**
@@ -186,9 +187,12 @@ object Qself {
                 else -> "skip"
             }
             val switch = if (feature.isEnabled) "on" else "off"
-            "${feature.id.substringAfterLast('.')}=$status/$switch"
+            // The hook count is what tells "ran and hooked 8 methods" apart from
+            // "ran and found nothing to hook" — both used to print `ok`.
+            val hooks = HookStats.count(feature.id)
+            "${feature.id.substringAfterLast('.')}=$status/$switch($hooks)"
         }
-        QLog.i("Qself", "features: $summary")
+        QLog.i("Qself", "features: $summary | hooks=${HookStats.total()}")
         QLog.i(
             "Qself",
             "boot complete: ${_featureResults.count { it.value }}/${_featureResults.size} features ok",

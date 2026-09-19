@@ -90,56 +90,65 @@ object HostDex {
         fragments: List<String>,
         validate: (DexClass) -> Boolean,
     ): List<DexClass> {
-        val apk = File(context.applicationInfo?.sourceDir ?: return emptyList())
-        if (!apk.isFile || !apk.canRead()) {
-            QLog.w(TAG, "host APK not readable: ${apk.absolutePath}")
+        val info = context.applicationInfo ?: return emptyList()
+        // Not just sourceDir: an app that ships extra dex in split APKs keeps
+        // them in splitSourceDirs, and a class living there would be invisible
+        // to a scan of the base APK alone.
+        val apks = (listOf(info.sourceDir) + (info.splitSourceDirs?.toList() ?: emptyList()))
+            .filterNotNull()
+            .map(::File)
+            .filter { it.isFile && it.canRead() }
+        if (apks.isEmpty()) {
+            QLog.w(TAG, "no readable host APK (sourceDir/splitSourceDirs)")
             return emptyList()
         }
         val startedAt = System.currentTimeMillis()
         val matches = ArrayList<DexClass>()
         var scanned = 0
-        try {
-            ZipFile(apk).use { zip ->
-                // QQ ships its dex as classes.dex, classes2.dex, ... — the same
-                // convention every app uses; anything else is not code.
-                val entries = zip.entries().toList()
-                    .filter { entry ->
-                        val name = entry.name
-                        !entry.isDirectory &&
-                            name.startsWith("classes") &&
-                            name.endsWith(".dex") &&
-                            entry.size in 1..MAX_DEX_BYTES
-                    }
-                for (entry in entries) {
-                    val bytes = try {
-                        zip.getInputStream(entry).use { it.readBytes() }
-                    } catch (t: Throwable) {
-                        QLog.w(TAG, "cannot read ${entry.name}: ${t.javaClass.simpleName}")
-                        continue
-                    }
-                    val reader = DexReader(bytes)
-                    if (!reader.valid) {
-                        QLog.w(TAG, "${entry.name}: not a dex (endian/magic)")
-                        continue
-                    }
-                    val decoded = reader.classDetails { descriptor ->
-                        scanned++
-                        scanned <= MAX_CANDIDATES && fragments.any { descriptor.contains(it) }
-                    }
-                    for (cls in decoded) {
-                        if (validate(cls)) {
-                            matches += cls
+        for (apk in apks) {
+            try {
+                ZipFile(apk).use { zip ->
+                    // QQ ships its dex as classes.dex, classes2.dex, ... — the same
+                    // convention every app uses; anything else is not code.
+                    val entries = zip.entries().toList()
+                        .filter { entry ->
+                            val name = entry.name
+                            !entry.isDirectory &&
+                                name.startsWith("classes") &&
+                                name.endsWith(".dex") &&
+                                entry.size in 1..MAX_DEX_BYTES
+                        }
+                    for (entry in entries) {
+                        val bytes = try {
+                            zip.getInputStream(entry).use { it.readBytes() }
+                        } catch (t: Throwable) {
+                            QLog.w(TAG, "cannot read ${entry.name}: ${t.javaClass.simpleName}")
+                            continue
+                        }
+                        val reader = DexReader(bytes)
+                        if (!reader.valid) {
+                            QLog.w(TAG, "${entry.name}: not a dex (endian/magic)")
+                            continue
+                        }
+                        val decoded = reader.classDetails { descriptor ->
+                            scanned++
+                            scanned <= MAX_CANDIDATES && fragments.any { descriptor.contains(it) }
+                        }
+                        for (cls in decoded) {
+                            if (validate(cls)) {
+                                matches += cls
+                            }
                         }
                     }
                 }
-            }
-        } catch (t: Throwable) {
-            QLog.w(TAG, "discovery failed", t)
-            return emptyList()
+            } catch (t: Throwable) {
+                QLog.w(TAG, "discovery failed in ${apk.name}: ${t.javaClass.simpleName}")
+        }
         }
         QLog.i(
             TAG,
-            "scanned $scanned classes in ${System.currentTimeMillis() - startedAt} ms, " +
+            "scanned $scanned classes in ${apks.size} apk(s) in " +
+                "${System.currentTimeMillis() - startedAt} ms, " +
                 "${matches.size} match(es) for ${fragments.joinToString("|")}",
         )
         return matches
