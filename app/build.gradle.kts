@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.androidx.recyclerview)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.material)
-}
 
-ksp(projects.tools.ksp)
+    // feature registry processor (@QselfFeature -> QselfFeatures)
+    ksp(projects.tools.ksp)
+}
