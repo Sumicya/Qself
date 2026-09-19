@@ -50,6 +50,9 @@ class MainActivity : Activity() {
 
         setContentView(R.layout.activity_main)
         actionBar?.subtitle = BuildConfig.VERSION_NAME
+        // Diagnosed in the field: if this is null the platform theme gave the
+        // activity no action bar, and the options menu has nowhere to appear.
+        QLog.i("UI", "actionBar=${actionBar?.javaClass?.name ?: "none"}")
 
         adapter = FeatureAdapter(this, buildRows()) { feature, value ->
             Qself.bridge.setEnabled(feature.id, value)
@@ -59,7 +62,7 @@ class MainActivity : Activity() {
         list.adapter = adapter
         list.setOnItemClickListener { _, rowView, position, _ ->
             when (val row = adapter.getItem(position)) {
-                is UiRow.Diagnostics -> copyLogs()
+                is UiRow.Diagnostics -> showActions()
                 is UiRow.Feature -> onRowClick(row.feature, rowView)
                 is UiRow.Header -> Unit
             }
@@ -72,6 +75,30 @@ class MainActivity : Activity() {
             Qself.refreshSharedSettings()
             runOnUiThread { adapter.submit(buildRows()) }
         }.start()
+    }
+
+    /**
+     * The one entry point that does not depend on the action bar: some ROMs
+     * (ColorOS among them) simply do not render the framework overflow menu,
+     * which would leave the class dump unreachable. Tapping the diagnostics
+     * card always works.
+     */
+    private fun showActions() {
+        val items = arrayOf(
+            getString(R.string.copy_logs),
+            getString(R.string.dump_classes),
+            getString(R.string.about),
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.actions)
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> copyLogs()
+                    1 -> dumpClasses()
+                    else -> showAbout()
+                }
+            }
+            .show()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {

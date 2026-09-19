@@ -60,6 +60,14 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
+        android:text="@string/diag_actions_hint"
+        android:textColor="?android:attr/colorAccent"
+        android:textSize="12sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
         android:text="@string/takes_effect_on_restart"
         android:textColor="?android:attr/textColorSecondary"
         android:textSize="12sp" />
