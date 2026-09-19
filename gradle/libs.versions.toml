@@ -1,17 +1,17 @@
 # Qself — dependency catalog.
 #
-# Versions mirror the combination that is known to build with AGP 9.3.1 /
-# Kotlin 2.4.10 (see git history of this repo for the pre-rewrite setup).
+# Kotlin/KSP are version-coupled with AGP 9's built-in Kotlin support; the
+# pair below is the one that builds green on this repo's stack (AGP 9.3.1).
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+[versions]
 kotlin = "2.4.20"
-
 agp = "9.3.1"
-
-# KSP 2.x (KSP2) — works with AGP 9 built-in Kotlin
+# KSP 2.x (KSP2) — must match the Kotlin version AGP compiles with
 ksp = "2.3.12"
 
+[libraries]
 # --- AndroidX / UI -----------------------------------------------------------
 androidx-annotation = { module = "androidx.annotation:annotation", version = "1.10.0" }
 androidx-appcompat = { module = "androidx.appcompat:appcompat", version = "1.8.0" }
@@ -22,7 +22,7 @@ material = { module = "com.google.android.material:material", version = "1.14.0"
 
 # --- Xposed ------------------------------------------------------------------
 # classic Xposed API; compileOnly (the framework provides it at runtime).
-# 82 is the newest version published on api.xposed.info (there is no 89).
+# 82 is the newest version published on api.xposed.info.
 xposed-api = { module = "de.robv.android.xposed:api", version = "82" }
 
 # --- KSP tooling -------------------------------------------------------------
