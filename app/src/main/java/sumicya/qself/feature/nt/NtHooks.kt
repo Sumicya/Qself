@@ -33,6 +33,23 @@ internal object NtHooks {
         return true
     }
 
+    /**
+     * Resolve [className] first, then hook `name(params)` to return [result].
+     * Returns false when either the class or that exact signature is missing,
+     * which is the normal case for a QQ build the feature was not written for.
+     */
+    fun replaceIn(
+        feature: QselfFeature,
+        host: Host,
+        className: String,
+        name: String,
+        result: Any?,
+        vararg params: Class<*>,
+    ): Boolean {
+        val cls = host.resolve(className) ?: return false
+        return replace(feature, host, cls, name, result, *params)
+    }
+
     /** Hook every declared method called [name] (overloads differ only by args). */
     fun replaceAll(
         feature: QselfFeature,

@@ -103,21 +103,55 @@ grep -a -o 'Lcom/tencent/qqnt/[A-Za-z0-9_/$]*;' classes*.dex \
 **结构性事实**：几乎每个类都带 `static $redirector_ : IPatchRedirector` —— qfix redirect 已经
 编译进全部 dex，所以"让 redirector 查不到"就能让补丁整体失效（见下）。
 
+### 升级/更新（QQ 9.2.10）
+
+| 类 | 关键方法（真实签名） |
+|---|---|
+| `com.tencent.upgrade.checker.a` | `static a(): checker.a`（单例）；**`b(UpgradeStrategy): boolean`** ← 判定"要不要升级" |
+| `com.tencent.upgrade.checker.b` | **`a(UpgradeStrategy, UpgradeStrategy): boolean`**；**`b(UpgradeStrategy): boolean`** |
+| `com.tencent.upgrade.core.b` | **`b(com.tencent.upgrade.request.a): void`** ← 请求派发（查询/升级请求都从这里走）；内部有 `ArrayDeque` 队列 |
+| `com.tencent.upgrade.core.c` | 单例 `static b`；`a(): void`；**`b(UpgradeStrategy): boolean`**；`c(): void` |
+| `com.tencent.upgrade.core.d` | 单例 `static a(): core.d`；`b(): void`；两个 `com.tencent.upgrade.storage.b` 槽位（下载/补丁状态） |
+| `com.tencent.upgrade.core.h` | 内类 `h$c`/`h$d` 实现 `onSuccess(List)`、`onFail(int, String)`、`b(RDeliveryData)` —— 服务端策略落地处 |
+| `com.tencent.upgrade.core.f` | RDelivery：`e(Context, UpgradeConfig, e44.e): RDelivery`；`b(String): String`；`i(): boolean` |
+| `com.tencent.upgrade.download.DownloadParam` | `<init>(int, int, int)`；`getDefaultParam()`；`getDownLoadedSize()/getTotalSize()` |
+| `com.tencent.mobileqq.upgrade.download.c` | `<init>(UpgradeDetailWrapper, upgrade.j)`；**`b(DownloadInfo): void`**；`onResult(List)`；`onException(int, String)`；`a(c$b): void`；`f(): int` |
+| `com.tencent.mobileqq.upgrade.download.d` | **`onDownloadFinish/Update/Cancel/Pause/Wait/Error(...)`**；**`installSucceed(String, String): void`** ← 装包那一下 |
+| `com.tencent.mobileqq.upgrade.j` | `i(): UpgradeDetailWrapper`；`l(): download.c`；`g(): download.b`；`n(QQAppInterface, boolean): void`；**`o(protocol.KQQConfig$UpgradeInfo): void`** |
+| `com.tencent.mobileqq.upgrade.k` | **`a(UpgradeDetailWrapper): void`**；`b/c(UpgradeDetailWrapper): boolean`；`d(int): boolean`；`h(int): void`；`i()/j(): boolean` |
+| `com.tencent.mobileqq.upgrade.shiply.a` | **`c(UpgradeStrategy, boolean): void`**；`a()/b()/d()/f(): void` |
+| `com.tencent.mobileqq.upgrade.shiply.b` | **`a(UpgradeDetailWrapper, UpgradeStrategy): void`** |
+| `com.tencent.mobileqq.upgrade.UpgradeDetailWrapper` | `i(UpgradeStrategy): boolean`；`static a(UpgradeInfo): UpgradeDetailWrapper$b`；`f(String, String): void` |
+| `com.tencent.mobileqq.upgrade.unitedconfig.UpgradeConfigParser` | `c(): UpgradeDetailWrapper`；`e(UpgradeDetailWrapper): void`；`f(byte[]): UpgradeDetailWrapper`（freesia 配置） |
+| 横幅 | `activity.recent.bannerprocessor.UpgradeBannerProcessor` / `InstallUpgradeBannerProcessor`：`onMessage(Message, long, boolean): void`、`updateBanner(banner.a, Message): void`、`initBanner(banner.a): View` |
+
+**自动下载确实存在**（这是"要不要拦"的答案）：`upgrade.download.d` 的
+`onDownloadFinish/onDownloadUpdate` 与 `installSucceed` 说明更新包是 SDK 自己拉下来并
+尝试安装的，不需要用户点。因此 `misc.anti_update_nt` 从**判定层**就开始拦。
+
 ## 已实现的 NT 特性
 
 | 特性 | id | 钩子 | 默认 | 说明 |
 |---|---|---|---|---|
 | 禁用热补丁（NT） | `misc.disable_hot_patch_nt` | `PatchRedirectCenter.apply` + `getRedirector`×2、`Relax.apply*`/`applyPatch`/`applyInternal`/native `relax` | 关（实验） | 补丁流程"报成功但不生效"，已装补丁的 redirector 查不到 → 原方法体执行 |
 | 禁用崩溃上报（NT） | `misc.disable_crash_report_nt` | init/上报/上传/native 注册 四层 | 关（实验） | 不初始化上报器；丢弃 post；阻断上传；不注册 native/ANR 处理器 |
+| 屏蔽更新（NT） | `misc.anti_update_nt` | 判定(4)/请求(1)/提示(4)/下载(5)/横幅(4) 五层 | 关（实验） | 判定恒 false → 不产生"有新版本"；请求派发被跳过 → 不下包；提示与横幅不出现 |
 
 两个特性都声明 `hostGeneration = NT`，在旧版 QQ 上会被直接跳过（不会失败）。
 未在真机验证前保持默认关闭；开起来后看：
 
 ```bash
-su -c 'logcat -d -v threadtime | grep -aE "Qself/(NtHotPatch|NtCrashReport)" | tail -5'
+su -c 'logcat -d -v threadtime | grep -aE "Qself/(NtHotPatch|NtCrashReport|NtAntiUpdate)" | tail -5'
 # 期望：installed N hooks (apply blocked, redirectors inert)
 #       installed N hooks (init=true, posts dropped, native off)
+#       installed N hooks (decision=4 request=1 prompt=4 download=5 banner=4)
 ```
+
+三个 NT 特性都**只钩 void 方法或 boolean 谓词**：返回对象的 getter（如
+`core.d.a()`、`core.f.e(...)`）和构造器一律不碰 —— 调用方拿去解引用的地方返回 null 就是崩溃，
+而掐掉驱动它们的状态（判定/请求/提示）已经足够。
+
+`NtAntiUpdate` 每层单独计数，日志里能直接看出未来的 QQ 版本还缺哪一层。
 
 `BLOCK_INIT`（`NtCrashReport.kt`）是唯一建议先动的地方：若未来某版 QQ 需要真正的
 Bugly 实例，把它改成 `false`，其余三层仍然生效。
