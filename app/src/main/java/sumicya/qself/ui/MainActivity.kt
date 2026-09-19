@@ -223,8 +223,7 @@ class MainActivity : Activity() {
                 val prefixes = input.text.toString()
                     .split(',', '\n')
                     .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-                    .map { "L" + it.replace('.', '/') }
+                    .filter { it.isNotEmpty() }   // ClassDump normalises both forms
                 runDump(prefixes)
             }
             .setNegativeButton(android.R.string.cancel, null)

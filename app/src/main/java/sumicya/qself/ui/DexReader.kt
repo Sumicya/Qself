@@ -23,9 +23,22 @@ import java.io.ByteArrayOutputStream
  * class_def     32 bytes  [0]=class_idx [24]=class_data_off
  * class_data    uleb static_fields, instance_fields, direct_methods, virtual_methods
  * method_id     8 bytes   class_idx:u16 proto_idx:u16 name_idx:u32
+ * field_id      8 bytes   class_idx:u16 type_idx:u16  name_idx:u32
  * proto_id      12 bytes  shorty_idx:u32 return_type_idx:u32 parameters_off:u32
  * type_list     u32 size, u16[] type_idx
  * ```
+ *
+ * Two traps, both of which produced silently wrong names until they were
+ * caught by cross-checking against androguard on real dex files:
+ *
+ *  - `class_idx` and every other `*_idx` in the tables above indexes **type_ids**,
+ *    never `string_ids` directly; going straight to the string table yields an
+ *    unrelated string (a type at position N and the string at position N differ).
+ *  - the four arrays in `class_data_item` are each diff-coded **on their own**.
+ *    The first entry of every array is absolute. Carrying the index across a
+ *    group boundary walks out of the table: `field_ids` is sorted per class by
+ *    name, so static and instance fields interleave and a negative diff would
+ *    be required to express the second group's first entry.
  */
 class DexReader(private val bytes: ByteArray) {
 
@@ -35,6 +48,8 @@ class DexReader(private val bytes: ByteArray) {
     private val typeIdsOff = u32(0x44)
     private val protoIdsSize = u32(0x48)
     private val protoIdsOff = u32(0x4C)
+    private val fieldIdsSize = u32(0x50)
+    private val fieldIdsOff = u32(0x54)
     private val methodIdsSize = u32(0x58)
     private val methodIdsOff = u32(0x5C)
     private val classDefsSize = u32(0x60)
@@ -50,9 +65,7 @@ class DexReader(private val bytes: ByteArray) {
     fun classDescriptors(): List<String> {
         val out = ArrayList<String>(classDefsSize)
         for (i in 0 until classDefsSize) {
-            val classIdx = u32(classDefsOff + i * 32)
-            if (classIdx < 0 || classIdx >= stringIdsSize) continue
-            out.add(stringAt(stringIdsOff + classIdx * 4) ?: continue)
+            typeDescriptor(u32(classDefsOff + i * 32))?.let { out.add(it) }
         }
         return out
     }
@@ -61,9 +74,7 @@ class DexReader(private val bytes: ByteArray) {
     fun matchingDescriptors(prefixes: List<String>): List<String> {
         val out = ArrayList<String>()
         for (i in 0 until classDefsSize) {
-            val classIdx = u32(classDefsOff + i * 32)
-            if (classIdx < 0 || classIdx >= stringIdsSize) continue
-            val descriptor = stringAt(stringIdsOff + classIdx * 4) ?: continue
+            val descriptor = typeDescriptor(u32(classDefsOff + i * 32)) ?: continue
             if (prefixes.any { descriptor.startsWith(it) }) out.add(descriptor)
         }
         return out
@@ -73,9 +84,7 @@ class DexReader(private val bytes: ByteArray) {
     fun classDetail(descriptor: String): DexClass? {
         for (i in 0 until classDefsSize) {
             val base = classDefsOff + i * 32
-            val classIdx = u32(base)
-            if (classIdx < 0 || classIdx >= stringIdsSize) continue
-            if (stringAt(stringIdsOff + classIdx * 4) != descriptor) continue
+            if (typeDescriptor(u32(base)) != descriptor) continue
             val classDataOff = u32(base + 24)
             if (classDataOff <= 0 || classDataOff >= bytes.size) return DexClass(descriptor, emptyList(), emptyList())
             return parseClassData(descriptor, classDataOff)
@@ -96,32 +105,38 @@ class DexReader(private val bytes: ByteArray) {
         val fields = ArrayList<DexMember>(staticFields + instanceFields)
 
         // field entries: idx_diff, access_flags
-        var fieldIdx = 0
-        repeat(staticFields + instanceFields) { i ->
-            val diff = uleb(p)
-            val flags = uleb(p)
-            fieldIdx = if (i == 0) diff else fieldIdx + diff
-            fieldName(fieldIdx)?.let { fields.add(DexMember(it, flags, "")) }
-        }
-        // method entries: idx_diff, access_flags, code_off
-        var methodIdx = 0
-        repeat(directMethods + virtualMethods) { i ->
-            val diff = uleb(p)
-            val flags = uleb(p)
-            uleb(p) // code_off — unused
-            methodIdx = if (i == 0) diff else methodIdx + diff
-            if (methodIdx in 0 until methodIdsSize) {
-                methodSignature(methodIdx)?.let { methods.add(DexMember(it.first, flags, it.second)) }
+        fun readFields(count: Int) {
+            var index = 0
+            repeat(count) { i ->
+                val diff = uleb(p)
+                val flags = uleb(p)
+                index = if (i == 0) diff else index + diff
+                fieldName(index)?.let { fields.add(DexMember(it, flags, "")) }
             }
         }
+        // method entries: idx_diff, access_flags, code_off
+        fun readMethods(count: Int) {
+            var index = 0
+            repeat(count) { i ->
+                val diff = uleb(p)
+                val flags = uleb(p)
+                uleb(p) // code_off — unused
+                index = if (i == 0) diff else index + diff
+                if (index in 0 until methodIdsSize) {
+                    methodSignature(index)?.let { methods.add(DexMember(it.first, flags, it.second)) }
+                }
+            }
+        }
+        readFields(staticFields)
+        readFields(instanceFields)
+        readMethods(directMethods)
+        readMethods(virtualMethods)
         return DexClass(descriptor, methods, fields)
     }
 
     private fun fieldName(fieldIdx: Int): String? {
-        val off = 0x50.let { u32(it) } // field_ids_off
-        val size = u32(0x54)
-        if (fieldIdx >= size) return null
-        val base = off + fieldIdx * 8
+        if (fieldIdx < 0 || fieldIdx >= fieldIdsSize) return null
+        val base = fieldIdsOff + fieldIdx * 8
         val nameIdx = u32(base + 4)
         if (nameIdx < 0 || nameIdx >= stringIdsSize) return null
         return stringAt(stringIdsOff + nameIdx * 4)
@@ -151,13 +166,15 @@ class DexReader(private val bytes: ByteArray) {
 
     // ---- primitives -------------------------------------------------------
 
-    private fun typeName(typeIdx: Int): String? {
+    /** Raw `Lx/y/Z;` / `[I` descriptor for a type index, or null when unreadable. */
+    private fun typeDescriptor(typeIdx: Int): String? {
         if (typeIdx < 0 || typeIdx >= typeIdsSize) return null
         val descriptorIdx = u32(typeIdsOff + typeIdx * 4)
         if (descriptorIdx < 0 || descriptorIdx >= stringIdsSize) return null
-        val descriptor = stringAt(stringIdsOff + descriptorIdx * 4) ?: return null
-        return javaName(descriptor)
+        return stringAt(stringIdsOff + descriptorIdx * 4)
     }
+
+    private fun typeName(typeIdx: Int): String? = typeDescriptor(typeIdx)?.let { javaName(it) }
 
     private fun javaName(descriptor: String): String {
         var array = 0

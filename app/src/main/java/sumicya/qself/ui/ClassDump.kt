@@ -42,6 +42,20 @@ object ClassDump {
         "com.tencent.mobileqq.qfix.,com.tencent.feedback.eup.," +
             "com.tencent.bugly.crashreport.,com.tencent.qqnt.startup."
 
+    /**
+     * `com.tencent.qqnt.` and `Lcom/tencent/qqnt/` both become `Lcom/tencent/qqnt/`.
+     * Accepting both forms matters: the UI pre-fills the dotted form while
+     * anything copied out of a dex dump is already in slash form.
+     */
+    fun normalizePrefix(text: String): String {
+        val trimmed = text.trim().trimEnd(',')
+        if (trimmed.isEmpty()) return ""
+        return when {
+            trimmed.contains('/') -> if (trimmed.startsWith("L")) trimmed else "L$trimmed"
+            else -> "L" + trimmed.replace('.', '/')
+        }
+    }
+
     /** Class-name fragments worth keeping (case-insensitive). */
     private val KEYWORDS = listOf(
         "nt", "kernel", "chat", "msg", "message", "aio", "troop", "friend",
@@ -58,6 +72,7 @@ object ClassDump {
      * thread. Returns a human-readable summary for the dialog.
      */
     fun dump(context: Context, hostPackage: String, prefixes: List<String>): String {
+        val wanted = prefixes.map(::normalizePrefix).filter { it.isNotEmpty() }
         val dir = java.io.File(context.cacheDir, "classdump").apply { mkdirs() }
         val apk = java.io.File(dir, "base.apk")
         apk.delete()
@@ -68,6 +83,7 @@ object ClassDump {
         val allClasses = LinkedHashSet<String>()
         val details = ArrayList<DexClass>()
         var dexCount = 0
+        var skippedDexes = 0
         try {
             ZipFile(apk).use { zip ->
                 val dexes = zip.entries().asSequence()
@@ -79,15 +95,25 @@ object ClassDump {
                     val entry = zip.getEntry(name) ?: continue
                     if (entry.size > MAX_DEX_BYTES) {
                         QLog.w(TAG, "skipping $name (${entry.size} bytes, too large to parse safely)")
+                        skippedDexes++
                         continue
                     }
-                    dexCount++
-                    val bytes = zip.getInputStream(entry).use(InputStream::readBytes)
-                    val reader = DexReader(bytes)
-                    if (!reader.valid) continue
-                    allClasses.addAll(reader.classDescriptors())
-                    for (descriptor in reader.matchingDescriptors(prefixes)) {
-                        reader.classDetail(descriptor)?.let { details.add(it) }
+                    try {
+                        val bytes = zip.getInputStream(entry).use(InputStream::readBytes)
+                        val reader = DexReader(bytes)
+                        if (!reader.valid) {
+                            skippedDexes++
+                            continue
+                        }
+                        allClasses.addAll(reader.classDescriptors())
+                        for (descriptor in reader.matchingDescriptors(wanted)) {
+                            reader.classDetail(descriptor)?.let { details.add(it) }
+                        }
+                        dexCount++
+                    } catch (t: Throwable) {
+                        // A single odd dex image must not lose the whole dump.
+                        skippedDexes++
+                        QLog.w(TAG, "skipping $name: ${t.javaClass.simpleName}: ${t.message}")
                     }
                 }
             }
@@ -99,14 +125,16 @@ object ClassDump {
         }
 
         val classesText = buildClassList(hostPackage, dexCount, allClasses)
-        val methodsText = buildMethodList(hostPackage, prefixes, details)
+        val methodsText = buildMethodList(hostPackage, wanted, details)
 
         val classesFile = write(context, OUT_CLASSES, classesText)
         val methodsFile = write(context, OUT_METHODS, methodsText)
         val published = publish(listOf(classesFile to "/sdcard/$OUT_CLASSES", methodsFile to "/sdcard/$OUT_METHODS"))
 
         return buildString {
-            append("类名：${allClasses.size} 个（扫描 $dexCount 个 dex）\n")
+            append("类名：${allClasses.size} 个（扫描 $dexCount 个 dex")
+            if (skippedDexes > 0) append("，跳过 $skippedDexes 个")
+            append("）\n")
             append("方法签名：${details.size} 个类匹配前缀\n")
             append("  方法 ${details.sumOf { it.methods.size }} / 字段 ${details.sumOf { it.fields.size }}\n")
             append("文件：\n  ${classesFile.absolutePath}\n  ${methodsFile.absolutePath}\n")
