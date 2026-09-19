@@ -15,15 +15,17 @@
 Qself 把旧 QAuxiliary 分支的屎山一次铲平：
 
 - **简单化**：submodule 11 → 2，移除 MMKV/ezxhelper/XPopup/EasyAdapter/DexKit 等；
-  构建不再有 build-logic 复合工程；配置 = 一个 JSON 文件。
-- **现代化**：全 Kotlin（特性 + UI + 运行时），Material 3 设置界面（动态取色），
-  编译期 KSP 特性注册表（运行时零元数据反射）。
+  构建不再有 build-logic 复合工程；配置 = 一个 JSON 文件；运行时**零第三方依赖**
+  （唯一剩下的 AndroidX 条目只服务于 compileOnly 的框架 API stub）。
+- **现代化**：全 Kotlin（特性 + UI + 运行时），编译期 KSP 特性注册表
+  （运行时零元数据反射）；设置界面用 framework 主题
+  （`Theme.DeviceDefault`，Android 12+ 自动跟系统取色）。
 - **自由化**：代码 **GPL-3.0-or-later**（旧 EULA 作废）；运行时不绑定单一框架
   （LSPosed 10.x 入口 + 经典 API 引擎 + native 引擎，见 `docs/NATIVE-LOADING.md`）。
-- **原生化**：纯 Android 原生 UI 组件（无 WebView、无第三方 UI 库）；
-  随包分发 Dobby（inline hook）+ LSPlant（ART Java hook）原生引擎 —— 进程里
-  **优先用原生引擎装钩子**，libart.so 符号由自研解析器提供，框架只当加载器；
-  引擎不可用时自动回退到框架的 Java 引擎。
+- **原生化**：纯 Android 原生 UI（`android.app.Activity` + `ListView`，无 AndroidX、
+  无 Material、无 WebView）；随包分发 Dobby（inline hook）+ LSPlant（ART Java
+  hook）原生引擎 —— 进程里**优先用原生引擎装钩子**，libart.so 符号由自研解析器
+  提供，框架只当加载器；引擎不可用时自动回退到框架的 Java 引擎。
 
 ## 使用方法
 

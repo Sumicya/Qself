@@ -12,13 +12,11 @@ agp = "9.3.1"
 ksp = "2.3.12"
 
 [libraries]
-# --- AndroidX / UI -----------------------------------------------------------
+# --- AndroidX ----------------------------------------------------------------
+# The only AndroidX entry left, and it is build-only: the vendored libxposed
+# 10.x API stubs (libs/libxposed/api) annotate their Java sources with it.
+# The app itself ships framework-only UI.
 androidx-annotation = { module = "androidx.annotation:annotation", version = "1.10.0" }
-androidx-appcompat = { module = "androidx.appcompat:appcompat", version = "1.8.0" }
-androidx-core-ktx = { module = "androidx.core:core-ktx", version = "1.19.0" }
-androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version = "2.2.2" }
-androidx-recyclerview = { module = "androidx.recyclerview:recyclerview", version = "1.4.0" }
-material = { module = "com.google.android.material:material", version = "1.14.0" }
 
 # --- Xposed ------------------------------------------------------------------
 # classic Xposed API; compileOnly (the framework provides it at runtime).

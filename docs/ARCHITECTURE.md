@@ -22,10 +22,14 @@ MMKV（→ SharedPreferences + JSON 文件）、ezxhelper、XPopup、EasyAdapter
 fmt、libunwindstack、linux-syscall-support、DexKit、qq-stub、libxposed/service；
 build-logic 复合构建、develocity、协议插件全部移除。
 
+app / core 的第三方依赖只剩两个 *compileOnly* 的框架 API stub
+（`de.robv.android.xposed:api`、`libs/libxposed/api`）—— 运行时的 UI 与逻辑
+零第三方库。
+
 ## 启动流程
 
 ```
-LSPosed 10.x ──(META-INF/xposed/*)──► QselfModule10x ──► Qself.boot(param, features, LibXposedHookEngine)
+LSPosed 10.x ──(META-INF/xposed/*)──► QselfModule10x ──► Qself.boot(param, features, HookEngines.forModernFramework)
 经典 Xposed ──(assets/xposed_init, 默认不声明)──► QselfModule ──┘（ClassicHookEngine）
 设置 UI（模块自身进程）──────────────────────────────► Qself.bootUi(context, hostPackage, settings)
 ```
@@ -148,12 +152,23 @@ Native 引擎：<dobby 版本> / ready / libart ok: 58xxx symbols (dynsym …, s
 
 ## UI（原生化 ② + 现代化）
 
-- 单 Activity（`MainActivity`）+ RecyclerView + Material 3（Views，无 Compose、
-  无 XPopup/EasyAdapter）。
-- API 31+ 动态取色（`DynamicColors`）。
-- 行：标题 + beta 标签 + 摘要 + `MaterialSwitch`；分区 = `FeatureCategory`。
-- 诊断卡：版本 / 宿主 / 共享配置状态 / native 引擎与自检结果。
-- 关于与日志均为 `MaterialAlertDialog`（日志可复制）。
+设置界面**只用 Android framework**：没有 AndroidX，没有 Material，也
+没有 WebView/Compose/第三方 UI 库。
+
+- 单 Activity（`MainActivity : android.app.Activity`）+ `ListView` +
+  `BaseAdapter`（`FeatureAdapter`）；ActionBar 与溢出菜单来自主题。
+- 主题 `Theme.Qself` = `Theme.DeviceDefault.Light.DarkActionBar`
+  （`values-night/` 换 `Theme.DeviceDefault`）。framework 的 DeviceDefault 在
+  Android 12+ 本身就指向系统调色板（`system_accent*`），所以动态取色是免费的，
+  不需要 Material 的 `DynamicColors`。
+- 行：标题 + beta 标签（`TextView`）+ 摘要 + `android.widget.Switch`；
+  分区 = `FeatureCategory` 的一行 `TextView` 表头。
+- 诊断块：版本 / 宿主 / 共享配置状态 / native 引擎与自检结果；点一下复制日志。
+- 关于与日志均为 `android.app.AlertDialog`；提示用 `Toast`。
+- 依赖账本：`gradle/libs.versions.toml` 里唯一剩下的 AndroidX 条目是
+  `androidx.annotation`，且只有 vendored 的 libxposed API stub（compileOnly）
+  用它 —— **app 的运行时类路径上没有 AndroidX/Material**
+  （`docs/ci/verify-apk.sh` 会在 dex 里硬校验这一点）。
 
 ## 许可（自由化 ③）
 

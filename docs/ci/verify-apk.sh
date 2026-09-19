@@ -61,12 +61,21 @@ if [ -n "$DEXDUMP" ]; then
   rm -rf dex-check
   mkdir -p dex-check
   unzip -o -q "$APK" 'classes*.dex' -d dex-check
-  STUBS=$("$DEXDUMP" dex-check/*.dex 2>/dev/null \
-    | grep -c 'Class descriptor.*Lio/github/libxposed/\|Class descriptor.*Lde/robv/android/xposed/' || true)
+  DESCRIPTORS=$("$DEXDUMP" dex-check/*.dex 2>/dev/null \
+    | grep -o 'Class descriptor.*' || true)
+  STUBS=$(grep -c 'Lio/github/libxposed/\|Lde/robv/android/xposed/' <<<"$DESCRIPTORS" || true)
   if [ "$STUBS" -eq 0 ]; then
     report="${report}OK no framework stubs bundled, "
   else
     report="${report}BUNDLED ${STUBS} framework stub classes, "
+    fail=1
+  fi
+  # "Framework-only UI" is a claim; this is its proof.
+  UI_LIBS=$(grep -c 'Landroidx/\|Lcom/google/android/material/' <<<"$DESCRIPTORS" || true)
+  if [ "$UI_LIBS" -eq 0 ]; then
+    report="${report}OK no AndroidX/Material classes, "
+  else
+    report="${report}BUNDLED ${UI_LIBS} AndroidX/Material classes, "
     fail=1
   fi
 else

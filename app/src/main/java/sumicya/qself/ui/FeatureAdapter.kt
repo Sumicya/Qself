@@ -5,18 +5,20 @@
 
 package sumicya.qself.ui
 
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.BaseAdapter
+import android.widget.CompoundButton
+import android.widget.Switch
 import android.widget.TextView
-import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.chip.Chip
-import com.google.android.material.materialswitch.MaterialSwitch
 import sumicya.qself.Qself
 import sumicya.qself.R
 import sumicya.qself.feature.ActionFeature
 import sumicya.qself.feature.QselfFeature
 
+/** One line of the settings screen. */
 sealed class UiRow {
     data class Diagnostics(
         val version: String,
@@ -31,12 +33,23 @@ sealed class UiRow {
     data class Feature(val feature: QselfFeature) : UiRow()
 }
 
+/**
+ * Plain [BaseAdapter] over [UiRow]s - the settings list is a framework
+ * `ListView`, so nothing here depends on AndroidX or Material.
+ */
 class FeatureAdapter(
+    private val context: Context,
     private var rows: List<UiRow>,
     private val onToggle: (QselfFeature, Boolean) -> Unit,
-    private val onFeatureClick: (QselfFeature) -> Unit,
-    private val onCopyLogs: () -> Unit,
-) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+) : BaseAdapter() {
+
+    override fun getCount(): Int = rows.size
+
+    override fun getItem(position: Int): UiRow = rows[position]
+
+    override fun getItemId(position: Int): Long = position.toLong()
+
+    override fun getViewTypeCount(): Int = TYPE_COUNT
 
     override fun getItemViewType(position: Int): Int = when (rows[position]) {
         is UiRow.Diagnostics -> TYPE_DIAGNOSTICS
@@ -44,97 +57,74 @@ class FeatureAdapter(
         is UiRow.Feature -> TYPE_FEATURE
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-        val inflater = LayoutInflater.from(parent.context)
-        return when (viewType) {
-            TYPE_DIAGNOSTICS -> DiagnosticsViewHolder(
-                inflater.inflate(R.layout.item_diagnostics, parent, false),
-            )
-            TYPE_HEADER -> HeaderViewHolder(
-                inflater.inflate(R.layout.item_header, parent, false),
-            )
-            else -> FeatureViewHolder(
-                inflater.inflate(R.layout.item_feature, parent, false),
-            )
-        }
-    }
-
-    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+        val inflater = LayoutInflater.from(context)
+        val view = convertView
+            ?: inflater.inflate(layoutOf(getItemViewType(position)), parent, false)
         when (val row = rows[position]) {
-            is UiRow.Diagnostics -> (holder as DiagnosticsViewHolder).bind(row)
-            is UiRow.Header -> (holder as HeaderViewHolder).bind(row)
-            is UiRow.Feature -> (holder as FeatureViewHolder).bind(row)
+            is UiRow.Diagnostics -> bindDiagnostics(view, row)
+            is UiRow.Header -> bindHeader(view, row)
+            is UiRow.Feature -> bindFeature(view, row)
         }
+        return view
     }
 
-    override fun getItemCount(): Int = rows.size
-
-    /** Replaces the rows (used after the shared settings finished loading). */
+    /** Replaces the rows (used once the shared settings finished loading). */
     fun submit(updated: List<UiRow>) {
         rows = updated
         notifyDataSetChanged()
     }
 
-    inner class DiagnosticsViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        private val tvVersion = view.findViewById<TextView>(R.id.diag_version)
-        private val tvHost = view.findViewById<TextView>(R.id.diag_host)
-        private val tvSettings = view.findViewById<TextView>(R.id.diag_settings)
-        private val tvEngine = view.findViewById<TextView>(R.id.diag_engine)
-        private val tvSelfTest = view.findViewById<TextView>(R.id.diag_self_test)
+    private fun bindDiagnostics(view: View, row: UiRow.Diagnostics) {
+        view.findViewById<TextView>(R.id.diag_version)
+            .text = context.getString(R.string.diag_version, row.version)
+        view.findViewById<TextView>(R.id.diag_host)
+            .text = context.getString(R.string.diag_host, row.hostPackage)
+        view.findViewById<TextView>(R.id.diag_settings)
+            .text = context.getString(R.string.diag_settings, row.sharedSettings)
+        view.findViewById<TextView>(R.id.diag_engine)
+            .text = context.getString(R.string.diag_engine, row.nativeEngine)
+        view.findViewById<TextView>(R.id.diag_self_test)
+            .text = context.getString(R.string.diag_self_test, row.nativeSelfTest)
+    }
 
-        fun bind(row: UiRow.Diagnostics) {
-            tvVersion.text = itemView.context.getString(R.string.diag_version, row.version)
-            tvHost.text = itemView.context.getString(R.string.diag_host, row.hostPackage)
-            tvSettings.text = itemView.context.getString(R.string.diag_settings, row.sharedSettings)
-            tvEngine.text = itemView.context.getString(R.string.diag_engine, row.nativeEngine)
-            tvSelfTest.text = itemView.context.getString(R.string.diag_self_test, row.nativeSelfTest)
-            // Convenience: the diagnostics row doubles as "copy logs".
-            itemView.setOnClickListener { onCopyLogs() }
+    private fun bindHeader(view: View, row: UiRow.Header) {
+        view.findViewById<TextView>(R.id.header_title).text = row.title
+    }
+
+    private fun bindFeature(view: View, row: UiRow.Feature) {
+        val feature = row.feature
+        view.findViewById<TextView>(R.id.feature_title).text = feature.name
+        view.findViewById<TextView>(R.id.feature_summary).text = feature.summary
+        view.findViewById<TextView>(R.id.feature_tag)
+            .visibility = if (feature.experimental) View.VISIBLE else View.GONE
+
+        val switchView = view.findViewById<Switch>(R.id.feature_switch)
+        if (feature is ActionFeature) {
+            // Actions have no state; the row itself is the control.
+            switchView.visibility = View.GONE
+            switchView.setOnCheckedChangeListener(null)
+        } else {
+            // Detach first: recycled rows must not report a stale change.
+            switchView.visibility = View.VISIBLE
+            switchView.setOnCheckedChangeListener(null)
+            switchView.isChecked = Qself.bridge.isEnabled(feature.id, feature.defaultEnabled)
+            switchView.setOnCheckedChangeListener(
+                CompoundButton.OnCheckedChangeListener { _, value -> onToggle(feature, value) },
+            )
         }
     }
 
-    inner class HeaderViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        private val title = view.findViewById<TextView>(R.id.header_title)
-
-        fun bind(row: UiRow.Header) {
-            title.text = row.title
-        }
+    private fun layoutOf(viewType: Int): Int = when (viewType) {
+        TYPE_DIAGNOSTICS -> R.layout.item_diagnostics
+        TYPE_HEADER -> R.layout.item_header
+        else -> R.layout.item_feature
     }
 
-    inner class FeatureViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        private val title = view.findViewById<TextView>(R.id.feature_title)
-        private val summary = view.findViewById<TextView>(R.id.feature_summary)
-        private val tag = view.findViewById<Chip>(R.id.feature_tag)
-        private val switchView = view.findViewById<MaterialSwitch>(R.id.feature_switch)
-
-        fun bind(row: UiRow.Feature) {
-            val feature = row.feature
-            title.text = feature.name
-            summary.text = feature.summary
-            tag.isVisible = feature.experimental
-            val isAction = feature is ActionFeature
-            switchView.isVisible = !isAction
-            if (!isAction) {
-                switchView.isChecked = Qself.bridge.isEnabled(feature.id, feature.defaultEnabled)
-                switchView.setOnClickListener {
-                    onToggle(feature, switchView.isChecked)
-                }
-            }
-            itemView.setOnClickListener {
-                onFeatureClick(feature)
-            }
-        }
-    }
-
-    companion object {
-        private const val TYPE_DIAGNOSTICS = 0
-        private const val TYPE_HEADER = 1
-        private const val TYPE_FEATURE = 2
+    private companion object {
+        const val TYPE_DIAGNOSTICS = 0
+        const val TYPE_HEADER = 1
+        const val TYPE_FEATURE = 2
+        const val TYPE_COUNT = 3
     }
 }
-
-private var View.isVisible: Boolean
-    get() = visibility == View.VISIBLE
-    set(value) {
-        visibility = if (value) View.VISIBLE else View.GONE
-    }

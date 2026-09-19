@@ -5,72 +5,65 @@
 
 package sumicya.qself.ui
 
+import android.app.Activity
+import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
-import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.LinearLayoutManager
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.color.DynamicColors
-import com.google.android.material.snackbar.Snackbar
+import android.view.View
+import android.widget.ListView
+import android.widget.Switch
+import android.widget.Toast
 import sumicya.qself.BuildConfig
 import sumicya.qself.Qself
 import sumicya.qself.R
 import sumicya.qself.config.Settings
+import sumicya.qself.engine.HookNative
+import sumicya.qself.engine.NativeJavaSelfTest
 import sumicya.qself.feature.ActionFeature
 import sumicya.qself.feature.FeatureCategory
 import sumicya.qself.feature.QselfFeature
 import sumicya.qself.gen.QselfFeatures
 import sumicya.qself.log.QLog
-import sumicya.qself.engine.HookNative
-import sumicya.qself.engine.NativeJavaSelfTest
 import sumicya.qself.util.HostInfoProvider
 
 /**
  * The module's settings screen. Runs in the module's own process; the
  * authoritative settings live in the host app's files dir and are reached
  * through [sumicya.qself.config.SettingsBridge].
+ *
+ * Framework UI on purpose: a plain [Activity] with a `ListView` and the
+ * theme's action bar - the whole screen needs no AndroidX or Material code.
  */
-class MainActivity : AppCompatActivity() {
+class MainActivity : Activity() {
+
+    private lateinit var adapter: FeatureAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        DynamicColors.applyToActivityIfAvailable(this)
 
         val settings = Settings(this)
         Qself.bootUi(application, hostPackage(), settings)
 
         setContentView(R.layout.activity_main)
-        val toolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
-        toolbar.title = getString(R.string.app_name)
-        toolbar.subtitle = BuildConfig.VERSION_NAME
-        setSupportActionBar(toolbar)
+        actionBar?.subtitle = BuildConfig.VERSION_NAME
 
-        val list = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.list)
-        list.layoutManager = LinearLayoutManager(this)
-        val adapter = FeatureAdapter(
-            rows = buildRows(),
-            onToggle = { feature, value ->
-                Qself.bridge.setEnabled(feature.id, value)
-                Snackbar.make(list, R.string.takes_effect_on_restart, Snackbar.LENGTH_SHORT).show()
-            },
-            onFeatureClick = { feature ->
-                if (feature is ActionFeature) {
-                    feature.onClick(this)
-                }
-            },
-            onCopyLogs = {
-                val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(
-                    ClipData.newPlainText("qself-logs", QLog.snapshot()),
-                )
-                Snackbar.make(list, R.string.logs_copied, Snackbar.LENGTH_SHORT).show()
-            },
-        )
+        adapter = FeatureAdapter(this, buildRows()) { feature, value ->
+            Qself.bridge.setEnabled(feature.id, value)
+            toast(R.string.takes_effect_on_restart)
+        }
+        val list = findViewById<ListView>(R.id.list)
         list.adapter = adapter
+        list.setOnItemClickListener { _, rowView, position, _ ->
+            when (val row = adapter.getItem(position)) {
+                is UiRow.Diagnostics -> copyLogs()
+                is UiRow.Feature -> onRowClick(row.feature, rowView)
+                is UiRow.Header -> Unit
+            }
+        }
 
         // The authoritative settings live in the host's files dir behind `su`;
         // reading them can wait on a root prompt, so never do it on the UI
@@ -99,6 +92,15 @@ class MainActivity : AppCompatActivity() {
         else -> super.onOptionsItemSelected(item)
     }
 
+    /** Action features run their dialog; switch features toggle where tapped. */
+    private fun onRowClick(feature: QselfFeature, rowView: View) {
+        if (feature is ActionFeature) {
+            feature.onClick(this)
+        } else {
+            rowView.findViewById<Switch>(R.id.feature_switch)?.toggle()
+        }
+    }
+
     private fun buildRows(): List<UiRow> {
         val rows = ArrayList<UiRow>()
         rows += UiRow.Diagnostics(
@@ -108,7 +110,7 @@ class MainActivity : AppCompatActivity() {
             nativeEngine = "${HookNative.version} / " +
                 "${HookNative.lsplantStatus} / libart ${HookNative.artSymbolStatus}",
             nativeSelfTest = "dobby=${HookNative.selfTestResult} " +
-                "java=${javaSelfTest} (${NativeJavaSelfTest.explain(javaSelfTest)})",
+                "java=$javaSelfTest (${NativeJavaSelfTest.explain(javaSelfTest)})",
         )
         val byCategory = LinkedHashMap<FeatureCategory, MutableList<QselfFeature>>()
         for (feature in QselfFeatures.features) {
@@ -135,33 +137,38 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAbout() {
-        MaterialAlertDialogBuilder(this)
+        AlertDialog.Builder(this)
             .setTitle(R.string.app_name)
-            .setMessage(
-                getString(R.string.about_text, BuildConfig.VERSION_NAME),
-            )
+            .setMessage(getString(R.string.about_text, BuildConfig.VERSION_NAME))
             .setPositiveButton(android.R.string.ok, null)
             .show()
     }
 
     private fun showLogs() {
         val text = QLog.snapshot()
-        MaterialAlertDialogBuilder(this)
+        AlertDialog.Builder(this)
             .setTitle(R.string.logs)
             .setMessage(text.ifEmpty { getString(R.string.logs_empty) })
-            .setNeutralButton(R.string.copy) { _, _ ->
-                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("qself-logs", text))
-            }
+            .setNeutralButton(R.string.copy) { _, _ -> copyLogs(text) }
             .setPositiveButton(android.R.string.ok, null)
             .show()
+    }
+
+    private fun copyLogs(text: String = QLog.snapshot()) {
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("qself-logs", text))
+        toast(R.string.logs_copied)
+    }
+
+    private fun toast(message: Int) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
     /** Hooks a probe class through LSPlant; run once, it is the real proof. */
     private val javaSelfTest: Int by lazy { NativeJavaSelfTest.run() }
 
-    companion object {
-        private const val MENU_ABOUT = 1
-        private const val MENU_LOGS = 2
+    private companion object {
+        const val MENU_ABOUT = 1
+        const val MENU_LOGS = 2
     }
 }

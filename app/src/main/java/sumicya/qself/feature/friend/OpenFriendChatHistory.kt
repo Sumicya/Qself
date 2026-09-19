@@ -5,16 +5,16 @@
 
 package sumicya.qself.feature.friend
 
+import android.app.AlertDialog
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.view.Gravity
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
-import androidx.appcompat.view.ContextThemeWrapper
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import sumicya.qself.R
 import sumicya.qself.ProcessKind
+import sumicya.qself.R
 import sumicya.qself.annotation.QselfFeature
 import sumicya.qself.feature.ActionFeature
 import sumicya.qself.feature.FeatureCategory
@@ -37,59 +37,51 @@ object OpenFriendChatHistory : ActionFeature {
     override val defaultEnabled: Boolean = false
 
     override fun onClick(context: Context) {
-        val ctx = ContextThemeWrapper(
-            context,
-            com.google.android.material.R.style.Theme_Material3_DayNight,
-        )
-        val input = EditText(ctx).apply {
+        val density = context.resources.displayMetrics.density
+        val input = EditText(context).apply {
             textSize = 16f
             hint = "QQ 号或 uid"
             gravity = Gravity.CENTER_HORIZONTAL
-            val pad = (16 * context.resources.displayMetrics.density).toInt()
+            val pad = (16 * density).toInt()
             setPadding(pad, pad / 2, pad, 0)
         }
-        val container = LinearLayout(ctx).apply {
+        val container = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             addView(input)
         }
-        MaterialAlertDialogBuilder(ctx)
+        val dialog = AlertDialog.Builder(context)
             .setTitle(R.string.input_uin_title)
             .setView(container)
             .setCancelable(true)
             .setPositiveButton(R.string.confirm, null)
             .setNegativeButton(R.string.cancel, null)
             .create()
-            .apply {
-                setOnShowListener { _ ->
-                    getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
-                        ?.setOnClickListener { submit(ctx, input, this) }
-                }
-            }
-            .show()
+        // Rebind the positive button so a bad input keeps the dialog open.
+        dialog.setOnShowListener {
+            dialog.getButton(DialogInterface.BUTTON_POSITIVE)
+                ?.setOnClickListener { submit(context, input, dialog) }
+        }
+        dialog.show()
     }
 
-    private fun submit(
-        ctx: Context,
-        input: EditText,
-        dialog: androidx.appcompat.app.AlertDialog,
-    ) {
+    private fun submit(context: Context, input: EditText, dialog: AlertDialog) {
         val text = input.text.toString().trim()
         when {
-            text.isEmpty() -> toast(ctx, R.string.input_required)
+            text.isEmpty() -> toast(context, R.string.input_required)
             text.toLongOrNull() != null -> {
                 val uin = text.toLong()
                 if (uin < 10000) {
-                    toast(ctx, R.string.invalid_uin)
+                    toast(context, R.string.invalid_uin)
                 } else {
-                    startChatHistory(ctx, uin.toString())
+                    startChatHistory(context, uin.toString())
                     dialog.dismiss()
                 }
             }
             text.startsWith("u_") && text.length == 24 -> {
-                startUidHistory(ctx, text)
+                startUidHistory(context, text)
                 dialog.dismiss()
             }
-            else -> toast(ctx, R.string.invalid_uid)
+            else -> toast(context, R.string.invalid_uid)
         }
     }
 

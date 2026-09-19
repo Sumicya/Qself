@@ -7,8 +7,6 @@ package sumicya.qself
 
 import android.app.Application
 import android.content.pm.ApplicationInfo
-import androidx.annotation.Keep
-import androidx.annotation.RequiresApi
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
@@ -32,21 +30,17 @@ import sumicya.qself.util.HostInfoProvider
  * The framework is only the *loader* here: which engine actually installs the
  * hooks is decided in [HookEngines] (native LSPlant when available).
  */
-@Keep
 class QselfModule10x : XposedModule {
 
-    @RequiresApi(26)
     @XposedApiMin(101)
     constructor() : super()
 
-    @RequiresApi(26)
     override fun onPackageLoaded(param: PackageLoadedParam) {
         if (param.packageName in HostInfoProvider.HOST_PACKAGES) {
             QLog.i("Qself", "package loaded: ${param.packageName}")
         }
     }
 
-    @RequiresApi(26)
     override fun onPackageReady(param: PackageReadyParam) {
         if (param.packageName !in HostInfoProvider.HOST_PACKAGES) {
             return

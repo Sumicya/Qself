@@ -70,12 +70,8 @@ dependencies {
     compileOnly(projects.libs.libxposed.api)
     compileOnly(libs.xposed.api)
 
-    implementation(libs.androidx.annotation)
-    implementation(libs.androidx.appcompat)
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.recyclerview)
-    implementation(libs.androidx.constraintlayout)
-    implementation(libs.material)
+    // No AndroidX / Material on purpose: the settings screen is framework UI
+    // (Activity + ListView + platform theme).
 
     // feature registry processor (@QselfFeature -> QselfFeatures)
     ksp(projects.tools.ksp)

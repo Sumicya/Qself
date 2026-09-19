@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Framework theme only: Theme.DeviceDefault (and its Light flavour) follow the
+  system palette - including wallpaper-based dynamic colours on Android 12+,
+  which framework-res already wires up for these themes.
+-->
 <resources>
-    <style name="Theme.Qself" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="android:windowBackground">?attr/colorSurface</item>
-    </style>
+    <style name="Theme.Qself" parent="@android:style/Theme.DeviceDefault.Light.DarkActionBar" />
 </resources>
