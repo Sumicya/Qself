@@ -96,7 +96,7 @@ class QselfModule10x : XposedModule {
         if (!armed) {
             // No framework hooking: fall back to our own engine as the trigger.
             HookEngines.nativeOrNull()?.let { native ->
-                armed = BootHook.install(native, onCreated)
+                armed = BootHook.install(native, appComponentFactory(param), onCreated)
             }
         }
 
