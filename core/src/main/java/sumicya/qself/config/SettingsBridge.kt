@@ -114,7 +114,10 @@ class SettingsBridge(
             val direct = try {
                 if (file.exists() && file.canRead()) file.readText() else null
             } catch (t: Throwable) {
-                QLog.d("Settings", "direct read failed: ${file.path}", t)
+                // Expected: a different uid cannot read /data/data/<host>.
+                // The su bridge below is the answer, so this stays a one-liner
+                // instead of a stack trace (it made the log look broken).
+                QLog.d("Settings", "direct read unavailable (${t.javaClass.simpleName}): ${file.path}")
                 null
             }
             if (direct != null) {

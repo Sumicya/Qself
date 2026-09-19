@@ -19,6 +19,8 @@
     <string name="tag_other_generation">不适用于当前 QQ</string>
     <string name="sync_settings">同步设置到 QQ</string>
     <string name="sync_running">正在写入宿主设置（需要 root）…</string>
+    <string name="restart_host">重启 QQ</string>
+    <string name="restart_running">正在停止 QQ（需要 root）…</string>
     <string name="feature_summary_not_applicable">%1$s（该开关仅对%2$s生效，当前宿主不需要它）</string>
     <string name="diagnostics">诊断</string>
     <string name="takes_effect_on_restart">开关在 QQ 下次重启后生效</string>

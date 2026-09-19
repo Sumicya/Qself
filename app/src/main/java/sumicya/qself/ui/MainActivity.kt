@@ -32,6 +32,7 @@ import sumicya.qself.util.HostGeneration
 import sumicya.qself.gen.QselfFeatures
 import sumicya.qself.log.QLog
 import sumicya.qself.util.HostInfoProvider
+import sumicya.qself.util.HostRestart
 
 /**
  * The module's settings screen. Runs in the module's own process; the
@@ -113,6 +114,7 @@ class MainActivity : Activity() {
             getString(R.string.copy_logs),
             getString(R.string.dump_classes),
             getString(R.string.sync_settings),
+            getString(R.string.restart_host),
             getString(R.string.about),
         )
         AlertDialog.Builder(this)
@@ -122,6 +124,7 @@ class MainActivity : Activity() {
                     0 -> copyLogs()
                     1 -> dumpClasses()
                     2 -> syncSettings()
+                    3 -> restartHost()
                     else -> showAbout()
                 }
             }
@@ -139,10 +142,13 @@ class MainActivity : Activity() {
         Thread {
             val message = Qself.syncSharedSettings()
             runOnUiThread {
+                // The switch that gets skipped by hand is the restart; offer it
+                // right where the sync result is shown.
                 AlertDialog.Builder(this)
                     .setTitle(R.string.sync_settings)
                     .setMessage(message)
-                    .setPositiveButton(android.R.string.ok) { _, _ -> adapter.submit(buildRows()) }
+                    .setPositiveButton(R.string.restart_host) { _, _ -> restartHost() }
+                    .setNegativeButton(android.R.string.ok) { _, _ -> adapter.submit(buildRows()) }
                     .show()
             }
         }.start()
@@ -245,6 +251,20 @@ class MainActivity : Activity() {
         } catch (t: Throwable) {
             HostInfoProvider.PACKAGE_NAME_QQ
         }
+    }
+
+    /**
+     * Settings only take effect at host startup (the hooks have to exist before
+     * the host's own startup code runs), so the module offers the restart
+     * instead of leaving it to the user.
+     */
+    private fun restartHost() {
+        val host = hostPackage()
+        toast(R.string.restart_running)
+        Thread {
+            val message = HostRestart.forceStop(host)
+            runOnUiThread { toast(message) }
+        }.start()
     }
 
     private fun showAbout() {

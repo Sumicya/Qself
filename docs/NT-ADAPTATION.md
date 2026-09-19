@@ -136,6 +136,19 @@ grep -a -o 'Lcom/tencent/qqnt/[A-Za-z0-9_/$]*;' classes*.dex \
 | 禁用热补丁（NT） | `misc.disable_hot_patch_nt` | `PatchRedirectCenter.apply` + `getRedirector`×2、`Relax.apply*`/`applyPatch`/`applyInternal`/native `relax` | 关（实验） | 补丁流程"报成功但不生效"，已装补丁的 redirector 查不到 → 原方法体执行 |
 | 禁用崩溃上报（NT） | `misc.disable_crash_report_nt` | init/上报/上传/native 注册 四层 | 关（实验） | 不初始化上报器；丢弃 post；阻断上传；不注册 native/ANR 处理器 |
 | 屏蔽更新（NT） | `misc.anti_update_nt` | 判定(4)/请求(1)/提示(4)/下载(5)/横幅(4) 五层 | 关（实验） | 判定恒 false → 不产生"有新版本"；请求派发被跳过 → 不下包；提示与横幅不出现 |
+| QQ 内设置面板 | `ui.inqq_panel` | `Instrumentation#callActivityOnResume` → 页名含 setting/about/config 时挂一个 Qself 悬浮按钮 | 开 | **不需要 root**：面板在 QQ 进程内直写 `files/qself/settings.json`；「重启 QQ」= `Process.killProcess(myPid())`，一键完成 |
+
+### 入口与重启的设计取舍
+
+- **为什么必须有入口在 QQ 里**：独立设置页在部分 ROM（ColorOS）上够不着，而且跨 uid 写配置
+  需要 root + 手动重启。面板跑在宿主进程里，写入是同 uid 直写，重启是同进程自杀，两条 root
+  依赖一起消失。
+- **为什么仍然需要重启**：热补丁应用、崩溃上报初始化、升级检查都发生在**首个窗口出现之前**，
+  钩子必须在那之前就位；对已经跑起来的进程改开关，这几件事必然无效。面板把这一步做成
+  一个按钮，而不是假装热开关可行。
+- **为什么不 hook QQ 设置页的具体类**：类名一旦被混淆/改名就失效。改用框架的
+  `callActivityOnResume` + 页面名特征匹配，任何 QQ 版本都能挂上，且完全不依赖 QQ 的布局结构
+  （只是往 decorView 加一个小按钮）。
 
 两个特性都声明 `hostGeneration = NT`，在旧版 QQ 上会被直接跳过（不会失败）。
 未在真机验证前保持默认关闭；开起来后看：
