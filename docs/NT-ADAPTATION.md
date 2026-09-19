@@ -66,10 +66,61 @@ grep -a -o 'Lcom/tencent/qqnt/[A-Za-z0-9_/$]*;' classes*.dex \
 | 聊天界面 | `com.tencent.qqnt.aio.SplashAIOFragment`、`aio.holder.template.BubbleLayoutCompatPress`、`aio.audiopanel.AudioPanelAdapter`、`aio.bottombord...`、**`com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.state.MsgListState`** | `com.tencent.aio.*` 是 NT 的消息列表框架（AIO），`qqnt.aio.*` 是界面层 |
 | 启动 | `com.tencent.qqnt.startup.NtStartup(Dispatcher)`、`startup.task.NtTask` | 早期 hook 点（需要时可用） |
 
-**下一步：方法签名**。类名只能定位，hook 需要方法名与参数类型，所以工具已升级为
-"导出方法签名"：对给定**类名前缀**输出每个类的
-`m <flags> 方法名(参数类型): 返回类型` 与字段列表，写到
-`/sdcard/qself-methods.txt`。
+**方法签名已取到**（下一步完成）：`tools/nt-scan/qself-scan.py` 在设备上解析 37 个 dex，
+按类名前缀输出 `m <flags> 方法名(参数类型): 返回类型` 与字段。默认前缀命中 **118 个类**，
+完整结果在 `/sdcard/qself-methods.txt`。
+
+> 这个过程同时修掉了 dex 解析器的两个硬 bug（`class_idx` 错当 string 索引、class_data
+> 四组数组的 diff 链跨组累加）——两个都是"不报错但全错"，之前导出的类名全是错的。
+> 详见 `tools/nt-scan/README.md`。
+
+## 已实测的真实签名（QQ 9.2.10 / 37 dex）
+
+### qfix（热补丁）
+
+| 类 | 关键方法（真实签名） |
+|---|---|
+| `com.tencent.mobileqq.qfix.redirect.PatchRedirectCenter` | `static apply(Context, String, String): int`；`static unApply(): void`；`static getRedirector(int): IPatchRedirector`；`static getRedirector(int, short)`；`static fakeGetRedirector(int[, short])`；`private static loadPatchClasses(String): SparseArray`；`static COPY/unzipConfig` |
+| `com.tencent.mobileqq.qfix.Relax` | `static apply(Context, File, File, File, boolean): int`；`static apply(Context, File, File, InputStream, boolean[, boolean]): int`；`protected static applyInternal(Context, File, File, InputStream, boolean, boolean): int`；`applyPatch(Context, File, File, InputStream, boolean): int`；`private static native relax(Context, Method, Method, ClassLoader, File, byte[], boolean): int`；`static getInstance(): Relax`（单例在 `Relax$RelaxHolder.sInstance`） |
+| `com.tencent.mobileqq.qfix.common.classloader.DexClassLoaderUtil` | `static createDexClassLoader(String, String, String, ClassLoader): DexClassLoader` |
+| `com.tencent.mobileqq.qfix.common.classloader.SystemClassLoaderInjector` | `static inject(Context, String, String[, String], boolean[, boolean]): String`；`static unloadDexElement(Context, int): String`；`makeDexElements(...)` |
+| `com.tencent.mobileqq.qfix.AndroidNClassLoader` | `static inject(PathClassLoader, Application): AndroidNClassLoader`；`findClass(String)` |
+| `com.tencent.mobileqq.qfix.QFixApplication` | `attachBaseContext(Context)`；`onCreate()`；`isAndroidNPatchEnable(): boolean` |
+| `com.tencent.mobileqq.qfix.ApplicationDelegate` | `proxyAttachBaseContext(Context, QFixApplication): void` |
+
+### 崩溃上报（Bugly / feedback.eup）
+
+| 类 | 关键方法（真实签名） |
+|---|---|
+| `com.tencent.feedback.eup.CrashReport` | `static initCrashReport(Context, String, boolean[, CrashStrategyBean[, long]])`；`static postException(int, String, String, String, Map)` 与 `(Thread, int, …)`；`static handleCatchException(Thread, Throwable, String, byte[]): boolean`（+boolean 重载）；`static doUploadExceptionDatas(): boolean`；`needUploadCrash(): boolean`；`uploadUserInfo()`；`triggerUserInfoUpload()`；`setCrashReportAble(boolean)`；`setNativeCrashReportAble(boolean)` |
+| `com.tencent.bugly.library.Bugly` | `static init(Context, BuglyBuilder[, boolean]): boolean`；`static postException(...)` ×2；`static handleCatchException(...): boolean` ×2；`setCrashMonitorAble(int, boolean)` |
+| `com.tencent.bugly.crashreport.inner.InnerApi` | `static postH5CrashAsync(Thread, String, String, String, Map)`；`postCocos2dxCrashAsync(int, …)`；`postU3dCrashAsync(…)` |
+| `com.tencent.feedback.eup.jni.NativeExceptionUpload` | `static native registNativeExceptionHandler(String, String, int): boolean`；`registNativeExceptionHandler2(String, String, int, int): String`；`enableHandler(boolean)`；`setmHandler(NativeExceptionHandler)` |
+| `com.tencent.bugly.crashreport.crash.jni.NativeCrashHandler` | `setShouldHandleInJava(boolean)`；`reRegisterNativeHandler(boolean)`；`reRegisterANRHandler(boolean)`；`enableCatchAnrTrace()`／`disableCatchAnrTrace()` |
+| `com.tencent.feedback.eup.CrashStrategyBean` | `setEnableNativeCrashMonitor(boolean)`；`setEnableANRCrashMonitor(boolean)`；`setUploadProcess(boolean)`；`setUploadSpotCrash(boolean)` |
+| `com.tencent.bugly.crashreport.crash.h5.H5JavaScriptInterface` | `reportJSException(String)` |
+
+**结构性事实**：几乎每个类都带 `static $redirector_ : IPatchRedirector` —— qfix redirect 已经
+编译进全部 dex，所以"让 redirector 查不到"就能让补丁整体失效（见下）。
+
+## 已实现的 NT 特性
+
+| 特性 | id | 钩子 | 默认 | 说明 |
+|---|---|---|---|---|
+| 禁用热补丁（NT） | `misc.disable_hot_patch_nt` | `PatchRedirectCenter.apply` + `getRedirector`×2、`Relax.apply*`/`applyPatch`/`applyInternal`/native `relax` | 关（实验） | 补丁流程"报成功但不生效"，已装补丁的 redirector 查不到 → 原方法体执行 |
+| 禁用崩溃上报（NT） | `misc.disable_crash_report_nt` | init/上报/上传/native 注册 四层 | 关（实验） | 不初始化上报器；丢弃 post；阻断上传；不注册 native/ANR 处理器 |
+
+两个特性都声明 `hostGeneration = NT`，在旧版 QQ 上会被直接跳过（不会失败）。
+未在真机验证前保持默认关闭；开起来后看：
+
+```bash
+su -c 'logcat -d -v threadtime | grep -aE "Qself/(NtHotPatch|NtCrashReport)" | tail -5'
+# 期望：installed N hooks (apply blocked, redirectors inert)
+#       installed N hooks (init=true, posts dropped, native off)
+```
+
+`BLOCK_INIT`（`NtCrashReport.kt`）是唯一建议先动的地方：若未来某版 QQ 需要真正的
+Bugly 实例，把它改成 `false`，其余三层仍然生效。
 
 ## 在设备上取真实类名（模块内置工具）
 
@@ -98,9 +149,9 @@ su -c 'grep -iE "撤|recall|revoke" /sdcard/qself-classes.txt | head -20'   # �
 
 | 特性 | 旧版实现 | NT 可行性 | 计划 |
 |---|---|---|---|
-| 屏蔽更新 | `upgrade.UpgradeController` | 需重新定位（NT 更新走 `com.tencent.qqnt.*` / 应用商店跳转） | 先禁用入口，等类名 |
-| 禁用崩溃上报 | `QQCrashReportManager` / `StatisticCollector` | 上报路径重构 | 同上 |
-| 禁用热修复 | `com.tencent.rfix.*` | QFix 仍在（`QFixApplication` 可见） | 有希望，优先 |
+| 屏蔽更新 | `upgrade.UpgradeController` | 需重新定位（NT 更新走 `com.tencent.qqnt.*` / 应用商店跳转） | **等签名**：下一步 dump `com.tencent.mobileqq.upgrade.` 等前缀 |
+| 禁用崩溃上报 | `QQCrashReportManager` / `StatisticCollector` | Bugly 仍在且签名齐全 | ✅ `misc.disable_crash_report_nt`（默认关） |
+| 禁用热修复 | `com.tencent.rfix.*` | qfix 仍在，`Relax`/`PatchRedirectCenter` 签名齐全 | ✅ `misc.disable_hot_patch_nt`（默认关） |
 | 隐藏空间标题栏入口 | QZone 卡片名 | 空间在 NT 是独立模块 | 低优先 |
 | 去相机按钮 / 去签到 | 旧版界面控件 | NT 界面重构（部分 Compose） | 低优先 |
 | 聊天左侧显示自己的消息 | `activity.aio.BaseChatItemLayout` | NT 聊天列表重构 | 需类名 |

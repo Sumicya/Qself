@@ -19,3 +19,7 @@ build/
 # Keystore (CI provides its own via secrets)
 *.jks
 *.keystore
+
+# python bytecode cache (tools/)
+__pycache__/
+*.pyc
