@@ -43,6 +43,14 @@ interface QselfFeature {
     val defaultEnabled: Boolean
 
     /**
+     * Which QQ generation this feature was written for. Defaults to
+     * [sumicya.qself.util.HostGeneration.PRE_NT] because that is what the
+     * current feature set targets; NT features must say so explicitly.
+     */
+    val hostGeneration: sumicya.qself.util.HostGeneration
+        get() = sumicya.qself.util.HostGeneration.PRE_NT
+
+    /**
      * Install the hooks. Called exactly once per target process at startup,
      * on the main thread before the app is fully created.
      *

@@ -139,8 +139,23 @@ object Qself {
             return
         }
 
+        val generation = _host!!.generation
+        QLog.i("Qself", "host generation: ${generation.title}")
+
         for (feature in features) {
             if (_process !in feature.targetProcesses) {
+                continue
+            }
+            if (feature.hostGeneration != sumicya.qself.util.HostGeneration.ANY &&
+                feature.hostGeneration != generation
+            ) {
+                // Not a failure: the feature simply belongs to the other QQ
+                // generation (see docs/NT-ADAPTATION.md).
+                _featureResults[feature.id] = false
+                QLog.i(
+                    "Feature",
+                    "${feature.id} skipped (needs ${feature.hostGeneration.title}, host is ${generation.title})",
+                )
                 continue
             }
             try {

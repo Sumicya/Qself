@@ -32,6 +32,15 @@ class Host(private val packageName: String) {
      * Load the first candidate that exists. The result (including null) is
      * cached, so repeated misses are cheap.
      */
+    /**
+     * Which QQ generation this process hosts (NT or pre-NT). Determined from
+     * class presence, cached by [resolve]; used to skip features that were
+     * written for the other generation instead of failing them one by one.
+     */
+    val generation: sumicya.qself.util.HostGeneration by lazy {
+        sumicya.qself.util.HostGeneration.detect { name -> resolve(name) }
+    }
+
     fun resolve(vararg fqcn: String): Class<*>? {
         for (name in fqcn) {
             classCache[name]?.let { return it }
