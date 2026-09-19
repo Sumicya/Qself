@@ -21,8 +21,9 @@ androidx-recyclerview = { module = "androidx.recyclerview:recyclerview", version
 material = { module = "com.google.android.material:material", version = "1.14.0" }
 
 # --- Xposed ------------------------------------------------------------------
-# classic Xposed API; compileOnly (the framework provides it at runtime)
-xposed-api = { module = "de.robv.android.xposed:api", version = "89" }
+# classic Xposed API; compileOnly (the framework provides it at runtime).
+# 82 is the newest version published on api.xposed.info (there is no 89).
+xposed-api = { module = "de.robv.android.xposed:api", version = "82" }
 
 # --- KSP tooling -------------------------------------------------------------
 ksp-api = { module = "com.google.devtools.ksp:symbol-processing-api", version.ref = "ksp" }

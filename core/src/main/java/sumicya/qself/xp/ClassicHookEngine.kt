@@ -7,7 +7,6 @@ package sumicya.qself.xp
 
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
-import java.lang.reflect.Constructor
 import java.lang.reflect.Executable
 import sumicya.qself.log.QLog
 
@@ -15,6 +14,9 @@ import sumicya.qself.log.QLog
  * [HookEngine] backed by the classic Xposed API (XposedBridge). This works
  * on Xposed, EdXposed and LSPosed 1.x — the environments that expose
  * `de.robv.android.xposed`.
+ *
+ * `XposedBridge.hookMethod` takes any [java.lang.reflect.Member], so
+ * constructors and methods go through the same call.
  */
 class ClassicHookEngine : HookEngine {
 
@@ -22,8 +24,10 @@ class ClassicHookEngine : HookEngine {
         executable: Executable,
         onBefore: ((HookParam) -> Unit)?,
         onAfter: ((HookParam) -> Unit)?,
-        priority: Int,
+        @Suppress("UNUSED_PARAMETER") priority: Int,
     ): Handle {
+        // The classic API routes priorities through a separate overload;
+        // v1 keeps the default priority and ignores the parameter.
         val callback = object : XC_MethodHook() {
             override fun beforeHookedMethod(param: MethodHookParam) {
                 onBefore?.invoke(BeforeView(param))
@@ -34,11 +38,7 @@ class ClassicHookEngine : HookEngine {
             }
         }
         return try {
-            val unhooker = when (executable) {
-                is java.lang.reflect.Method -> XposedBridge.hookMethod(executable, priority, callback)
-                is Constructor<*> -> XposedBridge.hookConstructor(executable, priority, callback)
-                else -> throw IllegalArgumentException("not a method or constructor: $executable")
-            }
+            val unhooker = XposedBridge.hookMethod(executable, callback)
             Handle { runCatching { unhooker.unhook() } }
         } catch (t: Throwable) {
             QLog.e("Hook", "hook failed: $executable", t)
@@ -56,7 +56,7 @@ class ClassicHookEngine : HookEngine {
 
         override fun skip(result: Any?) {
             // setting the result in a before-hook replaces the invocation
-            param.result = result
+            param.setResult(result)
         }
 
         override fun setException(throwable: Throwable?) {
@@ -70,14 +70,14 @@ class ClassicHookEngine : HookEngine {
         override val args: Array<Any?> get() = param.args
         override val isAfter: Boolean get() = true
         override val result: Any? get() = param.result
-        override val exception: Throwable? get() = param.throwable
+        override val exception: Throwable? get() = if (param.hasThrowable()) param.throwable else null
 
         override fun skip(result: Any?) {
             // report only: the original execution is already done
         }
 
         override fun setException(throwable: Throwable?) {
-            param.throwable = throwable
+            param.setThrowable(throwable)
         }
     }
 }
