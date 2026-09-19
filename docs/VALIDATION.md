@@ -46,6 +46,9 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
 | **35419634655** | `e0453bb` | ✅ | **自举钩子（`BootHook`）编译打包通过，契约自检仍全绿**；APK 8,493,185 B，artifact `qself-debug` 3,667,255 B（重写前 8,429,106 B） |
 | **35419379475** | `65b6d9e3` | ✅ | **构建期契约自检（`verifyModuleApk`）全绿**：入口类确实定义在某个 dex（旧检查只扫 `classes.dex`，属假阴性）、零 AndroidX/Material、零 stub；模块源码全部编译打包 |
 
+| **35422053208** | `801186b` | ✅ | **启动路径加固后重新全绿**：`ANDROID_STL=c++_static` 链接通过、契约自检通过 |
+| **35422217108** | `00277ed` | ✅ | 新增"不得打包共享 STL"断言后全绿 —— APK **8.49 MB → 6.85 MB**（不再随包分发 `libc++_shared.so`），artifact `qself-debug` 3,067,686 B |
+
 ## 真机反馈：QQ 启动即闪退（2026-09-19）
 
 首次真机试装（`e0453bb` 系列构建）反馈：进入 QQ 立即闪退，尚无崩溃日志。
