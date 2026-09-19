@@ -14,11 +14,15 @@ import sumicya.qself.util.HostInfoProvider
 import sumicya.qself.xp.ClassicHookEngine
 
 /**
- * Module entry for the classic Xposed API (Xposed / EdXposed / LSPosed 1.x).
+ * Module entry for the classic XposedBridge API (Xposed / EdXposed /
+ * LSPosed 1.x).
  *
- * v1 ships the LSPosed 10.x entry; this class is dormant until declared via
- * an `assets/xposed_init` file containing `sumicya.qself.QselfModule`.
- * Kept compiled so the classic path stays a one-line opt-in.
+ * Dormant by default: the shipped APK declares only the modern libxposed
+ * entry. Enabling this path means adding `assets/xposed_init` with
+ * `sumicya.qself.QselfModule` plus the legacy `xposedmodule` /
+ * `xposedminversion` / `xposedscope` manifest metadata — see
+ * docs/ARCHITECTURE.md. It stays compiled so the classic engine remains a
+ * documented, dependency-free fallback instead of a rewrite.
  */
 class QselfModule : IXposedHookLoadPackage {
 

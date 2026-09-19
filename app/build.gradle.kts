@@ -18,7 +18,7 @@ android {
 
     defaultConfig {
         applicationId = "sumicya.qself"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = 20001
         versionName = "2.0.0-alpha01"

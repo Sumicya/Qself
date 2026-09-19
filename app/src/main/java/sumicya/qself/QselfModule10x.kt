@@ -6,65 +6,55 @@
 package sumicya.qself
 
 import android.app.Application
-import android.os.Build
+import android.content.pm.ApplicationInfo
 import androidx.annotation.Keep
 import androidx.annotation.RequiresApi
-import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
-import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
-import io.github.libxposed.api.annotations.XposedApiExact
 import io.github.libxposed.api.annotations.XposedApiMin
 import sumicya.qself.gen.QselfFeatures
+import sumicya.qself.libxposed.LibXposedHookEngine
 import sumicya.qself.log.QLog
 import sumicya.qself.util.HostInfoProvider
-import sumicya.qself.xp.NoopHookEngine
 
 /**
- * Module entry for LSPosed 10.x (libxposed API).
+ * Module entry for the modern libxposed API (LSPosed 10.x and later).
  *
- * The framework discovers this class through `META-INF/xposed/module.prop`.
+ * The framework discovers this class through
+ * `META-INF/xposed/java_init.list` + `META-INF/xposed/module.prop`, and
+ * restricts it to `META-INF/xposed/scope.list` (declared statically, so no
+ * user-side scope setup is required).
  *
- * v1 limitation: the 10.x Java-level hooking engine lands in v1.1, so the
- * module boots with a [NoopHookEngine] — it reports diagnostics and skips
- * feature installation instead of crashing the host.
+ * The class has one constructor on purpose: the module targets API 101, so
+ * the framework always instantiates the no-argument form.
  */
 @Keep
 class QselfModule10x : XposedModule {
 
-    @XposedApiExact(100)
-    constructor(
-        base: XposedInterface,
-        param: ModuleLoadedParam,
-    ) : super(base, param)
-
-    @RequiresApi(Build.VERSION_CODES.O)
+    @RequiresApi(26)
     @XposedApiMin(101)
     constructor() : super()
 
-    @XposedApiExact(100)
+    @RequiresApi(26)
     override fun onPackageLoaded(param: PackageLoadedParam) {
         if (param.packageName in HostInfoProvider.HOST_PACKAGES) {
-            QLog.i("Qself", "10x: package loaded ${param.packageName}")
+            QLog.i("Qself", "package loaded: ${param.packageName}")
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
-    @XposedApiMin(101)
+    @RequiresApi(26)
     override fun onPackageReady(param: PackageReadyParam) {
         if (param.packageName !in HostInfoProvider.HOST_PACKAGES) {
             return
         }
         val app = currentApplication()
         if (app == null) {
-            QLog.w("Qself", "10x: no application available yet; cannot boot")
+            QLog.w("Qself", "no application available yet; cannot boot")
             return
         }
-        // PackageLoadedParam has no process name accessor; the application
-        // info carries it (falling back to the package name = main process).
-        val processName = param.applicationInfo.processName ?: param.packageName
-        QLog.i("Qself", "10x: booting for ${param.packageName} proc=$processName")
+        val processName = processName(param)
+        QLog.i("Qself", "booting ${param.packageName} proc=$processName")
         Qself.boot(
             Qself.BootParam(
                 application = app,
@@ -73,8 +63,18 @@ class QselfModule10x : XposedModule {
                 framework = FrameworkKind.LSPosed_10X,
             ),
             QselfFeatures.features,
-            NoopHookEngine("LSPosed 10.x hook engine ships in v1.1"),
+            LibXposedHookEngine(this),
         )
+    }
+
+    /**
+     * [PackageLoadedParam] has no process-name accessor of its own; the
+     * application info carries it (falling back to the package name, which is
+     * the main process).
+     */
+    private fun processName(param: PackageReadyParam): String {
+        val info: ApplicationInfo = param.applicationInfo
+        return info.processName ?: param.packageName
     }
 
     private fun currentApplication(): Application? {

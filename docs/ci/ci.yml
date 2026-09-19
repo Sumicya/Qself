@@ -87,6 +87,42 @@ jobs:
           fi
           exit "$code"
 
+      # The modern (libxposed) module contract is a set of files inside the
+      # APK; a wrong path here means "module installs but never loads", which
+      # no compiler would catch. Report the result as annotations so it can be
+      # inspected without downloading the artifact.
+      - name: Verify APK
+        if: success()
+        run: |
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          echo "apk: $APK ($(stat -c%s "$APK") bytes)"
+          unzip -l "$APK" > apk-contents.txt
+          fail=0
+          report=""
+          for entry in META-INF/xposed/module.prop META-INF/xposed/java_init.list \
+                       META-INF/xposed/scope.list lib/arm64-v8a/libqself_hook.so \
+                       lib/armeabi-v7a/libqself_hook.so; do
+            if grep -q " ${entry}$" apk-contents.txt; then
+              report="${report}OK ${entry}%0A"
+            else
+              report="${report}MISSING ${entry}%0A"
+              fail=1
+            fi
+          done
+          ENTRY=$(head -n1 META-INF/xposed/java_init.list 2>/dev/null || echo "sumicya.qself.QselfModule10x")
+          if unzip -p "$APK" classes.dex | grep -aq "L${ENTRY//.//};"; then
+            report="${report}OK entry class in dex%0A"
+          else
+            report="${report}MISSING entry class in dex%0A"
+          fi
+          echo -e "$report"
+          echo "::notice title=apk-contents::$(stat -c%s "$APK") bytes%0A${report}"
+          echo "::notice title=module.prop::$(sed -e 's/$/%0A/' tools/moduleprop/src/main/resources/META-INF/xposed/module.prop)"
+          if [ "$fail" -ne 0 ]; then
+            echo "::error title=apk-contents::module metadata missing from the APK"
+            exit 1
+          fi
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
