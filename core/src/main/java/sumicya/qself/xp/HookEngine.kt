@@ -53,7 +53,8 @@ interface HookEngine {
         fun setException(throwable: Throwable?)
     }
 
-    interface Handle {
+    /** Cancels the hook; SAM-convertible so engines can return a lambda. */
+    fun interface Handle {
         fun unhook()
     }
 

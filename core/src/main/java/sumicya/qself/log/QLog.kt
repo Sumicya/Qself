@@ -65,10 +65,11 @@ object QLog {
 
     /** Snapshot of the ring buffer, oldest first, at most [limit] lines. */
     fun snapshot(limit: Int = 512): String {
-        synchronized(lock) {
+        val lines: List<String> = synchronized(lock) {
             val list = ring.toList()
-            return if (list.size > limit) list.subList(list.size - limit, list.size) else list
-        }.joinToString("\n")
+            if (list.size > limit) list.subList(list.size - limit, list.size) else list
+        }
+        return lines.joinToString("\n")
     }
 
     fun dumpToFile(file: File) {

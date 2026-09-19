@@ -6,10 +6,14 @@
 package sumicya.qself
 
 import android.app.Application
+import android.os.Build
 import androidx.annotation.Keep
 import androidx.annotation.RequiresApi
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
+import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
+import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
+import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 import io.github.libxposed.api.annotations.XposedApiExact
 import io.github.libxposed.api.annotations.XposedApiMin
 import sumicya.qself.gen.QselfFeatures
@@ -35,18 +39,18 @@ class QselfModule10x : XposedModule {
         param: ModuleLoadedParam,
     ) : super(base, param)
 
-    @RequiresApi(26)
+    @RequiresApi(Build.VERSION_CODES.O)
     @XposedApiMin(101)
     constructor() : super()
 
     @XposedApiExact(100)
     override fun onPackageLoaded(param: PackageLoadedParam) {
         if (param.packageName in HostInfoProvider.HOST_PACKAGES) {
-            QLog.i("Qself", "10x: package loaded ${param.packageName} proc=${param.processName}")
+            QLog.i("Qself", "10x: package loaded ${param.packageName}")
         }
     }
 
-    @RequiresApi(26)
+    @RequiresApi(Build.VERSION_CODES.O)
     @XposedApiMin(101)
     override fun onPackageReady(param: PackageReadyParam) {
         if (param.packageName !in HostInfoProvider.HOST_PACKAGES) {
@@ -57,12 +61,15 @@ class QselfModule10x : XposedModule {
             QLog.w("Qself", "10x: no application available yet; cannot boot")
             return
         }
-        QLog.i("Qself", "10x: booting for ${param.packageName} proc=${param.processName}")
+        // PackageLoadedParam has no process name accessor; the application
+        // info carries it (falling back to the package name = main process).
+        val processName = param.applicationInfo.processName ?: param.packageName
+        QLog.i("Qself", "10x: booting for ${param.packageName} proc=$processName")
         Qself.boot(
             BootParam(
                 application = app,
                 packageName = param.packageName,
-                processName = param.processName,
+                processName = processName,
                 framework = FrameworkKind.LSPosed_10X,
             ),
             QselfFeatures.features,
