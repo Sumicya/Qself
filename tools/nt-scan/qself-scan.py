@@ -48,6 +48,9 @@ MAP_TYPES = {
     0x2005: "ENCODED_ARRAY_ITEM", 0x2006: "ANNOTATIONS_DIRECTORY_ITEM",
 }
 
+MAX_CLASSES_REPORTED = 80
+MAX_METHODS_REPORTED = 12
+
 PRIMITIVES = dict(V="void", Z="boolean", B="byte", S="short", C="char",
                   I="int", J="long", F="float", D="double")
 
@@ -258,7 +261,7 @@ def normalise_prefix(text):
 
 
 def scan(files, prefixes, verbose=True):
-    full, interesting, anomalies = [], [], []
+    full, per_class, anomalies = [], [], []
     matched = 0
     for position, path in enumerate(files, start=1):
         name = os.path.basename(path)
@@ -288,18 +291,18 @@ def scan(files, prefixes, verbose=True):
                 full.append("class %s  (undecodable: %s)" % (java, error))
                 continue
             full.append("class " + java)
+            class_methods = []
             for field_name, field_type, access in fields:
                 full.append("  f %s %s: %s" % (flags(access, FLAG_F), field_name,
                                                pretty(field_type)))
             for method_name, ret, params, access in methods:
                 joined = ", ".join(pretty(p) for p in params)
-                full.append("  m %s %s(%s): %s" % (flags(access, FLAG_M), method_name,
-                                                   joined, pretty(ret)))
-                low = method_name.lower()
-                if method_name == "<init>" or any(k in low for k in INTERESTING):
-                    interesting.append("%s\n    %s %s(%s): %s" % (
-                        java, flags(access, FLAG_M), method_name, joined, pretty(ret)))
-    return full, list(dict.fromkeys(interesting)), anomalies, matched
+                line = "m %s %s(%s): %s" % (flags(access, FLAG_M), method_name,
+                                            joined, pretty(ret))
+                full.append("  " + line)
+                class_methods.append(line)
+            per_class.append((java, class_methods))
+    return full, per_class, anomalies, matched
 
 
 def write_dump(full, matched, files):
@@ -371,7 +374,7 @@ def main(argv):
         return 1
 
     sys.setrecursionlimit(10000)
-    full, interesting, anomalies, matched = scan(files, prefixes)
+    full, per_class, anomalies, matched = scan(files, prefixes)
     target, lines = write_dump(full, matched, files)
 
     print("matched classes: %d   dex files: %d" % (matched, len(files)))
@@ -384,10 +387,22 @@ def main(argv):
     else:
         print("undecodable classes: 0")
     print("")
-    print("=== 候选入口方法（把这一段贴回来即可）===")
-    print("\n".join(interesting))
-    if not interesting:
-        print("(none — 试更宽的前缀，或先用 --all 看全部类名)")
+    print("=== 匹配类的方法（把这一段贴回来即可）===")
+    if not per_class:
+        print("(no class matched — 试更宽的前缀，或先用 --all 看全部类名)")
+    # Obfuscated hosts name their methods `a`, `b`, `c`: filtering by keyword
+    # would hide exactly the method that has to be hooked, so every matched
+    # class is listed. The full list stays in the dump file.
+    for java, methods in per_class[:MAX_CLASSES_REPORTED]:
+        print("class " + java)
+        for line in methods[:MAX_METHODS_REPORTED]:
+            print("    " + line)
+        if len(methods) > MAX_METHODS_REPORTED:
+            print("    # … %d more methods (见 dump 文件)" % (len(methods) - MAX_METHODS_REPORTED))
+    if len(per_class) > MAX_CLASSES_REPORTED:
+        print("# … %d more matched classes (见 dump 文件)" % (len(per_class) - MAX_CLASSES_REPORTED))
+    print("")
+    print("# 完整列表：%s" % target)
     return 0
 
 
