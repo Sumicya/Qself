@@ -54,7 +54,17 @@ object HookEngines {
             QLog.w("Qself", "native engine not ready: ${HookNative.lsplantStatus}")
             return null
         }
-        QLog.i("Qself", "hook engine: ${HookNative.lsplantStatus} (native)")
+        // A working LSPlant is necessary but not sufficient: on an ART this
+        // build was never verified against, DLL/inline hooking can corrupt
+        // execution. The Dobby self-test (hook a marker, call through the
+        // trampoline, restore) is the cheapest end-to-end proof that inline
+        // hooking works *on this device*, so it gates the native engine.
+        val selfTest = HookNative.selfTestResult
+        if (selfTest != 0) {
+            QLog.w("Qself", "native self-test failed ($selfTest); refusing the native engine")
+            return null
+        }
+        QLog.i("Qself", "hook engine: ${HookNative.lsplantStatus} (native, self-test ok)")
         return NativeHookEngine()
     }
 }

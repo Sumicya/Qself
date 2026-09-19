@@ -81,13 +81,33 @@ pac_enabled_keys: PR_PAC_APIAKEY, APIBKEY, APDAKEY, APDBKEY
 设备: OnePlus PLC110, Android 16 (BP2A.250605.015)
 ```
 
-判读：**执行流跳进了不可执行内存**，栈里有 JIT 代码与 libart JNI stub —— 典型的
-"ART 内部被 inline hook / JIT 入口点失效"特征。嫌疑排序：① LSPlant 在该 ART
-（Android 16 + PAC）上 patch 出错；② 设备上其他同样 hook ART 的模块（例如残留的
-旧模块）；③ LSPosed 自身在该 ROM 上的兼容性。
+判读：**执行流跳进了不可执行内存**，栈里有 JIT 代码与 libart JNI stub。
 
-据此的**产品级决定**：原生引擎由默认改为**可选**（`use-native` 开关），
-默认走框架引擎 —— 装上即用，不拿宿主稳定性冒险。
+**更正（同日）**：用户实测「在 LSPosed 里停用本模块 → QQ 正常启动」，
+**闪退确实是本模块造成的**（此前一次误答导致过相反的结论）。结合签名，嫌疑收敛为：
+
+1. ~~其他模块 / LSPosed 兼容性~~ —— 已排除；
+2. **原生引擎（LSPlant/Dobby）在该 ART 上把被 hook 方法的入口点改坏**：默认开启的
+   特性只有 `DisableCrashReport`（唯一 `defaultEnabled = true`），它 hook 的是 QQ
+   崩溃上报路径，而崩溃线程 `XEvent_async` 正是 QQ 的后台线程 —— 调用被 hook 方法
+   时跳进 Dobby 的 trampoline/code cache（非可执行内存）→ SIGSEGV_ACCERR；
+3. 其次是该特性 `skip()` 掉的那个"唯一 void 两参数方法"启发式选错（但这类问题通常
+   表现为 Java 异常，不会 SEGV）。
+
+据此的**产品级决定**（已实现）：
+
+- 原生引擎由默认改为**可选**（`use-native` 开关），默认走框架引擎 —— 装上即用，
+  不拿宿主稳定性冒险；
+- 即便打开 `use-native`，也要求 **Dobby 自检通过**（`selfTestResult == 0`）才启用，
+  在未验证的 ART 上直接拒绝原生引擎。
+
+二分顺序（真机，5 分钟）：
+
+| 步骤 | 命令 | 若是 | 若否 |
+|---|---|---|---|
+| 1 | 什么都不做，装新包 | 修好了（原生引擎已默认关闭） | 进第 2 步 |
+| 2 | `touch $Q/safe-mode` | 崩在我们的钩子（原生或 Java），进第 3 步 | 崩在框架注入/宿主，与本模块无关 |
+| 3 | 删 `safe-mode`，`touch $Q/use-native` | 崩在原生引擎（LSPlant/Dobby/ART） | 崩在 Java 钩子逻辑（首查 `DisableCrashReport`） |
 
 **定位闪退需要的日志**（Termux + root，QQ 崩溃后立刻执行）：
 
