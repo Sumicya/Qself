@@ -16,6 +16,7 @@ v1 目标：**少而稳**。每个功能都是从旧实现移植并重构到
 | `ui.remove_camera_button` | 屏蔽标题栏相机按钮 | 界面 | 按版本选择混淆方法名；9.0.8+ / TIM 不可用 |
 | `friend.open_chat_history` | 打开好友聊天记录 | 好友 | UI 动作：输入 uin 启动 ChatHistoryActivity（`setClassName`，旧版 QQ）；NT/uid 路径 v1.1 |
 | `qzone.hide_title_bar_entrance` | 隐藏空间动态"此刻" | 空间 | 主路径（QZMTitleBarEntranceManager）+ 横幅路径（FeedxTopEntrance）；beta |
+| `ui.inqq_entry` | QQ 内设置入口 | 界面 | 上游做法：把 Qself 作为一行插进 QQ 自己的设置列表（hook provider 的 `List getItemProcessList(Context)`，行本身从 live list 现场发现）；provider 改名时由 DexKit 式运行时发现补上 |
 
 ## 推迟（v1.1 候选，按优先级）
 
@@ -29,7 +30,8 @@ v1 目标：**少而稳**。每个功能都是从旧实现移植并重构到
 | 图片自定义摘要（ImageCustomSummary） | 依赖消息数据对象深度反射 |
 | 侧滑栏精简（SimplifyQQSettingMe） | 版本分支多 |
 | 多开头像（MultiForwardAvatarHook） | 413 行复杂逻辑 |
-| DexKit 类名发现 | v1 依赖 FQCN 候选表；v1.1 恢复 DexKit 以跟随 QQ 改名 |
+| ~~DexKit 类名发现~~ | **已落地（v1.1 提前）**：`HostDex` + `DexReader`（已移入 core）在宿主进程内直接读宿主 APK，按**方法形状**找类并把结果缓存到 `files/qself/hostdex.txt`。设置入口的 provider 是第一个使用者 |
+| 设置入口的 pre-NT 路径（`QQSettingSettingActivity/Fragment`） | 目标是 NT QQ（用户明确要求不做旧版），上游那两条类名在 NT 上不存在，故不移植 |
 
 ## 移植约定
 
@@ -38,3 +40,5 @@ v1 目标：**少而稳**。每个功能都是从旧实现移植并重构到
   装钩子。钩子 handler 内**不允许**再做反射。
 - 版本分支用 `QQVersion` 常量表（`core/util/QQVersion.kt`，与旧表同步）。
 - 功能失败（类缺失等）只影响自己：`Qself.featureErrors` 记录，UI 诊断可见。
+- 会被 QQ 混淆/改名的类：先用 FQCN 候选，候选全miss后走 `HostDex` 运行时发现
+  （按方法形状验证，命中后写入缓存）。**不把"猜的类名"直接写进钩子。**

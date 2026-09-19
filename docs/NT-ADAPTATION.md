@@ -151,8 +151,13 @@ grep -a -o 'Lcom/tencent/qqnt/[A-Za-z0-9_/$]*;' classes*.dex \
   照这个做：候选只有 provider 的类名（`setting.main.NewSettingConfigProvider` /
   `MainSettingConfigProvider` / 混淆后的 `setting.main.b`），**行本身（item 类、构造器、点击
   setter、分组包装器）全部从 QQ 刚构建出来的那个 list 里现场发现**，所以没有任何一个"猜"的
-  类名会进到钩子里。候选 provider 都找不到时，才退回 `callActivityOnResume` + 页名特征匹配的
-  悬浮按钮（日志会写明是哪一条生效），保证任何版本都进得去。
+  类名会进到钩子里。
+- **候选全 miss 时走运行时发现**（上游的 DexKit 那一步，见 ARCHITECTURE.md「运行时类名发现」）：
+  在宿主进程内读宿主 APK，按"有 `Collection (Context)` 方法"这个**形状**在
+  `Lcom/tencent/mobileqq/setting/` 里找 provider，命中后反射验证再 hook，并写入
+  `files/qself/hostdex.txt` 缓存。这样 QQ 把 provider 改名/混淆也不会丢入口。
+- **最后才退悬浮按钮**：`callActivityOnResume` + 页名特征匹配（日志写明哪条生效）。
+  它是兜底，不是主路径——主路径是 QQ 设置列表里的那一行。
 - **点击后开什么**：开 Qself 自己的设置页（上游也是开自己的设置页），不是自制的浮动对话框。
 - **设置怎么生效**：设置页写入宿主 `files/qself/settings.json`（root 桥，已验证可用），写成功
   后由模块执行 `am force-stop` 重启 QQ——不再要求用户自己重启。

@@ -10,6 +10,7 @@ import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import java.util.concurrent.atomic.AtomicBoolean
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
@@ -55,10 +56,31 @@ class QselfModule10x : XposedModule {
     @XposedApiMin(101)
     constructor() : super()
 
+    /** The engine the boot trigger is armed with; reused for the features. */
+    private var bootEngine: HookEngine? = null
+
+    /** True once the triggers are armed — `onPackageLoaded` and `onPackageReady`
+     *  both call [armBoot], and only the first one may install hooks. */
+    private val bootArmed = AtomicBoolean(false)
+
     override fun onPackageLoaded(param: PackageLoadedParam) {
-        if (param.packageName in HostInfoProvider.HOST_PACKAGES) {
-            QLog.i("Qself", "package loaded: ${param.packageName}")
+        if (param.packageName !in HostInfoProvider.HOST_PACKAGES) {
+            return
         }
+        QLog.i("Qself", "package loaded: ${param.packageName}")
+        // The earliest callback there is: documented to run *before* the host's
+        // AppComponentFactory is instantiated, i.e. before the Application
+        // exists. Arming here is the whole difference between a module that
+        // boots and one that armed its trigger after the fact — measured on the
+        // device: onPackageReady arrived 0.8 s after this, when the Application
+        // was already created, so a trigger armed there never fired.
+        armBoot(
+            packageName = param.packageName,
+            processName = param.packageName,
+            classLoader = runCatching { param.defaultClassLoader }.getOrNull(),
+            factory = null,
+            factoryClass = factoryClassName(param.applicationInfo),
+        )
     }
 
     override fun onPackageReady(param: PackageReadyParam) {
@@ -79,8 +101,35 @@ class QselfModule10x : XposedModule {
         }
 
         val processName = processName(param)
+        armBoot(
+            packageName = param.packageName,
+            processName = processName,
+            classLoader = runCatching { param.classLoader }.getOrNull(),
+            factory = appComponentFactory(param),
+            factoryClass = factoryClassName(param.applicationInfo),
+        )
+        if (bootEngine == null && !Qself.isBooted) {
+            QLog.w("Qself", "no way to reach the Application in this process; module idle")
+        }
+    }
+
+    /**
+     * Arm the Application triggers once. Called from both lifecycle callbacks:
+     * whichever comes first wins, the other is a no-op ([bootArmed]).
+     */
+    private fun armBoot(
+        packageName: String,
+        processName: String,
+        classLoader: ClassLoader?,
+        factory: Any?,
+        factoryClass: String?,
+    ) {
+        if (!bootArmed.compareAndSet(false, true)) {
+            return
+        }
         val frameworkEngine = LibXposedHookEngine(this)
         val trigger: HookEngine = frameworkEngine
+        bootEngine = trigger
         QLog.i("Qself", "boot trigger engine: $trigger")
 
         val onCreated: (Application) -> Unit = { application ->
@@ -88,28 +137,47 @@ class QselfModule10x : XposedModule {
             // message is posted while `handleBindApplication` is still
             // running, so it is processed before the first Activity launch.
             Handler(Looper.getMainLooper()).post {
-                bootHost(application, param.packageName, processName)
+                bootHost(application, packageName, processName)
             }
         }
 
-        var armed = BootHook.install(trigger, appComponentFactory(param), onCreated)
-        if (!armed) {
-            // No framework hooking: fall back to our own engine as the trigger.
-            HookEngines.nativeOrNull()?.let { native ->
-                armed = BootHook.install(native, appComponentFactory(param), onCreated)
+        if (BootHook.install(trigger, factory, factoryClass, classLoader, onCreated)) {
+            return
+        }
+        // No framework hooking: fall back to our own engine as the trigger.
+        HookEngines.nativeOrNull()?.let { native ->
+            if (BootHook.install(native, factory, factoryClass, classLoader, onCreated)) {
+                return
             }
         }
+        // Everything else failed: the Application may already exist (a late
+        // lifecycle callback). Qself.boot() is idempotent, so trying is safe.
+        initialApplication()?.let { application ->
+            bootHost(application, packageName, processName)
+        }
+    }
 
-        if (!armed) {
-            // A framework may deliver this callback late (Application already
-            // created). Qself.boot() is idempotent, so trying both is safe.
-            initialApplication()?.let { application ->
-                bootHost(application, param.packageName, processName)
-            }
-        }
-        if (!armed && !Qself.isBooted) {
-            QLog.w("Qself", "no way to reach the Application in this process; module idle")
-        }
+    /** `ApplicationInfo#appComponentFactory`, the class name of the host's factory. */
+    private fun factoryClassName(info: ApplicationInfo?): String? = try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info?.appComponentFactory else null
+    } catch (t: Throwable) {
+        null
+    }
+
+    /**
+     * The real process name (`com.tencent.mobileqq:MSF`, `:qzone`, ...).
+     *
+     * Neither lifecycle param carries it, and the boot trigger can fire from
+     * either callback, so it is read from the kernel instead of guessed: a
+     * process is exactly `/proc/self/cmdline`. Guessing "main process" here
+     * would install MAIN-only features inside subprocesses.
+     */
+    private fun selfProcessName(): String? = try {
+        java.io.File("/proc/self/cmdline").readBytes()
+            .let { bytes -> String(bytes, Charsets.UTF_8).trimEnd('\u0000') }
+            .ifEmpty { null }
+    } catch (t: Throwable) {
+        null
     }
 
     /** The heavy part, off the hook callback and off the bind path. */
@@ -117,14 +185,15 @@ class QselfModule10x : XposedModule {
         if (Qself.isBooted) {
             return
         }
+        val actualProcess = selfProcessName() ?: processName
         val dataDir = application.dataDir?.absolutePath
         val useNative = BootFlags.useNative(dataDir)
         val noFeatures = BootFlags.noFeatures(dataDir)
-        val engine = HookEngines.forModernFramework(this, preferNative = useNative)
+        val engine = bootEngine ?: HookEngines.forModernFramework(this, preferNative = useNative)
         val features = if (noFeatures) emptyList() else QselfFeatures.features
         QLog.i(
             "Qself",
-            "booting $packageName proc=$processName engine=$engine " +
+            "booting $packageName proc=$actualProcess engine=$engine " +
                 "(native ${if (useNative) "opted in" else "off"}, " +
                 "features ${if (noFeatures) "suppressed by flag" else "${features.size}"})",
         )
@@ -133,7 +202,7 @@ class QselfModule10x : XposedModule {
                 Qself.BootParam(
                     application = application,
                     packageName = packageName,
-                    processName = processName,
+                    processName = actualProcess,
                     framework = FrameworkKind.LSPosed_10X,
                 ),
                 features,

@@ -6,6 +6,8 @@
 package sumicya.qself.ui
 
 import android.content.Context
+import sumicya.qself.dex.DexClass
+import sumicya.qself.dex.DexReader
 import sumicya.qself.log.QLog
 import java.io.InputStream
 import java.util.concurrent.TimeUnit

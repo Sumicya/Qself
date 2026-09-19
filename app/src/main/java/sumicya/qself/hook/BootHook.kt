@@ -67,6 +67,11 @@ object BootHook {
          * the framework will use to build the Application on Android 10+.
          */
         appComponentFactory: Any? = null,
+        /** `ApplicationInfo#appComponentFactory`: the class name, available
+         *  *before* the factory instance exists (i.e. at package-loaded time). */
+        appComponentFactoryClass: String? = null,
+        /** The classloader the factory class name is resolved against. */
+        classLoader: ClassLoader? = null,
         onApplication: (Application) -> Unit,
     ): Boolean {
         val fired = AtomicBoolean(false)
@@ -161,7 +166,7 @@ object BootHook {
         // 3. The factory that actually builds it (Android 10+).
         arm(
             "AppComponentFactory#instantiateApplication",
-            factoryMethod(appComponentFactory),
+            factoryMethod(appComponentFactory, appComponentFactoryClass, classLoader),
             onAfter = { param ->
                 val application = param.result as? Application
                 if (application != null) {
@@ -213,7 +218,8 @@ object BootHook {
         return armed.isNotEmpty()
     }
 
-    private fun instrument(name: String, vararg paramTypes: Class<*>): Method? = try {
+    /** `Instrumentation#<name>(<paramTypes>)`, or null when it does not exist. */
+    fun instrument(name: String, vararg paramTypes: Class<*>): Method? = try {
         Instrumentation::class.java.getDeclaredMethod(name, *paramTypes)
     } catch (t: Throwable) {
         null
@@ -223,9 +229,12 @@ object BootHook {
      * The factory's own `instantiateApplication`, else the framework base class
      * — a host subclass that overrides it is hooked on the subclass instead.
      */
-    private fun factoryMethod(factory: Any?): Method? {
-        val classes = ArrayList<Class<*>>(2)
+    private fun factoryMethod(factory: Any?, factoryClassName: String?, classLoader: ClassLoader?): Method? {
+        val classes = ArrayList<Class<*>>(3)
         factory?.let { classes += it.javaClass }
+        factoryClassName?.let { name ->
+            runCatching { classes += Class.forName(name, false, classLoader) }
+        }
         runCatching { classes += Class.forName("android.app.AppComponentFactory") }
         for (cls in classes) {
             val method = runCatching {

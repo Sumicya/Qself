@@ -55,10 +55,16 @@ boot；而 `AppGlobals` / `ActivityThread.currentApplication()` 这类取 Applic
 老办法既是隐藏 API（Android 9+ 反射会被拦），时机也太早。于是 Qself 在宿主创建
 Application 的瞬间把它接过来——等同经典 `handleLoadPackage` 的时机。
 
+**什么时候装钩子：`onPackageLoaded`，不是 `onPackageReady`**。真机日志里两者相差
+842 ms，而 `onPackageReady` 到达时宿主 Application 已经创建（`LoadedApk` 的
+classloader 是宿主自己请求的，框架只能在那之后回调）。`onPackageLoaded` 的契约
+写得很清楚：默认 classloader 就绪、**自定义 AppComponentFactory 尚未实例化**——
+这正是启动触发需要的时刻，所以 boot 在它里面装钩子（`onPackageReady` 再调用一次
+是幂等的空操作）。
+
 **为什么是 5 个触发点而不是 1 个**：只用 `Instrumentation#callApplicationOnCreate`
 时，真机日志是"三次进程启动都停在 `boot hook armed on …`、之后一行都没有"——钩子
-装上但方法再没进我们的 handler（框架可以很晚才派发 `onPackageReady`，此时该调用
-已经发生；宿主也可能有自己覆写的 Instrumentation）。现在同时装
+装上但方法再没进我们的 handler（钩子装得太晚，或宿主有自己覆写的 Instrumentation）。现在同时装
 `callApplicationOnCreate`、两个 `newApplication` 重载（after，只读 result）、
 `AppComponentFactory#instantiateApplication`（Android 10+ 真正创建 Application 的
 地方，用 `onPackageReady` 交过来的 factory 实例）、`Application#onCreate`，外加
@@ -117,6 +123,22 @@ object AntiUpdate : SwitchFeature() {          // 或 ActionFeature
 `#newApplication` / `#callActivityOnCreate`、`Application#onCreate`）；
 `QselfModule10x.initialApplication()` 是取 Application 的兜底（隐藏 API，可能失败，
 失败即忽略）。热路径（hook 回调、开关读取、UI）零反射。
+
+## 运行时类名发现（HostDex）
+
+QQ 把类改名/混淆时，写死的 FQCN 候选表就失效（`com.tencent.mobileqq.setting.main.b`
+就是 9.2.30+ 的设置 provider）。上游的解法是 DexKit：**去 dex 里找类，而不是相信
+名字**。Qself 用已有的 `DexReader`（现在在 core）做同一件事：
+
+- `HostDex.find(context, fragments, validate)`：宿主进程内直接读宿主 APK
+  （`applicationInfo.sourceDir`，**不需要 root/su**），按类名片段过滤，
+  在**类内部方法签名层面**逐类校验（单次遍历，不是每类重扫 class_defs）；
+- 校验由调用方给：例如设置 provider 的判据是"有 `Collection (Context)` 方法"——
+  这个形状扛得住改名；
+- 命中写进宿主 `files/qself/hostdex.txt` 缓存，下个版本/下次启动先试缓存；
+- 扫描很重（几百 MB dex），所以只在"廉价候选全 miss"时、后台线程里跑一次。
+
+第一个使用者是 QQ 内设置入口（`ui.inqq_entry`）。
 
 ## 跨进程配置（SettingsBridge）
 

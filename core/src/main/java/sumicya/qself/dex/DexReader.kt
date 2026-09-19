@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-package sumicya.qself.ui
+package sumicya.qself.dex
 
 import java.io.ByteArrayOutputStream
 
@@ -76,6 +76,32 @@ class DexReader(private val bytes: ByteArray) {
         for (i in 0 until classDefsSize) {
             val descriptor = typeDescriptor(u32(classDefsOff + i * 32)) ?: continue
             if (prefixes.any { descriptor.startsWith(it) }) out.add(descriptor)
+        }
+        return out
+    }
+
+    /**
+     * Decode every class whose descriptor passes [filter] in a **single pass**.
+     *
+     * [classDetail] rescans the whole class_defs table per call, which is fine
+     * for one class and quadratic in a discovery scan; this is the entry point
+     * for "find the class that behaves like X" searches (see
+     * [sumicya.qself.host.HostDex]).
+     */
+    fun classDetails(filter: (String) -> Boolean): List<DexClass> {
+        val out = ArrayList<DexClass>()
+        for (i in 0 until classDefsSize) {
+            val base = classDefsOff + i * 32
+            val descriptor = typeDescriptor(u32(base)) ?: continue
+            if (!filter(descriptor)) continue
+            val classDataOff = u32(base + 24)
+            out.add(
+                if (classDataOff <= 0 || classDataOff >= bytes.size) {
+                    DexClass(descriptor, emptyList(), emptyList())
+                } else {
+                    parseClassData(descriptor, classDataOff)
+                },
+            )
         }
         return out
     }

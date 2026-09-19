@@ -26,7 +26,9 @@ import sumicya.qself.ProcessKind
 import sumicya.qself.annotation.QselfFeature
 import sumicya.qself.feature.FeatureCategory
 import sumicya.qself.feature.FeatureContext
+import sumicya.qself.dex.DexClass
 import sumicya.qself.feature.SwitchFeature
+import sumicya.qself.host.HostDex
 import sumicya.qself.log.QLog
 import sumicya.qself.util.HostGeneration
 import sumicya.qself.xp.Hooks
@@ -160,21 +162,111 @@ private object QselfEntryRow {
         "as3.i",
     )
 
+    /** Cache key for the dex-discovered provider (see [HostDex]). */
+    private const val PURPOSE = "settings.provider"
+
+    /**
+     * Where a settings-list provider lives. Used as a *filter* for the dex
+     * search, never as a name: the class that matters is identified by its
+     * method shape (`(Context) -> List`), which survives renames — the
+     * obfuscated `...setting.main.b` of 9.2.30+ is found exactly this way.
+     */
+    private val FRAGMENTS = listOf("Lcom/tencent/mobileqq/setting/")
+
     /** Set once a row was really inserted; the floating chip steps aside then. */
     val injected = AtomicBoolean(false)
 
     private val reportedFailure = AtomicBoolean(false)
 
+    private val discoveryStarted = AtomicBoolean(false)
+
     fun inject(feature: InQqEntry, ctx: FeatureContext): Boolean {
-        val provider = PROVIDERS.firstNotNullOfOrNull { ctx.host.resolve(it) }
-        if (provider == null) {
-            QLog.w(TAG, "no settings provider found (tried ${PROVIDERS.joinToString(", ")})")
-            return false
+        // 1. the names that are known to be stable across most NT builds,
+        // 2. the name a previous boot discovered from the dex,
+        // 3. a background dex search (upstream's DexKit step) for anything else.
+        val known = PROVIDERS.firstNotNullOfOrNull { name ->
+            ctx.host.resolve(name)?.takeIf(::isProvider)
         }
-        val method = provider.declaredMethods.firstOrNull(::isItemListMethod)
+        if (known != null) {
+            hookProvider(feature, ctx, known)
+            return true
+        }
+        val cached = HostDex.recall(ctx.context, PURPOSE)
+            ?.let { ctx.host.resolve(HostDex.toFqcn(it)) }
+            ?.takeIf(::isProvider)
+        if (cached != null) {
+            QLog.i(TAG, "settings provider from the discovery cache: ${cached.name}")
+            hookProvider(feature, ctx, cached)
+            return true
+        }
+        startDiscovery(feature, ctx)
+        return false
+    }
+
+    /**
+     * Upstream's DexKit step, with the dex reader Qself already ships: read the
+     * host APK in the *host's own* process (no root, no `su`), keep the classes
+     * shaped like a settings provider, validate through reflection, then hook
+     * the one that really has `List getItemProcessList(Context)`.
+     *
+     * Runs off the boot thread: the scan touches every class in every dex, and
+     * the settings row only has to exist by the time the user opens settings.
+     */
+    private fun startDiscovery(feature: InQqEntry, ctx: FeatureContext) {
+        if (!discoveryStarted.compareAndSet(false, true)) return
+        QLog.w(
+            TAG,
+            "no known settings provider; searching the host dex " +
+                "(${PROVIDERS.joinToString(", ")} all missed)",
+        )
+        Thread({ discoverAndHook(feature, ctx) }, "qself-hostdex")
+            .apply { isDaemon = true }
+            .start()
+    }
+
+    /** The background half of [startDiscovery]; a named function so failures are
+     *  contained and the log names the class it settled on. */
+    private fun discoverAndHook(feature: InQqEntry, ctx: FeatureContext) {
+        try {
+            val descriptor = HostDex.discover(ctx.context, PURPOSE, FRAGMENTS, ::looksLikeProvider)
+            if (descriptor == null) {
+                QLog.w(TAG, "dex search found no settings provider; the chip stays the entry")
+                return
+            }
+            val cls = ctx.host.resolve(HostDex.toFqcn(descriptor))
+            if (cls == null || !isProvider(cls)) {
+                QLog.w(TAG, "$descriptor does not validate as a provider; ignored")
+                return
+            }
+            QLog.i(TAG, "settings provider discovered from the dex: $descriptor")
+            hookProvider(feature, ctx, cls)
+        } catch (t: Throwable) {
+            QLog.w(TAG, "could not hook the discovered provider", t)
+        }
+    }
+
+    /** A settings-list provider: `Collection (Context)` under any name. */
+    private fun isProvider(cls: Class<*>): Boolean =
+        providerMethod(cls) != null
+
+    /** The dex-level pre-filter: `(…Context…): …List` somewhere in the class. */
+    private fun looksLikeProvider(cls: DexClass): Boolean =
+        cls.methods.any { member ->
+            val signature = member.signature
+            signature.contains("android.content.Context") &&
+                (signature.contains("java.util.List") ||
+                    signature.contains("java.util.ArrayList") ||
+                    signature.contains("java.util.Collection"))
+        }
+
+    private fun providerMethod(cls: Class<*>): Method? =
+        cls.declaredMethods.firstOrNull(::isItemListMethod)
+
+    private fun hookProvider(feature: InQqEntry, ctx: FeatureContext, provider: Class<*>) {
+        val method = providerMethod(provider)
         if (method == null) {
-            QLog.w(TAG, "${provider.name} has no List getItemProcessList(Context)")
-            return false
+            QLog.w(TAG, "${provider.name} has no Collection (Context) method")
+            return
         }
         val baseClass = ITEM_PARENTS.firstNotNullOfOrNull { ctx.host.resolve(it)?.superclass }
         if (baseClass == null) {
@@ -195,7 +287,6 @@ private object QselfEntryRow {
             }
         }
         QLog.i(TAG, "settings provider hooked: ${provider.name}#${method.name}")
-        return true
     }
 
     /** `List getItemProcessList(Context)`, under whatever name QQ gave it. */
