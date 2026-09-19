@@ -34,6 +34,9 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
 | **35416221194** | `c63c1e5` | ✅ | 现代 API 入口 + `LibXposedHookEngine` 打包成功 |
 | **35416420537** | `4fc809a` | ✅ | CI 增加 APK 自检（入口文件 / dex 入口类 / 两个 ABI 的 .so / 不打包框架 stub） |
 | **35416632275** | `13371f0` | ✅ | settings 桥重写（su 读取、非阻塞写入、10s 超时）后仍全绿 |
+| 35417217679 | `c7cc2df` | ❌ | LSPlant 的 C++23 模块目标被 CMake 拒绝：AGP 自带 Ninja 1.10.2 < 1.11 |
+| 35417497954 | `681dddb` | ❌ | Ninja 覆盖生效（LSPlant 132 个编译步骤全部通过），只剩 `duplicate symbol qself::art::Status()` |
+| **35417673671** | `439a1ef` | ✅ | **LSPlant 从源码编译、链接进 `libqself_hook.so`，APK 10.3 → 14.5 MB** |
 
 ## 已验证 / 未验证
 
@@ -47,7 +50,12 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
   （脚本比对过的结论，见提交说明）。
 - APK 元数据自检（workflow 的 *Verify APK* 步骤，结果以注解回传）：
   `META-INF/xposed/{module.prop,java_init.list,scope.list}`、两个 ABI 的
-  `libqself_hook.so`、dex 中的入口类。
+  `libqself_hook.so`、dex 中的入口类、以及"没有把框架 stub 打进包"。
+  注：入口类那一项在旧版检查里是假阴性（只扫了 `classes.dex`），
+  `docs/ci/verify-apk.sh` 已修并在合成 APK 上跑通两种结局（绿 / 缺文件退 1）。
+- C++：LSPlant 的 C++23 模块目标（`lsplant_static`、`dex_builder_static`）
+  与 Dobby 一起在 NDK r29 + CMake 3.31.0 + Ninja 1.11（系统包）下编译链接，
+  arm64-v8a 与 armeabi-v7a 均通过。
 
 **未验证（必须在真机确认）**：
 
@@ -57,6 +65,9 @@ gh api repos/Sumicya/Qself/check-runs/$JOB/annotations --paginate
 - 设置界面的 `su` 桥在真实 root 环境下的读写。
 - 各 QQ 版本上混淆类/方法名命中的比例（`docs/FEATURES.md` 的移植约定里有版本分支）。
 - `su` 桥首次授权的交互（Magisk/KernelSU 弹窗）与实际读写结果。
+- **native 引擎在真机上的表现**：libart.so 能否被 mmap（SELinux）、符号数是否
+  合理、`lsplant::Init` 是否成功、Dobby 能否改写 ART 的代码页；
+  设置页「引擎自检」的 `java=` 就是这一串的结论（0 = 端到端通过）。
 
 真机验证步骤见 README「使用方法」；诊断信息（引擎版本、自检结果、共享配置状态）
 直接在设置页首行显示，出问题时先看那里和 `QLog`（设置 → 日志）。

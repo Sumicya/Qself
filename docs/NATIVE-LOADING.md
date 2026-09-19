@@ -10,22 +10,25 @@
 - 所有 Java 特性经 `HookEngine` 抽象隔离，替换引擎不动特性代码。
 - LSPlant 子模块已登记，但 v1 不参与编译。
 
-## 阶段 1（v1.1）：把 Java 引擎做厚
+## 阶段 1（已完成）：两套 Java 引擎
 
-- `LibXposedHookEngine` 已完成（`hook()` → `HookBuilder.setPriority/
-  setExceptionMode` → `Chain.proceed(新参数)`），剩余的是补齐参数改写与
-  异常语义的回归测试。
+- `LibXposedHookEngine`：`hook()` → `HookBuilder.setPriority/setExceptionMode`
+  → `Chain.proceed(新参数)`，参数改写与异常语义都已实现。
+- `NativeHookEngine`（阶段 2 的主体）已完成，见下。
 - 在 LSPosed 1.x / 经典 Xposed 环境声明 `QselfModule`（`xposed_init`），
   复用已实现的 `ClassicHookEngine`。
 
-## 阶段 2：native 级特性 + LSPlant
+## 阶段 2（引擎已完成）：LSPlant 原生 Java hook
 
-- 接入 LSPlant：实现 libart.so 符号解析器（需同时支持 .dynsym 与 .symtab），
-  用 Dobby 的 `DobbyHook` 作为 `InitInfo.inline_hooker`，初始化后即可 hook ART
-  Java 方法 → 这条路径是摆脱 Xposed 框架的关键一步。
-- 需要 PLT 级拦截时，把 Dobby 的 `builtin-plugin/ImportTableReplace`
-  （目前只在 Darwin 编译）接进 Android 源文件列表，再经 JNI 暴露。
-- 每个 native 特性自带开关，走同一套 `SettingsBridge`。
+- ✅ libart.so 符号解析器（`.dynsym` + `.symtab`，ELF32/ELF64 双架构）：
+  `native/src/main/cpp/art/art_symbols.*`。
+- ✅ `lsplant::Init` 接入，Dobby 作为 inline hooker：`art/lsplant_bridge.*`。
+- ✅ `NativeHookEngine` + `HookEngines` 引擎选择 + 真机可见的自检
+  （`NativeJavaSelfTest`）。构建侧需要 Ninja ≥ 1.11（LSPlant 的 C++23 模块
+  目标），见 `native/build.gradle.kts` 的 `qself.ninja.path`。
+- 待办：真正的 native 特性（不经过 ART Java 层），例如 libc 层拦截；
+  需要 PLT 级拦截时再把 Dobby 的 `builtin-plugin/ImportTableReplace`
+  （目前只在 Darwin 编译）接进 Android 源文件列表。
 
 ## 阶段 3：纯 native 注入（摆脱框架）
 

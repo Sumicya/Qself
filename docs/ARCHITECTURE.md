@@ -103,18 +103,48 @@ object AntiUpdate : SwitchFeature() {          // 或 ActionFeature
 | Frida | v1 移除 loader，见 `NATIVE-LOADING.md` 路线图 |
 | 纯 native 注入 | 路线图最后一站 |
 
-## 原生引擎（原生化 ③）
+## 原生引擎（原生化 ①③）
 
-`native/` 打包 `libqself_hook.so`（v1 = Dobby，静态链接进同一 .so）：
+`native/` 打包 `libqself_hook.so`，两套引擎共用同一个 `.so`：
 
-- `HookNative.init()` / `DobbyGetVersion()`：引擎初始化与版本，设置页「诊断」可见。
-- `selfTestResult`：用 DobbyHook 钩自己的 C 函数 → 验证替换体与 trampoline 都工作
-  → `DobbyDestroy` 还原 → 再验证恢复原状；0 表示端到端通过。
-- v1 **不提供** PLT/import-table 替换：Dobby 的 `DobbyImportTableReplace` 只在
-  Darwin 上编译（其实现没有接入 Android 源文件列表），链接会直接失败。需要该能力
-  时在 v1.1 自行接 `builtin-plugin/ImportTableReplace`。
-- **LSPlant（ART Java 方法 hook）在 v1.1 接入**：它需要通过 `InitInfo` 注入
-  libart.so 符号解析器，属于独立工作量，见 `NATIVE-LOADING.md`。
+**A. Dobby（inline hook）** — 任意函数地址的原生钩子 + 自检：
+`HookNative.selfTestResult` 用 DobbyHook 钩自己的 C 函数 → 验证替换体与
+trampoline 都工作 → `DobbyDestroy` 还原 → 再验证恢复原状；0 表示端到端通过。
+
+**B. LSPlant（ART Java 方法 hook，阶段 2 已完成）** — 不需要任何框架 API
+即可 hook Java 方法/构造器：
+
+```
+features ──► HookEngine（core 抽象）
+                 ├── NativeHookEngine ──► LSPlant ──► ART
+                 │        └── Dobby（inline hooker）
+                 │        └── art/art_symbols（libart.so 符号解析器）
+                 └── LibXposedHookEngine（框架回退）
+```
+
+- `art/art_symbols.{h,cpp}`：`dl_iterate_phdr` 找到 libart.so → `mmap` 其文件
+  → 解析 ELF（arm64 用 ELF64、armv7 用 ELF32）→ 同时索引 **.dynsym 与
+  .symtab**（ART 内部符号不经动态链接器导出，`dlsym` 只能兜底）。所有读取都
+  经过边界检查，索引只在首次使用时构建一次，键直接指向映射内容故不需要拷贝。
+  状态串（`ok: N symbols (dynsym …, symtab …)`）显示在设置页诊断行。
+- `art/lsplant_bridge.{h,cpp}`：`lsplant::Init` 的 `InitInfo` 用
+  `DobbyHook`/`DobbyDestroy` 作为 inline hooker 对，符号解析器即上面那个；
+  `LsplantInit` 只执行一次，失败不致命。
+- `NativeHookEngine`（app）：把 LSPlant 适配到 `HookEngine`。LSPlant 会把
+  接收者作为 `args[0]` 传给回调（静态方法没有），因此回调里先把它拆出来，
+  特性的 handler 只看到参数；参数被 in-place 修改时用新数组调用 backup；
+  `InvocationTargetException` 会被解包，宿主看到的是原始异常。构造器同样
+  支持（backup 按 `Method` 调用在正在初始化的实例上）。
+- **引擎选择**：`HookEngines` 优先用 native，LSPlant 起不来（ABI 不支持、
+  libart 符号缺失、`lsplant::Init` 失败）时回退框架引擎——降级而不是罢工。
+- 设置页「引擎自检」里 `java=` 是 `NativeJavaSelfTest` 的结果：它用 LSPlant
+  hook 一个模块自有的探测类，检查替换体生效、unhook 后原方法恢复。
+
+```
+诊断行示例
+Native 引擎：<dobby 版本> / ready / libart ok: 58xxx symbols (dynsym …, symtab …)
+引擎自检：dobby=0 java=0 (ok)
+```
 
 ## UI（原生化 ② + 现代化）
 

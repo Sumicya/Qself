@@ -21,7 +21,9 @@ Qself 把旧 QAuxiliary 分支的屎山一次铲平：
 - **自由化**：代码 **GPL-3.0-or-later**（旧 EULA 作废）；运行时不绑定单一框架
   （LSPosed 10.x 入口 + 经典 API 引擎 + native 引擎，见 `docs/NATIVE-LOADING.md`）。
 - **原生化**：纯 Android 原生 UI 组件（无 WebView、无第三方 UI 库）；
-  Dobby 原生 hook 引擎随包分发并自检（LSPlant 的 ART 层接入见 v1.1 路线图）。
+  随包分发 Dobby（inline hook）+ LSPlant（ART Java hook）原生引擎 —— 进程里
+  **优先用原生引擎装钩子**，libart.so 符号由自研解析器提供，框架只当加载器；
+  引擎不可用时自动回退到框架的 Java 引擎。
 
 ## 使用方法
 
@@ -55,6 +57,7 @@ JDK 21 + Android SDK（platform 37, cmake, ndk）
 - 架构说明：[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - v1 功能清单与推迟项：[`docs/FEATURES.md`](docs/FEATURES.md)
 - 加载方式路线图（native 注入）：[`docs/NATIVE-LOADING.md`](docs/NATIVE-LOADING.md)
+- 诊断：设置页首行显示 native 引擎版本、libart 符号数、两项自检结果
 - 构建验证记录（含 CI 运行历史与"已验证/未验证"清单）：[`docs/VALIDATION.md`](docs/VALIDATION.md)
 - CI：`bash docs/ci/bootstrap.sh`（把 `docs/ci/ci.yml` 同步到 `.github/workflows/`）
 
