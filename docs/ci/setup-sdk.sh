@@ -15,4 +15,10 @@ echo -n 24333f8a63b6825ea9c5514f83c2829b004d1fee > "$SDK/licenses/android-sdk-li
 yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
 
 "$SDKMANAGER" "ndk;29.0.13599879" "cmake;3.31.0"
+
+# LSPlant's C++23 module targets need Ninja >= 1.11; the Android CMake package
+# still bundles 1.10.2, so the build is pointed at the distro's Ninja through
+# the override that native/build.gradle.kts reads.
+sudo apt-get install -y --no-install-recommends ninja-build >/dev/null
 echo "sdk.dir=$SDK" > local.properties
+echo "qself.ninja.path=$(command -v ninja || echo /usr/bin/ninja)" >> local.properties

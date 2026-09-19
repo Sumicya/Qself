@@ -8,6 +8,36 @@ plugins {
     alias(libs.plugins.android.library)
 }
 
+/*
+ * LSPlant is compiled from source and its C++23 module targets need Ninja
+ * >= 1.11, while the Ninja bundled with the Android CMake package is 1.10.2.
+ * Point the build at a newer one by adding this to local.properties:
+ *
+ *   qself.ninja.path=/usr/bin/ninja
+ *
+ * Falling back to a `ninja` on PATH keeps this working on machines (and CI
+ * images) that already ship a recent one.
+ */
+val localProperties = java.util.Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+
+/** First executable named [name] on PATH, without spawning a process. */
+fun findOnPath(name: String): String? =
+    System.getenv("PATH")
+        ?.split(java.io.File.pathSeparator)
+        ?.asSequence()
+        ?.map { java.io.File(it, name) }
+        ?.firstOrNull { it.canExecute() }
+        ?.absolutePath
+
+val ninjaOverride: String? = localProperties.getProperty("qself.ninja.path")
+    ?.takeIf { it.isNotBlank() }
+    ?: findOnPath("ninja")
+
 android {
     namespace = "sumicya.qself.engine"
     compileSdk {
@@ -33,6 +63,9 @@ android {
                     "-DANDROID_STL=c++_shared",
                     "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
                 )
+                if (ninjaOverride != null) {
+                    arguments += "-DCMAKE_MAKE_PROGRAM=$ninjaOverride"
+                }
             }
         }
     }

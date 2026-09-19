@@ -10,6 +10,7 @@ NDK=$(ls "$SDK/ndk" 2>/dev/null | tr '\n' ',' || true)
 CMAKE=$(ls "$SDK/cmake" 2>/dev/null | tr '\n' ',' || true)
 PLATFORMS=$(ls "$SDK/platforms" 2>/dev/null | tr '\n' ',' || true)
 BUILD_TOOLS=$(ls "$SDK/build-tools" 2>/dev/null | tr '\n' ',' || true)
+NINJA=$(ninja --version 2>/dev/null || echo none)
 
-echo "ndk=[$NDK] cmake=[$CMAKE] platforms=[$PLATFORMS] build-tools=[$BUILD_TOOLS]"
-echo "::notice title=toolchain::ndk=$NDK%0Acmake=$CMAKE%0Aplatforms=$PLATFORMS%0Abuild-tools=$BUILD_TOOLS"
+echo "ndk=[$NDK] cmake=[$CMAKE] ninja=$NINJA platforms=[$PLATFORMS] build-tools=[$BUILD_TOOLS]"
+echo "::notice title=toolchain::ndk=$NDK cmake=$CMAKE ninja=$NINJA platforms=$PLATFORMS build-tools=$BUILD_TOOLS"
