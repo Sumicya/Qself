@@ -63,6 +63,15 @@ enum class HostGeneration(val title: String) {
             return if (major >= 9) NT else PRE_NT
         }
 
+        /**
+         * `com.tencent.qqnt.base.BaseActivity=true com.tencent.qqnt.startup.NtStartup=false`
+         * — which markers were actually found. Printed at boot because a
+         * generation verdict without its evidence is impossible to debug from
+         * a log (and that cost a device round trip).
+         */
+        fun probe(resolve: (String) -> Class<*>?): String =
+            NT_MARKERS.joinToString(" ") { "${it.substringAfterLast('.')}=${resolve(it) != null}" }
+
         /** True when [feature] was not written for [host]. */
         fun mismatches(feature: HostGeneration, host: HostGeneration?): Boolean =
             host != null && feature != ANY && feature != host

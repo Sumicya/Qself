@@ -21,7 +21,18 @@ import sumicya.qself.log.QLog
  * QQ renames or moves classes occasionally, so [resolve] accepts a list of
  * candidate FQCNs (newest first) and remembers both hits and misses.
  */
-class Host(private val packageName: String) {
+class Host(
+    private val packageName: String,
+    /**
+     * The *host application's* classloader. Without it `Class.forName` inside
+     * a hooked process resolves against the module's own classloader, which
+     * knows nothing about QQ — every lookup misses and the module concludes it
+     * is running on the wrong QQ generation (that is exactly what happened on
+     * the device: NT features were skipped, classic ones no-op'd, and the boot
+     * log said nothing useful). Always pass the host Application's loader.
+     */
+    private val classLoader: ClassLoader? = null,
+) {
 
     private val classCache = LinkedHashMap<String, Class<*>?>()
     private val methodCache = LinkedHashMap<MethodKey, Method?>()
@@ -48,7 +59,12 @@ class Host(private val packageName: String) {
                 return null
             }
             val cls = try {
-                Class.forName(name)
+                if (classLoader != null) {
+                    Class.forName(name, false, classLoader)
+                } else {
+                    QLog.w("Host", "no host classloader; falling back to Class.forName")
+                    Class.forName(name)
+                }
             } catch (t: Throwable) {
                 null
             }

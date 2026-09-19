@@ -121,7 +121,7 @@ object Qself {
         )
         val sharedLoaded = bridge.load()
         _bridge = bridge
-        _host = Host(param.packageName)
+        _host = Host(param.packageName, param.application.classLoader)
         _engine = engine
         _features = features
         _hostInfo = HostInfoProvider.load(param.application)
@@ -139,6 +139,11 @@ object Qself {
             return
         }
 
+        QLog.i(
+            "Qself",
+            "host classloader: ${param.application.classLoader.javaClass.name}",
+        )
+        QLog.i("Qself", "generation probe: ${sumicya.qself.util.HostGeneration.probe { _host!!.resolve(it) }}")
         val generation = _host!!.generation
         QLog.i("Qself", "host generation: ${generation.title}")
 
@@ -170,7 +175,24 @@ object Qself {
                 QLog.e("Feature", "init failed: ${feature.id}", t)
             }
         }
-        QLog.i("Qself", "boot complete: ${_featureResults.count { it.value }}/${_featureResults.size} features ok")
+        // One line that answers "what happened to my switches": status and
+        // switch state per feature. "4/10 ok" on its own was unreadable —
+        // skipped and failed looked identical from the outside.
+        val summary = features.joinToString(" ") { feature ->
+            val status = when {
+                feature.id !in _featureResults -> "n/a"
+                _featureErrors.containsKey(feature.id) -> "fail"
+                _featureResults[feature.id] == true -> "ok"
+                else -> "skip"
+            }
+            val switch = if (feature.isEnabled) "on" else "off"
+            "${feature.id.substringAfterLast('.')}=$status/$switch"
+        }
+        QLog.i("Qself", "features: $summary")
+        QLog.i(
+            "Qself",
+            "boot complete: ${_featureResults.count { it.value }}/${_featureResults.size} features ok",
+        )
     }
 
     // ---- module (UI) process ----------------------------------------------
@@ -196,6 +218,7 @@ object Qself {
             hostFilesDir = File("/data/data/$hostPackage/files"),
             localCache = localCache,
             useSuBridge = true,
+            alternateFilesDirs = listOf(File("/data/user/0/$hostPackage/files")),
         )
         _hostInfo = HostInfoProvider.load(context, hostPackage)
         QLog.i("Qself", "bootUi: host=$hostPackage (shared settings load deferred)")
@@ -220,6 +243,33 @@ object Qself {
     val uiHasSharedSettings: Boolean
         @Synchronized
         get() = _bridge != null && _uiSharedLoaded
+
+    /**
+     * Human-readable state of the cross-process settings, including *why* it
+     * is not shared. The diagnostics row shows this instead of a bare "local
+     * cache", which on the device told nobody anything.
+     */
+    val settingsStatus: String
+        @Synchronized
+        get() {
+            val bridge = _bridge ?: return "未启动"
+            if (_uiSharedLoaded) return "已同步（shared）"
+            val reason = bridge.lastError
+            return if (reason != null) "本地缓存：$reason" else "本地缓存（未读取/未写入宿主）"
+        }
+
+    /**
+     * Write every switch to the host's settings file now. **Blocking** (`su`),
+     * returns a message for the user.
+     */
+    @Synchronized
+    fun syncSharedSettings(): String {
+        val bridge = _bridge ?: return "模块未启动"
+        val result = bridge.saveAll()
+        _uiSharedLoaded = bridge.load()
+        QLog.i("Qself", "settings sync: $result (shared=$_uiSharedLoaded)")
+        return result
+    }
 
     val hostInfo: HostInfo
         get() = requireNotNull(_hostInfo) { "Qself not booted" }

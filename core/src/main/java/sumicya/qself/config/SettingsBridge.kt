@@ -34,9 +34,30 @@ class SettingsBridge(
     private val localCache: Settings?,
     /** True only for the module-side bridge: allows `su` reads and writes. */
     private val useSuBridge: Boolean = false,
+    /**
+     * Further places the file may live. The settings UI only knows the
+     * conventional path (`/data/data/<pkg>/files`); the platform's own is
+     * `/data/user/0/<pkg>/files`, and which one `su` can reach is device
+     * dependent — trying both costs nothing and removes a class of "it just
+     * silently does not work" reports.
+     */
+    private val alternateFilesDirs: List<File> = emptyList(),
 ) {
 
-    val sharedFile: File? = hostFilesDir?.let { File(it, "qself/settings.json") }
+    /** Candidate locations of the authoritative file, primary first. */
+    val sharedFiles: List<File> =
+        (listOfNotNull(hostFilesDir) + alternateFilesDirs).map { File(it, "qself/settings.json") }
+
+    val sharedFile: File? = sharedFiles.firstOrNull()
+
+    /**
+     * Why the last shared read/write failed, in a form worth showing a user
+     * ("su exit=1", "回读不一致", ...). Null when the last attempt worked —
+     * including when `su` was never needed.
+     */
+    @Volatile
+    var lastError: String? = null
+        private set
 
     private val inMemory: MutableMap<String, Boolean> = LinkedHashMap()
     private val lock = Any()
@@ -84,28 +105,52 @@ class SettingsBridge(
     }
 
     private fun readShared(): String? {
-        val file = sharedFile ?: return null
+        if (sharedFiles.isEmpty()) return null
         // Same uid (host process): plain read. Different uid (module UI
         // process): the path is not even stat-able, so exists() must not gate
         // the su bridge — an absent-looking file is exactly the case it is
         // there for.
-        val direct = try {
-            if (file.exists() && file.canRead()) file.readText() else null
-        } catch (t: Throwable) {
-            QLog.d("Settings", "direct read failed", t)
-            null
-        }
-        if (direct != null) {
-            return direct
+        for (file in sharedFiles) {
+            val direct = try {
+                if (file.exists() && file.canRead()) file.readText() else null
+            } catch (t: Throwable) {
+                QLog.d("Settings", "direct read failed: ${file.path}", t)
+                null
+            }
+            if (direct != null) {
+                lastError = null
+                return direct
+            }
         }
         if (!useSuBridge) {
             return null
         }
-        return suRead(file).also {
-            if (it == null) {
-                QLog.d("Settings", "shared settings unreadable (no su?)")
+        for (file in sharedFiles) {
+            val text = suRead(file)
+            if (text != null) {
+                lastError = null
+                return text
             }
         }
+        QLog.d("Settings", "shared settings unreadable through any path (no su?)")
+        return null
+    }
+
+    /**
+     * Write the in-memory state (folded together with the local cache) to the
+     * host file and report what happened. Blocking — `su`. The UI exposes this
+     * as an explicit "sync now" so a failing bridge is visible and retryable
+     * instead of quietly downgrading to a local-only cache.
+     */
+    @Synchronized
+    fun saveAll(): String {
+        if (sharedFiles.isEmpty()) {
+            lastError = "没有宿主设置路径"
+            return lastError!!
+        }
+        val ok = writeShared()
+        val path = lastWrittenPath ?: sharedFiles.first().absolutePath
+        return if (ok) "已写入 $path" else "写入失败：${lastError ?: "未知原因"}"
     }
 
     private fun mirrorToLocalCache(values: Map<String, Boolean>) {
@@ -151,8 +196,8 @@ class SettingsBridge(
     }
 
     @Synchronized
-    private fun writeShared() {
-        val file = sharedFile ?: return
+    private fun writeShared(): Boolean {
+        if (sharedFiles.isEmpty()) return false
         // Fold the local cache in first: the file mirrors every switch this
         // process knows about, not just the one just toggled.
         localCache?.all?.forEach { (k, v) ->
@@ -165,14 +210,37 @@ class SettingsBridge(
             inMemory.forEach { (k, v) -> json.put(k, v) }
         }
         val text = json.toString()
-        val direct = !useSuBridge || canWriteDirectly(file)
-        if (direct) {
-            file.parentFile?.mkdirs()
-            file.writeText(text)
-        } else {
-            suWrite(file, text)
+
+        for (file in sharedFiles) {
+            val direct = !useSuBridge || canWriteDirectly(file)
+            val ok = if (direct) {
+                try {
+                    file.parentFile?.mkdirs()
+                    file.writeText(text)
+                    true
+                } catch (t: Throwable) {
+                    lastError = "直接写入失败：${t.javaClass.simpleName}"
+                    QLog.w("Settings", "failed to write ${file.path}", t)
+                    false
+                }
+            } else {
+                suWrite(file, text)
+            }
+            if (ok) {
+                lastWrittenPath = file.absolutePath
+                lastError = null
+                return true
+            }
         }
+        // Nothing accepted the write: make sure the cache a caller reads back
+        // is still the truth we just recorded.
+        return false
     }
+
+    /** Path the last successful write landed on (for the UI report). */
+    @Volatile
+    var lastWrittenPath: String? = null
+        private set
 
     private fun canWriteDirectly(file: File): Boolean {
         val dir = file.parentFile ?: return false
@@ -185,15 +253,30 @@ class SettingsBridge(
         return lastStdout
     }
 
-    private fun suWrite(file: File, text: String) {
-        val dir = file.parentFile?.absolutePath ?: return
+    /**
+     * Write through `su` **and verify it landed**: a root shell can fail in
+     * ways that still look like success (a denied prompt, a read-only mount),
+     * and an unverified write is how the UI ended up claiming "local cache"
+     * with no explanation on the device.
+     */
+    private fun suWrite(file: File, text: String): Boolean {
+        val dir = file.parentFile?.absolutePath ?: return false
         // Everything is single-quoted for the root shell, so JSON quotes,
         // spaces and newlines survive untouched.
         val cmd = "mkdir -p ${shellQuote(dir)} && printf %s ${shellQuote(text)} > ${shellQuote(file.absolutePath)}"
         val code = execSu(arrayOf("sh", "-c", cmd))
         if (code != 0) {
-            QLog.w("Settings", "su write failed (exit=$code)")
+            lastError = "su 写入失败（exit=${code ?: "无 su"}）"
+            QLog.w("Settings", "su write failed (exit=$code, path=${file.path})")
+            return false
         }
+        val back = suRead(file)
+        if (back == null || back.trim() != text.trim()) {
+            lastError = "写入后回读不一致"
+            QLog.w("Settings", "su write verification failed (path=${file.path})")
+            return false
+        }
+        return true
     }
 
     private var lastStdout: String = ""

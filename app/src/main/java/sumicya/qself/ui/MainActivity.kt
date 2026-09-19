@@ -89,6 +89,7 @@ class MainActivity : Activity() {
         val items = arrayOf(
             getString(R.string.copy_logs),
             getString(R.string.dump_classes),
+            getString(R.string.sync_settings),
             getString(R.string.about),
         )
         AlertDialog.Builder(this)
@@ -97,10 +98,31 @@ class MainActivity : Activity() {
                 when (which) {
                     0 -> copyLogs()
                     1 -> dumpClasses()
+                    2 -> syncSettings()
                     else -> showAbout()
                 }
             }
             .show()
+    }
+
+    /**
+     * Write every switch into the host's settings file through `su` and report
+     * the outcome. Without this the bridge could fail silently: the switches
+     * would move in the UI while QQ's process kept reading its defaults (that
+     * is how the NT features ended up never running on the device).
+     */
+    private fun syncSettings() {
+        toast(R.string.sync_running)
+        Thread {
+            val message = Qself.syncSharedSettings()
+            runOnUiThread {
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.sync_settings)
+                    .setMessage(message)
+                    .setPositiveButton(android.R.string.ok) { _, _ -> adapter.submit(buildRows()) }
+                    .show()
+            }
+        }.start()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -142,7 +164,7 @@ class MainActivity : Activity() {
         rows += UiRow.Diagnostics(
             version = BuildConfig.VERSION_NAME,
             hostPackage = "$host ${hostDetails(host)}",
-            sharedSettings = if (Qself.uiHasSharedSettings) "loaded" else "local cache (su unavailable)",
+            sharedSettings = Qself.settingsStatus,
             nativeEngine = "${HookNative.version} / " +
                 "${HookNative.lsplantStatus} / libart ${HookNative.artSymbolStatus}",
             nativeSelfTest = "dobby=${HookNative.selfTestResult} " +
