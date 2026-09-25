@@ -82,6 +82,36 @@ object TgInputBar : ViewRule("tg_input_bar") {
         fun sync() {
             mirrors.forEach { it.sync() }
             swap()
+            collapse()
+        }
+
+        /** Original height of host slots we squeezed to 0. */
+        private val squeezed = HashMap<View, Int>()
+
+        /**
+         * With the icon strip gone QQ keeps its space as an empty slot above the input.
+         * Any sibling slot with nothing visible inside is squeezed to 0; it comes back
+         * the moment QQ puts something there (reply preview and the like).
+         */
+        private fun collapse() {
+            for (i in 0 until host.childCount) {
+                val c = host.getChildAt(i)
+                if (c === row || c !is ViewGroup) continue
+                val lp = c.layoutParams ?: continue
+                if (blank(c)) {
+                    if (c !in squeezed && c.height > 0) {
+                        squeezed[c] = lp.height
+                        lp.height = 0
+                        c.layoutParams = lp
+                    }
+                } else squeezed.remove(c)?.let { lp.height = it; c.layoutParams = lp }
+            }
+        }
+
+        private fun blank(v: View): Boolean = when {
+            v.visibility == View.GONE -> true
+            v is ViewGroup -> (0 until v.childCount).all { blank(v.getChildAt(it)) }
+            else -> false
         }
 
         /** Empty box shows the mic, typing shows QQ's own send button. */
@@ -102,6 +132,8 @@ object TgInputBar : ViewRule("tg_input_bar") {
 
         fun restore() {
             edit.removeTextChangedListener(watcher)
+            squeezed.forEach { (c, h) -> c.layoutParams?.let { it.height = h; c.layoutParams = it } }
+            squeezed.clear()
             sendHiddenFrom?.let { send?.visibility = it }
             row.removeView(input)
             host.removeView(row)

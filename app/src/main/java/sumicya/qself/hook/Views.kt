@@ -154,7 +154,7 @@ object TgDrawer : ViewRule("tg_drawer", inLists = true) {
     private val drop = setOf(
         "开通会员", "会员中心", "超级会员", "QQ会员", "QQ钱包", "钱包", "个性装扮", "装扮",
         "我的小世界", "小世界", "免流量", "QQ小游戏", "小游戏", "厘米秀", "超级QQ秀", "QQ秀",
-        "我的QQ空间", "QQ空间", "游戏中心", "腾讯文档", "打卡", "当地天气",
+        "我的QQ空间", "QQ空间", "游戏中心", "腾讯文档", "打卡", "当地天气", "天气",
     )
     private val dropDesc = listOf("等级", "QQ会员", "天气")
     private val hosts = listOf("Drawer", "SettingMe", "QQSetting")
@@ -172,7 +172,9 @@ object TgDrawer : ViewRule("tg_drawer", inLists = true) {
         val b = button(v) ?: return false
         val d = desc(b)
         val hit = (d != null && d.length <= 12 && dropDesc.any { d.startsWith(it) }) ||
-            Views.texts(b, 3).let { t -> t.isNotEmpty() && t.size <= 3 && t.any { it in drop } }
+            // Judge a button by its main label (first text with letters), so a row that merely
+            // contains a dropped item (e.g. 设置 | 日间 | 天气) is never taken down as a whole.
+            Views.texts(b, 3).firstOrNull { t -> t.any(Character::isLetter) } in drop
         if (!hit) return false
         return Views.ancestors(v).any { a -> hosts.any { a.javaClass.name.contains(it) } }
     }
