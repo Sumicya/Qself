@@ -33,7 +33,7 @@ object Runtime {
         HomeBar.Glass, HomeBar.HideGuild, HomeBar.HideFeed,
         TgInputBar, TgTitleBar, TgDrawer,
         PlainBubble, PlainFont, NoPendant,
-        AntiRecall, MultiForward, NoLightInteraction, NoDropSticker,
+        AntiRecall, MultiForward, TgPlusPanel, NoLightInteraction, NoDropSticker,
         SystemWebView, NoTelemetry, NoCrashReport,
         Dump,
     )

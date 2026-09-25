@@ -185,6 +185,8 @@ object TgDrawer : ViewRule("tg_drawer", inLists = true) {
  * /sdcard/Android/data/com.tencent.mobileqq/files/qself/latest.txt so rules can be tuned from real data.
  */
 object Dump : Feature("debug_dump") {
+    private var lastHash = 0
+
     override fun install() = Views.refresh()
     override fun uninstall() = Views.refresh()
     override fun onResume(activity: Activity) = Views.attach(activity)
@@ -193,8 +195,10 @@ object Dump : Feature("debug_dump") {
         val sb = StringBuilder(64 * 1024)
         sb.append(a.javaClass.name).append('\n')
         tree(root, 0, sb)
-        val dir = a.getExternalFilesDir("qself") ?: return
         val body = sb.toString()
+        if (body.hashCode() == lastHash) return
+        lastHash = body.hashCode()
+        val dir = a.getExternalFilesDir("qself") ?: return
         val name = a.javaClass.simpleName
         thread(name = "qself-dump", isDaemon = true) {
             runCatching {

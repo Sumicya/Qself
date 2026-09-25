@@ -34,6 +34,7 @@ object Catalog {
 
         Item("anti_recall", "防撤回", "丢弃好友与群的撤回推送，消息留在本地", Group.CHAT),
         Item("multi_forward", "转发多选", "转发页始终显示好友/群/多选入口", Group.CHAT),
+        Item("tg_plus_panel", "「+」面板精简", "像 TG 附件菜单：留照片/拍摄/文件/位置/红包等，去掉一起派对、礼物、短视频、直播间这类", Group.CHAT),
         Item("no_light_interaction", "屏蔽轻互动", "早安、晚安、戳一戳之类的互动表情", Group.CHAT),
         Item("no_drop_sticker", "屏蔽表情雨", "关键词触发的全屏掉落表情", Group.CHAT),
 

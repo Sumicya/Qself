@@ -77,6 +77,40 @@ object MultiForward : Feature("multi_forward") {
     }
 }
 
+/**
+ * 「+」 panel as a Telegram attach menu: photos, camera, files, location, money and tools stay;
+ * the play-together / gift / short-video / live entries go. The panel's item list is filtered
+ * right before QQ hands it to the UI (PlusPanelUiState.FetchCompleted), matching items by title.
+ */
+object TgPlusPanel : Feature("tg_plus_panel") {
+    private val drop = setOf(
+        "一起派对", "好友爱玩", "一起看", "一起K歌", "一起听歌", "一起玩", "礼物", "厘米秀",
+        "短视频", "直播间", "群课堂", "作业", "匿名送礼", "赞赏照片", "匿问我答", "滤镜", "涂鸦",
+    )
+
+    private fun titles(o: Any): Sequence<String> = sequence {
+        var c: Class<*>? = o.javaClass
+        while (c != null && c != Any::class.java) {
+            for (f in c.declaredFields) if (f.type == String::class.java && !Modifier.isStatic(f.modifiers)) {
+                f.isAccessible = true
+                (f.get(o) as? String)?.let { yield(it) }
+            }
+            c = c.superclass
+        }
+    }
+
+    override fun install() {
+        val ctor = need("com.tencent.qqnt.pluspanel.data.PlusPanelUiState\$FetchCompleted")
+            .getDeclaredConstructor(ArrayList::class.java)
+        hook(ctor) { chain ->
+            (chain.getArg(0) as? ArrayList<*>)?.removeAll { item ->
+                item != null && runCatching { titles(item).any { it in drop } }.getOrDefault(false)
+            }
+            chain.proceed()
+        }
+    }
+}
+
 object NoLightInteraction : Feature("no_light_interaction") {
     override fun install() {
         val c = need("com.tencent.qqnt.biz.lightbusiness.lightinteraction.LIAConfigManager")
