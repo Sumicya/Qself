@@ -87,7 +87,8 @@ object HomeBar {
         private val clip = bar.clipToOutline
         private val elevation = bar.elevation
         private val hostBlur = (0 until parent.childCount).map(parent::getChildAt)
-            .filter { it !== bar && it.javaClass.simpleName.contains("Blur") }
+            // QQ's full-width blur strip and the 1px divider above the bar: both would show around the capsule.
+            .filter { it !== bar && (it.javaClass.simpleName.contains("Blur") || (it.height in 1..2 && it.width >= parent.width / 2)) }
             .associateWith { it.visibility }
         private val source: View? = (0 until parent.childCount).map(parent::getChildAt)
             .firstOrNull { it.javaClass.name.contains("ViewPager") }
@@ -99,8 +100,12 @@ object HomeBar {
 
         private val relayout = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> filterTabs() }
         private val preDraw = ViewTreeObserver.OnPreDrawListener {
-            // Page content moved: re-record the backdrop within this same frame.
-            if (glassOn) glass?.invalidateSelf()
+            if (glassOn) {
+                // QQ re-shows its own blur strip on scroll / theme change; keep it down.
+                hostBlur.keys.forEach { if (it.visibility == View.VISIBLE) it.visibility = View.INVISIBLE }
+                // Page content moved: re-record the backdrop within this same frame.
+                glass?.invalidateSelf()
+            }
             true
         }
 

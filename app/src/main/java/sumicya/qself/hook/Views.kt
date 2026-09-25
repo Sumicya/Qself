@@ -135,21 +135,6 @@ object Views {
     fun windowY(v: View): Int { v.getLocationInWindow(loc); return loc[1] }
 }
 
-/** Chat input: Telegram keeps voice, emoji and attach; the red packet / camera / GIF / poke row goes. */
-object TgInputBar : ViewRule("tg_input_bar") {
-    private val drop = listOf("红包", "相机", "拍摄", "拍照", "GIF", "热图", "戳一戳", "厘米", "QQ秀", "通话")
-
-    override fun match(v: View): Boolean {
-        val d = desc(v) ?: return false
-        if (d.length > 8 || drop.none { d.contains(it, ignoreCase = true) }) return false
-        if (v.height > dp(v, 64)) return false
-        val p = v.parent as? ViewGroup ?: return false
-        if (p.childCount !in 4..12 || !Views.isHorizontalRow(p)) return false
-        val labelled = (0 until p.childCount).count { p.getChildAt(it).contentDescription != null }
-        return labelled >= 4
-    }
-}
-
 /** Chat title bar: no "listen together", QQ Show and similar entertainment buttons. */
 object TgTitleBar : ViewRule("tg_title_bar") {
     private val drop = listOf("一起听", "一起看", "一起玩", "一起派对", "一起K歌", "QQ秀", "厘米秀", "小世界", "群游戏")
@@ -161,19 +146,34 @@ object TgTitleBar : ViewRule("tg_title_bar") {
     }
 }
 
-/** Side drawer: drop the shopping mall, keep the tools. */
+/**
+ * Side drawer: drop the shopping mall, check-in, weather and level badge; keep albums, favourites,
+ * files, settings. Frosted pills (a blur wrapper around one button) are hidden as a whole.
+ */
 object TgDrawer : ViewRule("tg_drawer", inLists = true) {
     private val drop = setOf(
         "开通会员", "会员中心", "超级会员", "QQ会员", "QQ钱包", "钱包", "个性装扮", "装扮",
         "我的小世界", "小世界", "免流量", "QQ小游戏", "小游戏", "厘米秀", "超级QQ秀", "QQ秀",
-        "我的QQ空间", "QQ空间", "游戏中心", "腾讯文档",
+        "我的QQ空间", "QQ空间", "游戏中心", "腾讯文档", "打卡", "当地天气",
     )
+    private val dropDesc = listOf("等级", "QQ会员", "天气")
     private val hosts = listOf("Drawer", "SettingMe", "QQSetting")
 
+    /** The clickable part of [v]: itself, or its only non-blur child. */
+    private fun button(v: View): View? {
+        if (v.isClickable) return v
+        if (v !is ViewGroup) return null
+        val rest = (0 until v.childCount).map(v::getChildAt).filter { !it.javaClass.name.contains("Blur") }
+        return rest.singleOrNull()?.takeIf { it.isClickable }
+    }
+
     override fun match(v: View): Boolean {
-        if (!v.isClickable || v.height !in 1..dp(v, 96)) return false
-        val t = Views.texts(v, 3)
-        if (t.isEmpty() || t.size > 3 || t.none { it in drop }) return false
+        if (v.height !in 1..dp(v, 96)) return false
+        val b = button(v) ?: return false
+        val d = desc(b)
+        val hit = (d != null && d.length <= 12 && dropDesc.any { d.startsWith(it) }) ||
+            Views.texts(b, 3).let { t -> t.isNotEmpty() && t.size <= 3 && t.any { it in drop } }
+        if (!hit) return false
         return Views.ancestors(v).any { a -> hosts.any { a.javaClass.name.contains(it) } }
     }
 }
