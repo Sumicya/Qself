@@ -31,9 +31,11 @@ object Runtime {
 
     val features: List<Feature> = listOf(
         HomeBar.Glass, HomeBar.HideGuild, HomeBar.HideFeed,
+        TgInputBar, TgTitleBar, TgDrawer,
         PlainBubble, PlainFont, NoPendant,
         AntiRecall, MultiForward, NoLightInteraction, NoDropSticker,
         SystemWebView, NoTelemetry, NoCrashReport,
+        Dump,
     )
 
     // Held strongly: SharedPreferences only keeps weak references to listeners.
