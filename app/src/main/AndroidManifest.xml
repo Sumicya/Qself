@@ -4,7 +4,7 @@
     <application
         android:name=".ui.QselfApp"
         android:allowBackup="false"
-        android:icon="@android:drawable/sym_def_app_icon"
+        android:icon="@mipmap/ic_launcher"
         android:label="Qself"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 

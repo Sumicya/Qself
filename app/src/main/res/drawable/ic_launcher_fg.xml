@@ -1,0 +1,7 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- "Q": a ring with a tail, inside the 66dp safe zone -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M54,30a22,22 0,1 0,12.9 39.8l6.6,6.6 4.9,-4.9 -6.4,-6.4A22,22 0,0 0,54 30zM54,37.5a14.5,14.5 0,1 1,0 29a14.5,14.5 0,0 1,0 -29z" />
+</vector>

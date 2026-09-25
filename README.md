@@ -33,7 +33,7 @@
 ./gradlew :app:assembleDebug
 ```
 
-需要 JDK 21 和 Android SDK platform 36。CI：`.github/workflows/build.yml`，每次推送都会构建，APK 在 Actions 的 Artifacts 里。
+需要 JDK 21 和 Android SDK platform 37。CI：`.github/workflows/build.yml`，每次推送都会构建，APK 在 Actions 的 Artifacts 里。
 
 ## 源码结构
 

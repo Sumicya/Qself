@@ -5,8 +5,7 @@ plugins {
 
 android {
     namespace = "sumicya.qself"
-    // libxposed service 102 declares minCompileSdk 37; 36 is what CI runners ship.
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "sumicya.qself"
