@@ -33,7 +33,7 @@
 ./gradlew :app:assembleDebug
 ```
 
-需要 JDK 21 和 Android SDK platform 36。推荐的 CI 在 `docs/ci-build.yml`，拷到 `.github/workflows/` 即可（之后可删掉旧工作流和 `libs/` 占位目录）。
+需要 JDK 21 和 Android SDK platform 36。CI：`.github/workflows/build.yml`，每次推送都会构建，APK 在 Actions 的 Artifacts 里。
 
 ## 源码结构
 
