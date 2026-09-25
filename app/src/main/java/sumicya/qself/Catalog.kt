@@ -30,6 +30,7 @@ object Catalog {
         Item("tg_drawer", "侧栏精简", "去掉会员、钱包、装扮、免流量、打卡、天气和等级，只留相册/收藏/文件/设置", Group.LOOK),
         Item("plain_bubble", "统一气泡", "所有人的消息都用默认气泡", Group.LOOK),
         Item("plain_font", "统一字体", "去掉会员字体与魔法字", Group.LOOK),
+        Item("plain_nick", "昵称只留名字", "群聊消息上方去掉群等级、头衔、荣誉和会员图标", Group.LOOK),
         Item("no_pendant", "去头像挂件", "聊天里只显示干净的头像", Group.LOOK),
 
         Item("anti_recall", "防撤回", "丢弃好友与群的撤回推送，消息留在本地", Group.CHAT),

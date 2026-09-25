@@ -58,6 +58,13 @@ abstract class Feature(val id: String, val mainOnly: Boolean = true) {
             .intercept { chain -> body(chain) }
     }
 
+    /** Ask ART to stop inlining [m] into its callers' compiled code, so hooks on small callees are seen. */
+    protected fun deopt(m: Executable) {
+        runCatching {
+            Runtime.module.javaClass.getMethod("deoptimize", Executable::class.java).invoke(Runtime.module, m)
+        }
+    }
+
     /** Replace the result, skipping the original. */
     protected fun constant(target: Method, value: Any?) = hook(target) { value }
 

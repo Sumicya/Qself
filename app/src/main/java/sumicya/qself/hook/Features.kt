@@ -111,6 +111,45 @@ object TgPlusPanel : Feature("tg_plus_panel") {
     }
 }
 
+/**
+ * Telegram nick line: only the sender's name. Group level / honor / member-level tags and VIP
+ * icons are separate "blocks" in QQ's nick slot; each block is asked l(msg) before it binds.
+ * Those blocks answer no, and their already-inflated views are hidden.
+ */
+object PlainNick : Feature("plain_nick") {
+    private const val NICK = "com.tencent.mobileqq.aio.msglist.holder.component.nick"
+    private val drop = setOf(
+        "com.tencent.qqnt.aio.gradelevel.AIOTroopMemberGradeLevelBlock",
+        "com.tencent.qqnt.aio.mutualmark.AIOTroopHonorNickBlock",
+        "com.tencent.qqnt.aio.nick.memberlevel.AIOTroopMemberLevelBlock",
+        "com.tencent.mobileqq.vas.vipicon.AIOVipIconProcessor",
+        "com.tencent.mobileqq.vas.vipicon.AIOVipIconExProcessor",
+        "$NICK.pit.block.AIONickIconSimpleBlock",
+    )
+
+    private fun dropped(o: Any): Boolean {
+        var c: Class<*>? = o.javaClass
+        while (c != null) { if (c.name in drop) return true; c = c.superclass }
+        return false
+    }
+
+    override fun install() {
+        val base = need("$NICK.block.a")
+        val lazy = need("$NICK.block.LazyNickBlock")
+        val item = need("com.tencent.mobileqq.aio.msg.AIOMsgItem")
+        val view = base.getDeclaredMethod("h")
+        hook(lazy.getDeclaredMethod("l", item)) { chain ->
+            val self = chain.thisObject
+            if (self != null && dropped(self)) {
+                runCatching { (view.invoke(self) as? View)?.visibility = View.GONE }
+                false
+            } else chain.proceed()
+        }
+        cls("$NICK.slot.AIONickSlotContainer")?.declaredMethods?.filter { it.name == "d" }?.forEach(::deopt)
+        cls("$NICK.pit.AIONickComponentV2")?.declaredMethods?.filter { it.name == "d1" }?.forEach(::deopt)
+    }
+}
+
 object NoLightInteraction : Feature("no_light_interaction") {
     override fun install() {
         val c = need("com.tencent.qqnt.biz.lightbusiness.lightinteraction.LIAConfigManager")
