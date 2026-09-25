@@ -80,7 +80,7 @@ object MultiForward : Feature("multi_forward") {
 object NoLightInteraction : Feature("no_light_interaction") {
     override fun install() {
         val c = need("com.tencent.qqnt.biz.lightbusiness.lightinteraction.LIAConfigManager")
-        val lists = c.declaredMethods.filter { it.parameterCount <= 1 && it.returnType == List::class.java }
+        val lists = c.declaredMethods.filter { it.returnType == List::class.java }
         lists.forEach { constant(it, ArrayList<Any>()) }
         check(lists.isNotEmpty(), "LIAConfigManager lists")
     }
@@ -88,11 +88,14 @@ object NoLightInteraction : Feature("no_light_interaction") {
 
 object NoDropSticker : Feature("no_drop_sticker") {
     override fun install() {
-        val c = cls("com.tencent.mobileqq.aio.animation.util.AioAnimationConfigHelper")
-            ?: need("com.tencent.mobileqq.activity.aio.anim.AioAnimationConfigHelper")
-        val rules = c.declaredMethods.filter { it.returnType == ArrayList::class.java }
+        // 9.2.10: AioAnimationConfigHolder.e(): List holds the egg rules.
+        val c = cls("com.tencent.mobileqq.aio.animation.util.AioAnimationConfigHolder")
+            ?: need("com.tencent.mobileqq.aio.animation.util.AioAnimationConfigHelper")
+        val rules = c.declaredMethods.filter {
+            it.parameterCount == 0 && List::class.java.isAssignableFrom(it.returnType)
+        }
         rules.forEach { constant(it, ArrayList<Any>()) }
-        check(rules.isNotEmpty(), "AioAnimationConfigHelper rules")
+        check(rules.isNotEmpty(), "AioAnimationConfig rules")
     }
 }
 
