@@ -2,15 +2,17 @@
 
 ## 是什么
 
-一个纯钩子的 LSPosed 模块（libxposed API 102），只针对 QQ 9.2.10 / Android 16。没有界面、没有配置、
+一个纯钩子的 LSPosed 模块（libxposed API 102），只针对 QQ 9.2.10 / Android 16。模块 APK 没有界面；
+开关是 QQ 主页里一颗圆钮弹出的系统对话框，状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
 没有网络、没有第三方库：只有 `compileOnly` 的 libxposed 和测试用的 JUnit。
 
 ## 规矩
 
 按 [ponytail](https://github.com/DietrichGebert/ponytail) 来：
 - 先问「不做行不行」；再看仓库里有没有现成的；再看 Kotlin 标准库；再看 Android 原生 API；最后才写代码
-- 不加抽象、不加依赖、不加样板；能删就删；一个功能 = 一个顶层函数 + `Qself.kt` 清单里一行
+- 不加抽象、不加依赖、不加样板；能删就删；一个功能 = 一个顶层函数 + `Qself.kt` 清单里一行（清单顺序就是开关顺序）
 - 钩子体不要 try/catch：libxposed 默认异常模式下，钩子抛异常等于这一次没装
+- 钩子经 `hook()` 装就自动受开关管；视图规则自己 `on("功能名")`
 - 故意省掉的地方写 `ponytail:` 注释，说清上限和往上走的路
 - 非平凡逻辑留一份能跑的检查（目前只有 `ProtoTest.kt`）
 - 代码先行，解释不超过三行；中文

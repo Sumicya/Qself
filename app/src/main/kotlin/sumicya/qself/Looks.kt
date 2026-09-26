@@ -40,7 +40,7 @@ private fun walk(v: View, inDrawer: Boolean) {
     val name = v.javaClass.name
     when {
         name.endsWith(".QQTabLayout") -> { homeBar(v as ViewGroup); return }
-        name.endsWith(".PanelIconLinearLayout") -> { tgInput(v as ViewGroup); return }
+        name.endsWith(".PanelIconLinearLayout") -> { if (on("TG输入栏")) tgInput(v as ViewGroup); return }
         else -> trim(v, inDrawer)
     }
     if (v is ViewGroup) {
@@ -63,7 +63,7 @@ private fun trim(v: View, inDrawer: Boolean) {
     // 侧栏里一行行可点的：打卡、天气、等级、会员、装扮……（文案多半带「我的」前缀，所以用包含）
     val row = inDrawer && v.isClickable && v.height in 1..(96 * v.dp).toInt() &&
         texts(v).any { t -> DRAWER.any { it in t } }
-    hide(v, title || row || v.javaClass.simpleName == "WeatherSettingMeItemView")
+    hide(v, on("标题栏侧栏精简") && (title || row || v.javaClass.simpleName == "WeatherSettingMeItemView"))
 }
 
 private val hidden = WeakHashMap<View, Int>()
@@ -97,17 +97,22 @@ private val floated: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 
 private fun homeBar(bar: ViewGroup) {
     // 热重载后是新一代代码、新的 floated 集合：靠背景认出上一代已经浮过的底栏，别再加一次边距。
-    if (floated.add(bar) && bar.background?.javaClass?.name != Glass::class.java.name) float(bar)
-    settle(bar)
+    // ponytail: 浮起来之后关掉开关不会沉回去，重启 QQ 才复原；复原要存一堆原值，不值。
+    if (bar.background?.javaClass?.name == Glass::class.java.name) floated.add(bar)
+    else if (on("玻璃底栏") && floated.add(bar)) float(bar)
+    val glass = bar in floated
+    if (glass) settle(bar)
     // material TabLayout：bar → SlidingTabIndicator → TabView × N
     (bar.getChildAt(0) as? ViewGroup)?.let { strip ->
         for (i in 0 until strip.childCount) {
             val tab = strip.getChildAt(i)
-            hide(tab, texts(tab).any { "频道" in it || "动态" in it || "小世界" in it })
+            hide(tab, on("藏频道动态") && texts(tab).any { "频道" in it || "动态" in it || "小世界" in it })
         }
     }
-    // QQ 给底栏铺的通栏模糊带、分割细线、纯色垫底：胶囊两侧会露出来，都藏。
     if (bar.height == 0) return
+    knob(bar)
+    // QQ 给底栏铺的通栏模糊带、分割细线、纯色垫底：胶囊两侧会露出来，都藏。
+    if (!glass) return
     val frame = generateSequence(bar.parent as? ViewGroup) { it.parent as? ViewGroup }
         .firstOrNull { it.javaClass.simpleName == "TabFrameLayout" } ?: bar.parent as? ViewGroup
     frame?.let { clear(it, bar) }
