@@ -1,136 +1,22 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-  ~ QAuxiliary - An Xposed module for QQ/TIM
-  ~ Copyright (C) 2019-2022 qwq233@qwq2333.top
-  ~ https://github.com/cinit/QAuxiliary
-  ~
-  ~ This software is non-free but opensource software: you can redistribute it
-  ~ and/or modify it under the terms of the GNU Affero General Public License
-  ~ as published by the Free Software Foundation; either
-  ~ version 3 of the License, or any later version and our eula as published
-  ~ by QAuxiliary contributors.
-  ~
-  ~ This software is distributed in the hope that it will be useful,
-  ~ but WITHOUT ANY WARRANTY; without even the implied warranty of
-  ~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  ~ Affero General Public License for more details.
-  ~
-  ~ You should have received a copy of the GNU Affero General Public License
-  ~ and eula along with this software.  If not, see
-  ~ <https://www.gnu.org/licenses/>
-  ~ <https://github.com/cinit/QAuxiliary/blob/master/LICENSE.md>.
-  -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-
-    <permission
-        android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-        android:protectionLevel="signature"
-        tools:node="remove" />
-
-    <uses-permission
-        android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-        tools:node="remove" />
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:icon="@drawable/icon"
-        android:label="@string/app_name"
-        android:name=".util.hookstatus.ModuleAppImpl"
-        android:resizeableActivity="true"
-        android:description="@string/xposeddescription"
-        android:theme="@style/AppTheme.Def"
-        android:vmSafeMode="false"
-        android:useEmbeddedDex="false"
-        android:enableOnBackInvokedCallback="true"
-        tools:ignore="AllowBackup,GoogleAppIndexingWarning,UnusedAttribute">
-        <activity
-            android:exported="true"
-            android:icon="@drawable/icon"
-            android:name="io.github.qauxv.activity.ConfigV2Activity"
-            android:theme="@style/Theme.MaiTungTMDesign.DayNight">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="de.robv.android.xposed.category.MODULE_SETTINGS" />
-            </intent-filter>
-        </activity>
+        android:name=".ui.QselfApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Qself"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
         <activity
-            android:enabled="false"
+            android:name=".ui.MainActivity"
             android:exported="true"
-            android:icon="@drawable/icon"
-            android:name="me.ketal.ui.activity.QFileShareToIpadActivity"
-            android:theme="@style/NoDisplay">
-            <intent-filter android:label="@string/send_to_ipad">
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-
-                <data android:mimeType="image/*" />
-                <data android:mimeType="video/*" />
-                <data android:mimeType="audio/*" />
-                <data android:mimeType="application/*" />
-                <data android:mimeType="text/*" />
-            </intent-filter>
-            <intent-filter android:label="@string/send_to_ipad">
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/*" />
-            </intent-filter>
-        </activity>
-
-        <activity-alias
-            android:exported="true"
-            android:icon="@drawable/icon"
-            android:label="@string/app_name"
-            android:name=".activity.ConfigV2ActivityAlias"
-            android:targetActivity="io.github.qauxv.activity.ConfigV2Activity"
-            android:theme="@style/Theme.MaiTungTMDesign.DayNight">
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="de.robv.android.xposed.category.MODULE_SETTINGS" />
             </intent-filter>
-        </activity-alias>
-
-        <activity
-            android:exported="false"
-            android:name=".activity.SettingsUiFragmentHostActivity"
-            android:theme="@style/AppTheme.Def" />
-
-        <activity
-            android:exported="false"
-            android:name=".activity.ShadowSafTransientActivity"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-
-        <meta-data
-            android:name="xposedmodule"
-            android:value="true" />
-        <meta-data
-            android:name="xposeddescription"
-            android:value="@string/xposeddescription" />
-        <meta-data
-            android:name="xposedminversion"
-            android:value="51" />
-        <meta-data
-            android:name="xposedscope"
-            android:resource="@array/xposedscope" />
-
-        <provider
-            android:name="androidx.startup.InitializationProvider"
-            android:authorities="${applicationId}.androidx-startup"
-            android:exported="false"
-            tools:node="remove"
-            tools:ignore="MissingClass" />
-
+        </activity>
     </application>
-
-    <queries>
-        <package android:name="com.tencent.mobileqq" />
-        <package android:name="com.tencent.mobileqqi" />
-        <package android:name="com.tencent.tim" />
-        <package android:name="com.tencent.qqlite" />
-        <package android:name="com.tencent.minihd.qq" />
-        <package android:name="me.weishu.exp" />
-        <package android:name="de.robv.android.xposed.installer" />
-        <package android:name="org.lsposed.manager" />
-        <package android:name="com.android.shell" />
-    </queries>
-
 </manifest>
