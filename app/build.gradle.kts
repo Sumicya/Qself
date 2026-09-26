@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -9,45 +8,45 @@ android {
 
     defaultConfig {
         applicationId = "sumicya.qself"
-        // Android 16. Glass needs RenderEffect + AGSL, and QQ 9.2.x needs 16 anyway.
-        minSdk = 36
+        minSdk = 31 // RenderEffect
         targetSdk = 37
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 300
+        versionName = "0.3.0"
+    }
+
+    // 固定签名（app/qself.p12，密码 qself）：每次 CI 出的包都能直接覆盖安装，热重载才接得上。
+    signingConfigs.getByName("debug") {
+        storeFile = file("qself.p12")
+        storePassword = "qself"
+        keyAlias = "qself"
+        keyPassword = "qself"
     }
 
     buildTypes {
+        // R8 只裁不混淆：把没用到的 kotlin-stdlib 裁掉，崩溃栈还是明文。
+        debug {
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
         release {
-            isMinifyEnabled = false
-            // Same key as debug, so `assembleRelease` can be installed over a debug build.
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("debug")
         }
+    }
+
+    buildFeatures {
+        buildConfig = true // 只为日志里那一句版本号
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
-
-    buildFeatures {
-        compose = true
-        buildConfig = true
-    }
-
-    packaging {
-        resources.excludes += setOf("META-INF/*.version", "kotlin/**", "DebugProbesKt.bin")
-    }
 }
 
 dependencies {
-    // Provided by LSPosed inside QQ. Must never be packaged.
+    // LSPosed 在 QQ 进程里提供，绝不打进 APK。
     compileOnly("io.github.libxposed:api:102.0.0")
-    // Module app side only: remote preferences + hot reload.
-    implementation("io.github.libxposed:service:102.0.0")
-
-    implementation(platform("androidx.compose:compose-bom:2026.09.00"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.foundation:foundation")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.activity:activity-compose:1.13.0")
+    testImplementation("junit:junit:4.13.2")
 }

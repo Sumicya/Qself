@@ -1,11 +1,9 @@
-# Qself CI. 这个文件必须放在 .github/workflows/build.yml：
+# Qself CI。agent 没有 workflow 权限，这份要由人复制过去：
 #
 #   cp ci/build.yml .github/workflows/build.yml
-#   git add .github/workflows/build.yml && git commit -m "ci: log failures" && git push
+#   git add .github/workflows/build.yml && git commit -m "ci: 先跑单元测试再出包" && git push
 #
-# 之后每次 push 都会构建：APK 在 Actions 的 Artifacts 里，也覆盖到固定链接
-#   https://github.com/Sumicya/Qself/releases/download/ci/Qself-debug.apk
-# 上（浏览器点一下就直接下载）；构建失败时把 Gradle 日志的尾巴贴成本次提交的 comment。
+# 每次 push：跑 ProtoTest，出 debug APK 放进 Artifacts；失败时把 Gradle 日志尾巴贴成提交评论。
 name: Build
 
 on:
@@ -31,10 +29,10 @@ jobs:
           packages: 'platform-tools'
       - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
       - uses: gradle/actions/setup-gradle@v6
-      - name: Run ./gradlew --no-daemon :app:assembleDebug
+      - name: Test and build
         run: |
           set -o pipefail
-          ./gradlew --no-daemon :app:assembleDebug 2>&1 | tee build.log
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug 2>&1 | tee build.log
       - name: Check libxposed packaging
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
@@ -46,15 +44,6 @@ jobs:
           name: Qself-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      - name: Publish the rolling CI release
-        if: github.event_name == 'push'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cp app/build/outputs/apk/debug/app-debug.apk Qself-debug.apk
-          gh release view ci >/dev/null 2>&1 || gh release create ci --prerelease --title "CI build" --notes "每次 push 覆盖这个附件" --target "$GITHUB_SHA"
-          gh release upload ci Qself-debug.apk --clobber
       - name: Publish the build log on failure
         if: failure()
         env:
