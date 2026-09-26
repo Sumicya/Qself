@@ -81,6 +81,9 @@ object Core {
         syncAll()
         started = true
         log(Log.INFO, "started in $process")
+        // QQ can die before anyone gets to open the settings app, so the whole report also goes to the
+        // LSPosed log (LSPosed manager → 日志). That log survives a crash, the in-app report does not.
+        for (line in report().trim().lineSequence()) log(Log.INFO, line)
     }
 
     fun stop() {
