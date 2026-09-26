@@ -65,7 +65,7 @@ abstract class ViewRule(id: String, val inLists: Boolean = false) : Feature(id) 
     internal val hidden = WeakHashMap<View, Int>()
     var hits = 0
 
-    protected abstract fun match(v: View): Boolean
+    abstract fun match(v: View): Boolean
 
     override fun install() = Views.refresh()
     override fun uninstall() {

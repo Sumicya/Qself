@@ -9,7 +9,7 @@ import sumicya.qself.Catalog
 class Entry : XposedModule() {
 
     override fun onModuleLoaded(param: XposedModuleInterface.ModuleLoadedParam) {
-        Core.process = param.processName
+        Core.onProcess(param.processName)
     }
 
     override fun onPackageReady(param: XposedModuleInterface.PackageReadyParam) {
@@ -27,7 +27,7 @@ class Entry : XposedModule() {
     /** New generation. Package callbacks are not replayed, so boot from the live app. */
     override fun onHotReloaded(param: XposedModuleInterface.HotReloadedParam) {
         param.oldHookHandles.forEach { runCatching { it.unhook() } }
-        Core.process = param.processName
+        Core.onProcess(param.processName)
         val loader = Core.applicationClassLoader() ?: return
         Core.start(this, loader)
         Core.replayActivity()

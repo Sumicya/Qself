@@ -32,6 +32,11 @@ object Core {
     var process: String = ""
         private set
 
+    /** Called by the entry point as soon as the framework tells us where we landed. */
+    fun onProcess(name: String) {
+        process = name
+    }
+
     private val main = Handler(Looper.getMainLooper())
     private val infra = mutableListOf<XposedInterface.HookHandle>()
     private var prefs: SharedPreferences? = null
