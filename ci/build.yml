@@ -1,9 +1,10 @@
-# Qself CI. This file has to live at .github/workflows/build.yml:
+# Qself CI. 这个文件必须放在 .github/workflows/build.yml：
 #
-#   mkdir -p .github/workflows && cp ci/build.yml .github/workflows/build.yml
-#   git add .github/workflows/build.yml && git commit -m "ci: build" && git push
+#   cp ci/build.yml .github/workflows/build.yml
+#   git add .github/workflows/build.yml && git commit -m "ci: log failures" && git push
 #
-# Once it is there, every push builds the APK and uploads it as an artifact.
+# 之后每次 push 都会构建，APK 在 Actions 的 Artifacts 里；
+# 构建失败时把 Gradle 日志的尾巴贴成本次提交的 comment —— 这样 agent 也能直接读到。
 name: Build
 
 on:
@@ -12,7 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   apk:
@@ -29,7 +30,10 @@ jobs:
           packages: 'platform-tools'
       - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
       - uses: gradle/actions/setup-gradle@v6
-      - run: ./gradlew --no-daemon :app:assembleDebug
+      - name: Run ./gradlew --no-daemon :app:assembleDebug
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon :app:assembleDebug 2>&1 | tee build.log
       - name: Check libxposed packaging
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
@@ -41,3 +45,10 @@ jobs:
           name: Qself-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+      - name: Publish the build log on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -f build.log ] || echo "failed before gradle" > build.log
+          gh api -X POST "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" -f body="$(tail -c 6000 build.log)"
