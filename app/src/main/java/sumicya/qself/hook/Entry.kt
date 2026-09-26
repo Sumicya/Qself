@@ -19,7 +19,8 @@ class Entry : XposedModule() {
      */
     override fun onPackageLoaded(param: XposedModuleInterface.PackageLoadedParam) {
         if (param.packageName != Catalog.QQ || !param.isFirstPackage) return
-        Core.start(this, param.classLoader)
+        // API 102 exposes defaultClassLoader only; the vendored stub's classLoader is not in the release.
+        Core.start(this, param.defaultClassLoader)
     }
 
     /** Old generation, still inside the running QQ: take everything back down. */
