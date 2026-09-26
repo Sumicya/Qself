@@ -47,7 +47,9 @@ object GlassKit {
         }
     }
 
-    fun remove(host: View) = applied[host]?.let(applied::drop)
+    fun remove(host: View) {
+        applied[host]?.let(applied::drop)
+    }
 
     fun clearAll() = applied.dropAll()
 
@@ -403,7 +405,6 @@ object GlassTitle : ViewRule("glass_title") {
 object GlassChat : ViewRule("glass_chat") {
     private val rows = Decor<Row>()
     private val titles = Decor<GlassOn>()
-    private val cleared = HashMap<View, android.graphics.drawable.Drawable?>()
 
     override fun match(v: View): Boolean {
         when {
@@ -425,10 +426,11 @@ object GlassChat : ViewRule("glass_chat") {
         super.uninstall()
     }
 
-    private inner class Row(override val anchor: View) : DecorState {
+    private class Row(override val anchor: View) : DecorState {
         private val row = anchor
         private val lp = row.layoutParams as? ViewGroup.MarginLayoutParams
         private val margins = lp?.let { intArrayOf(it.leftMargin, it.rightMargin, it.bottomMargin) }
+        private val cleared = HashMap<View, Drawable?>()
 
         init {
             lp?.let {
@@ -438,10 +440,12 @@ object GlassChat : ViewRule("glass_chat") {
                 row.layoutParams = it
             }
             GlassKit.apply(row, capsule = true, elevationDp = 3f)
-            findEdit(row)?.let { edit -> clear(edit); (edit.parent as? View)?.let(::clear) }
+            sync()
         }
 
-        fun sync() = findEdit(row)?.let { edit -> clear(edit); (edit.parent as? View)?.let(::clear) }
+        fun sync() {
+            findEdit(row)?.let { edit -> clear(edit); (edit.parent as? View)?.let(::clear) }
+        }
 
         private fun clear(v: View) {
             if (cleared.containsKey(v)) return
