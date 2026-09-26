@@ -21,6 +21,7 @@ object TabBar {
     private val feedLabels = setOf("动态", "小世界")
 
     object Glass : Feature("glass_bar") {
+        override val live = true
         override fun install() = refresh()
         override fun uninstall() = refresh()
         override fun onResume(activity: Activity) = attach(activity)
@@ -28,6 +29,7 @@ object TabBar {
     }
 
     object HideGuild : Feature("hide_tab_guild") {
+        override val live = true
         override fun install() = refresh()
         override fun uninstall() = refresh()
         override fun onResume(activity: Activity) = attach(activity)
@@ -35,6 +37,7 @@ object TabBar {
     }
 
     object HideFeed : Feature("hide_tab_feed") {
+        override val live = true
         override fun install() = refresh()
         override fun uninstall() = refresh()
         override fun onResume(activity: Activity) = attach(activity)

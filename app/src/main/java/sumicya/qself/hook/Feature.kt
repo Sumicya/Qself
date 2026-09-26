@@ -23,6 +23,13 @@ abstract class Feature(val id: String, val mainOnly: Boolean = true) {
 
     val hookCount: Int get() = handles.size
 
+    /**
+     * True when flipping this switch only touches views, with no Xposed hook involved: those can be
+     * flipped while QQ is running. Everything else waits for a hot reload, because hooks may only be
+     * installed while the package is still loading.
+     */
+    open val live: Boolean get() = false
+
     /** One extra line in the report, e.g. how many views were hit. */
     open fun status(): String? = null
 
@@ -40,7 +47,8 @@ abstract class Feature(val id: String, val mainOnly: Boolean = true) {
         } catch (t: Throwable) {
             handles.forEach { runCatching { it.unhook() } }
             handles.clear()
-            error = t.toString().take(160)
+            error = if (t is IllegalStateException && t.message?.contains("hook mutation") == true)
+                "钩子窗口已关闭：热重载或重启 QQ 后生效" else t.toString().take(160)
             Core.log(Log.WARN, "$id failed: $t")
         }
     }

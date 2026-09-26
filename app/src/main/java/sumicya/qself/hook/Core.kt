@@ -62,7 +62,12 @@ object Core {
 
     /** Held strongly: SharedPreferences keeps only weak references to its listeners. */
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        main.post { if (key == null) syncAll() else Catalog.byId[key]?.let { sync(feature(it.id)) } }
+        main.post {
+            if (key == null) syncAll()
+            // A switch that installs hooks cannot be flipped from here any more (the window is closed);
+            // it waits for the hot reload the settings app sends right after writing the preference.
+            else features.firstOrNull { it.id == key }?.let { f -> if (f.live) sync(f) }
+        }
     }
 
     fun start(module: XposedModule, loader: ClassLoader) {
@@ -100,8 +105,6 @@ object Core {
     }
 
     fun log(priority: Int, message: String) = runCatching { module.log(priority, "Qself", message) }
-
-    private fun feature(id: String) = features.firstOrNull { it.id == id }
 
     private fun syncAll() = features.forEach(::sync)
 
@@ -178,6 +181,7 @@ object Core {
                     f.status()?.let { append(" · ").append(it) }
                 }
                 f.error != null -> append("  失败: ").append(f.error)
+                (isMain || !f.mainOnly) && isEnabled(f.id) -> append("  等热重载")
                 else -> append("  关")
             }
             appendLine()

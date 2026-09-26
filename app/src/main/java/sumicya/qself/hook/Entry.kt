@@ -12,7 +12,12 @@ class Entry : XposedModule() {
         Core.onProcess(param.processName)
     }
 
-    override fun onPackageReady(param: XposedModuleInterface.PackageReadyParam) {
+    /**
+     * Hooks can only be installed while the package is loading: after that window the framework seals
+     * the generation ("no longer accepting hook mutations"). So everything Qself installs on startup
+     * goes in right here, from the preferences as they are at this moment.
+     */
+    override fun onPackageLoaded(param: XposedModuleInterface.PackageLoadedParam) {
         if (param.packageName != Catalog.QQ || !param.isFirstPackage) return
         Core.start(this, param.classLoader)
     }

@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -75,6 +77,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Screen(service: XposedService?) {
+    val context = LocalContext.current
     val prefs = remember(service) { runCatching { service?.getRemotePreferences(Catalog.PREFS) }.getOrNull() }
     val state = remember(prefs) {
         mutableStateMapOf<String, Boolean>().apply {
@@ -120,6 +123,7 @@ private fun Screen(service: XposedService?) {
                                 if (prefs != null) {
                                     state[item.id] = !on
                                     prefs.edit().putBoolean(item.id, !on).apply()
+                                    Reloader.schedule(context)
                                 }
                             }
                             ListItem(
@@ -134,6 +138,33 @@ private fun Screen(service: XposedService?) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Hooks may only be installed while QQ's package is loading, so flipping a switch writes the
+ * preference and then asks LSPosed to hot reload the module inside the running QQ: the old
+ * generation tears its hooks down, the new one installs whatever the preferences now say.
+ * Flipping several switches in a row is collapsed into one reload.
+ */
+private object Reloader {
+    private val handler = Handler(Looper.getMainLooper())
+    private var context: Context? = null
+    private var service: XposedService? = null
+    private val fire = Runnable {
+        val svc = service ?: return@Runnable
+        val ctx = context ?: return@Runnable
+        val targets = runCatching { svc.runningTargets }.getOrDefault(emptyList())
+        if (targets.isEmpty()) return@Runnable
+        targets.forEach { target -> runCatching { svc.hotReloadModule(target, null) { _, _ -> } } }
+        Toast.makeText(ctx, "已让 QQ 里的 Qself 热重载", Toast.LENGTH_SHORT).show()
+    }
+
+    fun schedule(ctx: Context) {
+        context = ctx
+        service = Framework.service.value
+        handler.removeCallbacks(fire)
+        handler.postDelayed(fire, 500)
     }
 }
 

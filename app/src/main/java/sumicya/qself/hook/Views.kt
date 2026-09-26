@@ -65,6 +65,9 @@ abstract class ViewRule(id: String, val inLists: Boolean = false) : Feature(id) 
     internal val hidden = WeakHashMap<View, Int>()
     var hits = 0
 
+    /** Hiding is done by the scanner, not by a hook, so these flip while QQ runs. */
+    override val live: Boolean get() = true
+
     abstract fun match(v: View): Boolean
 
     override fun install() = Views.refresh()
@@ -236,6 +239,7 @@ object TgDrawer : ViewRule("tg_drawer", inLists = true) {
  * QQ's own files/qself/ so rules can be tuned from real data.
  */
 object Dump : Feature("debug_dump") {
+    override val live = true
     private var lastHash = 0
 
     override fun install() = Views.refresh()

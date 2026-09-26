@@ -2,8 +2,9 @@
 
 **自由 · 简单 · 现代 · 原生** —— 给 NT QQ 用的 LSPosed 模块，GPL-3.0。
 
-- **现代**：只用 libxposed **API 102**（LSPosed 2.x），minSdk 36。带**热重载**：设置页拨开关通过
-  LSPosed 远程配置推到正在运行的 QQ，钩子当场装上/卸下，不用重启 QQ；换新 APK 走 `autoHotReload`。
+- **现代**：只用 libxposed **API 102**（LSPosed 2.x），minSdk 36。钩子只在包加载阶段装
+  （框架之后会封掉这一代），所以设置页拨开关 = 写远程配置 + 让 QQ 里的 Qself 热重载一次：
+  旧的一代自己拆干净，新的一代按新配置装，不用重启 QQ；换新 APK 也走 `autoHotReload`。
 - **原生**：QQ 里不塞任何 UI 库。玻璃底栏就是 QQ 自己的底栏（图标、未读、点击全是 QQ 原生的），
   背景是一颗 AGSL 圆角矩形透镜（SDF 折射 + 一点色散）+ 系统 `RenderNode`/`RenderEffect` 模糊。
   设置页是 Jetpack Compose Material 3（动态取色），只跑在模块自己的进程里。
@@ -24,7 +25,7 @@
 
 1. Android 16+，LSPosed 2.x（libxposed API 102）。
 2. 装 APK（`sumicya.qself`），在 LSPosed 里启用，作用域是静态声明的 QQ。
-3. 打开 Qself 拨开关。第一次启用后重启一次 QQ，之后改开关即时生效。
+3. 打开 Qself 拨开关。第一次启用后重启一次 QQ；之后纯界面的开关当场生效，要装钩子的开关由设置页顺手给 QQ 发一次热重载（半秒内合并成一次），也不用重启 QQ。
 4. 出问题：设置页「生成报告」→ 复制贴出来（含每个开关的状态、失败原因和钩子数）。
 
 目标：QQ 9.2.10 / Android 16 / LSPosed 2.2.0。
