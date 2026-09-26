@@ -91,3 +91,68 @@ member com.tencent.feedback.eup.CrashReport#init
 lit    android.app.ActivityThread
 lit    com.tencent.mobileqq
 lit    sumicya.qself.REPORT
+
+# ---------- 底栏 TabBar.kt
+class  com.tencent.mobileqq.activity.SplashActivity
+class~ QQTabLayout
+class~ QQTabWidget
+class  com.google.android.material.tabs.TabLayout
+member com.google.android.material.tabs.TabLayout#setSelectedTabIndicator
+member com.google.android.material.tabs.TabLayout#setSelectedTabIndicatorGravity
+member com.google.android.material.tabs.TabLayout#setSelectedTabIndicatorHeight
+member com.google.android.material.tabs.TabLayout#setTabIndicatorAnimationMode
+member com.google.android.material.tabs.TabLayout#setTabIndicatorFullWidth
+member com.google.android.material.tabs.TabLayout#setTabRippleColor
+text   频道
+text   动态
+text   小世界
+
+# ---------- 玻璃 Glass.kt
+class  com.tencent.mobileqq.utils.QQTheme
+member com.tencent.mobileqq.utils.QQTheme#isNowThemeIsNight
+class~ QQBlurView
+class~ QQNativeBlurView
+class~ TitleAreaLeftLayout
+class~ AIOTitleRelativeLayout
+
+# ---------- 输入栏 TG 化 InputBar.kt
+class~ PanelIconLinearLayout
+res    send_btn
+text   表情
+text   相册
+text   图片
+text   更多
+text   语音
+
+# ---------- 聊天标题栏精简 Views.kt
+text   一起听
+text   一起K歌
+text   一起派对
+text   一起看
+text   一起玩
+text   QQ秀
+text   厘米秀
+text   群游戏
+text   小世界
+
+# ---------- 侧栏精简 Views.kt
+text   开通会员
+text   会员中心
+text   超级会员
+text   QQ会员
+text   QQ钱包
+text   钱包
+text   个性装扮
+text   装扮
+text   我的小世界
+text   免流量
+text   QQ小游戏
+text   小游戏
+text   超级QQ秀
+text   QQ空间
+text   游戏中心
+text   腾讯文档
+text   打卡
+text   当地天气
+text   天气
+text   等级

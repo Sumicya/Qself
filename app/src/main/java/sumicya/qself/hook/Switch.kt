@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself.hook
 
+import android.app.Activity
 import android.util.Log
 import io.github.libxposed.api.XposedInterface
 import java.lang.reflect.Executable

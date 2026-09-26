@@ -34,9 +34,12 @@ object Core {
 
     val switches: List<Switch> by lazy {
         listOf(
+            TabBar.Glass, TabBar.HideGuild, TabBar.HideFeed,
+            GlassTitle, GlassChat, InputBar.Tg, TgTitleBar, TgDrawer,
             PlainBubble, PlainFont, PlainNick, NoPendant,
             AntiRecall, MultiForward, PlusPanel, NoLightInteraction, NoDropSticker,
             SystemWebView, NoTelemetry, NoCrashReport,
+            Dump,
         )
     }
 
@@ -60,8 +63,9 @@ object Core {
 
     /** 强引用持有：SharedPreferences 只弱引用自己的监听器。 */
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        // 钩子只能在包加载时装，所以这里不装：开关写完 pref，设置页会紧跟着发一次热重载。
+        // 装钩子的开关只能等热重载（设置页写完 pref 会跟着发一次），只改界面的开关立刻生效。
         if (key == null) main.post { syncAll() }
+        else switches.firstOrNull { it.id == key && it.live }?.let { s -> main.post { sync(s) } }
     }
 
     fun start(module: XposedModule, loader: ClassLoader) {
@@ -90,6 +94,8 @@ object Core {
             reporter = null
             prefs?.unregisterOnSharedPreferenceChangeListener(listener)
             switches.forEach { it.disable() }
+            GlassKit.clearAll()
+            Views.clearAll()
             infra.forEach { runCatching { it.unhook() } }
             infra.clear()
             prefs = null
@@ -122,6 +128,7 @@ object Core {
     private fun resumed(activity: Activity) {
         front = WeakReference(activity)
         listen(activity.applicationContext)
+        switches.forEach { if (it.active) runCatching { it.onResume(activity) } }
     }
 
     /** 热重载之后没人告诉我们前台是哪个 Activity，去问 ActivityThread。 */
@@ -164,7 +171,10 @@ object Core {
         for (s in switches) {
             append(if (s.active) "✓ " else if (s.error != null) "✗ " else "· ").append(s.id)
             when {
-                s.active -> if (s.hookCount > 0) append("  钩子 ").append(s.hookCount)
+                s.active -> {
+                    if (s.hookCount > 0) append("  钩子 ").append(s.hookCount)
+                    s.status()?.let { append(" · ").append(it) }
+                }
                 s.error != null -> append("  失败: ").append(s.error)
                 (isMain || !s.mainOnly) && isEnabled(s.id) -> append("  等热重载")
                 else -> append("  关")

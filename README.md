@@ -45,28 +45,14 @@
 
 ```
 app/src/main/java/sumicya/qself/
-  Catalog.kt          所有开关（设置页和 QQ 里共用一份）
-  hook/Entry.kt       libxposed 入口 + 热重载
-  hook/Core.kt        QQ 进程里的状态、远程配置、前台 Activity、自检报告
-  hook/Feature.kt     开关基类：装钩子 / 卸钩子 / 反射帮手
-  hook/Glass.kt       AGSL 透镜 + RenderNode 玻璃；首页顶栏、聊天标题栏、输入栏玻璃
-  hook/TabBar.kt      QQ 自己的底栏：浮起、玻璃、滑块胶囊、隐藏不要的 Tab
-  hook/InputBar.kt    输入栏 TG 化（QQ 的按钮原地镜像，点击穿透回 QQ）
-  hook/Views.kt       按「看得见的东西」找控件的规则引擎 + 界面结构导出
-  hook/Msg.kt         内核 VAS 结构、防撤回、转发多选、「+」面板、昵称
-  hook/Quiet.kt       禁 X5、屏蔽统计上报、屏蔽崩溃上报
-  hook/Proto.kt       认撤回推送用的极简 protobuf
-  ui/                 Compose Material 3 设置页
-```
-
-## 目录
-
-```
-app/src/main/java/sumicya/qself/
   Catalog.kt          开关表（设置页和 QQ 里的代码都读这一份）
   hook/Entry.kt       libxposed 入口 + 热重载
   hook/Core.kt        QQ 进程里的状态、远程 pref、前台 Activity、自检报告
   hook/Switch.kt      开关基类：装钩子 / 卸钩子 / 反射帮手
+  hook/Glass.kt       AGSL 透镜 + RenderNode 玻璃；首页顶栏、聊天标题栏、输入栏玻璃
+  hook/TabBar.kt      QQ 自己的底栏：浮起、玻璃、滑块胶囊、隐藏不要的页签
+  hook/InputBar.kt    输入栏 TG 化（QQ 的按钮原地镜像，点击穿透回 QQ）
+  hook/Views.kt       按「看得见的东西」找控件的规则引擎 + 界面结构导出
   hook/Msg.kt         VAS 会员结构、防撤回、转发页、「+」面板、昵称、轻互动、表情雨
   hook/Quiet.kt       禁 X5、屏蔽统计上报、屏蔽崩溃上报
   hook/Proto.kt       认撤回推送用的极简 protobuf
@@ -91,7 +77,7 @@ tools/
 pkg install python                        # 只装这一次
 cat qq.a? > qq.apk                        # qqapk 仓库里的分包先拼起来
 python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/java
-# 73 条符号，0 条对不上 -> 退出码 0
+# 128 条符号，0 条对不上 -> 退出码 0
 ```
 
 红了就是 QQ 换了名字。要么按它打印出来的真签名改代码，要么把这条功能删掉。
