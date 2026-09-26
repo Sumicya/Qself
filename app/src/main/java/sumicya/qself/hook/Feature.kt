@@ -66,16 +66,17 @@ abstract class Feature(val id: String, val mainOnly: Boolean = true) {
             .intercept { chain -> body(chain) }
     }
 
-    protected fun hooks(targets: Collection<Executable>, body: (XposedInterface.Chain) -> Any?) =
-        targets.forEach { hook(it, body) }
-
     /** Replace the result, skipping the original. */
     protected fun constant(target: Method, value: Any?) = hook(target) { value }
 
-    protected fun afterConstructed(clazz: Class<*>, body: (Any) -> Unit) = hooks(clazz.declaredConstructors) { chain ->
-        val result = chain.proceed()
-        chain.thisObject?.let(body)
-        result
+    protected fun afterConstructed(clazz: Class<*>, body: (Any) -> Unit) {
+        for (constructor in clazz.declaredConstructors) {
+            hook(constructor) { chain ->
+                val result = chain.proceed()
+                chain.thisObject?.let(body)
+                result
+            }
+        }
     }
 
     protected fun setField(obj: Any, name: String, value: Any) {

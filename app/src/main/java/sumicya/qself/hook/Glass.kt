@@ -165,29 +165,29 @@ class GlassSurface(private val host: View, private val capsule: Boolean) :
     }
 
     override fun draw(canvas: Canvas) {
-        val bounds = bounds
-        if (bounds.isEmpty) return
+        val area = bounds
+        if (area.isEmpty) return
         val target = canvas as? RecordingCanvas
         if (target == null || shader == null || recording) {
-            flat(canvas, bounds)
+            flat(canvas, area)
             return
         }
         recording = true
         try {
-            node.setPosition(0, 0, bounds.width(), bounds.height())
-            updateEffect(bounds.width(), bounds.height())
-            if (record(bounds.width(), bounds.height())) target.drawRenderNode(node) else flat(canvas, bounds)
+            node.setPosition(0, 0, area.width(), area.height())
+            updateEffect(area.width(), area.height())
+            if (record(area.width(), area.height())) target.drawRenderNode(node) else flat(canvas, area)
         } catch (t: Throwable) {
-            flat(canvas, bounds)
+            flat(canvas, area)
         } finally {
             recording = false
         }
     }
 
-    private fun flat(canvas: Canvas, bounds: android.graphics.Rect) {
-        rect.set(bounds)
+    private fun flat(canvas: Canvas, area: Rect) {
+        rect.set(area)
         fill.color = if (GlassKit.night(host)) 0x8C1C1C1E.toInt() else 0x80F4F4F7.toInt()
-        val r = if (capsule) bounds.height() / 2f else 0f
+        val r = if (capsule) area.height() / 2f else 0f
         canvas.drawRoundRect(rect, r, r, fill)
     }
 
