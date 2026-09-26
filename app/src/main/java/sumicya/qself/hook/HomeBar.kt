@@ -24,21 +24,27 @@ object HomeBar {
         override fun install() = refresh()
         override fun uninstall() = refresh()
         override fun onResume(activity: Activity) = attach(activity)
+        override fun status() = barStatus() + (pillError?.let { " · 滑块失败 $it" } ?: "")
     }
 
     object HideGuild : Feature("hide_tab_guild") {
         override fun install() = refresh()
         override fun uninstall() = refresh()
         override fun onResume(activity: Activity) = attach(activity)
+        override fun status() = barStatus() + " · 已藏 ${applied?.hiddenCount ?: 0}"
     }
 
     object HideFeed : Feature("hide_tab_feed") {
         override fun install() = refresh()
         override fun uninstall() = refresh()
         override fun onResume(activity: Activity) = attach(activity)
+        override fun status() = barStatus() + " · 已藏 ${applied?.hiddenCount ?: 0}"
     }
 
     private var applied: Applied? = null
+    private var pillError: String? = null
+
+    private fun barStatus() = if (applied?.bar?.isAttachedToWindow == true) "底栏已找到" else "底栏未找到"
 
     private fun wanted() = Glass.active || HideGuild.active || HideFeed.active
 
@@ -72,6 +78,7 @@ object HomeBar {
         private val lp = bar.layoutParams
         private val margins = (lp as? ViewGroup.MarginLayoutParams)?.let { intArrayOf(it.leftMargin, it.rightMargin, it.bottomMargin) }
         private val hiddenTabs = HashMap<View, Int>()
+        val hiddenCount get() = hiddenTabs.size
         private var glass: GlassSurface? = null
 
         private val relayout = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> filterTabs() }
@@ -124,6 +131,7 @@ object HomeBar {
          * selects through it), so it follows taps and pager swipes with the elastic animation for free.
          */
         private fun indicator(on: Boolean) = runCatching {
+            pillError = null
             val c = bar.javaClass
             val int = Int::class.javaPrimitiveType!!
             val bool = Boolean::class.javaPrimitiveType!!
@@ -132,12 +140,14 @@ object HomeBar {
                 c.getMethod("setSelectedTabIndicatorGravity", int).invoke(bar, 3) // stretch
                 c.getMethod("setTabIndicatorAnimationMode", int).invoke(bar, 1) // elastic
                 c.getMethod("setSelectedTabIndicator", Drawable::class.java).invoke(bar, PillDrawable(bar))
+                // The pill has no intrinsic height; without this QQ's 0-height indicator stays invisible.
+                c.getMethod("setSelectedTabIndicatorHeight", int).invoke(bar, bar.height.coerceAtLeast(dp(bar, 56f).toInt()))
                 runCatching { c.getMethod("setTabRippleColor", ColorStateList::class.java).invoke(bar, ColorStateList.valueOf(0)) }
             } else {
                 c.getMethod("setSelectedTabIndicator", Drawable::class.java).invoke(bar, ColorDrawable(0))
                 c.getMethod("setSelectedTabIndicatorGravity", int).invoke(bar, 0)
             }
-        }
+        }.onFailure { pillError = it.toString().take(120) }
 
         fun restore() {
             bar.removeOnLayoutChangeListener(relayout)

@@ -17,7 +17,6 @@ import android.graphics.RenderNode
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
-import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
@@ -107,7 +106,8 @@ class GlassDrawable(private val host: View, private val spec: GlassSpec) : Drawa
     private val hl = IntArray(2)
     private val vl = IntArray(2)
     private var drawing = false
-    private val shader: RuntimeShader? = if (Build.VERSION.SDK_INT >= 33) runCatching { RuntimeShader(SHADER) }.getOrNull() else null
+    private val shader: RuntimeShader? = runCatching { RuntimeShader(SHADER) }
+        .onFailure { shaderError = it.toString() }.getOrNull()
     private var effectKey = ""
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
@@ -130,7 +130,7 @@ class GlassDrawable(private val host: View, private val spec: GlassSpec) : Drawa
             }
         }
         if (!shaded) {
-            // No AGSL (Android 12): blur only, plus a flat tint.
+            // Software canvas (screenshots, transitions) or no AGSL: a flat tint.
             fill.color = if (night) 0x8C1C1C1E.toInt() else 0x80F4F4F7.toInt()
             rect.set(b)
             val r = if (spec.capsule) b.height() / 2f else 0f
@@ -156,7 +156,9 @@ class GlassDrawable(private val host: View, private val spec: GlassSpec) : Drawa
                 if (l.backgroundOnly) {
                     v.background?.let { bg -> bg.setBounds(0, 0, v.width, v.height); bg.draw(rc) }
                 } else {
-                    if (v.alpha < 1f) rc.saveLayerAlpha(0f, 0f, v.width.toFloat(), v.height.toFloat(), (v.alpha * 255).toInt())
+                    // View.draw() expects the caller to have applied the view's own scroll.
+                    rc.translate(-v.scrollX.toFloat(), -v.scrollY.toFloat())
+                    if (v.alpha < 1f) rc.saveLayerAlpha(v.scrollX.toFloat(), v.scrollY.toFloat(), (v.scrollX + v.width).toFloat(), (v.scrollY + v.height).toFloat(), (v.alpha * 255).toInt())
                     v.draw(rc)
                 }
                 rc.restore()
@@ -176,7 +178,7 @@ class GlassDrawable(private val host: View, private val spec: GlassSpec) : Drawa
             RenderEffect.createColorFilterEffect(ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.5f) })), fx,
         )
         val s = shader
-        if (s != null && Build.VERSION.SDK_INT >= 33) {
+        if (s != null) {
             val lens = GlassKit.dp(host, spec.lensDp)
             s.setFloatUniform("size", w.toFloat(), h.toFloat())
             if (spec.capsule) {
@@ -210,11 +212,15 @@ class GlassDrawable(private val host: View, private val spec: GlassSpec) : Drawa
     @Deprecated("Deprecated in Java")
     override fun getOpacity() = PixelFormat.TRANSLUCENT
 
-    private companion object {
+    companion object {
+        /** Why the AGSL lens could not be built, if it could not (self-check report). */
+        var shaderError: String? = null
+            private set
+
         // Own lens: inside the rounded rect, within `lens` px of the edge, sample the backdrop
         // pulled inwards along the edge normal, harder the closer to the edge. Then a base tint,
         // and an edge tint that fades in towards the rim.
-        const val SHADER = """
+        private const val SHADER = """
 uniform shader img;
 uniform float2 size;
 uniform float4 shape;
@@ -252,8 +258,11 @@ half4 main(float2 xy) {
 }
 
 /**
- * Puts glass behind a view and keeps it alive: QQ's own blur layers and dividers behind it are
- * held down, and the glass is re-recorded whenever the window draws. Everything is undone by [restore].
+ * Puts glass behind a view and keeps it fresh. The backdrop is re-recorded when something behind
+ * may have changed: a scroll anywhere in the window, a layout pass, or (throttled to 4 Hz) any other
+ * frame. It never invalidates itself in a loop, so an idle screen costs nothing. QQ's own blur
+ * layers and dividers behind it are held down; same-size wrappers lose their solid background.
+ * Listeners follow the host's window attachment. Everything is undone by [restore].
  */
 class GlassSurface(val host: View, spec: GlassSpec, private val elevationDp: Float = 0f) {
     private val background = host.background
@@ -262,15 +271,26 @@ class GlassSurface(val host: View, spec: GlassSpec, private val elevationDp: Flo
     private val elevation = host.elevation
     private val glass = GlassDrawable(host, spec)
     private val held = HashMap<View, Int>()
+    private val cleared = HashMap<View, Drawable?>()
     private val scratchLayers = ArrayList<Backdrop.Layer>()
     private val scratchObs = ArrayList<View>()
-    private var frames = 0
+    private var lastRefresh = 0L
+    private var observer: ViewTreeObserver? = null
 
-    private val preDraw = ViewTreeObserver.OnPreDrawListener {
-        // QQ re-shows its blur layers on scroll / theme change; check every few frames.
-        if (frames++ % 8 == 0) holdObstructions()
+    private fun refresh() {
+        lastRefresh = android.os.SystemClock.uptimeMillis()
         glass.invalidateSelf()
+    }
+
+    private val onScroll = ViewTreeObserver.OnScrollChangedListener { refresh() }
+    private val onLayout = ViewTreeObserver.OnGlobalLayoutListener { holdObstructions(); refresh() }
+    private val onPreDraw = ViewTreeObserver.OnPreDrawListener {
+        if (android.os.SystemClock.uptimeMillis() - lastRefresh > 250) refresh()
         true
+    }
+    private val attach = object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(v: View) = listen()
+        override fun onViewDetachedFromWindow(v: View) = unlisten()
     }
 
     init {
@@ -283,17 +303,43 @@ class GlassSurface(val host: View, spec: GlassSpec, private val elevationDp: Flo
         }
         if (elevationDp > 0) host.elevation = GlassKit.dp(host, elevationDp)
         holdObstructions()
-        host.viewTreeObserver.addOnPreDrawListener(preDraw)
+        host.addOnAttachStateChangeListener(attach)
+        if (host.isAttachedToWindow) listen()
+    }
+
+    private fun listen() {
+        unlisten()
+        observer = host.viewTreeObserver.also {
+            it.addOnScrollChangedListener(onScroll)
+            it.addOnGlobalLayoutListener(onLayout)
+            it.addOnPreDrawListener(onPreDraw)
+        }
+    }
+
+    private fun unlisten() {
+        observer?.takeIf { it.isAlive }?.let {
+            it.removeOnScrollChangedListener(onScroll)
+            it.removeOnGlobalLayoutListener(onLayout)
+            it.removeOnPreDrawListener(onPreDraw)
+        }
+        observer = null
     }
 
     private fun holdObstructions() {
         scratchObs.clear()
         Backdrop.layers(host, scratchLayers, scratchObs)
-        // QQ's blur layer may also sit inside the host itself, and a divider may be drawn after it.
-        (host as? ViewGroup)?.let { g -> for (i in 0 until g.childCount) g.getChildAt(i).takeIf(GlassKit::isBlur)?.let(scratchObs::add) }
+        val hr = GlassKit.rectInWindow(host, Rect())
+        val vr = Rect()
+        // QQ's blur layer may also sit inside the host; full-size children with a flat colour would hide the glass.
+        (host as? ViewGroup)?.let { g ->
+            for (i in 0 until g.childCount) {
+                val c = g.getChildAt(i)
+                if (GlassKit.isBlur(c)) scratchObs += c
+                else if (c.background is android.graphics.drawable.ColorDrawable && covers(GlassKit.rectInWindow(c, vr), hr)) clear(c)
+            }
+        }
+        // A divider may be drawn after the host, right on its edge.
         (host.parent as? ViewGroup)?.let { p ->
-            val hr = GlassKit.rectInWindow(host, Rect())
-            val vr = Rect()
             for (i in 0 until p.childCount) {
                 val v = p.getChildAt(i)
                 if (v === host || !GlassKit.isHairline(v, host)) continue
@@ -301,20 +347,38 @@ class GlassSurface(val host: View, spec: GlassSpec, private val elevationDp: Flo
                 if (Rect.intersects(vr, hr) || kotlin.math.abs(vr.centerY() - hr.top) < 8) scratchObs += v
             }
         }
+        // Wrappers exactly around the host paint over whatever should show through.
+        var a = host.parent as? View
+        while (a != null && covers(hr, GlassKit.rectInWindow(a, vr))) {
+            if (a.background != null) clear(a)
+            a = a.parent as? View
+        }
         for (v in scratchObs) {
             if (v !in held) held[v] = v.visibility
             if (v.visibility == View.VISIBLE) v.visibility = View.INVISIBLE
         }
     }
 
+    /** [a] covers [b] give or take a couple of pixels. */
+    private fun covers(a: Rect, b: Rect) = a.left <= b.left + 2 && a.top <= b.top + 2 && a.right >= b.right - 2 && a.bottom >= b.bottom - 2
+
+    private fun clear(v: View) {
+        if (v in cleared) return
+        cleared[v] = v.background
+        v.background = null
+    }
+
     fun restore() {
-        runCatching { host.viewTreeObserver.removeOnPreDrawListener(preDraw) }
+        host.removeOnAttachStateChangeListener(attach)
+        unlisten()
         host.background = background
         host.outlineProvider = outline
         host.clipToOutline = clip
         host.elevation = elevation
         held.forEach { (v, vis) -> v.visibility = vis }
         held.clear()
+        cleared.forEach { (v, bg) -> v.background = bg }
+        cleared.clear()
         glass.release()
     }
 }
@@ -326,6 +390,8 @@ class PillDrawable(private val host: View) : Drawable() {
     private val rect = RectF()
     private val inset = GlassKit.dp(host, 4f)
 
+    init { rim.maskFilter = BlurMaskFilter(GlassKit.dp(host, 5f), BlurMaskFilter.Blur.INNER) }
+
     override fun draw(canvas: Canvas) {
         val night = GlassKit.night(host)
         rect.set(bounds)
@@ -336,7 +402,6 @@ class PillDrawable(private val host: View) : Drawable() {
         canvas.drawRoundRect(rect, r, r, fill)
         // Inner glow towards the rim instead of an outline.
         rim.color = if (night) 0x40FFFFFF else 0x99FFFFFF.toInt()
-        rim.maskFilter = BlurMaskFilter(GlassKit.dp(host, 5f), BlurMaskFilter.Blur.INNER)
         canvas.drawRoundRect(rect, r, r, rim)
     }
 
@@ -347,42 +412,50 @@ class PillDrawable(private val host: View) : Drawable() {
     override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
+/** Glass on one view, as per-view state that dies with it (see [Attached]). */
+private class GlassOn(override val anchor: View, spec: GlassSpec) : Attached.State {
+    val surface = GlassSurface(anchor, spec)
+    override fun undo() = surface.restore()
+}
+
 /**
  * Chat screen in glass: the title bar becomes full-width glass (lens + gradient on its bottom edge),
  * and the Telegram-style input row (tg_input_bar) becomes a floating glass capsule; the grey panel
  * and input box behind it are cleared so the capsule floats over the chat background.
  */
 object GlassChat : ViewRule("glass_chat") {
-    private val titles = java.util.WeakHashMap<View, GlassSurface>()
-    private val inputs = java.util.WeakHashMap<View, InputGlass>()
+    private val titles = Attached<GlassOn>(Attached.key())
+    private val inputs = Attached<InputGlass>(Attached.key())
 
     override fun match(v: View): Boolean {
         when {
-            v.tag == TgInputBar.ROW_TAG -> if (v !in inputs) inputs[v] = InputGlass(v)
+            v.tag == TgInputBar.ROW_TAG -> (inputs[v] ?: inputs.put(InputGlass(v)).also { hits++ }).sync()
             v.javaClass.name.endsWith("AIOTitleRelativeLayout") -> (v.parent as? ViewGroup)?.let { host ->
-                if (host !in titles) titles[host] = GlassSurface(host, GlassSpec(capsule = false))
+                if (titles[host] == null) { titles.put(GlassOn(host, GlassSpec(capsule = false))); hits++ }
             }
         }
         return false
     }
 
     override fun uninstall() {
-        titles.values.forEach { runCatching { it.restore() } }
-        titles.clear()
-        inputs.values.forEach { runCatching { it.restore() } }
-        inputs.clear()
+        titles.dropAll()
+        inputs.dropAll()
         super.uninstall()
     }
 
-    private class InputGlass(val row: View) {
+    /** Taken off when the row leaves the window (e.g. tg_input_bar switched off), so nothing stays cleared. */
+    private class InputGlass(override val anchor: View) : Attached.State {
+        private val row = anchor
         private val cleared = HashMap<View, Drawable?>()
         private val lp = row.layoutParams as? ViewGroup.MarginLayoutParams
         private val margins = lp?.let { intArrayOf(it.leftMargin, it.topMargin, it.rightMargin, it.bottomMargin) }
         private val surface: GlassSurface
+        private val detach = object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {}
+            override fun onViewDetachedFromWindow(v: View) = inputs.drop(this@InputGlass)
+        }
 
         init {
-            var p = row.parent as? View
-            repeat(3) { p?.let(::clear); p = p?.parent as? View }
             findEdit(row)?.let { e -> clear(e); (e.parent as? View)?.let(::clear) }
             lp?.let {
                 val side = GlassKit.dp(row, 8f).toInt()
@@ -391,6 +464,22 @@ object GlassChat : ViewRule("glass_chat") {
                 row.layoutParams = it
             }
             surface = GlassSurface(row, GlassSpec(capsule = true), elevationDp = 3f)
+            row.addOnAttachStateChangeListener(detach)
+            sync()
+        }
+
+        /**
+         * The grey panel behind the row is cleared only while it just wraps the input area; once it grows
+         * (emoji / 「+」 panel open) it gets its background back so the panel never turns see-through.
+         */
+        fun sync() {
+            val limit = row.height * 2 + GlassKit.dp(row, 40f)
+            var p = row.parent as? View
+            repeat(3) {
+                val v = p ?: return
+                if (v.height in 1..limit.toInt()) clear(v) else cleared.remove(v)?.let { bg -> v.background = bg }
+                p = v.parent as? View
+            }
         }
 
         private fun clear(v: View) {
@@ -405,7 +494,8 @@ object GlassChat : ViewRule("glass_chat") {
             return null
         }
 
-        fun restore() {
+        override fun undo() {
+            row.removeOnAttachStateChangeListener(detach)
             surface.restore()
             lp?.let {
                 it.leftMargin = margins!![0]; it.topMargin = margins[1]; it.rightMargin = margins[2]; it.bottomMargin = margins[3]
@@ -419,20 +509,19 @@ object GlassChat : ViewRule("glass_chat") {
 
 /** Home top bar (avatar, title, quick-entry button) as full-width glass over the chat list. */
 object GlassHomeTitle : ViewRule("glass_title") {
-    private val titles = java.util.WeakHashMap<View, GlassSurface>()
+    private val titles = Attached<GlassOn>(Attached.key())
 
     override fun match(v: View): Boolean {
         if (!v.javaClass.name.endsWith("TitleAreaLeftLayout")) return false
         val row = v.parent as? ViewGroup ?: return false
         val outer = row.parent as? ViewGroup
         val host = if (outer != null && (0 until outer.childCount).any { GlassKit.isBlur(outer.getChildAt(it)) }) outer else row
-        if (host !in titles) titles[host] = GlassSurface(host, GlassSpec(capsule = false))
+        if (titles[host] == null) { titles.put(GlassOn(host, GlassSpec(capsule = false))); hits++ }
         return false
     }
 
     override fun uninstall() {
-        titles.values.forEach { runCatching { it.restore() } }
-        titles.clear()
+        titles.dropAll()
         super.uninstall()
     }
 }

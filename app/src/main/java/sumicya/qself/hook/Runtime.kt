@@ -44,6 +44,7 @@ object Runtime {
     }
 
     fun log(priority: Int, msg: String) {
+        Report.remember(priority, msg)
         runCatching { module.log(priority, "Qself", msg) }
     }
 
@@ -61,6 +62,7 @@ object Runtime {
     }
 
     fun stop() = onMain {
+        Report.unlisten()
         prefs?.unregisterOnSharedPreferenceChangeListener(listener)
         features.forEach { it.disable() }
         infra.forEach { runCatching { it.unhook() } }
@@ -92,8 +94,11 @@ object Runtime {
         }
     }
 
+    val front: Activity? get() = resumed.get()
+
     private fun resumed(a: Activity) {
         resumed = WeakReference(a)
+        Report.listen(a.applicationContext)
         features.forEach { if (it.active) runCatching { it.onResume(a) } }
     }
 

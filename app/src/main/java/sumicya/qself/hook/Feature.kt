@@ -15,6 +15,13 @@ abstract class Feature(val id: String, val mainOnly: Boolean = true) {
     private val handles = mutableListOf<XposedInterface.HookHandle>()
     var active = false
         private set
+    /** Why the last enable() failed, for the self-check report. */
+    var error: String? = null
+        private set
+    val hookCount get() = handles.size
+
+    /** One-line state shown in the self-check report, beyond on/off. */
+    open fun status(): String? = null
 
     protected val cl: ClassLoader get() = Runtime.loader
 
@@ -23,9 +30,11 @@ abstract class Feature(val id: String, val mainOnly: Boolean = true) {
         try {
             install()
             active = true
+            error = null
             Runtime.log(Log.INFO, "$id on (${handles.size} hooks)")
         } catch (t: Throwable) {
             unhookAll()
+            error = t.toString().take(160)
             Runtime.log(Log.WARN, "$id failed: $t")
         }
     }

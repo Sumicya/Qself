@@ -22,7 +22,7 @@
 
 ## 用法
 
-1. 需要 Android 12+、支持 libxposed API 102 的 LSPosed。
+1. 需要 Android 16+（API 36）、支持 libxposed API 102 的 LSPosed。
 2. 安装 APK（`sumicya.qself`），在 LSPosed 里启用；作用域是静态声明的 QQ。
 3. 打开 Qself（桌面图标，或 LSPosed 里的模块设置）拨开关。第一次启用后重启一次 QQ，之后改开关都即时生效。
 

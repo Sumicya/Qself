@@ -22,6 +22,8 @@ import kotlin.concurrent.thread
  */
 abstract class ViewRule(id: String, val inLists: Boolean = false) : Feature(id) {
     internal val hidden = WeakHashMap<View, Int>()
+    /** Views taken down (or decorated) since start; shown in the self-check report. */
+    var hits = 0
 
     abstract fun match(v: View): Boolean
 
@@ -32,58 +34,99 @@ abstract class ViewRule(id: String, val inLists: Boolean = false) : Feature(id) 
         Views.refresh()
     }
     override fun onResume(activity: Activity) = Views.attach(activity)
+    override fun status() = "命中 $hits"
 
     protected fun dp(v: View, x: Int) = (x * v.resources.displayMetrics.density).toInt()
     protected fun desc(v: View): String? = v.contentDescription?.toString()?.trim()?.takeIf { it.isNotEmpty() }
 }
 
+/**
+ * Per-view state kept in the view's own tag, so it lives and dies with the view.
+ * (A WeakHashMap<View, State> whose State points back at the View never lets go.)
+ */
+class Attached<S : Attached.State>(private val key: Int) {
+    interface State {
+        val anchor: View
+        fun undo()
+    }
+
+    private val all = java.util.Collections.newSetFromMap(WeakHashMap<S, Boolean>())
+
+    @Suppress("UNCHECKED_CAST")
+    operator fun get(v: View): S? = v.getTag(key) as? S
+
+    fun put(s: S): S {
+        s.anchor.setTag(key, s)
+        all += s
+        return s
+    }
+
+    fun drop(s: S) {
+        all.remove(s)
+        if (s.anchor.getTag(key) === s) s.anchor.setTag(key, null)
+        runCatching { s.undo() }.onFailure { Runtime.log(Log.WARN, "undo: $it") }
+    }
+
+    fun dropAll() = all.toList().forEach(::drop)
+    fun each(): List<S> = all.toList()
+    val size get() = all.size
+
+    companion object {
+        // Tag keys must look like resource ids of a package other than android (>= 0x02xxxxxx);
+        // 0x5E is no one's package id.
+        private var next = 0x5E51_0000
+        fun key() = ++next
+    }
+}
+
 object Views {
     private val rules get() = Runtime.features.filterIsInstance<ViewRule>()
-    private val decors = WeakHashMap<View, Watch>()
+    private val watches = Attached<Watch>(Attached.key())
     private var lastDump = 0L
 
     private fun active() = rules.filter { it.active }
     private fun wanted() = rules.any { it.active } || Dump.active
 
     fun refresh() {
-        if (!wanted()) {
-            decors.values.toList().forEach { it.detach() }
-            decors.clear()
-        } else decors.values.toList().forEach { it.schedule() }
+        if (!wanted()) watches.dropAll()
+        else watches.each().forEach { it.schedule() }
     }
 
     fun attach(a: Activity) {
         if (!wanted()) return
         val decor = a.window?.decorView ?: return
-        (decors[decor] ?: Watch(decor, a).also { decors[decor] = it }).schedule()
+        (watches[decor] ?: watches.put(Watch(decor, a))).schedule()
     }
 
     /** One per window: coalesces layout storms into at most one scan every 200 ms. */
-    private class Watch(val decor: View, a: Activity) : ViewTreeObserver.OnGlobalLayoutListener, Runnable {
+    private class Watch(override val anchor: View, a: Activity) : Attached.State, ViewTreeObserver.OnGlobalLayoutListener, Runnable {
         val activity = WeakReference(a)
         var pending = false
         var last = 0L
+        var alive = true
 
-        init { decor.viewTreeObserver.addOnGlobalLayoutListener(this) }
+        init { anchor.viewTreeObserver.addOnGlobalLayoutListener(this) }
 
         override fun onGlobalLayout() = schedule()
 
         fun schedule() {
-            if (pending) return
+            if (pending || !alive) return
             pending = true
             val wait = (200 - (SystemClock.uptimeMillis() - last)).coerceAtLeast(16)
-            decor.postDelayed(this, wait)
+            anchor.postDelayed(this, wait)
         }
 
         override fun run() {
             pending = false
+            if (!alive) return
             last = SystemClock.uptimeMillis()
-            runCatching { scan(decor, activity.get()) }.onFailure { Runtime.log(Log.WARN, "scan: $it") }
+            runCatching { scan(anchor, activity.get()) }.onFailure { Runtime.log(Log.WARN, "scan: $it") }
         }
 
-        fun detach() {
-            decor.removeCallbacks(this)
-            runCatching { decor.viewTreeObserver.removeOnGlobalLayoutListener(this) }
+        override fun undo() {
+            alive = false
+            anchor.removeCallbacks(this)
+            runCatching { anchor.viewTreeObserver.removeOnGlobalLayoutListener(this) }
         }
     }
 
@@ -102,7 +145,7 @@ object Views {
             val was = r.hidden[v]
             val hit = runCatching { r.match(v) }.getOrDefault(false)
             if (hit) {
-                if (was == null) r.hidden[v] = v.visibility
+                if (was == null) { r.hidden[v] = v.visibility; r.hits++ }
                 if (v.visibility != View.GONE) v.visibility = View.GONE
                 gone = true
             } else if (was != null) {

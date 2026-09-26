@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself.ui
 
+import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.widget.Toast
@@ -19,7 +25,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -35,6 +47,10 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -83,6 +99,7 @@ private fun Screen(service: XposedService?) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { StatusCard(service) }
+            item { ReportCard() }
             Catalog.Group.entries.forEach { group ->
                 item {
                     Text(
@@ -156,5 +173,59 @@ private fun StatusCard(service: XposedService?) {
                 }
             }) { Text("热重载 QQ 里的 Qself") }
         }
+    }
+}
+
+/**
+ * Asks the running QQ for its self-check report (see hook/Report.kt) and shows it with a copy
+ * button, so problems can be reported by pasting text instead of digging out files.
+ */
+@Composable
+private fun ReportCard() {
+    val ctx = LocalContext.current
+    var report by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            Text("自检报告", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "从正在运行的 QQ 里取回每个开关的状态、失败原因和最近日志。出问题时复制发过来就行，不用找文件。",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(12.dp))
+            FilledTonalButton(enabled = !busy, onClick = {
+                busy = true
+                val intent = Intent(Catalog.ACTION_REPORT).setPackage(Catalog.QQ)
+                ctx.sendOrderedBroadcast(intent, null, object : BroadcastReceiver() {
+                    override fun onReceive(c: Context, i: Intent) {
+                        busy = false
+                        report = resultData ?: "QQ 没有回应。\n先打开 QQ 随便点一下（让 Qself 在 QQ 里跑起来），再回来点这个按钮。"
+                    }
+                }, null, Activity.RESULT_OK, null, null)
+            }) { Text(if (busy) "正在询问 QQ…" else "生成报告") }
+        }
+    }
+
+    report?.let { text ->
+        AlertDialog(
+            onDismissRequest = { report = null },
+            title = { Text("自检报告") },
+            text = {
+                SelectionContainer(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                    Text(text, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Qself 自检报告", text))
+                    Toast.makeText(ctx, "已复制", Toast.LENGTH_SHORT).show()
+                }) { Text("复制") }
+            },
+            dismissButton = { TextButton(onClick = { report = null }) { Text("关闭") } },
+        )
     }
 }

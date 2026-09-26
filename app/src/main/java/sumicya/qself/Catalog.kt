@@ -5,6 +5,8 @@ package sumicya.qself
 object Catalog {
     const val PREFS = "qself"
     const val QQ = "com.tencent.mobileqq"
+    /** Settings app -> QQ: "send me a self-check report" (ordered broadcast, answered in resultData). */
+    const val ACTION_REPORT = "sumicya.qself.REPORT"
 
     enum class Group(val title: String) {
         LOOK("外观 · TG 化"),

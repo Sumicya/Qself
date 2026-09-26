@@ -11,7 +11,6 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import java.util.WeakHashMap
 
 /**
  * Telegram-style chat input: one row, [emoji] [text] [attach] [more] [mic ⇄ send].
@@ -23,18 +22,17 @@ import java.util.WeakHashMap
  */
 object TgInputBar : ViewRule("tg_input_bar") {
     const val ROW_TAG = "qself-tg-input"
-    private val rows = WeakHashMap<View, Row>()
+    private val rows = Attached<Row>(Attached.key())
 
     override fun match(v: View): Boolean {
         if (!v.javaClass.name.endsWith("PanelIconLinearLayout")) return false
-        val row = rows[v] ?: Row.build(v as ViewGroup)?.also { rows[v] = it } ?: return false
+        val row = rows[v] ?: Row.build(v as ViewGroup)?.let(rows::put) ?: return false
         row.sync()
         return true
     }
 
     override fun uninstall() {
-        rows.values.forEach { runCatching { it.restore() } }
-        rows.clear()
+        rows.dropAll()
         super.uninstall()
     }
 
@@ -70,7 +68,8 @@ object TgInputBar : ViewRule("tg_input_bar") {
         val row: LinearLayout,
         val mirrors: List<Mirror>,
         val mic: Mirror?,
-    ) {
+    ) : Attached.State {
+        override val anchor: View get() = bar
         private var sendHiddenFrom: Int? = null
         private val watcher = object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -131,7 +130,7 @@ object TgInputBar : ViewRule("tg_input_bar") {
             }
         }
 
-        fun restore() {
+        override fun undo() {
             edit.removeTextChangedListener(watcher)
             squeezed.forEach { (c, h) -> c.layoutParams?.let { it.height = h; c.layoutParams = it } }
             squeezed.clear()
