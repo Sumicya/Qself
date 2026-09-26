@@ -31,7 +31,7 @@ object Runtime {
 
     val features: List<Feature> = listOf(
         HomeBar.Glass, HomeBar.HideGuild, HomeBar.HideFeed,
-        TgInputBar, TgTitleBar, TgDrawer,
+        TgInputBar, TgTitleBar, TgDrawer, GlassChat, GlassHomeTitle,
         PlainBubble, PlainFont, NoPendant, PlainNick,
         AntiRecall, MultiForward, TgPlusPanel, NoLightInteraction, NoDropSticker,
         SystemWebView, NoTelemetry, NoCrashReport,

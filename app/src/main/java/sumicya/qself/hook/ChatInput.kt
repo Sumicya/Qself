@@ -22,6 +22,7 @@ import java.util.WeakHashMap
  * The input ConstraintLayout itself is only re-parented into the row, and put back on disable.
  */
 object TgInputBar : ViewRule("tg_input_bar") {
+    const val ROW_TAG = "qself-tg-input"
     private val rows = WeakHashMap<View, Row>()
 
     override fun match(v: View): Boolean {
@@ -163,7 +164,7 @@ object TgInputBar : ViewRule("tg_input_bar") {
                 val row = LinearLayout(ctx).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    tag = "qself-tg-input"
+                    tag = ROW_TAG
                 }
                 val dp = ctx.resources.displayMetrics.density
                 val ripple = TypedValue().let {
@@ -197,7 +198,10 @@ object TgInputBar : ViewRule("tg_input_bar") {
                 albumM?.let { row.addView(it.view) }
                 moreM?.let { row.addView(it.view) }
                 micM?.let { row.addView(it.view.apply { (layoutParams as LinearLayout.LayoutParams).marginEnd = (6 * dp).toInt() }) }
-                host.addView(row, index, inputLp)
+                // The row gets its own params: glass margins on it must never leak back into QQ's box.
+                val rowLp = (inputLp as? LinearLayout.LayoutParams)?.let { LinearLayout.LayoutParams(it) }
+                    ?: LinearLayout.LayoutParams(inputLp)
+                host.addView(row, index, rowLp)
                 return Row(bar, input, host, index, inputLp, edit, send, row, mirrors, micM)
             }
         }

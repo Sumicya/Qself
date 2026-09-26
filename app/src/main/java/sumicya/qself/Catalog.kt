@@ -22,7 +22,9 @@ object Catalog {
     )
 
     val items = listOf(
-        Item("glass_bar", "悬浮玻璃底栏", "QQ 原底栏变成悬浮胶囊，背后是实时模糊的聊天内容", Group.LOOK),
+        Item("glass_bar", "悬浮玻璃底栏", "KSU 式轻玻璃：边缘折射＋渐变，无高光无描边；选中项垫一个滑动玻璃胶囊", Group.LOOK),
+        Item("glass_title", "首页顶栏玻璃", "首页顶栏变成玻璃，列表从下面滑过", Group.LOOK),
+        Item("glass_chat", "聊天玻璃", "聊天标题栏变玻璃；配合「输入栏 TG 化」，输入栏变成悬浮玻璃胶囊", Group.LOOK),
         Item("hide_tab_guild", "底栏去掉「频道」", "只留聊天该有的东西", Group.LOOK),
         Item("hide_tab_feed", "底栏去掉「动态」", "像 Telegram 一样只剩消息和联系人", Group.LOOK),
         Item("tg_input_bar", "输入栏 TG 化", "表情、输入框、相册、「+」、语音⇄发送合成一行，底下那排图标去掉；红包等在「+」里", Group.LOOK),
