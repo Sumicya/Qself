@@ -1,0 +1,111 @@
+# Qself 依赖的每一个名字。改代码 = 改这张表, 跑 tools/dexcheck.py 看红绿。
+# 基准: QQ 9.2.10 真包 (Sumicya/qqapk)。名字变了这里先红, 再决定改代码还是删功能。
+#
+# class / class~ / member / member! / field / res / text  的语法见 dexcheck.py 头注释。
+
+# ---------- 底栏 TabBar.kt
+class  com.tencent.mobileqq.activity.SplashActivity
+class~ QQTabLayout
+class~ QQTabWidget
+class  com.google.android.material.tabs.TabLayout
+member com.google.android.material.tabs.TabLayout#setSelectedTabIndicator
+member com.google.android.material.tabs.TabLayout#setSelectedTabIndicatorGravity
+member com.google.android.material.tabs.TabLayout#setSelectedTabIndicatorHeight
+member com.google.android.material.tabs.TabLayout#setTabIndicatorAnimationMode
+member com.google.android.material.tabs.TabLayout#setTabIndicatorFullWidth
+member com.google.android.material.tabs.TabLayout#setTabRippleColor
+text   频道
+text   动态
+text   小世界
+
+# ---------- 液态玻璃 Glass.kt
+class  com.tencent.mobileqq.utils.QQTheme
+member com.tencent.mobileqq.utils.QQTheme#isNowThemeIsNight
+class~ QQBlurView
+class~ QQNativeBlurView
+class~ TitleAreaLeftLayout
+class~ AIOTitleRelativeLayout
+
+# ---------- 输入栏 TG 化 InputBar.kt
+class~ PanelIconLinearLayout
+res    send_btn
+res    input
+
+# ---------- 报文: 防撤回 Msg.kt
+class  com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession$CppProxy
+member com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession$CppProxy#onMsfPush
+
+# ---------- 净化: 头像挂件 / 气泡 / 字体 / 昵称 / 等级 / 互动 Msg.kt
+class  com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant
+class  com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble
+class  com.tencent.qqnt.kernel.nativeinterface.VASMsgFont
+class  com.tencent.mobileqq.vas.vipicon.AIOVipIconProcessor
+class  com.tencent.mobileqq.vas.vipicon.AIOVipIconExProcessor
+class  com.tencent.mobileqq.aio.msg.AIOMsgItem
+class  com.tencent.qqnt.aio.gradelevel.AIOTroopMemberGradeLevelBlock
+class  com.tencent.qqnt.aio.mutualmark.AIOTroopHonorNickBlock
+class  com.tencent.qqnt.aio.nick.memberlevel.AIOTroopMemberLevelBlock
+class  com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock
+member! com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock#l
+class  com.tencent.mobileqq.aio.msglist.holder.component.nick.block.a
+member com.tencent.mobileqq.aio.msglist.holder.component.nick.block.a#h
+class  com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickSlotContainer
+class  com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.block.AIONickIconSimpleBlock
+class  com.tencent.qqnt.biz.lightbusiness.lightinteraction.LIAConfigManager
+member com.tencent.qqnt.biz.lightbusiness.lightinteraction.LIAConfigManager#g
+member com.tencent.qqnt.biz.lightbusiness.lightinteraction.LIAConfigManager#i
+class  com.tencent.mobileqq.aio.animation.util.AioAnimationConfigHolder
+member! com.tencent.mobileqq.aio.animation.util.AioAnimationConfigHolder#e
+class  com.tencent.qqnt.pluspanel.data.PlusPanelUiState$FetchCompleted
+member! com.tencent.qqnt.pluspanel.data.PlusPanelUiState$FetchCompleted#a
+field  com.tencent.qqnt.pluspanel.data.PlusPanelUiState$FetchCompleted#d
+
+# 「+」面板里要干掉的入口标题 (图标性入口留, 只删这些)
+text   一起听歌
+text   一起K歌
+text   一起看
+text   一起派对
+text   一起玩
+text   直播
+text   礼物
+text   厘米秀
+text   涂鸦
+text   滤镜
+text   短视频
+
+# ---------- 转发页减负 Msg.kt
+class  com.tencent.mobileqq.activity.ForwardRecentActivity
+member com.tencent.mobileqq.activity.ForwardRecentActivity#initEntryHeaderView
+field  com.tencent.mobileqq.activity.ForwardRecentActivity#mEntryContentContainer
+field  com.tencent.mobileqq.activity.ForwardRecentActivity#contactLayout
+field  com.tencent.mobileqq.activity.ForwardRecentActivity#friendLayout
+field  com.tencent.mobileqq.activity.ForwardRecentActivity#multiChatLayout
+field  com.tencent.mobileqq.activity.ForwardRecentActivity#troopDiscussionLayout
+
+# ---------- 抽屉净化 Views.kt
+class~ SettingMe
+class~ QQSetting
+text   我的小世界
+text   超级QQ秀
+text   会员中心
+text   个性装扮
+text   免流量
+text   游戏中心
+text   腾讯文档
+text   当地天气
+
+# ---------- 静音: 上报 / 崩溃 / X5 内核 Quiet.kt
+class  com.tencent.beacon.event.UserAction
+member com.tencent.beacon.event.UserAction#onUserAction
+member com.tencent.beacon.event.UserAction#initUserAction
+class  com.tencent.beacon.event.open.BeaconReport
+member com.tencent.beacon.event.open.BeaconReport#start
+class  com.tencent.mobileqq.statistics.StatisticCollector
+member com.tencent.mobileqq.statistics.StatisticCollector#collectPerformance
+member com.tencent.mobileqq.statistics.StatisticCollector#report
+class  com.tencent.feedback.eup.CrashReport
+member com.tencent.feedback.eup.CrashReport#init
+class  com.tencent.smtt.sdk.QbSdk
+member com.tencent.smtt.sdk.QbSdk#getIsSysWebViewForcedByOuter
+member com.tencent.smtt.sdk.QbSdk#forceSysWebView
+member com.tencent.smtt.sdk.QbSdk#unForceSysWebView

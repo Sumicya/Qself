@@ -58,3 +58,17 @@ app/src/main/java/sumicya/qself/
   hook/Proto.kt       认撤回推送用的极简 protobuf
   ui/                 Compose Material 3 设置页
 ```
+
+## 名字对不对, 跑一条命令就知道
+
+`tools/symbols.txt` 是这个模块依赖的**全部**类 / 方法 / 字段 / 文案, `tools/dexcheck.py` 拿真 QQ 的
+dex 一条条核。只用标准库, Termux 也能跑:
+
+```sh
+pkg install python                      # 只装这一次
+cat qq.a? > qq.apk                      # qqapk 仓库里的分包先拼起来
+python3 tools/dexcheck.py --apk qq.apk  # 89 条符号, 0 条对不上 -> 退出码 0
+```
+
+红了就是 QQ 换了名字。要么按它打印出来的真签名改代码, 要么把这条功能删掉 —— 不许留着静默失效的钩子。
+加功能 = 往 symbols.txt 里加一行, 不是往代码里塞字符串。

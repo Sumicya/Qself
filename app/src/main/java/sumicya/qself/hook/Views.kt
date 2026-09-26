@@ -211,7 +211,7 @@ object TgDrawer : ViewRule("tg_drawer", inLists = true) {
     private val drop = setOf(
         "开通会员", "会员中心", "超级会员", "QQ会员", "QQ钱包", "钱包", "个性装扮", "装扮",
         "我的小世界", "小世界", "免流量", "QQ小游戏", "小游戏", "厘米秀", "超级QQ秀", "QQ秀",
-        "我的QQ空间", "QQ空间", "游戏中心", "腾讯文档", "打卡", "当地天气", "天气",
+        "QQ空间", "游戏中心", "腾讯文档", "打卡", "当地天气", "天气",
     )
     private val dropDesc = listOf("等级", "QQ会员", "天气")
     private val hosts = listOf("Drawer", "SettingMe", "QQSetting")

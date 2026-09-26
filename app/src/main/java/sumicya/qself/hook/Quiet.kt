@@ -19,8 +19,10 @@ object NoTelemetry : Feature("no_telemetry", mainOnly = false) {
                 m.name.startsWith("initUserAction") && m.returnType == Void.TYPE -> { constant(m, null); count++ }
             }
         }
+        // report(BeaconEvent) 返回 EventResult，硬返 null 会让调用方 NPE，所以掐的是初始化：
+        // 没 start 过的 beacon 自己就会拒收（EventResult.ERROR_CODE_NOT_ENABLE）。
         cls("com.tencent.beacon.event.open.BeaconReport")?.declaredMethods?.forEach { m ->
-            if (m.name == "report" && m.returnType == Void.TYPE) { constant(m, null); count++ }
+            if (m.name == "start" && m.returnType == Void.TYPE) { constant(m, null); count++ }
         }
         cls("com.tencent.mobileqq.statistics.StatisticCollector")?.declaredMethods?.forEach { m ->
             if (Modifier.isPublic(m.modifiers) && m.returnType == Void.TYPE &&
