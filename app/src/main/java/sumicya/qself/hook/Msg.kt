@@ -34,6 +34,10 @@ object NoPendant : Feature("no_pendant") {
 /**
  * The kernel learns about recalls from MSF pushes. Drop the recall pushes, strip the recall
  * section from sync pushes, pass everything else through untouched.
+ *
+ * The push handler does not look the same in every QQ build: QFix rewrites it, so the real
+ * signature is onMsfPush(byte, String, byte[]) and the leading byte is a dummy. Pick the command
+ * and the body out by type instead of by position.
  */
 object AntiRecall : Feature("anti_recall") {
     private const val MSG_PUSH = "trpc.msg.olpush.OlPushService.MsgPush"
@@ -41,18 +45,20 @@ object AntiRecall : Feature("anti_recall") {
 
     override fun install() {
         val proxy = need("$KERNEL.IQQNTWrapperSession\$CppProxy")
-        val pushes = proxy.declaredMethods.filter { it.name == "onMsfPush" && it.parameterCount in 2..3 }
-        pushes.forEach { m ->
-            hook(m) { chain ->
-                val cmd = chain.getArg(0) as? String
-                val body = chain.getArg(1) as? ByteArray
+        val pushes = proxy.declaredMethods.filter { it.name == "onMsfPush" && it.parameterCount in 2..4 }
+        pushes.forEach { method ->
+            hook(method) { chain ->
+                val args = chain.args
+                val command = args.firstOrNull { it is String } as? String
+                val body = args.firstOrNull { it is ByteArray } as? ByteArray
+                val bodyAt = args.indexOfFirst { it is ByteArray }
                 when {
-                    body == null -> chain.proceed()
-                    cmd == MSG_PUSH && Proto.isRecallPush(body) -> null
-                    cmd == SYNC_PUSH -> {
+                    body == null || bodyAt < 0 -> chain.proceed()
+                    command == MSG_PUSH && Proto.isRecallPush(body) -> null
+                    command == SYNC_PUSH -> {
                         val stripped = Proto.without(body, 8)
                         if (stripped === body) chain.proceed()
-                        else chain.proceed(chain.args.toTypedArray().also { it[1] = stripped })
+                        else chain.proceed(args.toMutableList().also { it[bodyAt] = stripped }.toTypedArray())
                     }
                     else -> chain.proceed()
                 }
@@ -82,8 +88,11 @@ object MultiForward : Feature("multi_forward") {
 
 /**
  * 「+」 panel as a Telegram attach menu: photos, camera, files, location, money and tools stay;
- * play-together, gifts, short video and live rooms go. The list is filtered right before QQ hands
- * it to the UI, matching items by their titles.
+ * play-together, gifts, short video and live rooms go.
+ *
+ * QQ 9.2.10 keeps the fetched entries in a private ArrayList field of PlusPanelUiState.FetchCompleted
+ * and hands them out through a getter, so the getter is where the list gets filtered — each call
+ * takes the dropped titles out of the stored list and gives back the same list.
  */
 object PlusPanel : Feature("tg_plus_panel") {
     private val drop = setOf(
@@ -104,15 +113,22 @@ object PlusPanel : Feature("tg_plus_panel") {
         }
     }
 
+    private fun dropped(item: Any?): Boolean =
+        item != null && runCatching { titles(item).any { it in drop } }.getOrDefault(false)
+
     override fun install() {
-        val ctor = need("com.tencent.qqnt.pluspanel.data.PlusPanelUiState\$FetchCompleted")
-            .getDeclaredConstructor(ArrayList::class.java)
-        hook(ctor) { chain ->
-            (chain.getArg(0) as? ArrayList<*>)?.removeAll { item ->
-                item != null && runCatching { titles(item).any { it in drop } }.getOrDefault(false)
-            }
-            chain.proceed()
+        val state = need("com.tencent.qqnt.pluspanel.data.PlusPanelUiState\$FetchCompleted")
+        val getters = state.declaredMethods.filter {
+            (List::class.java.isAssignableFrom(it.returnType)) && it.parameterCount <= 1
         }
+        getters.forEach { method ->
+            hook(method) { chain ->
+                val result = chain.proceed()
+                (result as? MutableList<Any?>)?.removeAll { dropped(it) }
+                result
+            }
+        }
+        require(getters.isNotEmpty(), "FetchCompleted list getter")
     }
 }
 
@@ -120,6 +136,9 @@ object PlusPanel : Feature("tg_plus_panel") {
  * Telegram nick line: only the sender's name. Group level, honor, member-level tags and VIP icons
  * are separate blocks in QQ's nick slot, each asked to bind itself; those answer no, and the views
  * they already inflated are hidden.
+ *
+ * The question is LazyNickBlock.l(...) — a boolean that QFix rewrites with a dummy leading byte, so
+ * the parameter list differs between builds. Hook it by name and let the return value do the work.
  */
 object PlainNick : Feature("plain_nick") {
     private const val NICK = "com.tencent.mobileqq.aio.msglist.holder.component.nick"
@@ -132,8 +151,8 @@ object PlainNick : Feature("plain_nick") {
         "$NICK.pit.block.AIONickIconSimpleBlock",
     )
 
-    private fun dropped(o: Any): Boolean {
-        var c: Class<*>? = o.javaClass
+    private fun dropped(o: Any?): Boolean {
+        var c: Class<*>? = o?.javaClass
         while (c != null) {
             if (c.name in drop) return true
             c = c.superclass
@@ -142,18 +161,20 @@ object PlainNick : Feature("plain_nick") {
     }
 
     override fun install() {
-        val base = need("$NICK.block.a")
-        val item = need("com.tencent.mobileqq.aio.msg.AIOMsgItem")
-        val view = base.getDeclaredMethod("h")
-        hook(need("$NICK.block.LazyNickBlock").getDeclaredMethod("l", item)) { chain ->
-            val self = chain.thisObject
-            if (self != null && dropped(self)) {
-                runCatching { (view.invoke(self) as? View)?.visibility = View.GONE }
-                false
-            } else {
-                chain.proceed()
+        val view = need("$NICK.block.a").getDeclaredMethod("h")
+        val questions = need("$NICK.block.LazyNickBlock").declaredMethods.filter { it.name == "l" }
+        questions.forEach { method ->
+            hook(method) { chain ->
+                val self = chain.thisObject
+                if (dropped(self)) {
+                    runCatching { (view.invoke(self) as? View)?.visibility = View.GONE }
+                    false
+                } else {
+                    chain.proceed()
+                }
             }
         }
+        require(questions.isNotEmpty(), "LazyNickBlock.l")
         listOf("$NICK.slot.AIONickSlotContainer" to "d", "$NICK.pit.AIONickComponentV2" to "d1").forEach { (name, method) ->
             cls(name)?.declaredMethods?.filter { it.name == method }?.forEach { deopt(it) }
         }
