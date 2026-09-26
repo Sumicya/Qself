@@ -96,6 +96,7 @@ class Glass(private val host: View) : Drawable() {
         val save = rc.save()
         rc.translate((there[0] - here[0]).toFloat(), (there[1] - here[1]).toFloat())
         rc.clipRect(0, 0, v.width, v.height)
+        rc.translate(-v.scrollX.toFloat(), -v.scrollY.toFloat()) // 直接调 draw() 不经过父级，滚动量得自己减
         body(rc)
         rc.restoreToCount(save)
     }
