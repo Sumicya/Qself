@@ -13,11 +13,11 @@ import android.widget.TextView
 import java.util.WeakHashMap
 
 /**
- * TG 式输入栏：一行 [表情] [输入框] [相册] [+] [麦克风 ⇄ 发送]。
+ * Telegram 式输入栏：一行 [表情] [输入框] [+] [麦克风 ⇄ 发送]，表情和 + 尽量放进输入框里面（TG 的笑脸和回形针就在框里）。
  *
  * QQ 输入框下面那条图标带（PanelIconLinearLayout）藏起来，但它的按钮还活着：新行里的按钮是
  * 它们的镜子 —— 同一个 drawable，所以表情 ⇄ 键盘的状态跟着走 —— 点下去调原按钮的
- * performClick()，每个面板还是 QQ 自己的行为。输入框本身只是被挪进这一行。
+ * performClick()，每个面板还是 QQ 自己的行为（相册在 + 里，TG 也没有单独的相册钮）。
  */
 private val rows = WeakHashMap<View, Row>()
 
@@ -89,7 +89,6 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
         }
 
         val emoji = icon("表情")?.let(::mirror)
-        val album = icon("相册", "图片")?.let(::mirror)
         val more = icon("更多", "加号")?.let(::mirror)
         mic = icon("语音")?.let(::mirror)
 
@@ -98,14 +97,19 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
         row.tag = ROW
         strip.visibility = View.GONE
 
-        // 输入框搬进新行：表情 | 输入框 | 相册 | + | 麦克风/发送。
+        // 输入框搬进新行。框本身是横向 LinearLayout 时，表情放框的最左、+ 放发送钮之前；否则排在框两侧。
         val index = host.indexOfChild(box)
         val boxLp = box.layoutParams
         host.removeView(box)
-        emoji?.view?.let { (it.layoutParams as LinearLayout.LayoutParams).marginStart = (6 * dp).toInt(); row.addView(it) }
+        val inside = box is LinearLayout && box.orientation == LinearLayout.HORIZONTAL
+        if (inside) {
+            emoji?.view?.let { box.addView(it, 0) }
+            more?.view?.let { box.addView(it, send?.let(box::indexOfChild)?.takeIf { i -> i >= 0 } ?: box.childCount) }
+        } else {
+            emoji?.view?.let { (it.layoutParams as LinearLayout.LayoutParams).marginStart = (6 * dp).toInt(); row.addView(it) }
+        }
         row.addView(box, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        album?.view?.let(row::addView)
-        more?.view?.let(row::addView)
+        if (!inside) more?.view?.let(row::addView)
         mic?.view?.let { (it.layoutParams as LinearLayout.LayoutParams).marginEnd = (6 * dp).toInt(); row.addView(it) }
         host.addView(row, index.coerceIn(0, host.childCount), boxLp)
 

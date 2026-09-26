@@ -3,10 +3,15 @@ package sumicya.qself
 
 import android.app.Activity
 import android.app.Instrumentation
+import android.content.res.ColorStateList
 import android.graphics.Outline
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.RelativeLayout
 import android.widget.TextView
 import java.util.Collections
 import java.util.WeakHashMap
@@ -124,18 +129,34 @@ private fun float(bar: ViewGroup) {
     }
     bar.clipToOutline = true
     val dp = bar.dp
-    bar.elevation = 6 * dp
-    (bar.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
-        it.leftMargin += (16 * dp).toInt()
-        it.rightMargin += (16 * dp).toInt()
-        it.bottomMargin += (12 * dp).toInt()
+    bar.elevation = 4 * dp
+    // 胶囊只包住页签、居中：iOS 那样不是通栏。
+    bar.layoutParams?.let {
+        it.width = ViewGroup.LayoutParams.WRAP_CONTENT
+        when (it) {
+            is FrameLayout.LayoutParams -> it.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+            is LinearLayout.LayoutParams -> it.gravity = Gravity.CENTER_HORIZONTAL
+            is RelativeLayout.LayoutParams -> it.addRule(RelativeLayout.CENTER_HORIZONTAL)
+        }
+        if (it is ViewGroup.MarginLayoutParams) it.bottomMargin += (12 * dp).toInt()
         bar.layoutParams = it
     }
-    bar.background = Glass(bar)
-    // 内容一滚、布局一变就重画一次玻璃（底栏自己不会因为身后的东西动而重画）。
+    bar.setPadding((10 * dp).toInt(), bar.paddingTop, (10 * dp).toInt(), bar.paddingBottom)
+    val glass = Glass(bar) { selectedTab(bar) }
+    bar.background = glass
+    // 内容一滚、布局一变就重画一次玻璃（底栏自己不会因为身后的东西动而重画）；选中页签换了也要重画。
     bar.viewTreeObserver.addOnScrollChangedListener { bar.invalidate() }
     bar.viewTreeObserver.addOnGlobalLayoutListener { bar.invalidate() }
-    pill(bar)
+    bar.viewTreeObserver.addOnPreDrawListener { glass.sync(); true }
+    // material 的涟漪跟玻璃不搭。
+    runCatching { bar.javaClass.getMethod("setTabRippleColor", ColorStateList::class.java).invoke(bar, ColorStateList.valueOf(0)) }
+}
+
+/** material TabLayout 选中的那个 TabView（bar → SlidingTabIndicator → TabView × N）。 */
+fun selectedTab(bar: ViewGroup): View? {
+    val strip = bar.getChildAt(0) as? ViewGroup ?: return null
+    for (i in 0 until strip.childCount) strip.getChildAt(i).let { if (it.isSelected && it.visibility == View.VISIBLE) return it }
+    return null
 }
 
 /** QQ 给手势条留的底部内边距（可能随 insets 反复设回来）挪成外边距，胶囊本身不带空腔。 */
@@ -174,20 +195,6 @@ private fun strings(o: Any): List<String> = generateSequence<Class<*>>(o.javaCla
     .filter { it.type == String::class.java && !java.lang.reflect.Modifier.isStatic(it.modifiers) }
     .mapNotNull { it.isAccessible = true; it.get(o) as? String }
     .toList()
-
-/** 选中项的滑动胶囊就是 material TabLayout 自带的指示器：点按、滑动、弹性动画全都白送。 */
-private fun pill(bar: ViewGroup) {
-    val c = bar.javaClass
-    val int = Integer.TYPE
-    val dp = bar.dp
-    fun call(name: String, type: Class<*>, arg: Any) = runCatching { c.getMethod(name, type).invoke(bar, arg) }
-    call("setSelectedTabIndicator", android.graphics.drawable.Drawable::class.java, Pill(dp))
-    call("setSelectedTabIndicatorGravity", int, 3) // STRETCH：上下撑满
-    call("setTabIndicatorFullWidth", java.lang.Boolean.TYPE, true)
-    call("setTabIndicatorAnimationMode", int, 1) // ELASTIC
-    call("setSelectedTabIndicatorHeight", int, (56 * dp).toInt()) // 老版 material 没高度就不画
-    call("setTabRippleColor", android.content.res.ColorStateList::class.java, android.content.res.ColorStateList.valueOf(0))
-}
 
 /** 底栏父容器里除内容页（ViewPager）与底栏自身之外、盖在底栏那一带的装饰：模糊层、细线、纯 View 垫底。 */
 private fun clear(root: ViewGroup, bar: View) {

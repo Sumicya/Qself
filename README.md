@@ -1,7 +1,7 @@
 # Qself
 
 给 NT QQ 的一个 LSPosed 模块：**自由、简单、现代、原生**。装上即全部生效，没有网络；
-开关不在模块里，在 QQ 主页右下角一颗玻璃圆钮里（系统对话框的多选框，存进 QQ 自己的 SharedPreferences）。
+开关不在模块里，在 QQ 主页底栏胶囊旁边那颗玻璃圆钮里（系统对话框的多选框，存进 QQ 自己的 SharedPreferences）。
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
 换版本大概率要改 —— 改法见 [AGENTS.md](AGENTS.md)。
@@ -9,9 +9,9 @@
 ## 做了什么
 
 外观
-- 首页底栏浮成一颗玻璃胶囊：系统 `RenderEffect` 实时高斯模糊 + 提饱和 + 霜色 + 亮边，选中项是会滑的半透明胶囊
+- 首页底栏浮成一颗居中的液态玻璃胶囊（只包住页签）：系统 `RenderEffect` 实时高斯模糊 → AGSL 边缘折射 / 迎光泛白 / 提饱和 / 霜色，没有描边；选中项是一块弹着滑过去的亮胶囊
 - 藏掉「频道」「动态」页签
-- 聊天输入栏 Telegram 化：一行 表情 · 输入框 · 相册 · + · 麦克风⇄发送，原来那条图标带收起
+- 聊天输入栏 Telegram 化：一行 [表情 · 输入框 · +] · 麦克风⇄发送（表情和 + 在框里，相册在 + 里），原来那条图标带收起
 - 聊天标题栏去掉一起听 / 一起看 / 群游戏那排；侧栏去掉打卡、天气、等级、会员、装扮、钱包一类的入口
 - 统一气泡、统一字体、去头像挂件；昵称行只留名字（不显示群等级、头衔、成员等级、会员图标）
 
@@ -30,7 +30,7 @@
 
 1. Actions 里下载最新一次构建的 APK（或 `gh run download -R Sumicya/Qself`），安装
 2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开
-3. 主页右下角、底栏上方那颗圆钮：点开勾选即时生效（钩子每次被调用都查开关）；
+3. 主页底栏胶囊旁边那颗圆钮（右边放不下就在胶囊右上方）：点开勾选即时生效（钩子每次被调用都查开关）；
    已经浮起来的底栏、排好的输入行要点「重启 QQ」才复原
 4. 每个 QQ 进程启动时打一行日志，`logcat -s Qself` 或 LSPosed 管理器的日志页可见，形如
    `Qself 0.3.0 @ com.tencent.mobileqq ✓系统WebView ✓防撤回 … ✗某功能(NoSuchMethodException: …)`
@@ -48,7 +48,7 @@ app/src/main/kotlin/sumicya/qself/
   Chat.kt    聊天，含防撤回用的几十行 protobuf 读取
   Looks.kt   外观：盯住每个 Activity 的视图树套规则
   Input.kt   TG 式输入栏
-  Glass.kt   玻璃与滑动胶囊两个 Drawable
+  Glass.kt   液态玻璃 Drawable（RenderNode + AGSL，底栏用时自带滑动亮胶囊）
 app/src/test/kotlin/sumicya/qself/ProtoTest.kt   防撤回判断的唯一一份可跑检查
 app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop、作用域
 ```

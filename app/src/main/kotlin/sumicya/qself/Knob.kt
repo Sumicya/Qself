@@ -12,7 +12,8 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 
 /**
- * 开关：主页右下角、底栏上方一颗玻璃圆钮，点开是系统 AlertDialog 的多选框。
+ * 开关：主页那颗玻璃圆钮 —— 胶囊右边放得下就跟胶囊并排（iOS 那颗搜索钮的位置），放不下就挪到胶囊右上方。
+ * 点开是系统 AlertDialog 的多选框。
  * 状态存在 QQ 自己的 SharedPreferences「qself」里，钩子每次被调用时都查一遍，所以勾选即时生效；
  * 已经改过的视图（浮起来的底栏、排好的输入行）要重启 QQ 才复原。
  */
@@ -21,12 +22,14 @@ private const val KNOB = "qself-knob"
 fun knob(bar: View) {
     val decor = bar.rootView as? ViewGroup ?: return
     val dp = bar.dp
-    val lift = decor.height - windowY(bar) + (12 * dp).toInt() // 贴着底栏上沿
+    val size = (44 * dp).toInt()
+    val at = IntArray(2).also(bar::getLocationInWindow)
+    val beside = at[0] + bar.width + (8 + 44 + 16) * dp <= decor.width
+    val lift = if (beside) decor.height - at[1] - bar.height + (bar.height - size) / 2 else decor.height - at[1] + (12 * dp).toInt()
     decor.findViewWithTag<View>(KNOB)?.let { old ->
         (old.layoutParams as? ViewGroup.MarginLayoutParams)?.takeIf { it.bottomMargin != lift }?.let { it.bottomMargin = lift; old.layoutParams = it }
         return
     }
-    val size = (44 * dp).toInt()
     val knob = ImageView(bar.context).apply {
         tag = KNOB
         contentDescription = "Qself"
