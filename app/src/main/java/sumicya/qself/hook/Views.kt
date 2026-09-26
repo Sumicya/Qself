@@ -19,12 +19,12 @@ import kotlin.concurrent.thread
  * or a hook alive. The state is tagged on the view itself: a WeakHashMap<View, State> whose State
  * points back at the view never lets go of either.
  */
-class Decor<S : Decor.State> {
-    interface State {
-        val anchor: View
-        fun undo()
-    }
+interface DecorState {
+    val anchor: View
+    fun undo()
+}
 
+class Decor<S : DecorState> {
     private val key = nextKey()
     private val all = Collections.newSetFromMap(WeakHashMap<S, Boolean>())
 
@@ -104,7 +104,7 @@ object Views {
     fun clearAll() = watches.dropAll()
 
     private class Watch(override val anchor: View, activity: Activity) :
-        Decor.State, ViewTreeObserver.OnGlobalLayoutListener, Runnable {
+        DecorState, ViewTreeObserver.OnGlobalLayoutListener, Runnable {
 
         private val activity = WeakReference(activity)
         private var pending = false

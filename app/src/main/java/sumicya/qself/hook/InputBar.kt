@@ -75,7 +75,7 @@ object InputBar {
         val row: LinearLayout,
         val mirrors: List<Mirror>,
         val mic: Mirror?,
-    ) : Decor.State {
+    ) : DecorState {
 
         override val anchor: View get() = bar
 

@@ -71,7 +71,7 @@ object GlassKit {
         v.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
     }
 
-    private class On(override val anchor: View, capsule: Boolean, elevationDp: Float) : Decor.State {
+    private class On(override val anchor: View, capsule: Boolean, elevationDp: Float) : DecorState {
         private val host = anchor
         private val background = host.background
         private val outline = host.outlineProvider
@@ -368,7 +368,7 @@ class PillDrawable(private val host: View) : Drawable() {
 }
 
 /** One host wearing glass, as per-view state that dies with the view. */
-private class GlassOn(override val anchor: View) : Decor.State {
+private class GlassOn(override val anchor: View) : DecorState {
     override fun undo() = GlassKit.remove(anchor)
 }
 
@@ -425,7 +425,7 @@ object GlassChat : ViewRule("glass_chat") {
         super.uninstall()
     }
 
-    private inner class Row(override val anchor: View) : Decor.State {
+    private inner class Row(override val anchor: View) : DecorState {
         private val row = anchor
         private val lp = row.layoutParams as? ViewGroup.MarginLayoutParams
         private val margins = lp?.let { intArrayOf(it.leftMargin, it.rightMargin, it.bottomMargin) }
