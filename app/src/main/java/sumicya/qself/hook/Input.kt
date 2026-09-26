@@ -72,7 +72,7 @@ object TgInput : Rule("tg_input_bar") {
     }
 
     private class Row(
-        val strip: ViewGroup,
+        val strip: View,
         val edit: TextView,
         val box: ViewGroup,
         val host: ViewGroup,

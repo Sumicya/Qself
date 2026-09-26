@@ -2,6 +2,7 @@
 package sumicya.qself.hook
 
 import android.view.View
+import android.view.ViewGroup
 
 /**
  * 按看得见的东西精简 QQ 自己的界面。两条规则，各自把「见过什么」写进报告 ——
