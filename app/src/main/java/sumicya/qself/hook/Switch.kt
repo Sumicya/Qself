@@ -25,8 +25,20 @@ abstract class Switch(val id: String, val mainOnly: Boolean = true) {
 
     val hookCount: Int get() = handles.size
 
+    /**
+     * 只改界面的开关（藏控件、贴玻璃）不装钩子，翻转时不用等热重载，写好 pref 立刻生效。
+     * 装了钩子的开关只能是 false：钩子只能在包加载时装。
+     */
+    open val live: Boolean get() = false
+
+    /** 报告里多一行状态，比如命中了几个控件。 */
+    open fun status(): String? = null
+
     protected abstract fun install()
     protected open fun uninstall() {}
+
+    /** 每次有 Activity 到前台都会叫一次，给只改界面的开关用。 */
+    open fun onResume(activity: Activity) {}
 
     fun enable() {
         if (active) return
