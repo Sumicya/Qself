@@ -21,18 +21,26 @@ import java.util.concurrent.TimeUnit
 import sumicya.qself.BuildConfig
 import sumicya.qself.Catalog
 
-/** Process-wide state inside QQ. Settings come in live through LSPosed remote preferences. */
+/** QQ 进程里的全局状态。开关值从 LSPosed 远程 pref 实时进来。 */
 object Core {
     lateinit var module: XposedModule
         private set
     lateinit var loader: ClassLoader
         private set
 
-    /** Process name of this process (main QQ process, or e.g. :qzone). */
+    /** 这个进程的名字（QQ 主进程，或 :qzone 之类）。 */
     var process: String = ""
         private set
 
-    /** Called by the entry point as soon as the framework tells us where we landed. */
+    val switches: List<Switch> by lazy {
+        listOf(
+            PlainBubble, PlainFont, PlainNick, NoPendant,
+            AntiRecall, MultiForward, PlusPanel, NoLightInteraction, NoDropSticker,
+            SystemWebView, NoTelemetry, NoCrashReport,
+        )
+    }
+
+    /** 入口点一知道我们落在哪个进程就调用。 */
     fun onProcess(name: String) {
         process = name
     }
@@ -42,47 +50,35 @@ object Core {
     private var prefs: SharedPreferences? = null
     private var front = WeakReference<Activity>(null)
     private var reporter: BroadcastReceiver? = null
+    private var context: Context? = null
     private var started = false
 
-    val features: List<Feature> by lazy {
-        listOf(
-            TabBar.Glass, TabBar.HideGuild, TabBar.HideFeed,
-            InputBar.Tg, GlassTitle, GlassChat, TgTitleBar, TgDrawer,
-            PlainBubble, PlainFont, PlainNick, NoPendant,
-            PlusPanel, MultiForward, AntiRecall, NoLightInteraction, NoDropSticker,
-            SystemWebView, NoTelemetry, NoCrashReport,
-            Dump,
-        )
-    }
-
-    /** The Activity in front, or null while QQ is in the background. */
+    /** 前台的 Activity，QQ 在后台时是 null。 */
     val activity: Activity? get() = front.get()
 
     private val isMain get() = process == Catalog.QQ
 
-    /** Held strongly: SharedPreferences keeps only weak references to its listeners. */
+    /** 强引用持有：SharedPreferences 只弱引用自己的监听器。 */
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        main.post {
-            if (key == null) syncAll()
-            // A switch that installs hooks cannot be flipped from here any more (the window is closed);
-            // it waits for the hot reload the settings app sends right after writing the preference.
-            else features.firstOrNull { it.id == key }?.let { f -> if (f.live) sync(f) }
-        }
+        // 钩子只能在包加载时装，所以这里不装：开关写完 pref，设置页会紧跟着发一次热重载。
+        if (key == null) main.post { syncAll() }
     }
 
     fun start(module: XposedModule, loader: ClassLoader) {
         this.module = module
         this.loader = loader
         prefs = runCatching { module.getRemotePreferences(Catalog.PREFS) }
-            .onFailure { log(Log.WARN, "remote preferences unavailable, using defaults: $it") }
+            .onFailure { log(Log.WARN, "远程 pref 拿不到，先用默认值: $it") }
             .getOrNull()
         prefs?.registerOnSharedPreferenceChangeListener(listener)
         if (isMain) trackActivities()
+        for (s in switches) if (Catalog.byId[s.id] == null) log(Log.WARN, "开关 ${s.id} 没在 Catalog 里登记")
+        for (i in Catalog.items) if (switches.none { it.id == i.id }) log(Log.WARN, "Catalog 里的 ${i.id} 没有对应代码")
         syncAll()
         started = true
         log(Log.INFO, "started in $process")
-        // QQ can die before anyone gets to open the settings app, so the whole report also goes to the
-        // LSPosed log (LSPosed manager → 日志). That log survives a crash, the in-app report does not.
+        // QQ 崩了就没法进 QQ 点「生成报告」，所以整份报告同时写进 LSPosed 日志（管理器 → 日志），
+        // 那份日志在 QQ 崩了之后还在。
         for (line in report().trim().lineSequence()) log(Log.INFO, line)
     }
 
@@ -93,9 +89,7 @@ object Core {
             reporter?.let { r -> runCatching { context?.unregisterReceiver(r) } }
             reporter = null
             prefs?.unregisterOnSharedPreferenceChangeListener(listener)
-            features.forEach { it.disable() }
-            GlassKit.clearAll()
-            Views.clearAll()
+            switches.forEach { it.disable() }
             infra.forEach { runCatching { it.unhook() } }
             infra.clear()
             prefs = null
@@ -109,17 +103,11 @@ object Core {
 
     fun log(priority: Int, message: String) = runCatching { module.log(priority, "Qself", message) }
 
-    private fun syncAll() = features.forEach(::sync)
+    private fun syncAll() = switches.forEach(::sync)
 
-    private fun sync(f: Feature?) {
-        f ?: return
-        val want = isMain || !f.mainOnly
-        if (want && isEnabled(f.id)) {
-            f.enable()
-            activity?.let { a -> runCatching { f.onResume(a) } }
-        } else {
-            f.disable()
-        }
+    private fun sync(s: Switch) {
+        val want = isMain || !s.mainOnly
+        if (want && isEnabled(s.id)) s.enable() else s.disable()
     }
 
     private fun trackActivities() {
@@ -134,10 +122,9 @@ object Core {
     private fun resumed(activity: Activity) {
         front = WeakReference(activity)
         listen(activity.applicationContext)
-        features.forEach { if (it.active) runCatching { it.onResume(activity) } }
     }
 
-    /** After a hot reload nobody tells us which Activity is in front; ask ActivityThread. */
+    /** 热重载之后没人告诉我们前台是哪个 Activity，去问 ActivityThread。 */
     fun replayActivity() = main.post {
         runCatching {
             val at = Class.forName("android.app.ActivityThread")
@@ -149,16 +136,14 @@ object Core {
                 val activity = record.javaClass.getDeclaredField("activity").apply { isAccessible = true }.get(record) as? Activity
                 if (!paused && activity != null) resumed(activity)
             }
-        }.onFailure { log(Log.WARN, "could not find the front Activity: $it") }
+        }.onFailure { log(Log.WARN, "找不到前台 Activity: $it") }
     }
 
     fun applicationClassLoader(): ClassLoader? = runCatching {
         Class.forName("android.app.ActivityThread").getMethod("currentApplication").invoke(null)
     }.getOrNull().let { (it as? Application)?.classLoader ?: activity?.classLoader }
 
-    /** QQ answers a status request from the settings app here. */
-    private var context: Context? = null
-
+    /** QQ 在这里回应设置页的状态询问。 */
     private fun listen(ctx: Context) {
         if (reporter != null) return
         val receiver = object : BroadcastReceiver() {
@@ -168,30 +153,27 @@ object Core {
         }
         runCatching { ctx.registerReceiver(receiver, IntentFilter(Catalog.ACTION_REPORT), Context.RECEIVER_EXPORTED) }
             .onSuccess { reporter = receiver; context = ctx }
-            .onFailure { log(Log.WARN, "report receiver: $it") }
+            .onFailure { log(Log.WARN, "报告接收器: $it") }
     }
 
     private fun report(): String = buildString {
         val pkg = runCatching { context?.packageManager?.getPackageInfo(Catalog.QQ, 0) }.getOrNull()
-        appendLine("Qself ${BuildConfig.VERSION_NAME} · QQ ${pkg?.versionName ?: "?"} · ${process}")
+        appendLine("Qself ${BuildConfig.VERSION_NAME} · QQ ${pkg?.versionName ?: "?"} · $process")
         appendLine("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} ${Build.MODEL}")
         appendLine("前台: ${activity?.javaClass?.name ?: "-"}")
-        for (f in features) {
-            append(if (f.active) "✓ " else if (f.error != null) "✗ " else "· ").append(f.id)
+        for (s in switches) {
+            append(if (s.active) "✓ " else if (s.error != null) "✗ " else "· ").append(s.id)
             when {
-                f.active -> {
-                    if (f.hookCount > 0) append("  钩子 ").append(f.hookCount)
-                    f.status()?.let { append(" · ").append(it) }
-                }
-                f.error != null -> append("  失败: ").append(f.error)
-                (isMain || !f.mainOnly) && isEnabled(f.id) -> append("  等热重载")
+                s.active -> if (s.hookCount > 0) append("  钩子 ").append(s.hookCount)
+                s.error != null -> append("  失败: ").append(s.error)
+                (isMain || !s.mainOnly) && isEnabled(s.id) -> append("  等热重载")
                 else -> append("  关")
             }
             appendLine()
         }
     }
 
-    /** Views may only be touched on the main thread, and hot reload callbacks need not be on it. */
+    /** View 只能在主线程碰，而热重载回调不保证在主线程。 */
     private fun onMain(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) return block()
         val done = CountDownLatch(1)

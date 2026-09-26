@@ -1,41 +1,31 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself.hook
 
-import android.app.Activity
 import android.util.Log
 import io.github.libxposed.api.XposedInterface
 import java.lang.reflect.Executable
 import java.lang.reflect.Method
 
 /**
- * One switch. install() adds hooks, disable() takes back everything it added, so flipping
- * the switch in the settings app lands in the running QQ immediately.
+ * 一个开关：装钩子、卸钩子、报状态，就这三件事。
+ *
+ * 反射的名字一律写完整字面量（"com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble"），
+ * 不许拼字符串：tools/dexcheck.py 靠 tools/symbols.txt 一条条核，拼出来的名字核不了。
  */
-abstract class Feature(val id: String, val mainOnly: Boolean = true) {
+abstract class Switch(val id: String, val mainOnly: Boolean = true) {
     private val handles = mutableListOf<XposedInterface.HookHandle>()
 
     var active = false
         private set
 
-    /** Why the last install() failed, for the report. */
+    /** 上次装钩子为什么失败，给报告用。 */
     var error: String? = null
         private set
 
     val hookCount: Int get() = handles.size
 
-    /**
-     * True when flipping this switch only touches views, with no Xposed hook involved: those can be
-     * flipped while QQ is running. Everything else waits for a hot reload, because hooks may only be
-     * installed while the package is still loading.
-     */
-    open val live: Boolean get() = false
-
-    /** One extra line in the report, e.g. how many views were hit. */
-    open fun status(): String? = null
-
     protected abstract fun install()
     protected open fun uninstall() {}
-    open fun onResume(activity: Activity) {}
 
     fun enable() {
         if (active) return
@@ -47,8 +37,11 @@ abstract class Feature(val id: String, val mainOnly: Boolean = true) {
         } catch (t: Throwable) {
             handles.forEach { runCatching { it.unhook() } }
             handles.clear()
-            error = if (t is IllegalStateException && t.message?.contains("hook mutation") == true)
-                "钩子窗口已关闭：热重载或重启 QQ 后生效" else t.toString().take(160)
+            error = if (t is IllegalStateException && t.message?.contains("hook mutation") == true) {
+                "钩子窗口已关闭：热重载或重启 QQ 后生效"
+            } else {
+                t.toString().take(160)
+            }
             Core.log(Log.WARN, "$id failed: $t")
         }
     }
@@ -62,10 +55,11 @@ abstract class Feature(val id: String, val mainOnly: Boolean = true) {
         Core.log(Log.INFO, "$id off")
     }
 
-    /** The class of [name], or null when this QQ build does not have it. */
-    protected fun cls(name: String): Class<*>? = runCatching { Class.forName(name, false, Core.loader) }.getOrNull()
+    /** 这个 QQ 版本里没有这个类就返回 null。 */
+    protected fun cls(name: String): Class<*>? =
+        runCatching { Class.forName(name, false, Core.loader) }.getOrNull()
 
-    /** Same, but a miss marks the switch broken instead of silently doing nothing. */
+    /** 同上，但找不到就当成开关坏了，而不是静默失效。 */
     protected fun need(name: String): Class<*> = cls(name) ?: throw ClassNotFoundException(name)
 
     protected fun hook(target: Executable, body: (XposedInterface.Chain) -> Any?) {
@@ -74,7 +68,7 @@ abstract class Feature(val id: String, val mainOnly: Boolean = true) {
             .intercept { chain -> body(chain) }
     }
 
-    /** Replace the result, skipping the original. */
+    /** 直接换掉返回值，不跑原方法。 */
     protected fun constant(target: Method, value: Any?) = hook(target) { value }
 
     protected fun afterConstructed(clazz: Class<*>, body: (Any) -> Unit) {
@@ -104,6 +98,6 @@ abstract class Feature(val id: String, val mainOnly: Boolean = true) {
         if (!condition || handles.isEmpty()) throw NoSuchMethodException(what)
     }
 
-    /** Ask ART to stop inlining [target] into its callers, so a hook on a small callee is seen. */
+    /** 让 ART 别再把这个小方法内联进调用方，不然钩子看不见它。 */
     protected fun deopt(target: Executable) = runCatching { Core.module.deoptimize(target) }
 }

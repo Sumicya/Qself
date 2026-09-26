@@ -19,6 +19,7 @@
 import argparse
 import glob
 import hashlib
+import re
 import os
 import struct
 import sys
@@ -135,7 +136,7 @@ def load_symbols(path):
     return syms
 
 
-KINDS = ("class", "class~", "member", "member!", "field", "res", "text")
+KINDS = ("class", "class~", "member", "member!", "field", "res", "text", "lit")
 
 
 # ---------------------------------------------------------------- 主流程
@@ -147,6 +148,7 @@ def main():
     ap.add_argument("--dex", help="dex 目录或 glob,和 --apk 二选一")
     ap.add_argument("--symbols", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "symbols.txt"))
     ap.add_argument("--quiet", action="store_true", help="只打印 FAIL 和总结")
+    ap.add_argument("--lint", help="顺带检查这些 .kt 源码里的反射名字都登记在表里了")
     a = ap.parse_args()
 
     if a.apk:
@@ -213,6 +215,8 @@ def main():
             ok = bool(hits)
             detail = " · ".join("%s %s [%s]" % (h[1], h[2], h[3]) for h in hits[:2]) if ok \
                 else "没有（%s里%s）" % (cls.split(".")[-1], "类不存在" if cls not in hit_class else "无此成员")
+        elif kind == "lit":
+            ok, detail = True, "非 dex 字面量（给源码检查用的声明）"
         elif kind in ("res", "text"):
             n = arsc.count(arg.encode("utf-8")) if arsc else 0
             where = "resources.arsc"
@@ -227,8 +231,80 @@ def main():
             fails += 1
             print("  FAIL  %-9s %-72s %s" % (kind, arg, detail))
 
+    if a.lint:
+        bad = lint_sources(a.lint, syms)
+        if bad:
+            print("\n源码里有 %d 个名字没登记在 symbols.txt" % bad)
+            fails += bad
+
     print("\n%d 条符号，%d 条对不上" % (len(syms), fails))
     return 1 if fails else 0
+
+
+FQCN = re.compile(r"^[a-z][A-Za-z0-9_$]*(\.[A-Za-z0-9_$]+){2,}$")
+
+
+def literals(line):
+    """把一行 Kotlin 里的字符串字面量抽出来 —— 要认 ${...} 里的嵌套引号和三引号。"""
+    out, i, n = [], 0, len(line)
+    while i < n:
+        if line[i] != '"':
+            i += 1
+            continue
+        if line.startswith('"""', i):
+            j = line.find('"""', i + 3)
+            i = n if j < 0 else j + 3
+            continue
+        i += 1
+        buf = []
+        while i < n:
+            c = line[i]
+            if c == "\\":
+                buf.append(line[i:i + 2])
+                i += 2
+            elif c == "$" and i + 1 < n and line[i + 1] == "{":
+                depth, j = 0, i + 1
+                while j < n:
+                    if line[j] == "{":
+                        depth += 1
+                    elif line[j] == "}":
+                        depth -= 1
+                        if depth == 0:
+                            break
+                    j += 1
+                buf.append("$X")  # 占位, 后面只看剩下的部分
+                i = j + 1
+            elif c == '"':
+                i += 1
+                break
+            else:
+                buf.append(c)
+                i += 1
+        out.append("".join(buf))
+    return out
+
+
+def lint_sources(root, syms):
+    """代码里出现的反射名字必须都登记在表里 —— 不然这张表就是摆设。"""
+    declared = {arg for _, arg, _ in syms}
+    declared |= {arg.split("#", 1)[0] for arg in declared if "#" in arg}
+    bad = 0
+    for path in sorted(glob.glob(os.path.join(root, "**", "*.kt"), recursive=True)):
+        with open(path, encoding="utf-8") as fh:
+            for lineno, line in enumerate(fh, 1):
+                for value in literals(line):
+                    if "$X" in value:  # 拼出来的名字核不了, 一律不许
+                        if "." in value and any(c.isupper() for c in value):
+                            print("  FAIL  lint %s:%d  别拼名字: %s" % (path, lineno, value))
+                            bad += 1
+                        continue
+                    if not FQCN.match(value):
+                        continue
+                    if value in declared or any(value in d for d in declared):
+                        continue
+                    print("  FAIL  lint %s:%d  %s 没登记" % (path, lineno, value))
+                    bad += 1
+    return bad
 
 
 if __name__ == "__main__":

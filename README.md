@@ -59,16 +59,39 @@ app/src/main/java/sumicya/qself/
   ui/                 Compose Material 3 设置页
 ```
 
-## 名字对不对, 跑一条命令就知道
+## 目录
 
-`tools/symbols.txt` 是这个模块依赖的**全部**类 / 方法 / 字段 / 文案, `tools/dexcheck.py` 拿真 QQ 的
-dex 一条条核。只用标准库, Termux 也能跑:
-
-```sh
-pkg install python                      # 只装这一次
-cat qq.a? > qq.apk                      # qqapk 仓库里的分包先拼起来
-python3 tools/dexcheck.py --apk qq.apk  # 89 条符号, 0 条对不上 -> 退出码 0
+```
+app/src/main/java/sumicya/qself/
+  Catalog.kt          开关表（设置页和 QQ 里的代码都读这一份）
+  hook/Entry.kt       libxposed 入口 + 热重载
+  hook/Core.kt        QQ 进程里的状态、远程 pref、前台 Activity、自检报告
+  hook/Switch.kt      开关基类：装钩子 / 卸钩子 / 反射帮手
+  hook/Msg.kt         VAS 会员结构、防撤回、转发页、「+」面板、昵称、轻互动、表情雨
+  hook/Quiet.kt       禁 X5、屏蔽统计上报、屏蔽崩溃上报
+  hook/Proto.kt       认撤回推送用的极简 protobuf
+  ui/                 Compose Material 3 设置页
+tools/
+  symbols.txt         依赖的全部名字（类 / 方法 / 字段 / 文案）
+  dexcheck.py         拿真 QQ dex 逐条核 + 源码 lint
 ```
 
-红了就是 QQ 换了名字。要么按它打印出来的真签名改代码, 要么把这条功能删掉 —— 不许留着静默失效的钩子。
-加功能 = 往 symbols.txt 里加一行, 不是往代码里塞字符串。
+## 改名字之前先看这里
+
+反射的名字一律写完整字面量，不许拼字符串 —— 拼了 `tools/dexcheck.py` 就核不了，lint 直接报错。
+加功能 = 往 `tools/symbols.txt` 里加一行，不是往代码里塞字符串。名字对不上就让开关失败并写进
+报告，不许留静默失效的钩子。
+
+## 名字对不对，跑一条命令就知道
+
+`tools/symbols.txt` 是模块依赖的全部类 / 方法 / 字段 / 文案，`tools/dexcheck.py` 拿真 QQ 的 dex
+逐条核，顺带检查源码里没有漏登记的名字。只用标准库，Termux 也能跑：
+
+```sh
+pkg install python                        # 只装这一次
+cat qq.a? > qq.apk                        # qqapk 仓库里的分包先拼起来
+python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/java
+# 73 条符号，0 条对不上 -> 退出码 0
+```
+
+红了就是 QQ 换了名字。要么按它打印出来的真签名改代码，要么把这条功能删掉。

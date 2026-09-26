@@ -4,61 +4,65 @@ package sumicya.qself.hook
 import android.view.View
 import java.lang.reflect.Modifier
 
-// Only stable names live here: the NT kernel JNI structs, public SDK entry points and
-// unobfuscated QQ classes. Every switch is independent, and a miss only leaves that switch off.
+/**
+ * 消息层：VAS 会员结构、防撤回、转发页、「+」面板、昵称、轻互动、表情雨。
+ *
+ * 每个类名都是真 dex 里核过的完整名字（见 tools/symbols.txt）。名字对不上就让开关直接失败，
+ * 不许静默失效 —— 报告里会写「✗ 失败: ClassNotFoundException(...)」，LSPosed 日志里也有。
+ */
 
-private const val KERNEL = "com.tencent.qqnt.kernel.nativeinterface"
-
-/** Every received message loses its VIP bubble. */
-object PlainBubble : Feature("plain_bubble") {
-    override fun install() = afterConstructed(need("$KERNEL.VASMsgBubble")) {
+/** 每条收到的消息都掉 VIP 气泡。 */
+object PlainBubble : Switch("plain_bubble") {
+    override fun install() = afterConstructed(need("com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble")) {
         setField(it, "bubbleId", 0)
         setField(it, "subBubbleId", 0)
     }
 }
 
-object PlainFont : Feature("plain_font") {
-    override fun install() = afterConstructed(need("$KERNEL.VASMsgFont")) {
+/** 会员字体和魔法字都换成默认。 */
+object PlainFont : Switch("plain_font") {
+    override fun install() = afterConstructed(need("com.tencent.qqnt.kernel.nativeinterface.VASMsgFont")) {
         setField(it, "fontId", 0)
         setField(it, "magicFontType", 0)
     }
 }
 
-object NoPendant : Feature("no_pendant") {
-    override fun install() = afterConstructed(need("$KERNEL.VASMsgAvatarPendant")) {
+/** 头像挂件。 */
+object NoPendant : Switch("no_pendant") {
+    override fun install() = afterConstructed(need("com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant")) {
         setField(it, "pendantId", 0L)
         setField(it, "pendantDiyInfoId", 0)
     }
 }
 
 /**
- * The kernel learns about recalls from MSF pushes. Drop the recall pushes, strip the recall
- * section from sync pushes, pass everything else through untouched.
+ * 内核从 MSF 推送里知道谁撤回了消息：丢掉撤回推送，从同步推送里抠掉撤回那一段，别的原样放行。
  *
- * The push handler does not look the same in every QQ build: QFix rewrites it, so the real
- * signature is onMsfPush(byte, String, byte[]) and the leading byte is a dummy. Pick the command
- * and the body out by type instead of by position.
+ * 真 dex 里这个方法只有一种形态：IQQNTWrapperSession$CppProxy.onMsfPush(String, byte[], PushExtraInfo)。
+ * 但 QQ 自带 QFix，这个类上有 $redirector_ 字段 —— 运行时它还往里插参数，真实参数表跟 dex 不一样。
+ * 所以命令和正文按类型认，不按位置。
  */
-object AntiRecall : Feature("anti_recall") {
+object AntiRecall : Switch("anti_recall") {
     private const val MSG_PUSH = "trpc.msg.olpush.OlPushService.MsgPush"
     private const val SYNC_PUSH = "trpc.msg.register_proxy.RegisterProxy.InfoSyncPush"
 
     override fun install() {
-        val proxy = need("$KERNEL.IQQNTWrapperSession\$CppProxy")
-        val pushes = proxy.declaredMethods.filter { it.name == "onMsfPush" && it.parameterCount in 2..4 }
-        pushes.forEach { method ->
+        val pushes = need("com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession\$CppProxy")
+            .declaredMethods
+            .filter { it.name == "onMsfPush" && it.parameterCount >= 2 }
+        for (method in pushes) {
             hook(method) { chain ->
                 val args = chain.args
                 val command = args.firstOrNull { it is String } as? String
-                val body = args.firstOrNull { it is ByteArray } as? ByteArray
-                val bodyAt = args.indexOfFirst { it is ByteArray }
+                val at = args.indexOfFirst { it is ByteArray }
+                val body = if (at < 0) null else args[at] as ByteArray
                 when {
-                    body == null || bodyAt < 0 -> chain.proceed()
+                    body == null -> chain.proceed()
                     command == MSG_PUSH && Proto.isRecallPush(body) -> null
                     command == SYNC_PUSH -> {
                         val stripped = Proto.without(body, 8)
                         if (stripped === body) chain.proceed()
-                        else chain.proceed(args.toMutableList().also { it[bodyAt] = stripped }.toTypedArray())
+                        else chain.proceed(args.toMutableList().also { it[at] = stripped }.toTypedArray())
                     }
                     else -> chain.proceed()
                 }
@@ -68,8 +72,9 @@ object AntiRecall : Feature("anti_recall") {
     }
 }
 
-object MultiForward : Feature("multi_forward") {
-    private val slots = arrayOf("friendLayout", "contactLayout", "troopDiscussionLayout", "multiChatLayout")
+/** 转发页永远显示好友、群、多选这几个入口。 */
+object MultiForward : Switch("multi_forward") {
+    private val slots = listOf("contactLayout", "friendLayout", "multiChatLayout", "troopDiscussionLayout")
 
     override fun install() {
         val m = need("com.tencent.mobileqq.activity.ForwardRecentActivity").getDeclaredMethod("initEntryHeaderView")
@@ -87,14 +92,12 @@ object MultiForward : Feature("multi_forward") {
 }
 
 /**
- * 「+」 panel as a Telegram attach menu: photos, camera, files, location, money and tools stay;
- * play-together, gifts, short video and live rooms go.
+ * 「+」面板精简成 TG 的附件菜单：照片、拍摄、文件、位置、红包留着，一起派对、礼物、直播间这类去掉。
  *
- * QQ 9.2.10 keeps the fetched entries in a private ArrayList field of PlusPanelUiState.FetchCompleted
- * and hands them out through a getter, so the getter is where the list gets filtered — each call
- * takes the dropped titles out of the stored list and gives back the same list.
+ * 9.2.10 把拉到的入口存在 PlusPanelUiState.FetchCompleted 的私有 ArrayList 字段 d 里，通过
+ * getter a() 发出来 —— 所以过滤要挂在 getter 上：每次取都从存着的 list 里剔掉不要的标题。
  */
-object PlusPanel : Feature("tg_plus_panel") {
+object PlusPanel : Switch("tg_plus_panel") {
     private val drop = setOf(
         "一起派对", "好友爱玩", "一起看", "一起K歌", "一起听歌", "一起玩", "礼物", "厘米秀",
         "短视频", "直播间", "群课堂", "作业", "匿名送礼", "赞赏照片", "匿问我答", "滤镜", "涂鸦",
@@ -117,10 +120,9 @@ object PlusPanel : Feature("tg_plus_panel") {
         item != null && runCatching { titles(item).any { it in drop } }.getOrDefault(false)
 
     override fun install() {
-        val state = need("com.tencent.qqnt.pluspanel.data.PlusPanelUiState\$FetchCompleted")
-        val getters = state.declaredMethods.filter {
-            (List::class.java.isAssignableFrom(it.returnType)) && it.parameterCount <= 1
-        }
+        val getters = need("com.tencent.qqnt.pluspanel.data.PlusPanelUiState\$FetchCompleted")
+            .declaredMethods
+            .filter { List::class.java.isAssignableFrom(it.returnType) && it.parameterCount <= 1 }
         getters.forEach { method ->
             hook(method) { chain ->
                 val result = chain.proceed()
@@ -128,46 +130,44 @@ object PlusPanel : Feature("tg_plus_panel") {
                 result
             }
         }
-        require(getters.isNotEmpty(), "FetchCompleted list getter")
+        require(getters.isNotEmpty(), "FetchCompleted 的 list getter")
     }
 }
 
 /**
- * Telegram nick line: only the sender's name. Group level, honor, member-level tags and VIP icons
- * are separate blocks in QQ's nick slot, each asked to bind itself; those answer no, and the views
- * they already inflated are hidden.
+ * 昵称行只留名字：群等级、头衔、成员等级、会员图标在 QQ 里是各自独立的 block，
+ * 每个都会问一句「要不要绑自己」—— 让它们答否，顺便把已经 inflate 出来的 view 藏掉。
  *
- * The question is LazyNickBlock.l(...) — a boolean that QFix rewrites with a dummy leading byte, so
- * the parameter list differs between builds. Hook it by name and let the return value do the work.
+ * LazyNickBlock.l(AIOMsgItem) 返回 boolean，就是那一问；9.2.10 里它是 public final。
  */
-object PlainNick : Feature("plain_nick") {
-    private const val NICK = "com.tencent.mobileqq.aio.msglist.holder.component.nick"
-    private val drop = setOf(
+object PlainNick : Switch("plain_nick") {
+    private val block = setOf(
         "com.tencent.qqnt.aio.gradelevel.AIOTroopMemberGradeLevelBlock",
         "com.tencent.qqnt.aio.mutualmark.AIOTroopHonorNickBlock",
         "com.tencent.qqnt.aio.nick.memberlevel.AIOTroopMemberLevelBlock",
         "com.tencent.mobileqq.vas.vipicon.AIOVipIconProcessor",
         "com.tencent.mobileqq.vas.vipicon.AIOVipIconExProcessor",
-        "$NICK.pit.block.AIONickIconSimpleBlock",
+        "com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.block.AIONickIconSimpleBlock",
     )
 
     private fun dropped(o: Any?): Boolean {
         var c: Class<*>? = o?.javaClass
         while (c != null) {
-            if (c.name in drop) return true
+            if (c.name in block) return true
             c = c.superclass
         }
         return false
     }
 
     override fun install() {
-        val view = need("$NICK.block.a").getDeclaredMethod("h")
-        val questions = need("$NICK.block.LazyNickBlock").declaredMethods.filter { it.name == "l" }
+        val viewOf = need("com.tencent.mobileqq.aio.msglist.holder.component.nick.block.a").getDeclaredMethod("h")
+        val questions = need("com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock")
+            .declaredMethods.filter { it.name == "l" }
         questions.forEach { method ->
             hook(method) { chain ->
                 val self = chain.thisObject
                 if (dropped(self)) {
-                    runCatching { (view.invoke(self) as? View)?.visibility = View.GONE }
+                    runCatching { (viewOf.invoke(self) as? View)?.visibility = View.GONE }
                     false
                 } else {
                     chain.proceed()
@@ -175,28 +175,31 @@ object PlainNick : Feature("plain_nick") {
             }
         }
         require(questions.isNotEmpty(), "LazyNickBlock.l")
-        listOf("$NICK.slot.AIONickSlotContainer" to "d", "$NICK.pit.AIONickComponentV2" to "d1").forEach { (name, method) ->
-            cls(name)?.declaredMethods?.filter { it.name == method }?.forEach { deopt(it) }
-        }
+        // 昵称槽里真正拼内容的那两个方法很小，ART 会把它们内联掉，钩子就看不见了。
+        cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickSlotContainer")
+            ?.declaredMethods?.filter { it.name == "d" }?.forEach { deopt(it) }
+        cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2")
+            ?.declaredMethods?.filter { it.name == "d1" }?.forEach { deopt(it) }
     }
 }
 
-object NoLightInteraction : Feature("no_light_interaction") {
+/** 早安、晚安、戳一戳这类轻互动直接别发。 */
+object NoLightInteraction : Switch("no_light_interaction") {
     override fun install() {
         val lists = need("com.tencent.qqnt.biz.lightbusiness.lightinteraction.LIAConfigManager")
             .declaredMethods.filter { it.returnType == List::class.java }
         lists.forEach { constant(it, ArrayList<Any>()) }
-        require(lists.isNotEmpty(), "LIAConfigManager lists")
+        require(lists.isNotEmpty(), "LIAConfigManager 的 list")
     }
 }
 
-object NoDropSticker : Feature("no_drop_sticker") {
+/** 关键词触发的全屏掉表情。 */
+object NoDropSticker : Switch("no_drop_sticker") {
     override fun install() {
-        // 9.2.10: AioAnimationConfigHolder.e() returns the egg rules.
-        val c = cls("com.tencent.mobileqq.aio.animation.util.AioAnimationConfigHolder")
-            ?: need("com.tencent.mobileqq.aio.animation.util.AioAnimationConfigHelper")
-        val rules = c.declaredMethods.filter { it.parameterCount == 0 && List::class.java.isAssignableFrom(it.returnType) }
+        val rules = need("com.tencent.mobileqq.aio.animation.util.AioAnimationConfigHolder")
+            .declaredMethods
+            .filter { it.parameterCount == 0 && List::class.java.isAssignableFrom(it.returnType) }
         rules.forEach { constant(it, ArrayList<Any>()) }
-        require(rules.isNotEmpty(), "AioAnimationConfig rules")
+        require(rules.isNotEmpty(), "AioAnimationConfigHolder 的规则表")
     }
 }

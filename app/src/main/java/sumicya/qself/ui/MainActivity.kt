@@ -103,7 +103,7 @@ private fun Screen(service: XposedService?) {
         ) {
             item { Card(shape = RoundedCornerShape(28.dp), colors = statusColors(service)) { Status(service) } }
             item { Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) { Report() } }
-            Catalog.Group.entries.forEach { group ->
+            Catalog.Group.entries.filter { g -> Catalog.items.any { it.group == g } }.forEach { group ->
                 item {
                     Text(
                         group.title,
