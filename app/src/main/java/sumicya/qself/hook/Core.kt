@@ -34,10 +34,8 @@ object Core {
 
     val switches: List<Switch> by lazy {
         listOf(
-            TabBar.Glass, TabBar.HideGuild, TabBar.HideFeed,
-            GlassTitle, GlassChat, InputBar.Tg, TgTitleBar, TgDrawer,
-            PlainBubble, PlainFont, PlainNick, NoPendant,
-            AntiRecall, MultiForward, PlusPanel, NoLightInteraction, NoDropSticker,
+            Bar.Capsule, Bar.HideGuild, Bar.HideFeed,
+            TgInput, TrimTitle, TrimDrawer,
             SystemWebView, NoTelemetry, NoCrashReport,
             Dump,
         )
@@ -94,8 +92,7 @@ object Core {
             reporter = null
             prefs?.unregisterOnSharedPreferenceChangeListener(listener)
             switches.forEach { it.disable() }
-            GlassKit.clearAll()
-            Views.clearAll()
+            Screen.dropAll()
             infra.forEach { runCatching { it.unhook() } }
             infra.clear()
             prefs = null

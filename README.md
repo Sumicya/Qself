@@ -49,10 +49,10 @@ app/src/main/java/sumicya/qself/
   hook/Entry.kt       libxposed 入口 + 热重载
   hook/Core.kt        QQ 进程里的状态、远程 pref、前台 Activity、自检报告
   hook/Switch.kt      开关基类：装钩子 / 卸钩子 / 反射帮手
-  hook/Glass.kt       AGSL 透镜 + RenderNode 玻璃；首页顶栏、聊天标题栏、输入栏玻璃
-  hook/TabBar.kt      QQ 自己的底栏：浮起、玻璃、滑块胶囊、隐藏不要的页签
-  hook/InputBar.kt    输入栏 TG 化（QQ 的按钮原地镜像，点击穿透回 QQ）
-  hook/Views.kt       按「看得见的东西」找控件的规则引擎 + 界面结构导出
+  hook/Screen.kt      扫描器 + Rule 基类 + 界面结构导出
+  hook/Bar.kt         底栏：浮成胶囊、藏页签（玻璃借 QQ 自己那层模糊）
+  hook/Input.kt       输入栏 TG 化（QQ 的按钮原地镜像，点击穿透回 QQ）
+  hook/Trim.kt        聊天标题栏与侧栏精简（认错了把「见过什么」写进报告）
   hook/Msg.kt         VAS 会员结构、防撤回、转发页、「+」面板、昵称、轻互动、表情雨
   hook/Quiet.kt       禁 X5、屏蔽统计上报、屏蔽崩溃上报
   hook/Proto.kt       认撤回推送用的极简 protobuf
