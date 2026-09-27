@@ -44,7 +44,6 @@ val features = listOf(
     Feature("系统WebView", false, "网页走系统 WebView，不加载 X5", ::systemWebView),
     Feature("屏蔽统计上报", false, "灯塔统计空转", ::noTelemetry),
     Feature("屏蔽崩溃上报", false, "不初始化 Bugly", ::noCrashReport),
-),
 )
 
 /** libxposed 入口。装上即全部生效；开关在 QQ 主页右下角那颗圆钮里。 */
