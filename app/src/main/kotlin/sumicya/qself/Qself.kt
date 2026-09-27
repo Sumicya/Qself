@@ -33,6 +33,7 @@ val features = listOf(
     Feature("转发不限人数", true, "转发选人不再卡 9 个", ::noForwardLimit),
     Feature("左滑回复不设限", true, "卡片消息也能左滑回复", ::replyAnyMsg),
     Feature("隐藏在线状态", true, "昵称下那行在线状态藏掉", {}),
+    Feature("显示具体未读条数", true, "角标不再停在 99+", ::exactCount),
     Feature("+面板精简", true, "+ 面板只留正经附件", ::plusPanel),
     Feature("屏蔽红点引导", true, "红点和引导气泡不亮", ::noRedDot),
     Feature("去会员等级", true, "资料卡不画 SVIP/VIP 图标", ::plainCard),

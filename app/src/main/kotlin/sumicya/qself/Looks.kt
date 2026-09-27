@@ -3,6 +3,7 @@ package sumicya.qself
 
 import android.app.Activity
 import android.app.Instrumentation
+import android.graphics.Paint
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -12,6 +13,7 @@ import android.widget.RelativeLayout
 import android.widget.TextView
 import java.util.Collections
 import java.util.WeakHashMap
+import kotlin.math.ceil
 
 /**
  * 外观：每个 Activity 一到前台就盯住它的 decor，布局一变（节流 150ms）就走一遍视图树套规则。
@@ -187,6 +189,41 @@ private fun settle(bar: ViewGroup) {
         absorbed[bar] = inset
         bar.setPadding(bar.paddingLeft, bar.paddingTop, bar.paddingRight, 0)
         bar.layoutParams = it
+    }
+}
+
+/** QQ 两种角标：QUIBadge 自己画 mText，旧版 TextView 用第三个参数做数量；别去视图树找不存在的子 TextView。 */
+fun exactCount() {
+    val badge = cls("com.tencent.mobileqq.quibadge.QUIBadge")
+    val text = badge.getDeclaredField("mText").apply { isAccessible = true }
+    val num = badge.getDeclaredField("mNum").apply { isAccessible = true }
+    val paint = badge.getDeclaredField("mTextPaint").apply { isAccessible = true }
+    hook(badge.method("updateNum")) { chain ->
+        chain.proceed().also {
+            val n = chain.args[0] as Int
+            if (n > 99) text.set(chain.thisObject, n.toString())
+        }
+    }
+    // QQ 给 99+ 固定 31dp 宽；真数字多一位，就补上那一位的像素宽度。
+    hook(badge.method("getMinWidth")) { chain ->
+        val width = chain.proceed() as Int
+        val b = chain.thisObject
+        if (num.getInt(b) <= 99) width else {
+            val p = paint.get(b) as Paint
+            width + ceil(p.measureText(text.get(b) as String) - p.measureText("99+")).toInt().coerceAtLeast(0)
+        }
+    }
+    hook(cls("com.tencent.widget.d").method("d")) { chain ->
+        chain.proceed().also {
+            val n = chain.args[2] as Int // d(TextView, type, count, background, limit, label, isRed)
+            val v = chain.args[0] as? TextView
+            if (n > 99 && v?.text?.toString() == "99+") {
+                v.text = n.toString()
+                val lp = v.layoutParams
+                val width = ceil(v.paint.measureText(v.text.toString()) + v.paddingLeft + v.paddingRight + 4 * v.dp).toInt()
+                if (lp != null && lp.width in 1 until width) { lp.width = width; v.layoutParams = lp }
+            }
+        }
     }
 }
 
