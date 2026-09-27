@@ -10,8 +10,8 @@ android {
         applicationId = "sumicya.qself"
         minSdk = 31 // RenderEffect
         targetSdk = 37
-        versionCode = 300
-        versionName = "0.3.0"
+        versionCode = 400
+        versionName = "0.4.0"
     }
 
     // 固定签名（app/qself.p12，密码 qself）：每次 CI 出的包都能直接覆盖安装，热重载才接得上。

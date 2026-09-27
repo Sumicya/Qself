@@ -22,6 +22,7 @@ val features: List<Triple<String, Boolean, () -> Any?>> = listOf(
     Triple("去头像挂件", true, ::noPendant),
     Triple("昵称只留名字", true, ::plainNick),
     Triple("防撤回", true, ::antiRecall),
+    Triple("连发合并", true, ::groupRuns),
     Triple("转发多选", true, ::multiForward),
     Triple("+面板精简", true, ::plusPanel),
     Triple("屏蔽轻互动", true, ::noLightInteraction),

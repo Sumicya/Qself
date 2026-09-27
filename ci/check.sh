@@ -21,6 +21,7 @@ annotation class Test
 object Assert {
     @JvmStatic fun assertTrue(b: Boolean) { if (!b) throw AssertionError("expected true") }
     @JvmStatic fun assertFalse(b: Boolean) { if (b) throw AssertionError("expected false") }
+    @JvmStatic fun assertEquals(a: Any?, b: Any?) { if (a != b) throw AssertionError("expected $a, got $b") }
     @JvmStatic fun assertSame(a: Any?, b: Any?) { if (a !== b) throw AssertionError("expected same") }
     @JvmStatic fun assertArrayEquals(a: ByteArray, b: ByteArray) { if (!a.contentEquals(b)) throw AssertionError("arrays differ: ${a.toList()} vs ${b.toList()}") }
 }

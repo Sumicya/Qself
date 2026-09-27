@@ -2,6 +2,7 @@
 package sumicya.qself
 
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -23,14 +24,24 @@ class ProtoTest {
     private fun push(type: Long, sub: Long, content: ByteArray = ByteArray(0)) =
         field(1, field(2, field(1, type) + field(2, sub) + field(4, 1L shl 40)) + field(3, field(2, content)))
 
-    @Test fun c2cRecall() = assertTrue(isRecall(push(528, 138)))
+    @Test fun c2cRecall() {
+        assertTrue(recall(push(528, 138)) != null) // 解不出细节也照样吞
+        val r = recall(push(528, 138, field(1, field(1, "u_abc".toByteArray()) + field(2, "u_me".toByteArray()) + field(3, 4567L))))!!
+        assertEquals(1, r.chatType)
+        assertEquals("u_abc", r.peer)
+        assertEquals(listOf(4567L), r.seqs)
+    }
 
-    @Test fun ordinaryMessage() = assertFalse(isRecall(push(166, 11)))
+    @Test fun ordinaryMessage() = assertTrue(recall(push(166, 11)) == null)
 
     @Test fun groupRecallNeedsOpType7() {
-        assertTrue(isRecall(push(732, 17, ByteArray(7) + field(1, 7L) + field(4, 123L))))
-        assertFalse(isRecall(push(732, 17, ByteArray(7) + field(1, 6L))))
-        assertFalse(isRecall(push(732, 17, ByteArray(3))))
+        val body = field(1, 7L) + field(4, 123L) + field(11, field(1, "u_op".toByteArray()) + field(3, field(1, 88L)) + field(3, field(1, 89L)))
+        val r = recall(push(732, 17, ByteArray(7) + body))!!
+        assertEquals(2, r.chatType)
+        assertEquals("123", r.peer)
+        assertEquals(listOf(88L, 89L), r.seqs)
+        assertTrue(recall(push(732, 17, ByteArray(7) + field(1, 6L))) == null)
+        assertTrue(recall(push(732, 17, ByteArray(3))) == null)
     }
 
     @Test fun stripDropsOnlyField8() {
@@ -40,7 +51,7 @@ class ProtoTest {
     }
 
     @Test fun garbageIsNotSilentlyARecall() {
-        assertFalse(isRecall(byteArrayOf()))
-        assertFalse(isRecall(field(1, field(2, field(1, 528L)))))
+        assertTrue(recall(byteArrayOf()) == null)
+        assertTrue(recall(field(1, field(2, field(1, 528L)))) == null)
     }
 }
