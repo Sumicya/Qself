@@ -174,7 +174,8 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         toX = x
         val cx = fromX + (toX - fromX) * (if (anim.isRunning) spring(anim.animatedFraction) else 1f)
         val inset = 4 * dp
-        val d = bounds.height() - 2 * inset // 圆和底栏同呼吸：直径 = 栏高减一圈留白
+        // 圆贴着页签钮：直径取页签宽和栏高里小的那个，减一圈留白；窄页签不会溢到邻座
+        val d = min(t.width.toFloat(), bounds.height().toFloat()) - 2 * inset
         // 上亮下暗一点，像一块有厚度的玻璃；白高光里混一点 Monet 强调色，跟玻璃罩色一个份量。
         val accent = monet(night, 0xFF)
         val top = wash(if (night) 0x40FFFFFF else 0xC8FFFFFF.toInt(), accent)

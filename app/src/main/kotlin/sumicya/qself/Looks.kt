@@ -3,7 +3,6 @@ package sumicya.qself
 
 import android.app.Activity
 import android.app.Instrumentation
-import android.content.res.ColorStateList
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -155,8 +154,6 @@ private fun float(bar: ViewGroup) {
     bar.viewTreeObserver.addOnScrollChangedListener { bar.invalidate() }
     bar.viewTreeObserver.addOnGlobalLayoutListener { bar.invalidate() }
     bar.viewTreeObserver.addOnPreDrawListener { glass.sync(); true }
-    // material 的涟漪跟玻璃不搭。
-    runCatching { bar.javaClass.getMethod("setTabRippleColor", ColorStateList::class.java).invoke(bar, ColorStateList.valueOf(0)) }
 }
 
 /** 页签定宽 76dp：material 给的是平分整条的 weight，QQ 的页签视图又是 match_parent，胶囊就只能跟屏幕一样长。 */

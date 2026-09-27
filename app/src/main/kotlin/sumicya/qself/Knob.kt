@@ -3,6 +3,7 @@ package sumicya.qself
 
 import android.app.AlertDialog
 import android.content.res.ColorStateList
+import android.util.TypedValue
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
@@ -62,6 +63,11 @@ fun knob(bar: View) {
         clipToOutline = true
         elevation = 6 * dp
         background = Glass(this)
+        // 按压反馈：foreground 一层无边界涟漪，background 还是玻璃
+        foreground = TypedValue().let {
+            if (context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, it, true))
+                context.getDrawable(it.resourceId) else null
+        }
         setOnClickListener { dialog(it) }
         viewTreeObserver.addOnScrollChangedListener { invalidate() }
         viewTreeObserver.addOnGlobalLayoutListener { invalidate() }
