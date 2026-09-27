@@ -24,6 +24,8 @@ val features: List<Triple<String, Boolean, () -> Any?>> = listOf(
     Triple("防撤回", true, ::antiRecall),
     Triple("连发合并", true, ::groupRuns),
     Triple("转发多选", true, ::multiForward),
+    Triple("多选不限条数", true, ::noSelectCap),
+    Triple("角标真实数字", true, ::realCount),
     Triple("+面板精简", true, ::plusPanel),
     Triple("屏蔽轻互动", true, ::noLightInteraction),
     Triple("屏蔽表情雨", true, ::noEmojiRain),

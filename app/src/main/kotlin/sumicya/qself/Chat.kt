@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself
 
+import android.os.Bundle
 import android.view.View
 import org.json.JSONArray
 import org.json.JSONObject
@@ -10,7 +11,7 @@ import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
-/** 聊天：会员装饰归零、防撤回、连发合并、转发、「+」面板、昵称行、轻互动、表情雨。 */
+/** 聊天：会员装饰归零、防撤回、连发合并、转发、多选上限、角标、「+」面板、昵称行、轻互动、表情雨。 */
 
 // ---- 会员装饰：NT 内核把气泡/字体/挂件放在几个纯数据结构里，构造完立刻清零，界面就按默认画。
 
@@ -233,6 +234,34 @@ fun multiForward() {
     hook(cls("com.tencent.mobileqq.activity.ForwardRecentActivity").method("initEntryHeaderView")) { chain ->
         chain.proceed().also { slots.forEach { s -> (chain.thisObject.get(s) as? View)?.visibility = View.VISIBLE } }
     }
+}
+
+// ---- 多选不限条数：AIO 多选每加一条都把「已选 + 本条」跟 100 比；消息选择页的上限来自 AIOParam 的 key_limited_count（没给才是 100）。
+// ponytail: 只放开客户端；合并转发成百上千条服务器收不收另说。
+
+@Suppress("UNCHECKED_CAST")
+fun noSelectCap() {
+    val helper = cls("com.tencent.mobileqq.aio.helper.MultiForwardHelper")
+    val picked = helper.method("u").apply { isAccessible = true } // 这条已经选过了？
+    hook(helper.method("s")) { chain -> // 原来：选过 → false；超 100 → 提示 + false；否则加进 h
+        val item = chain.getArg(0)
+        if (picked.invoke(chain.thisObject, item) as Boolean) false else { (chain.thisObject.get("h") as MutableList<Any?>).add(item); true }
+    }
+    hook(cls("com.tencent.aio.data.AIOParam").method("k")) { chain ->
+        chain.proceed().also { (it as? Bundle)?.takeIf { b -> !b.containsKey("key_limited_count") }?.putInt("key_limited_count", 100000) }
+    }
+}
+
+// ---- 角标真实数字：会话列表和底栏共用的 QUIBadge 超过 99 就写「99+」；NT 其他角标 QBadgeView 自带精确模式开关。
+
+fun realCount() {
+    hook(cls("com.tencent.mobileqq.quibadge.QUIBadge").method("updateNum")) { chain ->
+        chain.proceed().also {
+            val n = chain.getArg(0) as Int
+            if (n > 99) { chain.thisObject.set("mText", n.toString()); (chain.thisObject as View).requestLayout() }
+        }
+    }
+    cls("com.tencent.qqnt.widget.badgeview.QBadgeView").afterNew { it.set("M", true) }
 }
 
 // ---- 「+」面板：只留正经附件（照片、拍摄、文件、位置、红包……），娱乐入口剔掉。
