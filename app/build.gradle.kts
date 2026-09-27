@@ -12,9 +12,9 @@ android {
         applicationId = "sumicya.qself"
         minSdk = 31 // RenderEffect（AGSL 的 RuntimeShader 要 33，Glass.kt 自己降级）
         targetSdk = 37
-        // 版本 = 构建日期.CI 构建号（本地编译没 run 号就是 .0）；vc 垫 1000 是因为
-        // 0.8.x 那批的 801 已经装在机器上，run 号从个位数起，不垫会被判降级。
-        versionCode = 1000 + (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0)
+        // 版本 = 构建日期.CI 构建号（本地编译没 run 号就是 .0）。vc 就是 run 号本身：
+        // 会比装着的旧包小（判降级），模块是手动装的，卸了重装就行。
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = LocalDate.now().let { "${it.year % 100}.${it.monthValue}.${it.dayOfMonth}." } +
             (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0)
     }

@@ -31,8 +31,8 @@ import kotlin.math.min
 
 /**
  * 液态玻璃（iOS 26 的「透明」款）：把宿主身后的内容（各级祖先的背景 + 排在宿主前面的兄弟）录进一个
- * RenderNode，不模糊，过一遍 AGSL：边缘一圈把底下的画面往外顶（凸透镜）、贴边一道 2dp 的高光
- * （顶边最亮、底边次之、两头暗）、整体提一点饱和、罩一层淡色。没有描边。全在 GPU 上，
+ * RenderNode，不模糊，过一遍 AGSL：边缘一圈把底下的画面往外顶（凸透镜）、整体提一点饱和、
+ * 罩一层淡色。没有高光也没有描边。全在 GPU 上，
  * 每帧只多录一遍身后的 display list。
  *
  * [radius] 圆角上限（默认全圆 = 胶囊 / 圆钮），[selected] 给底栏用：返回当前选中的页签，
@@ -111,7 +111,6 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         s.setFloatUniform("rad", radius)
         s.setFloatUniform("rim", 18 * dp)
         s.setFloatUniform("bend", 12 * dp)
-        s.setFloatUniform("px", dp)
         s.setFloatUniform("night", if (night) 1f else 0f)
         s.setFloatUniform("accent", Color.red(accent) / 255f, Color.green(accent) / 255f, Color.blue(accent) / 255f)
         return RenderEffect.createRuntimeShaderEffect(s, "content")
@@ -204,7 +203,6 @@ uniform float pad;
 uniform float rad;
 uniform float rim;
 uniform float bend;
-uniform float px;
 uniform float night;
 uniform float3 accent;
 half4 main(float2 p) {
@@ -222,14 +220,6 @@ half4 main(float2 p) {
     col.rgb = mix(half3(l), col.rgb, half(1.25));
     half3 tint = mix(mix(half3(1.0), half3(0.07), half(night)), half3(accent), half(0.22));
     col.rgb = mix(col.rgb, tint, mix(half(0.28), half(0.34), half(night)));
-    float k = dot(n, normalize(float2(-0.55, -0.83)));
-    float lit = max(k, 0.0);
-    float back = max(-k, 0.0);
-    float band = smoothstep(r - 3.0 * px, r - 0.8 * px, d);
-    float glow = t * t * t;
-    float spec = band * (0.10 + 0.70 * lit * lit + 0.35 * back * back) + glow * 0.12 * lit;
-    col.rgb += half3(spec * mix(0.75, 0.55, night));
-    col.rgb -= half3(glow * 0.08 * back);
     col.a = 1.0;
     return col;
 }

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself
 
-import android.graphics.drawable.ColorDrawable
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.TypedValue
@@ -112,6 +111,7 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
         val boxLp = box.layoutParams.also { if (it.height > 0) it.height += (12 * dp).toInt() } // 胶囊上下各留 6dp
         host.removeView(box)
         edit.background = null
+        box.background = null // 框自己那层圆角底还留着就会在玻璃胶囊里挡一道
         emoji?.view?.let(field::addView)
         field.addView(box, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         more?.view?.let(field::addView)
@@ -127,7 +127,7 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
         }
         host.addView(row, index.coerceIn(0, host.childCount), boxLp)
         // 输入栏自己的底色去掉，胶囊才是浮在聊天背景上的。
-        generateSequence(host as View) { it.parent as? View }.take(2).forEach { if (it.background is ColorDrawable) it.background = null }
+        generateSequence(host as View) { it.parent as? View }.take(2).forEach { it.background = null }
 
         edit.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}

@@ -32,6 +32,7 @@ val features: List<Triple<String, Boolean, () -> Any?>> = listOf(
     Triple("转发不限人数", true, ::noForwardLimit),
     Triple("左滑回复不设限", true, ::replyAnyMsg),
     Triple("隐藏在线状态", true, {}),
+    Triple("显示具体未读条数", true, ::exactCount),
     Triple("+面板精简", true, ::plusPanel),
     Triple("屏蔽红点引导", true, ::noRedDot),
     Triple("去会员等级", true, ::plainCard),
