@@ -28,11 +28,10 @@ fun tgInput(strip: ViewGroup) {
     val scope = strip.parent as? ViewGroup ?: return
     val edit = find(scope) { it is TextView && (idName(it) == "input" || it.javaClass.simpleName.contains("EditText")) } as? TextView ?: return
     val box = edit.parent as? ViewGroup ?: return
-    // host 取 box 和图标带的最小公共容器（输入栏自己）。往上多拿一级（聊天根容器）的话，
-    // 消息列表就成了 host 的兄弟槽位，会被 collapse 压掉、输入行也会被挤。
-    val host = generateSequence(box.parent as? ViewGroup) { it.parent as? ViewGroup }
-        .firstOrNull { p -> generateSequence(strip as View) { it.parent as? View }.any { it === p } } ?: return
-    if (host.tag == ROW) return // 热重载前的上一代已经排好了这一行
+    // 只在输入框的直接父容器原位替换；公共祖先可能不是 box 的 parent，removeView 会静默失败。
+    val host = box.parent as? ViewGroup ?: return
+    if (generateSequence(box as View) { it.parent as? View }.any { it.tag == ROW || it === strip }) return
+    // 热重载前已排过的行不再重包；strip 包住 box 时隐藏它会连输入框一起藏掉。
     rows[strip] = Row(strip, edit, box, host, find(box) { idName(it) == "send_btn" }).also { it.sync() }
 }
 
@@ -156,9 +155,8 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
     private fun collapse() {
         for (i in 0 until host.childCount) {
             val child = host.getChildAt(i)
-            if (child === row || child !is ViewGroup) continue
-            val nm = child.javaClass.name // 列表类的槽位再空也不是图标带留下的空位，不压
-            if ("Recycler" in nm || "ListView" in nm || "Pager" in nm) continue
+            if (child === row || child !is ViewGroup ||
+                generateSequence(strip as View) { it.parent as? View }.none { it === child }) continue
             val lp = child.layoutParams ?: continue
             if (blank(child)) {
                 if (child !in squeezed && child.height > 0) {

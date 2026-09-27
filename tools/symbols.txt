@@ -152,12 +152,6 @@ member com.tencent.mobileqq.statistics.StatisticCollector#report
 class  com.tencent.feedback.eup.CrashReport
 member com.tencent.feedback.eup.CrashReport#initCrashReport
 
-# ---------- 具体未读条数：QQ 封顶 99+ 的两个出口，盖回真数字
-class  com.tencent.mobileqq.quibadge.QUIBadge
-member! com.tencent.mobileqq.quibadge.QUIBadge#updateNum
-class  com.tencent.widget.d
-member! com.tencent.widget.d#d
-
 # ---------- 屏蔽红点引导：这些门方法一律答 false，红点和引导气泡就不出现
 class  com.tencent.mobileqq.troop.utils.api.impl.TroopUtilsApiImpl
 member! com.tencent.mobileqq.troop.utils.api.impl.TroopUtilsApiImpl#isShowRedPoint

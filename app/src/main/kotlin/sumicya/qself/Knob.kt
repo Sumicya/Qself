@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
+import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -22,8 +23,8 @@ import kotlin.math.min
 /**
  * 开关：主页那颗玻璃圆钮 —— 和胶囊同高、顶底对齐，胶囊右边放得下就跟胶囊并排。
  * 底栏藏起来的页面（频道那些）钮也跟着藏，不留一颗钮飘在别的页面上。
- * 点开是一整块玻璃大卡片：一行两张卡、卡自己没底色，钩叉是画出来的（✓ 开着、– 没开、✗ 这版 QQ 没装上），
- * 每张卡带一句描述。状态存在 QQ 自己的 SharedPreferences「qself」里，钩子每次被调用时都查一遍，
+ * 点开是一张紧凑的玻璃卡片：两列功能名、钩叉状态（✓ 开着、– 没开、✗ 这版 QQ 没装上），
+ * 描述留在无障碍标签里。状态存在 QQ 自己的 SharedPreferences「qself」里，钩子每次被调用时都查一遍，
  * 所以切换即时生效；已经改过的视图（浮起来的底栏、排好的输入行）要重启 QQ 才复原。
  */
 private const val KNOB = "qself-knob"
@@ -156,26 +157,29 @@ private fun sheet(anchor: View) {
     val grid = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     fun cell(f: Feature): View {
         val mark = Mark(dp)
-        val title = TextView(ctx).apply { text = f.name; textSize = 15f; setTextColor(ink) }
-        val desc = TextView(ctx).apply { text = f.desc; textSize = 11f; setTextColor(sub) }
+        val title = TextView(ctx).apply {
+            text = f.name
+            textSize = 14f
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            setTextColor(ink)
+        }
         val view = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            val p = (10 * dp).toInt()
-            setPadding(p, p, p, p)
+            val p = (7 * dp).toInt()
+            setPadding(p, 0, p, 0)
             addView(View(ctx).apply { background = mark },
-                LinearLayout.LayoutParams((22 * dp).toInt(), (22 * dp).toInt()).apply { marginEnd = (10 * dp).toInt() })
-            addView(LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(title)
-                addView(desc)
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                LinearLayout.LayoutParams((18 * dp).toInt(), (18 * dp).toInt()).apply { marginEnd = (6 * dp).toInt() })
+            addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             foreground = borderlessRipple(this)
         }
         fun paint() {
             val broken = f.name in failed
-            mark.state(!broken && store.getBoolean(f.name, true), broken)
+            val enabled = store.getBoolean(f.name, true)
+            mark.state(!broken && enabled, broken)
             title.setTextColor(if (broken) sub else ink)
+            view.contentDescription = "${f.name}，${f.desc}，${if (broken) "不可用" else if (enabled) "已开启" else "已关闭"}"
         }
         paint()
         if (f.name !in failed) view.setOnClickListener { // ✗ 是这版 QQ 里没装上，点了也没用
@@ -186,9 +190,9 @@ private fun sheet(anchor: View) {
     }
     for (i in features.indices step 2) { // 一行两张卡
         val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-        row.addView(cell(features[i]), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(cell(features[i]), LinearLayout.LayoutParams(0, (48 * dp).toInt(), 1f))
         if (i + 1 < features.size)
-            row.addView(cell(features[i + 1]), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(cell(features[i + 1]), LinearLayout.LayoutParams(0, (48 * dp).toInt(), 1f))
         else row.addView(View(ctx), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         grid.addView(row)
     }
@@ -210,10 +214,10 @@ private fun sheet(anchor: View) {
         outlineProvider = capsule(r)
         clipToOutline = true
         elevation = 8 * dp
-        setPadding((14 * dp).toInt(), (18 * dp).toInt(), (14 * dp).toInt(), (10 * dp).toInt())
+        setPadding((10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt(), (6 * dp).toInt())
         addView(TextView(ctx).apply {
             text = "Qself ${BuildConfig.VERSION_NAME}"
-            textSize = 18f
+            textSize = 16f
             gravity = Gravity.CENTER
             setTextColor(ink)
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -233,8 +237,8 @@ private fun sheet(anchor: View) {
         setBackgroundColor(0x66000000)
         setOnClickListener { decor.removeView(this) } // 点卡片外面关掉
         addView(card, FrameLayout.LayoutParams(
-            min(decor.width - (32 * dp).toInt(), (520 * dp).toInt()),
-            (decor.height - (72 * dp).toInt()), Gravity.CENTER))
+            min(decor.width - (40 * dp).toInt(), (400 * dp).toInt()),
+            min((decor.height * 0.62f).toInt(), (((features.size + 1) / 2 * 48 + 104) * dp).toInt()), Gravity.CENTER))
     }
     decor.addView(dim, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 }

@@ -190,22 +190,6 @@ private fun settle(bar: ViewGroup) {
     }
 }
 
-/** 未读角标不再停在 99+：QQ 封顶之后把真数字盖回去。两个出口都走一遍（QUIBadge 和老的widget绑定器）。 */
-fun exactCount() {
-    fun fix(root: View?, n: Int) {
-        fun go(v: View): TextView? =
-            if (v is TextView && v.text.toString() == "99+") v
-            else if (v is ViewGroup) (0 until v.childCount).firstNotNullOfOrNull { go(v.getChildAt(it)) } else null
-        go(root ?: return)?.text = n.toString()
-    }
-    hook(cls("com.tencent.mobileqq.quibadge.QUIBadge").method("updateNum")) { chain ->
-        chain.proceed().also { fix(chain.thisObject as? View, chain.args[0] as Int) }
-    }
-    hook(cls("com.tencent.widget.d").method("d")) { chain ->
-        chain.proceed().also { fix(chain.args[0] as? View, chain.args[1] as Int) }
-    }
-}
-
 /** 侧栏菜单的数据源：会员 / 钱包 / 装扮 / 小世界……这些行连生成都不生成（视图规则是兜底）。 */
 @Suppress("UNCHECKED_CAST")
 fun drawerMenu() {

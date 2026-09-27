@@ -29,7 +29,7 @@ import kotlin.math.min
 /**
  * 液态玻璃（iOS 26 的「透明」款）：把宿主身后的内容（各级祖先的背景 + 排在宿主前面的兄弟）录进一个
  * RenderNode，不模糊，过一遍 AGSL：整块把底下的画面往外顶（凸透镜，中心轻边缘满）、整体提一点饱和、
- * 罩一层淡色。没有高光也没有描边；按下去透镜凹一点、整面浮一层柔光。全在 GPU 上，
+ * 罩一层淡色。平时不描边；按下时收紧轮廓、透镜凹一点，上缘浮起高光。全在 GPU 上，
  * 每帧只多录一遍身后的 display list。
  *
  * [radius] 圆角上限（默认全圆 = 胶囊 / 圆钮），[selected] 给底栏用：返回当前选中的页签，
@@ -48,7 +48,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     private var keyAccent = 0
     private var busy = false
     private var broken = false
-    // 按压：透镜往内凹一点 + 一层柔光，140ms 起落
+    // 按压：轮廓收紧 + 透镜内凹 + 上缘高光，140ms 起落
     private var press = 0f
     private var pressed = false
     private val pressAnim = ValueAnimator.ofFloat(0f, 0f).apply {
@@ -163,9 +163,11 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         pressAnim.start()
     }
 
+    override fun isStateful() = true // View 只给 stateful 背景传递 pressed 状态
+
     override fun onStateChange(state: IntArray): Boolean {
         setPress(state.contains(android.R.attr.state_pressed))
-        return false
+        return true
     }
 
     /** 选中页签换了就重画；每帧 pre-draw 时由宿主调一次。底栏自己拿不到 pressed
@@ -231,8 +233,8 @@ uniform float night;
 uniform float3 accent;
 half4 main(float2 p) {
     float2 c = size * 0.5;
-    float2 h = c - float2(pad, pad);
-    float r = min(rad, min(h.x, h.y));
+    float2 h = c - float2(pad, pad) - press * bend * float2(0.16, 0.10);
+    float r = min(rad - press * bend * 0.10, min(h.x, h.y));
     float2 spine = float2(clamp(p.x, c.x - (h.x - r), c.x + (h.x - r)), clamp(p.y, c.y - (h.y - r), c.y + (h.y - r)));
     float2 v = p - spine;
     float d = length(v);
@@ -245,7 +247,8 @@ half4 main(float2 p) {
     col.rgb = mix(half3(l), col.rgb, half(1.25));
     half3 tint = mix(mix(half3(1.0), half3(0.07), half(night)), half3(accent), half(0.22));
     col.rgb = mix(col.rgb, tint, mix(half(0.28), half(0.34), half(night)));
-    col.rgb += half3(press * mix(0.14, 0.08, night) * (1.0 - 0.55 * w)); // 按压高光：整面柔光，中心最亮
+    col.rgb += half3(press * mix(0.14, 0.08, night) * (1.0 - 0.55 * w));
+    col.rgb = min(col.rgb + half3(press * 0.24 * pow(w, 8.0) * max(-n.y, 0.0)), half3(1.0)); // 上缘窄高光
     col.a = 1.0;
     return col;
 }
