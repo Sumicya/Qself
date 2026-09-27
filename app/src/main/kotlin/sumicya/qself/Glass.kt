@@ -31,7 +31,7 @@ import kotlin.math.min
 
 /**
  * 液态玻璃（iOS 26 的「透明」款）：把宿主身后的内容（各级祖先的背景 + 排在宿主前面的兄弟）录进一个
- * RenderNode，不模糊，过一遍 AGSL：边缘一圈把底下的画面往外顶（凸透镜）、整体提一点饱和、
+ * RenderNode，不模糊，过一遍 AGSL：整块把底下的画面往外顶（凸透镜，中心轻边缘满）、整体提一点饱和、
  * 罩一层淡色。没有高光也没有描边。全在 GPU 上，
  * 每帧只多录一遍身后的 display list。
  *
@@ -109,7 +109,6 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         s.setFloatUniform("size", w.toFloat(), h.toFloat())
         s.setFloatUniform("pad", pad.toFloat())
         s.setFloatUniform("rad", radius)
-        s.setFloatUniform("rim", 18 * dp)
         s.setFloatUniform("bend", 12 * dp)
         s.setFloatUniform("night", if (night) 1f else 0f)
         s.setFloatUniform("accent", Color.red(accent) / 255f, Color.green(accent) / 255f, Color.blue(accent) / 255f)
@@ -202,7 +201,6 @@ uniform shader content;
 uniform float2 size;
 uniform float pad;
 uniform float rad;
-uniform float rim;
 uniform float bend;
 uniform float night;
 uniform float3 accent;
@@ -215,8 +213,8 @@ half4 main(float2 p) {
     float d = length(v);
     if (d > r) { return half4(0.0); }
     float2 n = v / max(d, 0.001);
-    float t = smoothstep(r - rim, r, d);
-    half4 col = content.eval(p - n * bend * t * t);
+    float w = d / max(r, 0.001); // 全扭曲：折射量从中心 0 长到边缘满，整块都是透镜
+    half4 col = content.eval(p - n * bend * w * w);
     half l = dot(col.rgb, half3(0.299, 0.587, 0.114));
     col.rgb = mix(half3(l), col.rgb, half(1.25));
     half3 tint = mix(mix(half3(1.0), half3(0.07), half(night)), half3(accent), half(0.22));

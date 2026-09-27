@@ -1,7 +1,8 @@
 # Qself
 
 给 NT QQ 的一个 LSPosed 模块：**自由、简单、现代、原生**。装上即全部生效，不联网、没有第三方库、没有一个 `.so`。
-开关不在模块里，在 QQ 主页底栏胶囊旁边那颗玻璃圆钮里（系统对话框的多选框，存进 QQ 自己的 SharedPreferences）。
+开关不在模块里，在 QQ 主页底栏胶囊旁边那颗玻璃圆钮里：点开是一整块玻璃大卡片，一行两张卡、
+画出来的 ✓/–/✗ 加一句描述（✗ = 这版 QQ 没装上），存进 QQ 自己的 SharedPreferences。
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
 但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，151 条）——换版本先看那张表红哪条，别猜。
@@ -11,7 +12,7 @@
 外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
 - 首页底栏浮成一颗居中的液态玻璃胶囊（每个页签 76dp，只包住页签）：不模糊，系统 `RenderEffect` + AGSL 做边缘折射、
   贴边高光、提饱和、淡色罩，没有描边；选中项是一块弹着滑过去的亮胶囊
-- **Monet 取色**：玻璃的罩色、高光胶囊、圆钮的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
+- **Monet 取色**：玻璃的罩色、选中圆、圆钮的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色
 - 聊天输入栏 Telegram 化：一颗悬浮玻璃胶囊 [表情 · 输入框 · +] 加右侧玻璃圆钮 麦克风⇄发送，
   输入栏底色去掉、框里的 AI 星星藏掉，原来那条图标带收起
@@ -56,7 +57,7 @@
 app/src/main/kotlin/sumicya/qself/
   Qself.kt   入口：功能清单（也是开关列表）、按进程装、日志
   Hook.kt    libxposed 封装（hook / constant / afterNew / 反射读写字段方法）与开关读取
-  Knob.kt    主页那颗圆钮与开关对话框
+  Knob.kt    主页那颗圆钮与开关面板（玻璃大卡片）
   Quiet.kt   自由化
   Chat.kt    聊天，含防撤回用的几十行 protobuf 读取、撤回灰字、连发合并、回复不@
   Looks.kt   外观：盯住每个 Activity 的视图树套规则

@@ -147,7 +147,7 @@ private fun float(bar: ViewGroup) {
     }
     // 两头的留白放在页签条上而不是 bar 上：material 固定模式会把页签条量成 bar 的整宽（含 padding），放 bar 上会挤歪。
     bar.setPadding(0, bar.paddingTop, 0, bar.paddingBottom)
-    bar.getChildAt(0)?.setPadding((8 * dp).toInt(), 0, (8 * dp).toInt(), 0)
+    bar.getChildAt(0)?.setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0) // 两端留白收掉，玻璃贴着按钮
     val glass = Glass(bar) { selectedTab(bar) }
     bar.background = glass
     // 内容一滚、布局一变就重画一次玻璃（底栏自己不会因为身后的东西动而重画）；选中页签换了也要重画。
@@ -156,9 +156,9 @@ private fun float(bar: ViewGroup) {
     bar.viewTreeObserver.addOnPreDrawListener { glass.sync(); true }
 }
 
-/** 页签定宽 76dp：material 给的是平分整条的 weight，QQ 的页签视图又是 match_parent，胶囊就只能跟屏幕一样长。 */
+/** 页签定宽 56dp：material 给的是平分整条的 weight，QQ 的页签视图又是 match_parent，胶囊就只能跟屏幕一样长。 */
 private fun fit(tab: View) {
-    val w = (76 * tab.dp).toInt()
+    val w = (56 * tab.dp).toInt() // 收窄：胶囊两端正好包住首尾页签的圆
     val lp = tab.layoutParams as? LinearLayout.LayoutParams ?: return
     if (lp.width == w && lp.weight == 0f && tab.paddingLeft == 0) return
     lp.width = w
