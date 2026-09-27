@@ -52,12 +52,10 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     private var busy = false
     private var broken = false
 
-    // 滑块：从 (fromX, fromW) 弹到 (toX, toW)
+    // 选中高亮：圆心从 fromX 弹到 toX
     private var target: View? = null
     private var fromX = 0f
-    private var fromW = 0f
     private var toX = 0f
-    private var toW = 0f
     private val anim = ValueAnimator.ofFloat(0f, 1f).apply {
         duration = 480
         interpolator = null
@@ -164,35 +162,27 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         val t = selected?.invoke() ?: return
         host.getLocationInWindow(here)
         t.getLocationInWindow(there)
-        val x = (there[0] - here[0]).toFloat()
-        val w = t.width.toFloat()
+        val x = there[0] - here[0] + t.width / 2f
         if (t !== target) {
             // 从现在画着的位置弹过去；第一次直接落位
             val first = target == null
             val f = if (anim.isRunning) spring(anim.animatedFraction) else 1f
             fromX = if (first) x else fromX + (toX - fromX) * f
-            fromW = if (first) w else fromW + (toW - fromW) * f
             target = t
             anim.cancel()
             if (!first) anim.start()
         }
         toX = x
-        toW = w
-        val f = if (anim.isRunning) anim.animatedFraction else 1f
-        val s = if (anim.isRunning) spring(f) else 1f
-        val bulge = 0.3f * abs(toX - fromX) * 4f * f * (1f - f) // 滑动途中拉长，像液体
-        val cx = (fromX + fromW / 2f) + ((toX + toW / 2f) - (fromX + fromW / 2f)) * s
-        val cw = fromW + (toW - fromW) * s + bulge
+        val cx = fromX + (toX - fromX) * (if (anim.isRunning) spring(anim.animatedFraction) else 1f)
         val inset = 4 * dp
-        rect.set(cx - cw / 2f + 2 * dp, bounds.top + inset, cx + cw / 2f - 2 * dp, bounds.bottom - inset)
+        val d = bounds.height() - 2 * inset // 圆和底栏同呼吸：直径 = 栏高减一圈留白
         // 上亮下暗一点，像一块有厚度的玻璃；白高光里混一点 Monet 强调色，跟玻璃罩色一个份量。
         val accent = monet(night, 0xFF)
         val top = wash(if (night) 0x40FFFFFF else 0xC8FFFFFF.toInt(), accent)
         val bottom = wash(if (night) 0x24FFFFFF else 0x8CFFFFFF.toInt(), accent)
         paint.color = -1
-        paint.shader = LinearGradient(0f, rect.top, 0f, rect.bottom, top, bottom, Shader.TileMode.CLAMP)
-        val r = rect.height() / 2f
-        canvas.drawRoundRect(rect, r, r, paint)
+        paint.shader = LinearGradient(0f, bounds.top + inset, 0f, bounds.bottom - inset, top, bottom, Shader.TileMode.CLAMP)
+        canvas.drawCircle(cx, bounds.centerY().toFloat(), d / 2f, paint)
         paint.shader = null
     }
 

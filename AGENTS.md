@@ -60,6 +60,9 @@
   Renewals/Push/DressUp/VasAD 四个 BannerProcessor 的 `handleMessage(Message)→boolean` 返回值语义
   没机器验不了，不敢直接吞。要做就走 Looks.kt 的视图规则，别猜返回值。
 - **语音转发及保存**：上游 411 行，要自己建确认对话框和长按菜单，不是一个钩子的事。
+- **气泡尾巴**：尾巴画在 9-patch 里（`skin_aio_*_bubble_nor/pressed`，朝头像那侧凸 17 行像素），QQ 也确实自带
+  同尺寸(110x106)无尾巴的 `_simple` 版 —— 但两套九宫格内边距不一样，直接换 id 会让消息文字不居中；
+  而且真机上聊天里本来就没有尾巴（NT 聊天大概率不走这套图，只有充值气泡/皮肤走）。0.8.1 试过，已撤，别再碰。
 
 ## 构建
 

@@ -12,6 +12,9 @@ import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
  * 每组自己找类装钩子，找不到就抛，install 接住、写进日志，不连累别的。
  * 玻璃底栏 / 藏页签 / 输入栏三项没有钩子，是 Looks.kt 视图扫描里按名字查开关的规则。
  */
+/** 这版 QQ 里没装上的功能。开关对话框给它们画 ✗，点了也不让点。 */
+val failed = mutableSetOf<String>()
+
 val features: List<Triple<String, Boolean, () -> Any?>> = listOf(
     Triple("玻璃底栏", true, {}),
     Triple("Monet取色", true, {}),
@@ -19,7 +22,6 @@ val features: List<Triple<String, Boolean, () -> Any?>> = listOf(
     Triple("TG输入栏", true, {}),
     Triple("标题栏侧栏精简", true, ::drawerMenu),
     Triple("统一气泡", true, ::plainBubble),
-    Triple("去气泡尾巴", true, ::noBubbleTail),
     Triple("统一字体", true, ::plainFont),
     Triple("去头像挂件", true, ::noPendant),
     Triple("昵称只留名字", true, ::plainNick),
@@ -71,9 +73,10 @@ class Qself : XposedModule() {
         installed = classLoader
         val main = process == "com.tencent.mobileqq"
         val report = StringBuilder("Qself ${BuildConfig.VERSION_NAME} @ $process")
+        failed.clear()
         fun run(name: String, fn: () -> Any?) = runCatching(fn)
             .onSuccess { report.append(" ✓").append(name) }
-            .onFailure { report.append(" ✗").append(name).append('(').append(it.toString().take(120)).append(')') }
+            .onFailure { failed += name; report.append(" ✗").append(name).append('(').append(it.toString().take(120)).append(')') }
         for ((name, mainOnly, fn) in features) {
             if (mainOnly && !main) continue
             feature = name
