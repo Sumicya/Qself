@@ -7,15 +7,13 @@ import io.github.libxposed.api.XposedModuleInterface.HotReloadingParam
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
 
-/**
- * 功能清单：名字（也是开关的键）、是否只在主进程、装法。开关对话框按这个顺序列。
- * 每组自己找类装钩子，找不到就抛，install 接住、写进日志，不连累别的。
- * 玻璃底栏 / 藏页签 / 输入栏三项没有钩子，是 Looks.kt 视图扫描里按名字查开关的规则。
- */
 /** 这版 QQ 里没装上的功能。开关对话框给它们画 ✗，点了也不让点。 */
 val failed = mutableSetOf<String>()
 
-/** 功能清单：名字（也是开关的键）、是否只在主进程、一句描述、装法。开关面板按这个顺序排。 */
+/**
+ * 功能清单：名字（也是开关的键）、是否只在主进程、一句描述、装法。开关面板按这个顺序排。
+ * 装法找不到类就抛，install 接住写进日志，不连累别的；装法是 {} 的是 Looks.kt 里按名字查开关的视图规则。
+ */
 class Feature(val name: String, val main: Boolean, val desc: String, val install: () -> Any?)
 
 val features = listOf(

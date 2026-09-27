@@ -3,7 +3,6 @@ package sumicya.qself
 
 import android.text.Editable
 import android.text.TextWatcher
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -75,16 +74,13 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
 
         val ctx = strip.context
         val dp = strip.dp
-        val ripple = TypedValue().let {
-            if (ctx.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, it, true)) it.resourceId else 0
-        }
         fun mirror(from: ImageView): Mirror {
             val view = ImageView(ctx).apply {
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
                 contentDescription = from.contentDescription
                 val p = (9 * dp).toInt()
                 setPadding(p, p, p, p)
-                if (ripple != 0) setBackgroundResource(ripple)
+                background = borderlessRipple(this)
                 setOnClickListener { from.performClick() }
                 setOnLongClickListener { from.performLongClick() }
                 layoutParams = LinearLayout.LayoutParams((44 * dp).toInt(), (44 * dp).toInt())

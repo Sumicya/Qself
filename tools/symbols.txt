@@ -3,7 +3,7 @@
 #
 # 语法见 dexcheck.py 头注释。lit = 非 dex 的字面量(框架类名 / 推送命令)。
 # 本地: cat qq.a* > qq.apk && python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin
-# CI 每次 push 都跑一遍（ci/build.yml 的 dex 作业）。
+# CI 每次 push 都跑一遍（.github/workflows/build.yml 的 dex 作业）。
 
 # ---------- 入口 / 全局 Qself.kt, Hook.kt
 lit    android.app.ActivityThread

@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "sumicya.qself"
-        minSdk = 31 // RenderEffect（AGSL 的 RuntimeShader 要 33，Glass.kt 自己降级）
+        minSdk = 36 // 只对着 Android 16 写：RenderEffect / AGSL 都不用判版本
         targetSdk = 37
         // 版本 = 构建日期.CI 构建号（本地编译没 run 号就是 .0）。vc 就是 run 号本身：
         // 会比装着的旧包小（判降级），模块是手动装的，卸了重装就行。

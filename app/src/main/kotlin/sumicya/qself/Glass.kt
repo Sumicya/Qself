@@ -7,8 +7,6 @@ import android.content.res.Resources
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Outline
 import android.graphics.Paint
@@ -19,7 +17,6 @@ import android.graphics.RenderNode
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
-import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
@@ -42,7 +39,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     private val dp = host.dp
     private val node = RenderNode("qself-glass")
     private val pad = (12 * dp).toInt() // 边缘折射往里采样，留一点余量就够
-    private val lens = if (Build.VERSION.SDK_INT >= 33) runCatching { RuntimeShader(LENS) }.getOrNull() else null
+    private val lens = RuntimeShader(LENS)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
     private val here = IntArray(2)
@@ -73,11 +70,11 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         val b = bounds
         if (b.isEmpty) return
         val night = night()
-        lens?.setFloatUniform("press", press)
+        lens.setFloatUniform("press", press)
         val drawn = canvas.isHardwareAccelerated && !busy && !broken && runCatching { backdrop(canvas, night) }
             .onFailure { broken = true; log("玻璃录制失败，退化为纯色", it) }.getOrDefault(false)
         val r = min(radius, b.height() / 2f)
-        if (!drawn || lens == null) { // 没有着色器时的霜色
+        if (!drawn) { // 软件画布 / 录制失败时的霜色
             rect.set(b)
             paint.shader = null
             paint.color = monet(night, if (night) 0xA6 else 0xB8)
@@ -113,14 +110,13 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     }
 
     private fun effect(w: Int, h: Int, night: Boolean, accent: Int): RenderEffect {
-        val s = lens ?: return RenderEffect.createColorFilterEffect(ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.25f) }))
-        s.setFloatUniform("size", w.toFloat(), h.toFloat())
-        s.setFloatUniform("pad", pad.toFloat())
-        s.setFloatUniform("rad", radius)
-        s.setFloatUniform("bend", 12 * dp)
-        s.setFloatUniform("night", if (night) 1f else 0f)
-        s.setFloatUniform("accent", Color.red(accent) / 255f, Color.green(accent) / 255f, Color.blue(accent) / 255f)
-        return RenderEffect.createRuntimeShaderEffect(s, "content")
+        lens.setFloatUniform("size", w.toFloat(), h.toFloat())
+        lens.setFloatUniform("pad", pad.toFloat())
+        lens.setFloatUniform("rad", radius)
+        lens.setFloatUniform("bend", 12 * dp)
+        lens.setFloatUniform("night", if (night) 1f else 0f)
+        lens.setFloatUniform("accent", Color.red(accent) / 255f, Color.green(accent) / 255f, Color.blue(accent) / 255f)
+        return RenderEffect.createRuntimeShaderEffect(lens, "content")
     }
 
     /** 按画家顺序（先远后近）把宿主底下的东西画到以宿主左上角为原点的画布上。 */
@@ -223,7 +219,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     override fun getOpacity() = PixelFormat.TRANSLUCENT
 
     private companion object {
-        /** 输入是模糊后的底图。坐标是节点像素；胶囊 = 节点四周去掉 pad。 */
+        /** 输入是身后的原图（不模糊）。坐标是节点像素；胶囊 = 节点四周去掉 pad。 */
         const val LENS = """
 uniform shader content;
 uniform float2 size;
@@ -264,11 +260,6 @@ fun capsule(max: Float = Float.MAX_VALUE) = object : ViewOutlineProvider() {
 
 private val isNight by lazy { runCatching { cls("com.tencent.mobileqq.utils.QQTheme").getMethod("isNowThemeIsNight") }.getOrNull() }
 
-/** QQ 自己的夜间模式开关；拿不到就看系统。 */
-/**
- * NagramX 那套原生 Monet：颜色跟着壁纸走（系统动态色，API 31+，minSdk 就是 31）。
- * 开关关了、或者系统没给动态色，返回 null，调用方用自己写死的那套中性色。
- */
 /** 把 Monet 强调色按 0.22 混进 [c]，保留 [c] 自己的透明度；accent 为 null（Monet 关着）就原样返回。 */
 private fun wash(c: Int, accent: Int?): Int {
     if (accent == null) return c
@@ -277,11 +268,13 @@ private fun wash(c: Int, accent: Int?): Int {
         (mix(Color.green(c), Color.green(accent)) shl 8) or mix(Color.blue(c), Color.blue(accent))
 }
 
+/** NagramX 那套 Monet：系统动态色跟壁纸走。开关关了返回 null，调用方用写死的中性色。 */
 fun monet(night: Boolean, alpha: Int): Int? =
     if (!on("Monet取色")) null else runCatching {
         val id = if (night) android.R.color.system_accent1_200 else android.R.color.system_accent1_600
         Resources.getSystem().getColor(id, null) and 0x00FFFFFF or (alpha shl 24)
     }.getOrNull()
 
+/** QQ 自己的夜间模式；拿不到就看系统。 */
 fun night(): Boolean = runCatching { isNight?.invoke(null) as? Boolean }.getOrNull()
     ?: (Resources.getSystem().configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES)

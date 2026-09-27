@@ -74,15 +74,11 @@ fun Class<*>.afterNew(body: (Any) -> Unit) = declaredConstructors.forEach { c ->
     hook(c) { chain -> chain.proceed().also { body(chain.thisObject) } }
 }
 
-/** 反射写字段，父类里的也认。 */
-fun Any.set(field: String, value: Any?) {
-    generateSequence<Class<*>>(javaClass) { it.superclass }
-        .firstNotNullOfOrNull { c -> c.declaredFields.firstOrNull { it.name == field } }
-        ?.apply { isAccessible = true }?.set(this, value)
-        ?: throw NoSuchFieldException("${javaClass.name}#$field")
-}
+/** 反射读写字段，父类里的也认。 */
+private fun Any.field(name: String) = generateSequence<Class<*>>(javaClass) { it.superclass }
+    .firstNotNullOfOrNull { c -> c.declaredFields.firstOrNull { it.name == name } }?.apply { isAccessible = true }
 
-fun Any.get(field: String): Any? =
-    generateSequence<Class<*>>(javaClass) { it.superclass }
-        .firstNotNullOfOrNull { c -> c.declaredFields.firstOrNull { it.name == field } }
-        ?.apply { isAccessible = true }?.get(this)
+fun Any.set(name: String, value: Any?) =
+    (field(name) ?: throw NoSuchFieldException("${javaClass.name}#$name")).set(this, value)
+
+fun Any.get(name: String): Any? = field(name)?.get(this)
