@@ -1,0 +1,221 @@
+# Qself 依赖的每一个名字。改代码 = 改这张表，跑 tools/dexcheck.py 看红绿。
+# 基准: QQ 9.2.10 真包 (Sumicya/qqapk 的 qq.aa..qq.ae 拼起来)。名字先在这里红，再决定改代码还是删功能。
+#
+# 语法见 dexcheck.py 头注释。lit = 非 dex 的字面量(框架类名 / 推送命令)。
+# 本地: cat qq.a* > qq.apk && python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin
+# CI 每次 push 都跑一遍（.github/workflows/build.yml 的 dex 作业）。
+
+# ---------- 入口 / 全局 Qself.kt, Hook.kt
+lit    android.app.ActivityThread
+lit    com.tencent.mobileqq
+lit    trpc.msg.olpush.OlPushService.MsgPush
+lit    trpc.msg.register_proxy.RegisterProxy.InfoSyncPush
+
+# ---------- 开关圆钮 Knob.kt
+class  com.tencent.mobileqq.utils.QQTheme
+member! com.tencent.mobileqq.utils.QQTheme#isNowThemeIsNight
+
+# ---------- 视图扫描 Looks.kt（按长相认，所以是后缀和文案）
+class~ .QQTabLayout
+class~ QQSettingMeRelativeLayout
+class~ WeatherSettingMeItemView
+class  com.tencent.mobileqq.activity.qqsettingme.config.QQSettingMeMenuConfigBeanV3
+member! com.tencent.mobileqq.activity.qqsettingme.config.QQSettingMeMenuConfigBeanV3#b
+
+# ---------- 回复不@ Chat.kt（上游按签名认：aio.input 包里、参数 AIOMsgItem、用到 mContext 和 senderUid）
+class  com.tencent.mobileqq.aio.input.reply.i
+member! com.tencent.mobileqq.aio.input.reply.i#k
+
+# ---------- 玻璃底栏 / TG 输入栏 Looks.kt, Input.kt（视图规则按长相认，所以是后缀和资源名）
+class~ PanelIconLinearLayout
+class  com.google.android.material.tabs.TabLayout
+member! com.google.android.material.tabs.TabLayout#setTabRippleColor
+res    input
+res    send_btn
+text   表情
+text   更多
+text   加号
+text   语音
+
+# ---------- 会员装饰归零 Chat.kt
+class  com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble
+field  com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble#bubbleId
+field  com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble#subBubbleId
+class  com.tencent.qqnt.kernel.nativeinterface.VASMsgFont
+field  com.tencent.qqnt.kernel.nativeinterface.VASMsgFont#fontId
+field  com.tencent.qqnt.kernel.nativeinterface.VASMsgFont#magicFontType
+class  com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant
+field  com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant#pendantId
+field  com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant#pendantDiyInfoId
+
+# ---------- 防撤回 Chat.kt
+class  com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession
+class  com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession$CppProxy
+member! com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession$CppProxy#onMsfPush
+member! com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession#getMsgService
+class  com.tencent.qqnt.kernel.nativeinterface.IKernelMsgService
+member! com.tencent.qqnt.kernel.nativeinterface.IKernelMsgService#getMsgsBySeqAndCount
+member! com.tencent.qqnt.kernel.nativeinterface.IKernelMsgService#addLocalJsonGrayTipMsg
+class  com.tencent.qqnt.kernel.nativeinterface.IMsgOperateCallback
+class  com.tencent.qqnt.kernel.nativeinterface.IAddJsonGrayTipMsgCallback
+class  com.tencent.qqnt.kernelpublic.nativeinterface.Contact
+member! com.tencent.qqnt.kernelpublic.nativeinterface.Contact#init
+class  com.tencent.qqnt.kernelpublic.nativeinterface.JsonGrayElement
+member! com.tencent.qqnt.kernelpublic.nativeinterface.JsonGrayElement#init
+class  com.tencent.qqnt.kernelpublic.nativeinterface.XmlToJsonParam
+class  com.tencent.qqnt.kernel.nativeinterface.MsgRecord
+field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgSeq
+field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgId
+field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgType
+field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgTime
+field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#senderUid
+field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#sendNickName
+field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#sendMemberName
+class  com.tencent.mobileqq.aio.msg.AIOMsgItem
+member! com.tencent.mobileqq.aio.msg.AIOMsgItem#getMsgRecord
+member! com.tencent.mobileqq.aio.msg.AIOMsgItem#getMsgId
+class  com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB
+member! com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB#k1
+member! com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB#s1
+
+# ---------- 连发合并 Chat.kt
+class  com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a
+member! com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a#n0
+member! com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a#d0
+member! com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a#i0
+class  com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent
+member! com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent#d1
+member! com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent#f1
+
+# ---------- 左滑回复不设限 Chat.kt（上游：卡片消息一律说支持回复）
+class  com.tencent.mobileqq.ark.api.impl.ArkHelperImpl
+member! com.tencent.mobileqq.ark.api.impl.ArkHelperImpl#isSupportReply
+
+# ---------- 转发不限人数 Chat.kt
+class  com.tencent.mobileqq.selectmember.ResultRecord
+member! com.tencent.mobileqq.selectmember.ResultRecord#copyResultRecord
+member! com.tencent.mobileqq.selectmember.ResultRecord#getUinType
+field  com.tencent.mobileqq.selectmember.ResultRecord#uin
+member! com.tencent.mobileqq.activity.ForwardRecentActivity#add2ForwardTargetList
+member! com.tencent.mobileqq.activity.ForwardRecentActivity#getForwardTargetKey
+member! com.tencent.mobileqq.activity.ForwardRecentActivity#refreshRightBtn
+field  com.tencent.mobileqq.activity.ForwardRecentActivity#mForwardTargetMap
+field  com.tencent.mobileqq.activity.ForwardRecentActivity#mSelectedAndSearchBar
+# 「隐藏在线状态」是视图规则，认的是服务器发的文案，dex 里没有对应落点。
+
+# ---------- 昵称行只留名字 Chat.kt
+class  com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock
+member! com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock#l
+member! com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock#h
+class  com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickSlotContainer
+member! com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickSlotContainer#d
+class  com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2
+member! com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2#d1
+member! com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2#f1
+class  com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.block.AIONickIconSimpleBlock
+class  com.tencent.qqnt.aio.gradelevel.AIOTroopMemberGradeLevelBlock
+class  com.tencent.qqnt.aio.mutualmark.AIOTroopHonorNickBlock
+class  com.tencent.qqnt.aio.nick.memberlevel.AIOTroopMemberLevelBlock
+class  com.tencent.mobileqq.vas.vipicon.AIOVipIconProcessor
+class  com.tencent.mobileqq.vas.vipicon.AIOVipIconExProcessor
+
+# ---------- 转发页 Chat.kt
+class  com.tencent.mobileqq.activity.ForwardRecentActivity
+member! com.tencent.mobileqq.activity.ForwardRecentActivity#initEntryHeaderView
+field  com.tencent.mobileqq.activity.ForwardRecentActivity#contactLayout
+field  com.tencent.mobileqq.activity.ForwardRecentActivity#friendLayout
+field  com.tencent.mobileqq.activity.ForwardRecentActivity#multiChatLayout
+field  com.tencent.mobileqq.activity.ForwardRecentActivity#troopDiscussionLayout
+
+# ---------- 「+」面板 Chat.kt
+class  com.tencent.qqnt.pluspanel.data.PlusPanelUiState$FetchCompleted
+member! com.tencent.qqnt.pluspanel.data.PlusPanelUiState$FetchCompleted#a
+
+# ---------- 轻互动 / 表情雨 Chat.kt
+class  com.tencent.qqnt.biz.lightbusiness.lightinteraction.LIAConfigManager
+class  com.tencent.mobileqq.aio.animation.util.AioAnimationConfigHolder
+member! com.tencent.mobileqq.aio.animation.util.AioAnimationConfigHolder#e
+
+# ---------- 自由化 Quiet.kt
+class  com.tencent.smtt.sdk.QbSdk
+member! com.tencent.smtt.sdk.QbSdk#getIsSysWebViewForcedByOuter
+class  com.tencent.beacon.event.UserAction
+member com.tencent.beacon.event.UserAction#on
+member! com.tencent.beacon.event.UserAction#loginEvent
+class  com.tencent.beacon.event.open.BeaconReport
+member! com.tencent.beacon.event.open.BeaconReport#report
+class  com.tencent.beacon.event.open.EventResult
+member! com.tencent.beacon.event.open.EventResult#init
+class  com.tencent.mobileqq.statistics.StatisticCollector
+member com.tencent.mobileqq.statistics.StatisticCollector#collectPerformance
+member com.tencent.mobileqq.statistics.StatisticCollector#report
+class  com.tencent.feedback.eup.CrashReport
+member com.tencent.feedback.eup.CrashReport#initCrashReport
+
+# ---------- 具体未读条数：QQ 封顶 99+ 的两个出口，盖回真数字
+class  com.tencent.mobileqq.quibadge.QUIBadge
+member! com.tencent.mobileqq.quibadge.QUIBadge#updateNum
+class  com.tencent.widget.d
+member! com.tencent.widget.d#d
+
+# ---------- 屏蔽红点引导：这些门方法一律答 false，红点和引导气泡就不出现
+class  com.tencent.mobileqq.troop.utils.api.impl.TroopUtilsApiImpl
+member! com.tencent.mobileqq.troop.utils.api.impl.TroopUtilsApiImpl#isShowRedPoint
+member! com.tencent.mobileqq.troop.utils.api.impl.TroopUtilsApiImpl#isShowKingTeamRedPoint
+member! com.tencent.mobileqq.troop.utils.api.impl.TroopUtilsApiImpl#isTroopTagNeedRedDot
+class  com.tencent.mobileqq.gamecenter.api.impl.GameCenterRedPointConfigApiImpl
+member! com.tencent.mobileqq.gamecenter.api.impl.GameCenterRedPointConfigApiImpl#canShowSpecialRedPoint
+member! com.tencent.mobileqq.gamecenter.api.impl.GameCenterRedPointConfigApiImpl#isJumpByRedPoint
+class  com.tencent.mobileqq.minigame.api.impl.MiniGameMetaGuideBubbleApiImpl
+member! com.tencent.mobileqq.minigame.api.impl.MiniGameMetaGuideBubbleApiImpl#shouldShowLebaGuideBubble
+member! com.tencent.mobileqq.minigame.api.impl.MiniGameMetaGuideBubbleApiImpl#hasGuideBubbleRedTouch
+class  com.tencent.mobileqq.profilecard.api.impl.ProfileCardApiImpl
+member! com.tencent.mobileqq.profilecard.api.impl.ProfileCardApiImpl#showProfileRedPointGuide
+member! com.tencent.mobileqq.profilecard.api.impl.ProfileCardApiImpl#showProfileZplanUserGuide
+class  com.tencent.mobileqq.zplan.aio.impl.ZPlanBadgeManagerImpl
+member! com.tencent.mobileqq.zplan.aio.impl.ZPlanBadgeManagerImpl#isEntranceShow
+member! com.tencent.mobileqq.zplan.aio.impl.ZPlanBadgeManagerImpl#canShowTips
+
+# ---------- 去会员等级：资料卡的会员判定一律答 false，等级图标就不画
+class  com.tencent.mobileqq.profilecard.component.content.ElegantProfileAccountLevelComponent
+member! com.tencent.mobileqq.profilecard.component.content.ElegantProfileAccountLevelComponent#isSuperVip
+member! com.tencent.mobileqq.profilecard.component.content.ElegantProfileAccountLevelComponent#isQQVip
+member! com.tencent.mobileqq.profilecard.component.content.ElegantProfileAccountLevelComponent#isBigClubVip
+member! com.tencent.mobileqq.profilecard.component.content.ElegantProfileAccountLevelComponent#isBigClubYearVip
+
+# ---------- 文案：视图规则和数据源过滤认的就是这些字，QQ 改了文案规则就瞎
+text   频道
+text   动态
+text   小世界
+text   一起听
+text   一起看
+text   一起玩
+text   一起派对
+text   一起K歌
+text   一起听歌
+text   QQ秀
+text   厘米秀
+text   群游戏
+text   好友爱玩
+text   礼物
+text   短视频
+text   直播间
+text   群课堂
+text   作业
+text   匿名送礼
+text   赞赏照片
+text   匿问我答
+text   滤镜
+text   涂鸦
+text   会员
+text   SVIP
+text   钱包
+text   装扮
+text   免流量
+text   小游戏
+text   QQ空间
+text   游戏中心
+text   腾讯文档
+text   打卡
+text   天气
+text   等级
