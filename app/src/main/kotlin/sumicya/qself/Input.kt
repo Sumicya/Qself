@@ -108,6 +108,7 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
             outlineProvider = capsule(22 * dp)
             clipToOutline = true
             background = Glass(this, 22 * dp)
+            isClickable = true // 空的地方按下去也有按压反馈（玻璃凹+柔光）；按钮在子视图里照旧先接触摸
             setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0)
         }
         val index = host.indexOfChild(box)

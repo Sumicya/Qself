@@ -32,7 +32,7 @@ import kotlin.math.min
 /**
  * 液态玻璃（iOS 26 的「透明」款）：把宿主身后的内容（各级祖先的背景 + 排在宿主前面的兄弟）录进一个
  * RenderNode，不模糊，过一遍 AGSL：整块把底下的画面往外顶（凸透镜，中心轻边缘满）、整体提一点饱和、
- * 罩一层淡色。没有高光也没有描边。全在 GPU 上，
+ * 罩一层淡色。没有高光也没有描边；按下去透镜凹一点、整面浮一层柔光。全在 GPU 上，
  * 每帧只多录一遍身后的 display list。
  *
  * [radius] 圆角上限（默认全圆 = 胶囊 / 圆钮），[selected] 给底栏用：返回当前选中的页签，
@@ -51,6 +51,13 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     private var keyAccent = 0
     private var busy = false
     private var broken = false
+    // 按压：透镜往内凹一点 + 一层柔光，140ms 起落
+    private var press = 0f
+    private var pressed = false
+    private val pressAnim = ValueAnimator.ofFloat(0f, 0f).apply {
+        duration = 140
+        addUpdateListener { press = it.animatedValue as Float; invalidateSelf() }
+    }
 
     // 选中高亮：圆心从 fromX 弹到 toX
     private var target: View? = null
@@ -66,6 +73,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         val b = bounds
         if (b.isEmpty) return
         val night = night()
+        lens?.setFloatUniform("press", press)
         val drawn = canvas.isHardwareAccelerated && !busy && !broken && runCatching { backdrop(canvas, night) }
             .onFailure { broken = true; log("玻璃录制失败，退化为纯色", it) }.getOrDefault(false)
         val r = min(radius, b.height() / 2f)
@@ -151,9 +159,29 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             there[0] < here[0] + host.width + pad && there[0] + v.width > here[0] - pad
     }
 
-    /** 选中页签换了就重画；每帧 pre-draw 时由宿主调一次。 */
+    private fun setPress(p: Boolean) {
+        if (p == pressed) return
+        pressed = p
+        pressAnim.cancel()
+        pressAnim.setFloatValues(press, if (p) 1f else 0f)
+        pressAnim.start()
+    }
+
+    override fun onStateChange(state: IntArray): Boolean {
+        setPress(state.contains(android.R.attr.state_pressed))
+        return false
+    }
+
+    /** 选中页签换了就重画；每帧 pre-draw 时由宿主调一次。底栏自己拿不到 pressed
+     * （触摸被页签吃掉），在这里看子/孙视图有没有被按着。 */
     fun sync() {
         if (selected?.invoke() !== target) invalidateSelf()
+        val g = host as? ViewGroup
+        val kid = g?.let { p ->
+            p.isPressed || (0 until p.childCount).any { p.getChildAt(it).isPressed } ||
+                (p.getChildAt(0) as? ViewGroup)?.let { c -> (0 until c.childCount).any { c.getChildAt(it).isPressed } } == true
+        } == true
+        setPress(host.isPressed || kid)
     }
 
     private fun pill(canvas: Canvas, night: Boolean) {
@@ -202,6 +230,7 @@ uniform float2 size;
 uniform float pad;
 uniform float rad;
 uniform float bend;
+uniform float press;
 uniform float night;
 uniform float3 accent;
 half4 main(float2 p) {
@@ -214,11 +243,13 @@ half4 main(float2 p) {
     if (d > r) { return half4(0.0); }
     float2 n = v / max(d, 0.001);
     float w = d / max(r, 0.001); // 全扭曲：折射量从中心 0 长到边缘满，整块都是透镜
-    half4 col = content.eval(p - n * bend * w * w);
+    // 按压变形：中心取样往外挪（凹进去），边缘不动
+    half4 col = content.eval(p - n * bend * w * w + n * (press * bend * 0.9) * (1.0 - w));
     half l = dot(col.rgb, half3(0.299, 0.587, 0.114));
     col.rgb = mix(half3(l), col.rgb, half(1.25));
     half3 tint = mix(mix(half3(1.0), half3(0.07), half(night)), half3(accent), half(0.22));
     col.rgb = mix(col.rgb, tint, mix(half(0.28), half(0.34), half(night)));
+    col.rgb += half3(press * mix(0.14, 0.08, night) * (1.0 - 0.55 * w)); // 按压高光：整面柔光，中心最亮
     col.a = 1.0;
     return col;
 }
