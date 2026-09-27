@@ -8,6 +8,8 @@ import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.graphics.LinearGradient
+import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.RectF
@@ -19,22 +21,26 @@ import android.graphics.drawable.Drawable
 import android.os.Build
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.min
 
 /**
- * 液态玻璃：把宿主身后的内容（各级祖先的背景 + 排在宿主前面的兄弟）录进一个 RenderNode，
- * 先高斯模糊，再过一遍 AGSL：边缘一圈把底下的画面往里折（透镜）、朝光的一侧泛白、背光的一侧压暗，
- * 中间只提饱和加一层淡淡的霜色。没有描边。全在 GPU 上，每帧只多录一遍身后的 display list。
+ * 液态玻璃（iOS 26 的「透明」款）：把宿主身后的内容（各级祖先的背景 + 排在宿主前面的兄弟）录进一个
+ * RenderNode，不模糊，过一遍 AGSL：边缘一圈把底下的画面往外顶（凸透镜）、贴边一道 2dp 的高光
+ * （顶边最亮、底边次之、两头暗）、整体提一点饱和、罩一层淡色。没有描边。全在 GPU 上，
+ * 每帧只多录一遍身后的 display list。
  *
- * [selected] 给底栏用：返回当前选中的页签，玻璃里就多一块会弹着滑过去的亮胶囊。
+ * [radius] 圆角上限（默认全圆 = 胶囊 / 圆钮），[selected] 给底栏用：返回当前选中的页签，
+ * 玻璃里就多一块会弹着滑过去的亮胶囊。
  */
-class Glass(private val host: View, private val selected: (() -> View?)? = null) : Drawable() {
+class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, private val selected: (() -> View?)? = null) : Drawable() {
     private val dp = host.dp
     private val node = RenderNode("qself-glass")
-    private val pad = (40 * dp).toInt() // 多录一圈，模糊到边缘不拖影
+    private val pad = (12 * dp).toInt() // 边缘折射往里采样，留一点余量就够
     private val lens = if (Build.VERSION.SDK_INT >= 33) runCatching { RuntimeShader(LENS) }.getOrNull() else null
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
@@ -62,9 +68,10 @@ class Glass(private val host: View, private val selected: (() -> View?)? = null)
         val night = night()
         val drawn = canvas.isHardwareAccelerated && !busy && !broken && runCatching { backdrop(canvas, night) }
             .onFailure { broken = true; log("玻璃录制失败，退化为纯色", it) }.getOrDefault(false)
-        val r = b.height() / 2f
+        val r = min(radius, b.height() / 2f)
         if (!drawn || lens == null) { // 没有着色器时的霜色
             rect.set(b)
+            paint.shader = null
             paint.color = if (night) 0xA61C1C1E.toInt() else 0xB8F5F5F8.toInt()
             canvas.drawRoundRect(rect, r, r, paint)
         }
@@ -95,15 +102,15 @@ class Glass(private val host: View, private val selected: (() -> View?)? = null)
     }
 
     private fun effect(w: Int, h: Int, night: Boolean): RenderEffect {
-        val blur = RenderEffect.createBlurEffect(14 * dp, 14 * dp, Shader.TileMode.CLAMP)
-        val s = lens ?: return RenderEffect.createColorFilterEffect(
-            ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.4f) }), blur)
+        val s = lens ?: return RenderEffect.createColorFilterEffect(ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.25f) }))
         s.setFloatUniform("size", w.toFloat(), h.toFloat())
         s.setFloatUniform("pad", pad.toFloat())
-        s.setFloatUniform("rim", 14 * dp)
-        s.setFloatUniform("bend", 9 * dp)
+        s.setFloatUniform("rad", radius)
+        s.setFloatUniform("rim", 18 * dp)
+        s.setFloatUniform("bend", 12 * dp)
+        s.setFloatUniform("px", dp)
         s.setFloatUniform("night", if (night) 1f else 0f)
-        return RenderEffect.createChainEffect(RenderEffect.createRuntimeShaderEffect(s, "content"), blur)
+        return RenderEffect.createRuntimeShaderEffect(s, "content")
     }
 
     /** 按画家顺序（先远后近）把宿主底下的东西画到以宿主左上角为原点的画布上。 */
@@ -172,9 +179,14 @@ class Glass(private val host: View, private val selected: (() -> View?)? = null)
         val cw = fromW + (toW - fromW) * s + bulge
         val inset = 4 * dp
         rect.set(cx - cw / 2f + 2 * dp, bounds.top + inset, cx + cw / 2f - 2 * dp, bounds.bottom - inset)
-        paint.color = if (night) 0x33FFFFFF else 0x80FFFFFF.toInt()
+        // 上亮下暗一点，像一块有厚度的玻璃
+        val top = if (night) 0x40FFFFFF else 0xC8FFFFFF.toInt()
+        val bottom = if (night) 0x24FFFFFF else 0x8CFFFFFF.toInt()
+        paint.color = -1
+        paint.shader = LinearGradient(0f, rect.top, 0f, rect.bottom, top, bottom, Shader.TileMode.CLAMP)
         val r = rect.height() / 2f
         canvas.drawRoundRect(rect, r, r, paint)
+        paint.shader = null
     }
 
     /** 欠阻尼弹簧：冲过头一点再回来。 */
@@ -192,13 +204,15 @@ class Glass(private val host: View, private val selected: (() -> View?)? = null)
 uniform shader content;
 uniform float2 size;
 uniform float pad;
+uniform float rad;
 uniform float rim;
 uniform float bend;
+uniform float px;
 uniform float night;
 half4 main(float2 p) {
     float2 c = size * 0.5;
     float2 h = c - float2(pad, pad);
-    float r = min(h.x, h.y);
+    float r = min(rad, min(h.x, h.y));
     float2 spine = float2(clamp(p.x, c.x - (h.x - r), c.x + (h.x - r)), clamp(p.y, c.y - (h.y - r), c.y + (h.y - r)));
     float2 v = p - spine;
     float d = length(v);
@@ -207,17 +221,27 @@ half4 main(float2 p) {
     float t = smoothstep(r - rim, r, d);
     half4 col = content.eval(p - n * bend * t * t);
     half l = dot(col.rgb, half3(0.299, 0.587, 0.114));
-    col.rgb = mix(half3(l), col.rgb, half(1.35));
-    half3 frost = mix(half3(1.0), half3(0.06), half(night));
-    col.rgb = mix(col.rgb, frost, mix(half(0.30), half(0.38), half(night)));
-    float k = dot(n, normalize(float2(-0.6, -0.8)));
-    float e = t * t * t;
-    col.rgb += half3(e * (0.55 + 0.45 * k) * 0.30) - half3(e * (0.55 - 0.45 * k) * 0.10);
+    col.rgb = mix(half3(l), col.rgb, half(1.25));
+    half3 tint = mix(half3(1.0), half3(0.07), half(night));
+    col.rgb = mix(col.rgb, tint, mix(half(0.28), half(0.34), half(night)));
+    float k = dot(n, normalize(float2(-0.55, -0.83)));
+    float lit = max(k, 0.0);
+    float back = max(-k, 0.0);
+    float band = smoothstep(r - 3.0 * px, r - 0.8 * px, d);
+    float glow = t * t * t;
+    float spec = band * (0.10 + 0.70 * lit * lit + 0.35 * back * back) + glow * 0.12 * lit;
+    col.rgb += half3(spec * mix(0.75, 0.55, night));
+    col.rgb -= half3(glow * 0.08 * back);
     col.a = 1.0;
     return col;
 }
 """
     }
+}
+
+/** 圆角上限为 [max] 的胶囊轮廓（不传就是全圆），配合 clipToOutline 用。 */
+fun capsule(max: Float = Float.MAX_VALUE) = object : ViewOutlineProvider() {
+    override fun getOutline(view: View, o: Outline) = o.setRoundRect(0, 0, view.width, view.height, min(max, view.height / 2f))
 }
 
 private val isNight by lazy { runCatching { cls("com.tencent.mobileqq.utils.QQTheme").getMethod("isNowThemeIsNight") }.getOrNull() }

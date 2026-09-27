@@ -4,11 +4,9 @@ package sumicya.qself
 import android.app.Activity
 import android.app.Instrumentation
 import android.content.res.ColorStateList
-import android.graphics.Outline
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
@@ -112,6 +110,7 @@ private fun homeBar(bar: ViewGroup) {
         for (i in 0 until strip.childCount) {
             val tab = strip.getChildAt(i)
             hide(tab, on("藏频道动态") && texts(tab).any { "频道" in it || "动态" in it || "小世界" in it })
+            if (glass) fit(tab)
         }
     }
     if (bar.height == 0) return
@@ -124,9 +123,7 @@ private fun homeBar(bar: ViewGroup) {
 }
 
 private fun float(bar: ViewGroup) {
-    bar.outlineProvider = object : ViewOutlineProvider() {
-        override fun getOutline(view: View, o: Outline) = o.setRoundRect(0, 0, view.width, view.height, view.height / 2f)
-    }
+    bar.outlineProvider = capsule()
     bar.clipToOutline = true
     val dp = bar.dp
     bar.elevation = 4 * dp
@@ -141,7 +138,9 @@ private fun float(bar: ViewGroup) {
         if (it is ViewGroup.MarginLayoutParams) it.bottomMargin += (12 * dp).toInt()
         bar.layoutParams = it
     }
-    bar.setPadding((10 * dp).toInt(), bar.paddingTop, (10 * dp).toInt(), bar.paddingBottom)
+    // 两头的留白放在页签条上而不是 bar 上：material 固定模式会把页签条量成 bar 的整宽（含 padding），放 bar 上会挤歪。
+    bar.setPadding(0, bar.paddingTop, 0, bar.paddingBottom)
+    bar.getChildAt(0)?.setPadding((8 * dp).toInt(), 0, (8 * dp).toInt(), 0)
     val glass = Glass(bar) { selectedTab(bar) }
     bar.background = glass
     // 内容一滚、布局一变就重画一次玻璃（底栏自己不会因为身后的东西动而重画）；选中页签换了也要重画。
@@ -150,6 +149,17 @@ private fun float(bar: ViewGroup) {
     bar.viewTreeObserver.addOnPreDrawListener { glass.sync(); true }
     // material 的涟漪跟玻璃不搭。
     runCatching { bar.javaClass.getMethod("setTabRippleColor", ColorStateList::class.java).invoke(bar, ColorStateList.valueOf(0)) }
+}
+
+/** 页签定宽 76dp：material 给的是平分整条的 weight，QQ 的页签视图又是 match_parent，胶囊就只能跟屏幕一样长。 */
+private fun fit(tab: View) {
+    val w = (76 * tab.dp).toInt()
+    val lp = tab.layoutParams as? LinearLayout.LayoutParams ?: return
+    if (lp.width == w && lp.weight == 0f && tab.paddingLeft == 0) return
+    lp.width = w
+    lp.weight = 0f
+    tab.setPadding(0, tab.paddingTop, 0, tab.paddingBottom)
+    tab.layoutParams = lp
 }
 
 /** material TabLayout 选中的那个 TabView（bar → SlidingTabIndicator → TabView × N）。 */

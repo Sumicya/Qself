@@ -3,6 +3,8 @@
 ## 是什么
 
 一个纯钩子的 LSPosed 模块（libxposed API 102），只针对 QQ 9.2.10 / Android 16。模块 APK 没有界面；
+本地没有 Android SDK 时用 `ci/check.sh` 做类型检查 + 跑 ProtoTest（第一次会拉工具链到 ~/.cache/qself-tc）。
+
 开关是 QQ 主页里一颗圆钮弹出的系统对话框，状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
 没有网络、没有第三方库：只有 `compileOnly` 的 libxposed 和测试用的 JUnit。
 

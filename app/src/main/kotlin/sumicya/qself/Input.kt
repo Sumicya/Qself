@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself
 
+import android.graphics.drawable.ColorDrawable
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.TypedValue
@@ -13,7 +14,8 @@ import android.widget.TextView
 import java.util.WeakHashMap
 
 /**
- * Telegram 式输入栏：一行 [表情] [输入框] [+] [麦克风 ⇄ 发送]，表情和 + 尽量放进输入框里面（TG 的笑脸和回形针就在框里）。
+ * Telegram（iOS 26）式输入栏：一颗悬浮的玻璃胶囊 [表情 · QQ 的输入框 · +]，右边一颗独立的玻璃圆钮（麦克风）；
+ * 一打字 QQ 自己的「发送」块在框里亮出来、麦克风收起。输入栏的底色去掉，胶囊直接浮在聊天背景上。
  *
  * QQ 输入框下面那条图标带（PanelIconLinearLayout）藏起来，但它的按钮还活着：新行里的按钮是
  * 它们的镜子 —— 同一个 drawable，所以表情 ⇄ 键盘的状态跟着走 —— 点下去调原按钮的
@@ -97,21 +99,35 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
         row.tag = ROW
         strip.visibility = View.GONE
 
-        // 输入框搬进新行。框本身是横向 LinearLayout 时，表情放框的最左、+ 放发送钮之前；否则排在框两侧。
-        val index = host.indexOfChild(box)
-        val boxLp = box.layoutParams
-        host.removeView(box)
-        val inside = box is LinearLayout && box.orientation == LinearLayout.HORIZONTAL
-        if (inside) {
-            emoji?.view?.let { box.addView(it, 0) }
-            more?.view?.let { box.addView(it, send?.let(box::indexOfChild)?.takeIf { i -> i >= 0 } ?: box.childCount) }
-        } else {
-            emoji?.view?.let { (it.layoutParams as LinearLayout.LayoutParams).marginStart = (6 * dp).toInt(); row.addView(it) }
+        // 玻璃胶囊就是输入框：[表情][QQ 的框（去掉自己的底色）][+]；多行时圆角封顶 22dp。
+        val field = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            outlineProvider = capsule(22 * dp)
+            clipToOutline = true
+            background = Glass(this, 22 * dp)
+            setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0)
         }
-        row.addView(box, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        if (!inside) more?.view?.let(row::addView)
-        mic?.view?.let { (it.layoutParams as LinearLayout.LayoutParams).marginEnd = (6 * dp).toInt(); row.addView(it) }
+        val index = host.indexOfChild(box)
+        val boxLp = box.layoutParams.also { if (it.height > 0) it.height += (12 * dp).toInt() } // 胶囊上下各留 6dp
+        host.removeView(box)
+        edit.background = null
+        emoji?.view?.let(field::addView)
+        field.addView(box, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        more?.view?.let(field::addView)
+        row.addView(field, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            setMargins((8 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
+        })
+        mic?.view?.let {
+            it.outlineProvider = capsule()
+            it.clipToOutline = true
+            it.background = Glass(it)
+            (it.layoutParams as LinearLayout.LayoutParams).marginEnd = (8 * dp).toInt()
+            row.addView(it)
+        }
         host.addView(row, index.coerceIn(0, host.childCount), boxLp)
+        // 输入栏自己的底色去掉，胶囊才是浮在聊天背景上的。
+        generateSequence(host as View) { it.parent as? View }.take(2).forEach { if (it.background is ColorDrawable) it.background = null }
 
         edit.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -123,7 +139,17 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
     fun sync() {
         mirrors.forEach { it.sync() }
         swap()
+        star()
         collapse()
+    }
+
+    /** QQ 塞在输入框右端的 AI 星星之类的图标钮：框里除了「发送」只留文字。 */
+    private fun star() {
+        fun go(v: View) {
+            if (v === send || v === edit) return
+            if (v is ImageView) { if (v.visibility != View.GONE) v.visibility = View.GONE } else if (v is ViewGroup) for (i in 0 until v.childCount) go(v.getChildAt(i))
+        }
+        go(box)
     }
 
     /** 图标带没了，QQ 还留着那块空位。里面什么都没有的兄弟槽位压到 0 高；QQ 一往里放东西它自己长回来。 */

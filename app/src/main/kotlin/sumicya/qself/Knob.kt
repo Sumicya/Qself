@@ -3,11 +3,9 @@ package sumicya.qself
 
 import android.app.AlertDialog
 import android.content.res.ColorStateList
-import android.graphics.Outline
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
 
@@ -24,10 +22,13 @@ fun knob(bar: View) {
     val dp = bar.dp
     val size = (44 * dp).toInt()
     val at = IntArray(2).also(bar::getLocationInWindow)
-    val beside = at[0] + bar.width + (8 + 44 + 16) * dp <= decor.width
+    val room = decor.width - at[0] - bar.width // 胶囊右边剩多少
+    val beside = room >= (12 + 44 + 8) * dp
     val lift = if (beside) decor.height - at[1] - bar.height + (bar.height - size) / 2 else decor.height - at[1] + (12 * dp).toInt()
+    val end = if (beside) room - (12 * dp).toInt() - size else (16 * dp).toInt()
     decor.findViewWithTag<View>(KNOB)?.let { old ->
-        (old.layoutParams as? ViewGroup.MarginLayoutParams)?.takeIf { it.bottomMargin != lift }?.let { it.bottomMargin = lift; old.layoutParams = it }
+        (old.layoutParams as? ViewGroup.MarginLayoutParams)?.takeIf { it.bottomMargin != lift || it.marginEnd != end }
+            ?.let { it.bottomMargin = lift; it.marginEnd = end; old.layoutParams = it }
         return
     }
     val knob = ImageView(bar.context).apply {
@@ -38,9 +39,7 @@ fun knob(bar: View) {
         scaleType = ImageView.ScaleType.CENTER_INSIDE
         val p = (10 * dp).toInt()
         setPadding(p, p, p, p)
-        outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(view: View, o: Outline) = o.setOval(0, 0, view.width, view.height)
-        }
+        outlineProvider = capsule()
         clipToOutline = true
         elevation = 6 * dp
         background = Glass(this)
@@ -49,7 +48,7 @@ fun knob(bar: View) {
         viewTreeObserver.addOnGlobalLayoutListener { invalidate() }
     }
     decor.addView(knob, FrameLayout.LayoutParams(size, size, Gravity.END or Gravity.BOTTOM).apply {
-        marginEnd = (16 * dp).toInt()
+        marginEnd = end
         bottomMargin = lift
     })
 }
