@@ -32,8 +32,11 @@
 打印一个类里每个方法用到的字符串、读写的字段、调用的方法 —— 上游 QAuxiliary 用 DexKit 在运行时搜的就是这些判据，
 这里离线搜同一件事，搜到就把名字写进表和代码。两条规矩：
 
-- `Class<*>.method(name)` 会往父类找（QQ 的挂点大半声明在 MVVM 基类上），`declaredMethods` 只翻本类会静悄悄空转；
-  反射**调用**用 `getMethod`（public + 父类），装钩子用 `method()`
+- `Class<*>.method(name)` 和 `constant()` 都往父类找（QQ 的挂点大半声明在 MVVM 基类 / Api 基类上），
+  `declaredMethods` 只翻本类会静悄悄空转；反射**调用**用 `getMethod`（public + 父类），装钩子用 `method()`
+- **「这方法声明在本类还是父类」离线判不准**：QQ 的 class_data 有畸形项，`dexq.py` 解到一半 method_idx
+  会跳出界（撞上就 break，所以它打印的「声明方法」可能不全）。别拿它下结论，一律按沿父类找写，装上看日志。
+  也正因如此 `constant()` 的 pick **必须带名字过滤** —— 写宽了会连父类、Object 的 notify/wait 一起改掉
 - 解析方法要在**装的时候**做完（`val m = c.getMethod("x")`），别写在钩子体里 —— 找不到就当场 ✗ 报出来，
   而不是每次绑定时被 `runCatching` 吞掉，看起来装着其实什么都没干
 

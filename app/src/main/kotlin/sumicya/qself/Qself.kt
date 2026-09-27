@@ -30,6 +30,8 @@ val features: List<Triple<String, Boolean, () -> Any?>> = listOf(
     Triple("左滑回复不设限", true, ::replyAnyMsg),
     Triple("隐藏在线状态", true, {}),
     Triple("+面板精简", true, ::plusPanel),
+    Triple("屏蔽红点引导", true, ::noRedDot),
+    Triple("去会员等级", true, ::plainCard),
     Triple("屏蔽轻互动", true, ::noLightInteraction),
     Triple("屏蔽表情雨", true, ::noEmojiRain),
     Triple("系统WebView", false, ::systemWebView),

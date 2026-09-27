@@ -10,8 +10,8 @@ android {
         applicationId = "sumicya.qself"
         minSdk = 31 // RenderEffect（AGSL 的 RuntimeShader 要 33，Glass.kt 自己降级）
         targetSdk = 37
-        versionCode = 700
-        versionName = "0.7.0"
+        versionCode = 800
+        versionName = "0.8.0"
     }
 
     // 固定签名（app/qself.p12，密码 qself）：每次 CI 出的包都能直接覆盖安装，热重载才接得上。

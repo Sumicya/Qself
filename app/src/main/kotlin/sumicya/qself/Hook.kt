@@ -43,9 +43,15 @@ fun store(): SharedPreferences? = prefs ?: runCatching {
         ?.getSharedPreferences("qself", Context.MODE_PRIVATE)
 }.getOrNull()?.also { prefs = it }
 
-/** 名字满足 [pick] 的方法全部改成固定返回 [value]；一个都没匹配到就当找错了类。 */
+/**
+ * 名字满足 [pick] 的方法全部改成固定返回 [value]；一个都没匹配到就当找错了类。
+ * 本类没有就往父类找（QQ 的门方法大半声明在 Api 基类上，只搜本类一个也搜不着），
+ * 就近命中即停 —— 子类重写过就用子类那份。pick 写宽了会连父类的方法一起改，自己当心。
+ */
 fun Class<*>.constant(value: Any?, pick: (Method) -> Boolean) {
-    val targets = declaredMethods.filter(pick)
+    val targets = generateSequence<Class<*>>(this) { it.superclass }
+        .firstNotNullOfOrNull { c -> c.declaredMethods.filter(pick).takeIf { it.isNotEmpty() } }
+        .orEmpty()
     require(targets.isNotEmpty()) { "$simpleName: 没有匹配的方法" }
     targets.forEach { m -> hook(m) { value } }
 }
