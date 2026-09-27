@@ -152,6 +152,16 @@ member com.tencent.mobileqq.statistics.StatisticCollector#report
 class  com.tencent.feedback.eup.CrashReport
 member com.tencent.feedback.eup.CrashReport#initCrashReport
 
+# ---------- 去气泡尾巴：nor/pressed 带尾巴，_simple 不带，两套都是 110x106，取图时换 id
+res    skin_aio_friend_bubble_nor
+res    skin_aio_friend_bubble_nor_simple
+res    skin_aio_friend_bubble_pressed
+res    skin_aio_friend_bubble_pressed_simple
+res    skin_aio_user_bubble_nor
+res    skin_aio_user_bubble_nor_simple
+res    skin_aio_user_bubble_pressed
+res    skin_aio_user_bubble_pressed_simple
+
 # ---------- 屏蔽红点引导：这些门方法一律答 false，红点和引导气泡就不出现
 class  com.tencent.mobileqq.troop.utils.api.impl.TroopUtilsApiImpl
 member! com.tencent.mobileqq.troop.utils.api.impl.TroopUtilsApiImpl#isShowRedPoint

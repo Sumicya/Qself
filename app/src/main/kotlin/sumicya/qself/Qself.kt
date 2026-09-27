@@ -19,6 +19,7 @@ val features: List<Triple<String, Boolean, () -> Any?>> = listOf(
     Triple("TG输入栏", true, {}),
     Triple("标题栏侧栏精简", true, ::drawerMenu),
     Triple("统一气泡", true, ::plainBubble),
+    Triple("去气泡尾巴", true, ::noBubbleTail),
     Triple("统一字体", true, ::plainFont),
     Triple("去头像挂件", true, ::noPendant),
     Triple("昵称只留名字", true, ::plainNick),

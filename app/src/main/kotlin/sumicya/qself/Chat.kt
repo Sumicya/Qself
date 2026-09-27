@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself
 
+import android.content.res.Resources
 import android.view.View
 import org.json.JSONArray
 import org.json.JSONObject
@@ -27,6 +28,38 @@ fun plainFont() = cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgFont").afte
 fun noPendant() = cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant").afterNew {
     it.set("pendantId", 0L)
     it.set("pendantDiyInfoId", 0)
+}
+
+// ---- 气泡小尾巴：尾巴是画在 9-patch 里的（friend 朝左、user 朝右，各凸出 17 行像素），不是单独的 View，
+// 所以只能在取图那一层换。QQ 自己带一套同尺寸(110x106)的 simple 气泡图，就是没尾巴那版。
+
+private const val PKG = "com.tencent.mobileqq"
+
+private val TAILLESS = listOf(
+    "skin_aio_friend_bubble_nor" to "skin_aio_friend_bubble_nor_simple",
+    "skin_aio_friend_bubble_pressed" to "skin_aio_friend_bubble_pressed_simple",
+    "skin_aio_user_bubble_nor" to "skin_aio_user_bubble_nor_simple",
+    "skin_aio_user_bubble_pressed" to "skin_aio_user_bubble_pressed_simple",
+)
+
+fun noBubbleTail() {
+    val get = Resources::class.java.getMethod("getDrawable", Int::class.javaPrimitiveType, Resources.Theme::class.java)
+    // ponytail: id 得等第一次取图才解析得了（装的时候 Application 还没建起来，没有 Resources），
+    // 没法当场 ✗；一张都没找到就写日志，别静悄悄空转。少几张不报错，各换各的。
+    var swap: Map<Int, Int>? = null
+    hook(get) { chain ->
+        val res = chain.thisObject as? Resources ?: return@hook chain.proceed()
+        val map = swap ?: TAILLESS.mapNotNull { (a, b) ->
+            val from = res.getIdentifier(a, "drawable", PKG)
+            val to = res.getIdentifier(b, "drawable", PKG)
+            if (from != 0 && to != 0) from to to else null
+        }.toMap().also {
+            swap = it
+            if (it.isEmpty()) log("去气泡尾巴：一张气泡图都没找到，这版 QQ 改名了")
+        }
+        val to = map[chain.args[0] as Int] ?: return@hook chain.proceed()
+        res.getDrawable(to, chain.args[1] as? Resources.Theme) // 换过的 id 不在表里，不会再绕回来
+    }
 }
 
 // ---- 防撤回：服务器推来的撤回通知在进 NT 内核之前吞掉，消息留在本地；再按 seq 把那条消息捞出来，
