@@ -15,7 +15,7 @@ android {
         // 版本 = 构建日期.CI 构建号（本地编译没 run 号就是 .0）；vc 垫 1000 是因为
         // 0.8.x 那批的 801 已经装在机器上，run 号从个位数起，不垫会被判降级。
         versionCode = 1000 + (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0)
-        versionName = LocalDate.now().let { "${it.year % 100}.${it.monthValue}.${it.dayValue}." } +
+        versionName = LocalDate.now().let { "${it.year % 100}.${it.monthValue}.${it.dayOfMonth}." } +
             (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0)
     }
 
