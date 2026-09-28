@@ -25,7 +25,7 @@ import kotlin.math.min
  * 底栏藏起来的页面（频道那些）钮也跟着藏，不留一颗钮飘在别的页面上。
  * 点开是一张紧凑的玻璃卡片：两列功能名、钩叉状态（✓ 开着、– 没开、✗ 这版 QQ 没装上），
  * 描述留在无障碍标签里。状态存在 QQ 自己的 SharedPreferences「qself」里，钩子每次被调用时都查一遍，
- * 所以切换即时生效；已经改过的视图（浮起来的底栏、排好的输入行）要重启 QQ 才复原。
+ * 所以切换即时生效；输入行可直接撤销，已浮起的底栏仍要重启 QQ 才复原。
  */
 private const val KNOB = "qself-knob"
 private const val SHEET = "qself-sheet"
@@ -141,6 +141,15 @@ private class Mark(dp: Float) : Drawable() {
     override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
+/** 开合都由系统 ViewPropertyAnimator 合成，不需要重录 QQ 背景。 */
+private fun dismiss(decor: ViewGroup) {
+    val dim = decor.findViewWithTag<View>(SHEET) as? ViewGroup ?: return
+    if (!dim.isClickable) return
+    dim.isClickable = false
+    dim.getChildAt(0)?.animate()?.alpha(0f)?.scaleX(0.94f)?.scaleY(0.94f)?.setDuration(150)?.start()
+    dim.animate().alpha(0f).setDuration(150).withEndAction { if (dim.parent === decor) decor.removeView(dim) }.start()
+}
+
 /** 开关面板直接挂 decor：点卡片外关闭，不额外建窗口，也不录制 QQ 背景。 */
 private fun sheet(anchor: View) {
     val decor = anchor.rootView as? ViewGroup ?: return
@@ -155,6 +164,7 @@ private fun sheet(anchor: View) {
     val grid = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     fun cell(f: Feature): View {
         val mark = Mark(dp)
+        val marker = View(ctx).apply { background = mark }
         val title = TextView(ctx).apply {
             text = f.name
             textSize = 14f
@@ -167,7 +177,7 @@ private fun sheet(anchor: View) {
             gravity = Gravity.CENTER_VERTICAL
             val p = (7 * dp).toInt()
             setPadding(p, 0, p, 0)
-            addView(View(ctx).apply { background = mark },
+            addView(marker,
                 LinearLayout.LayoutParams((18 * dp).toInt(), (18 * dp).toInt()).apply { marginEnd = (6 * dp).toInt() })
             addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             foreground = borderlessRipple(this)
@@ -183,6 +193,11 @@ private fun sheet(anchor: View) {
         if (f.name !in failed) view.setOnClickListener { // ✗ 是这版 QQ 里没装上，点了也没用
             store.edit().putBoolean(f.name, !store.getBoolean(f.name, true)).apply()
             paint()
+            marker.scaleX = 0.55f
+            marker.scaleY = 0.55f
+            marker.animate().scaleX(1f).scaleY(1f).setDuration(240)
+                .setInterpolator(android.view.animation.OvershootInterpolator(2f)).start()
+            if (f.name == "TG输入栏") refreshLooks(decor)
         }
         return view
     }
@@ -226,17 +241,25 @@ private fun sheet(anchor: View) {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
             addView(button("重启 QQ") { android.os.Process.killProcess(android.os.Process.myPid()) })
-            addView(button("好") { decor.findViewWithTag<View>(SHEET)?.let { decor.removeView(it) } })
+            addView(button("好") { dismiss(decor) })
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
     val dim = FrameLayout(ctx).apply {
         tag = SHEET
         setBackgroundColor(0x66000000)
-        setOnClickListener { decor.removeView(this) } // 点卡片外面关掉
+        setOnClickListener { dismiss(decor) }
         addView(card, FrameLayout.LayoutParams(
             min(decor.width - (40 * dp).toInt(), (400 * dp).toInt()),
             min((decor.height * 0.62f).toInt(), (((features.size + 1) / 2 * 48 + 104) * dp).toInt()), Gravity.CENTER))
     }
+    card.isClickable = true // 卡片空白处的触摸不要穿透到遮罩
+    dim.alpha = 0f
+    card.alpha = 0f
+    card.scaleX = 0.94f
+    card.scaleY = 0.94f
     decor.addView(dim, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    dim.animate().alpha(1f).setDuration(170).start()
+    card.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(240)
+        .setInterpolator(android.view.animation.OvershootInterpolator(0.6f)).start()
 }

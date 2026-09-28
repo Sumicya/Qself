@@ -40,11 +40,13 @@ private fun watch(decor: View) {
     scan.run()
 }
 
+fun refreshLooks(decor: View) = walk(decor, false)
+
 private fun walk(v: View, inDrawer: Boolean) {
     val name = v.javaClass.name
     when {
         name.endsWith(".QQTabLayout") -> { homeBar(v as ViewGroup); return }
-        name.endsWith(".PanelIconLinearLayout") -> { if (on("TG输入栏")) tgInput(v as ViewGroup); return }
+        name.endsWith(".PanelIconLinearLayout") -> { tgInput(v as ViewGroup); return }
         else -> trim(v, inDrawer)
     }
     if (v is ViewGroup) {
