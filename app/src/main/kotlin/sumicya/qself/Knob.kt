@@ -18,6 +18,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import java.util.WeakHashMap
 import kotlin.math.min
 
 /**
@@ -29,12 +30,13 @@ import kotlin.math.min
  */
 private const val KNOB = "qself-knob"
 private const val SHEET = "qself-sheet"
+private val owners = WeakHashMap<View, View>()
 
 fun knob(bar: View): Boolean {
     val decor = bar.rootView as? ViewGroup ?: return false
     val old = decor.findViewWithTag<View>(KNOB)
     if (!bar.isShown || bar.height == 0 || decor.width == 0) { // 底栏不在这页上：钮藏起来
-        old?.visibility = View.GONE
+        if (old != null && owners[old] === bar) old.visibility = View.GONE
         return false
     }
     val dp = bar.dp
@@ -45,6 +47,7 @@ fun knob(bar: View): Boolean {
     val lift = decor.height - at[1] - bar.height // 钮和胶囊同高，这一个数同时管顶和底
     val end = if (beside) room - (8 * dp).toInt() - size else (8 * dp).toInt()
     if (old != null) {
+        owners[old] = bar
         old.visibility = View.VISIBLE
         val lp = old.layoutParams as ViewGroup.MarginLayoutParams
         if (lp.width != size || lp.bottomMargin != lift || lp.marginEnd != end) {
@@ -77,6 +80,7 @@ fun knob(bar: View): Boolean {
         marginEnd = end
         bottomMargin = lift
     })
+    owners[knob] = bar
     return true // 新钮需要一轮布局：让首帧等它量好，再与胶囊一同出现。
 }
 
