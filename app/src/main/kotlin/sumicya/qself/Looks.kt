@@ -114,8 +114,16 @@ fun texts(v: View, depth: Int = 4): List<String> {
 // ---- 首页底栏：QQ 自己的 TabLayout 原地浮成一颗玻璃胶囊，频道 / 动态页签藏掉。
 
 private val floated: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
+private val positioned: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 
 private fun homeBar(bar: ViewGroup) {
+    // 和胶囊同一帧定位圆钮；不等下一轮 150ms 的视图树扫描。
+    if (positioned.add(bar)) bar.viewTreeObserver.addOnPreDrawListener {
+        if (!bar.isAttachedToWindow) true else {
+            (bar.background as? Glass)?.sync()
+            !knob(bar) // 新钮尚未布局，取消这一帧，避免只画胶囊没有圆钮。
+        }
+    }
     // 热重载后是新一代代码、新的 floated 集合：靠背景认出上一代已经浮过的底栏，别再加一次边距。
     // ponytail: 浮起来之后关掉开关不会沉回去，重启 QQ 才复原；复原要存一堆原值，不值。
     if (bar.background?.javaClass?.name == Glass::class.java.name) floated.add(bar)
@@ -131,7 +139,6 @@ private fun homeBar(bar: ViewGroup) {
         }
     }
     if (bar.height == 0) return
-    knob(bar)
     // QQ 给底栏铺的通栏模糊带、分割细线、纯色垫底：胶囊两侧会露出来，都藏。
     if (!glass) return
     val frame = generateSequence(bar.parent as? ViewGroup) { it.parent as? ViewGroup }
@@ -158,10 +165,8 @@ private fun float(bar: ViewGroup) {
     // 两头的留白放在页签条上而不是 bar 上：material 固定模式会把页签条量成 bar 的整宽（含 padding），放 bar 上会挤歪。
     bar.setPadding(0, bar.paddingTop, 0, bar.paddingBottom)
     bar.getChildAt(0)?.setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0) // 两端留白收掉，玻璃贴着按钮
-    val glass = Glass(bar) { selectedTab(bar) }
-    bar.background = glass
-    // 只在页签按下或选中变化时重画；半透明材质由系统自然合成，无须重录身后视图。
-    bar.viewTreeObserver.addOnPreDrawListener { glass.sync(); true }
+    bar.background = Glass(bar) { selectedTab(bar) }
+    // 选中态与圆钮的定位共用 homeBar 注册的 pre-draw 回调。
 }
 
 /** 页签定宽 56dp：material 给的是平分整条的 weight，QQ 的页签视图又是 match_parent，胶囊就只能跟屏幕一样长。 */

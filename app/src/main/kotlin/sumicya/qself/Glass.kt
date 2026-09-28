@@ -14,6 +14,9 @@ import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.RadialGradient
 import android.graphics.RectF
+import android.graphics.RenderEffect
+import android.graphics.RenderNode
+import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.view.View
@@ -26,10 +29,18 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
-/** 原生半透明材质：不重画 QQ 的视图树，点击/滚动/键盘变化时也不会录到旧帧或 QQ 的模糊层。 */
+/** 有明确可画的背后内容时做折射；QQ 的模糊控件不取样，失效时保留原生透明材质。 */
 class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, private val selected: (() -> View?)? = null) : Drawable() {
     private val dp = host.dp
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val node = RenderNode("qself-lens")
+    private val lens by lazy { RuntimeShader(LENS) }
+    private val pad = (12 * dp).toInt()
+    private var effectSize = 0L
+    private var failures = 0
+    private var sampled = false
+    private var missing = false
+    private var busy = false
     private val rect = RectF()
     private val contour = Path()
     private val here = IntArray(2)
@@ -59,14 +70,20 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         rect.inset(press * 4 * dp, press * 2 * dp) // 背景缩进去；命中区域和文字保持原位
         val r = min(radius, rect.height() / 2f)
         val accent = monet(night, 0xFF)
+        val refracted = canvas.isHardwareAccelerated && failures < 3 && !busy && runCatching { backdrop(canvas) }
+            .onFailure { if (++failures <= 2) log("玻璃取样失败 ${host.javaClass.simpleName}，使用透明材质", it) }
+            .getOrDefault(false)
         paint.style = Paint.Style.FILL
         paint.color = Color.WHITE
+        val colors = intArrayOf(
+            wash(if (night) 0xA05E6881.toInt() else 0xACFFFFFF.toInt(), accent),
+            wash(if (night) 0x76505C78 else 0x66EBF4FF, accent),
+            wash(if (night) 0x8A323E56.toInt() else 0x7DD7E4F2, accent),
+        )
+        if (refracted) for (i in colors.indices)
+            colors[i] = (colors[i] and 0xFFFFFF) or ((Color.alpha(colors[i]) * 0.42f).toInt() shl 24)
         paint.shader = LinearGradient(rect.left, rect.top, rect.right, rect.bottom,
-            intArrayOf(
-                wash(if (night) 0xA05E6881.toInt() else 0xACFFFFFF.toInt(), accent),
-                wash(if (night) 0x76505C78 else 0x66EBF4FF, accent),
-                wash(if (night) 0x8A323E56.toInt() else 0x7DD7E4F2, accent),
-            ), floatArrayOf(0f, 0.52f, 1f), Shader.TileMode.CLAMP)
+            colors, floatArrayOf(0f, 0.52f, 1f), Shader.TileMode.CLAMP)
         canvas.drawRoundRect(rect, r, r, paint)
 
         contour.reset()
@@ -105,6 +122,93 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         touchX = x
         touchY = y
         if (pressed) invalidateSelf()
+    }
+
+    private fun backdrop(canvas: Canvas): Boolean {
+        if (!host.isAttachedToWindow) return false
+        val b = bounds
+        val w = b.width() + 2 * pad
+        val h = b.height() + 2 * pad
+        busy = true
+        try {
+            if (effectSize != (w.toLong() shl 32 or h.toLong())) {
+                lens.setFloatUniform("size", w.toFloat(), h.toFloat())
+                lens.setFloatUniform("pad", pad.toFloat())
+                lens.setFloatUniform("dp", dp)
+                lens.setFloatUniform("bend", 12 * dp)
+                node.setRenderEffect(RenderEffect.createRuntimeShaderEffect(lens, "content"))
+                effectSize = w.toLong() shl 32 or h.toLong()
+            }
+            lens.setFloatUniform("rad", min(radius, b.height() / 2f))
+            lens.setFloatUniform("press", press)
+            node.setPosition(b.left - pad, b.top - pad, b.right + pad, b.bottom + pad)
+            val rc = node.beginRecording(w, h)
+            val count = try {
+                rc.translate((pad - b.left).toFloat(), (pad - b.top).toFloat())
+                behind(rc)
+            } finally { node.endRecording() }
+            if (count == 0) {
+                if (!missing) { log("玻璃无可见底图: ${host.javaClass.simpleName}，使用透明材质"); missing = true }
+                return false
+            }
+            if (!sampled) { log("玻璃折射取样: ${host.javaClass.simpleName}, 图层 $count"); sampled = true }
+            canvas.drawRenderNode(node)
+            return true
+        } finally { busy = false }
+    }
+
+    /** 只录背景和画在宿主之前的可见内容；QQ 的模糊层和另一块玻璃都不是原始底图。 */
+    private fun behind(rc: Canvas): Int {
+        host.getLocationInWindow(here)
+        val levels = ArrayList<Pair<ViewGroup, View>>(6)
+        var child: View = host
+        while (true) {
+            val p = child.parent as? ViewGroup ?: break
+            levels += p to child
+            child = p
+        }
+        var count = 0
+        for ((p, current) in levels.asReversed()) {
+            p.background?.let { bg ->
+                if (p.tag != "qself-sheet" && bg !is Glass && !bg.javaClass.name.contains("blur", true)) {
+                    paint(rc, p) { bg.draw(it) }
+                    count++
+                }
+            }
+            for (i in 0 until p.indexOfChild(current)) {
+                val s = p.getChildAt(i)
+                if (s.visibility != View.VISIBLE || s.width == 0 || s.height == 0 || !overlaps(s) || unsafe(s)) continue
+                paint(rc, s) { s.draw(it) }
+                count++
+            }
+        }
+        return count
+    }
+
+    // 模糊或另一块玻璃藏在容器里面时也不把整个容器当作原图重放。
+    private fun unsafe(v: View): Boolean {
+        if (v.background is Glass || v.javaClass.name.contains("blur", true) ||
+            v.background?.javaClass?.name?.contains("blur", true) == true) return true
+        if (v is ViewGroup) for (i in 0 until v.childCount) {
+            val child = v.getChildAt(i)
+            if (child.visibility == View.VISIBLE && overlaps(child) && unsafe(child)) return true
+        }
+        return false
+    }
+
+    private inline fun paint(rc: Canvas, v: View, body: (Canvas) -> Unit) {
+        v.getLocationInWindow(there)
+        val save = rc.save()
+        rc.translate((there[0] - here[0]).toFloat(), (there[1] - here[1]).toFloat())
+        rc.clipRect(0, 0, v.width, v.height)
+        body(rc)
+        rc.restoreToCount(save)
+    }
+
+    private fun overlaps(v: View): Boolean {
+        v.getLocationInWindow(there)
+        return there[1] < here[1] + host.height + pad && there[1] + v.height > here[1] - pad &&
+            there[0] < here[0] + host.width + pad && there[0] + v.width > here[0] - pad
     }
 
     private fun setPress(value: Boolean) {
@@ -164,6 +268,34 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     override fun setColorFilter(colorFilter: ColorFilter?) {}
     @Deprecated("Deprecated in Java")
     override fun getOpacity() = PixelFormat.TRANSLUCENT
+
+    private companion object {
+        const val LENS = """
+uniform shader content;
+uniform float2 size;
+uniform float pad;
+uniform float dp;
+uniform float rad;
+uniform float bend;
+uniform float press;
+half4 main(float2 p) {
+    float2 c = size * 0.5;
+    float2 h = c - float2(pad, pad) - press * dp * float2(4.0, 2.0);
+    float r = min(rad, min(h.x, h.y));
+    if (r <= 0.0) return half4(0.0);
+    float2 spine = clamp(p, c - h + r, c + h - r);
+    float2 v = p - spine;
+    float d = length(v);
+    if (d > r) return half4(0.0);
+    float2 n = v / max(d, 0.001);
+    float w = d / r;
+    half4 col = content.eval(p - n * bend * w * w + n * press * bend * 0.55 * (1.0 - w));
+    half l = dot(col.rgb, half3(0.299, 0.587, 0.114));
+    col.rgb = mix(half3(l), col.rgb, half(1.14));
+    return col;
+}
+"""
+    }
 }
 
 /** 圆角上限为 [max] 的胶囊轮廓（不传就是全圆），配合 clipToOutline 用。 */

@@ -30,13 +30,12 @@ import kotlin.math.min
 private const val KNOB = "qself-knob"
 private const val SHEET = "qself-sheet"
 
-fun knob(bar: View) {
-    val decor = bar.rootView as? ViewGroup ?: return
+fun knob(bar: View): Boolean {
+    val decor = bar.rootView as? ViewGroup ?: return false
     val old = decor.findViewWithTag<View>(KNOB)
-    if (bar.height == 0) return
-    if (!bar.isShown) { // 底栏不在这页上：钮藏起来，别侵入别的页面
+    if (!bar.isShown || bar.height == 0 || decor.width == 0) { // 底栏不在这页上：钮藏起来
         old?.visibility = View.GONE
-        return
+        return false
     }
     val dp = bar.dp
     val size = bar.height // 和胶囊同一个尺寸，顶边底边自然齐平
@@ -55,7 +54,7 @@ fun knob(bar: View) {
             lp.marginEnd = end
             old.layoutParams = lp
         }
-        return
+        return false
     }
     val knob = ImageView(bar.context).apply {
         tag = KNOB
@@ -72,12 +71,13 @@ fun knob(bar: View) {
         background = Glass(this)
         // 按压反馈：foreground 一层无边界涟漪，background 还是玻璃
         foreground = borderlessRipple(this)
-        setOnClickListener { sheet(it) }
+        setOnClickListener { if (decor.findViewWithTag<View>(SHEET) != null) dismiss(decor) else sheet(it) }
     }
     decor.addView(knob, FrameLayout.LayoutParams(size, size, Gravity.END or Gravity.BOTTOM).apply {
         marginEnd = end
         bottomMargin = lift
     })
+    return true // 新钮需要一轮布局：让首帧等它量好，再与胶囊一同出现。
 }
 
 fun borderlessRipple(v: View): Drawable? = TypedValue().let {
@@ -141,7 +141,7 @@ private class Mark(dp: Float) : Drawable() {
     override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
-/** 开合都由系统 ViewPropertyAnimator 合成，不需要重录 QQ 背景。 */
+/** 开合交给系统 ViewPropertyAnimator；玻璃自身只在需要绘制时取样。 */
 private fun dismiss(decor: ViewGroup) {
     val dim = decor.findViewWithTag<View>(SHEET) as? ViewGroup ?: return
     if (!dim.isClickable) return
@@ -150,7 +150,7 @@ private fun dismiss(decor: ViewGroup) {
     dim.animate().alpha(0f).setDuration(150).withEndAction { if (dim.parent === decor) decor.removeView(dim) }.start()
 }
 
-/** 开关面板直接挂 decor：点卡片外关闭，不额外建窗口，也不录制 QQ 背景。 */
+/** 开关面板直接挂 decor：点卡片外或原圆钮的位置关闭，不额外建窗口。 */
 private fun sheet(anchor: View) {
     val decor = anchor.rootView as? ViewGroup ?: return
     if (decor.findViewWithTag<View>(SHEET) != null) return
@@ -252,6 +252,16 @@ private fun sheet(anchor: View) {
         addView(card, FrameLayout.LayoutParams(
             min(decor.width - (40 * dp).toInt(), (400 * dp).toInt()),
             min((decor.height * 0.62f).toInt(), (((features.size + 1) / 2 * 48 + 104) * dp).toInt()), Gravity.CENTER))
+        // 遮罩盖在圆钮上方，原钮收不到第二次触摸；同一屏幕位置留明确的关闭命中区。
+        val pos = IntArray(2).also(anchor::getLocationInWindow)
+        val origin = IntArray(2).also(decor::getLocationInWindow)
+        addView(View(ctx).apply {
+            contentDescription = "关闭 Qself"
+            setOnClickListener { dismiss(decor) }
+        }, FrameLayout.LayoutParams(anchor.width, anchor.height, Gravity.TOP or Gravity.START).apply {
+            leftMargin = pos[0] - origin[0]
+            topMargin = pos[1] - origin[1]
+        })
     }
     card.isClickable = true // 卡片空白处的触摸不要穿透到遮罩
     dim.alpha = 0f

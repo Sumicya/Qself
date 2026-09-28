@@ -10,8 +10,8 @@
 ## 做了什么
 
 外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
-- 首页底栏浮成一颗居中的原生半透明胶囊（每个页签 56dp，只包住页签）：不采样、不模糊、
-  带渐变透色、弧形上缘反光与跟手按压亮斑；按下收缩轮廓，选中项滑动时略微拉伸。聊天输入栏和设置面板使用同一材质
+- 首页底栏浮成一颗居中的玻璃胶囊（每个页签 56dp，只包住页签）：实验性地录制可见底图并用 AGSL 折射，
+  遇到模糊层或取样失败就退回透明材质；带渐变透色、弧形上缘反光与跟手按压亮斑。按下收缩轮廓，选中项滑动时略微拉伸。聊天输入栏和设置面板使用同一材质；实际 QQ 效果需真机验收
 - **Monet 取色**：玻璃的罩色、选中圆、圆钮的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色
 - 聊天输入栏 Telegram 化：一颗悬浮玻璃胶囊 [表情 · 输入框 · +] 加右侧玻璃圆钮 麦克风⇄发送，
@@ -63,7 +63,7 @@ app/src/main/kotlin/sumicya/qself/
   Chat.kt    聊天，含防撤回用的几十行 protobuf 读取、撤回灰字、连发合并、回复不@
   Looks.kt   外观：盯住每个 Activity 的视图树套规则
   Input.kt   TG 式输入栏
-  Glass.kt   原生半透明 Drawable（Monet 取色、按压反馈、底栏选中滑块；不采样 QQ 视图）
+  Glass.kt   RenderNode + AGSL 折射 Drawable（取样失败退回透明材质、Monet、按压反馈、选中滑块）
 app/src/test/kotlin/sumicya/qself/ProtoTest.kt   防撤回判断的唯一一份可跑检查
 app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop、作用域
 tools/symbols.txt    落点表：代码依赖的每一个名字
