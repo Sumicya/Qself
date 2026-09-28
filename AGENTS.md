@@ -3,7 +3,7 @@
 ## 是什么
 
 一个纯钩子的 LSPosed 模块（libxposed API 102），只针对 QQ 9.2.10 / Android 16。模块 APK 没有界面；
-纯 Kotlin，八个文件（约 1500 行），没有第三方依赖、没有 `.so`、不联网。外观照 NagramXF 那套长相做（液态玻璃 + Monet 取色 + TG 式输入栏）。
+纯 Kotlin，八个文件，没有第三方依赖、没有 `.so`、不联网。外观是原生半透明材质 + Monet 取色 + TG 式输入栏；不录制 QQ 背景。
 
 开关是 QQ 主页底栏旁圆钮弹出的紧凑双列玻璃面板，状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
 
@@ -18,7 +18,7 @@
 - 钩子体不要 try/catch 兜底整个功能：libxposed 默认异常模式下，钩子抛异常等于这一次没装。
   但**从 `chain` 取参数、反射取视图这类可能落在兄弟子类上的动作要包 `runCatching`** —— 挂点在基类时，钩子会盖住所有子类
 - 钩子经 `hook()` 装就自动受开关管；视图规则自己 `on("功能名")`
-- minSdk 36：只有 Android 16，别写 `SDK_INT` 判断和降级分支
+- minSdk 36：只有 Android 16，别写 `SDK_INT` 判断和降级分支；玻璃不采样/不重画 QQ 视图，避免录到模糊层
 - 故意省掉的地方写 `ponytail:` 注释，说清上限和往上走的路
 - 非平凡逻辑留一份能跑的检查（目前只有 `ProtoTest.kt`）
 - 外观那三个文件（`Glass.kt` / `Input.kt` / `Looks.kt`）全是视图规则，dex 核不到，只能靠真机；

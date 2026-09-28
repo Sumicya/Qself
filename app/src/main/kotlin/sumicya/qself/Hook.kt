@@ -30,7 +30,9 @@ var feature: String? = null
  */
 fun hook(target: Executable, body: (Chain) -> Any?): XposedInterface.HookHandle {
     val name = feature
-    return xposed.hook(target).intercept { chain -> if (name == null || on(name)) body(chain) else chain.proceed() }
+    return xposed.hook(target).intercept { chain ->
+        if (name == null || name !in failed && on(name)) body(chain) else chain.proceed()
+    }
 }
 
 private var prefs: SharedPreferences? = null

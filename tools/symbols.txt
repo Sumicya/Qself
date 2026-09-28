@@ -91,16 +91,6 @@ member! com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarConten
 class  com.tencent.mobileqq.ark.api.impl.ArkHelperImpl
 member! com.tencent.mobileqq.ark.api.impl.ArkHelperImpl#isSupportReply
 
-# ---------- 转发不限人数 Chat.kt
-class  com.tencent.mobileqq.selectmember.ResultRecord
-member! com.tencent.mobileqq.selectmember.ResultRecord#copyResultRecord
-member! com.tencent.mobileqq.selectmember.ResultRecord#getUinType
-field  com.tencent.mobileqq.selectmember.ResultRecord#uin
-member! com.tencent.mobileqq.activity.ForwardRecentActivity#add2ForwardTargetList
-member! com.tencent.mobileqq.activity.ForwardRecentActivity#getForwardTargetKey
-member! com.tencent.mobileqq.activity.ForwardRecentActivity#refreshRightBtn
-field  com.tencent.mobileqq.activity.ForwardRecentActivity#mForwardTargetMap
-field  com.tencent.mobileqq.activity.ForwardRecentActivity#mSelectedAndSearchBar
 # 「隐藏在线状态」是视图规则，认的是服务器发的文案，dex 里没有对应落点。
 
 # ---------- 昵称行只留名字 Chat.kt
@@ -154,7 +144,11 @@ member com.tencent.feedback.eup.CrashReport#initCrashReport
 
 # ---------- 具体未读条数：QUIBadge 自绘 mText / 老角标 TextView（数量是第三个实参）
 class  com.tencent.mobileqq.quibadge.QUIBadge
-member! com.tencent.mobileqq.quibadge.QUIBadge#updateNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setRedNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setAIOBarNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setRedNumWithIcon
+member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayNumWIthIcon
 member! com.tencent.mobileqq.quibadge.QUIBadge#getMinWidth
 field  com.tencent.mobileqq.quibadge.QUIBadge#mText
 field  com.tencent.mobileqq.quibadge.QUIBadge#mNum

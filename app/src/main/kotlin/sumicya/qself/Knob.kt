@@ -73,8 +73,6 @@ fun knob(bar: View) {
         // 按压反馈：foreground 一层无边界涟漪，background 还是玻璃
         foreground = borderlessRipple(this)
         setOnClickListener { sheet(it) }
-        viewTreeObserver.addOnScrollChangedListener { invalidate() }
-        viewTreeObserver.addOnGlobalLayoutListener { invalidate() }
     }
     decor.addView(knob, FrameLayout.LayoutParams(size, size, Gravity.END or Gravity.BOTTOM).apply {
         marginEnd = end
@@ -143,7 +141,7 @@ private class Mark(dp: Float) : Drawable() {
     override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
-/** 开关面板：挂在 QQ 的 decor 上（不是对话框窗口）—— 玻璃要录身后的画面，得在同一个窗口树里。 */
+/** 开关面板直接挂 decor：点卡片外关闭，不额外建窗口，也不录制 QQ 背景。 */
 private fun sheet(anchor: View) {
     val decor = anchor.rootView as? ViewGroup ?: return
     if (decor.findViewWithTag<View>(SHEET) != null) return

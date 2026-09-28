@@ -30,7 +30,6 @@ val features = listOf(
     Feature("连发合并", true, "同一人连发成组，只留一个头像", ::groupRuns),
     Feature("回复不@", true, "回复不往输入框插 @昵称", ::replyNoAt),
     Feature("转发多选", true, "转发页常显多选入口", ::multiForward),
-    Feature("转发不限人数", true, "转发选人不再卡 9 个", ::noForwardLimit),
     Feature("左滑回复不设限", true, "卡片消息也能左滑回复", ::replyAnyMsg),
     Feature("隐藏在线状态", true, "昵称下那行在线状态藏掉", {}),
     Feature("显示具体未读条数", true, "角标不再停在 99+", ::exactCount),

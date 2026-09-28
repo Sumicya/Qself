@@ -155,7 +155,9 @@ fun ByteArray.pb(): List<Pb> {
         var v = 0L
         var shift = 0
         while (true) {
-            val b = this[i++].toInt()
+            require(i < size && shift <= 63) { "截断的 varint" }
+            val b = this[i++].toInt() and 0xff
+            require(shift != 63 || b and 0x7e == 0) { "溢出的 varint" }
             v = v or ((b and 0x7f).toLong() shl shift)
             if (b and 0x80 == 0) return v
             shift += 7
@@ -165,11 +167,16 @@ fun ByteArray.pb(): List<Pb> {
         val start = i
         val key = varint()
         val num = (key ushr 3).toInt()
+        require(num > 0) { "无效字段号" }
         val value: Any = when ((key and 7).toInt()) {
             0 -> varint()
-            1 -> { i += 8; 0L }
-            5 -> { i += 4; 0L }
-            2 -> { val n = varint().toInt(); copyOfRange(i, i + n).also { i += n } }
+            1 -> { require(size - i >= 8); i += 8; 0L }
+            5 -> { require(size - i >= 4); i += 4; 0L }
+            2 -> {
+                val n = varint()
+                require(n >= 0 && n <= size - i) { "截断的字段" }
+                copyOfRange(i, i + n.toInt()).also { i += n.toInt() }
+            }
             else -> throw IllegalArgumentException("wire type ${key and 7}")
         }
         out += Pb(num, start, i, value)
@@ -258,36 +265,6 @@ fun multiForward() {
 // ---- 左滑回复：卡片 (Ark) 消息 QQ 一律说不支持回复，这里一律说支持。（上游 QAuxiliary 同款）
 
 fun replyAnyMsg() = hook(cls("com.tencent.mobileqq.ark.api.impl.ArkHelperImpl").method("isSupportReply")) { true }
-
-// ---- 转发不限人数：QQ 的 add2ForwardTargetList 选满 9 个就返回 false，这里自己往 map 里塞，再刷新右侧按钮。
-
-@Suppress("UNCHECKED_CAST")
-fun noForwardLimit() {
-    val act = cls("com.tencent.mobileqq.activity.ForwardRecentActivity")
-    val rec = cls("com.tencent.mobileqq.selectmember.ResultRecord")
-    // 要反射的东西装的时候全解析好：缺一个当场 ✗，别等到点转发才发现
-    val keyOf = act.getMethod("getForwardTargetKey", String::class.java, Integer.TYPE)
-    val copyOf = rec.getMethod("copyResultRecord", rec)
-    val typeOf = rec.getMethod("getUinType")
-    val refresh = act.getMethod("refreshRightBtn")
-    hook(act.method("add2ForwardTargetList")) { chain ->
-        val r = chain.getArg(0) ?: return@hook false
-        val self = chain.thisObject
-        val map = self.get("mForwardTargetMap") as? MutableMap<Any, Any?> ?: return@hook chain.proceed()
-        val key = keyOf.invoke(self, r.get("uin"), typeOf.invoke(r)) ?: return@hook chain.proceed()
-        map[key] = copyOf.invoke(r, r)
-        refresh.invoke(self)
-        // 顶部那条「已选 N 人」按签名找（void(List, boolean)），找不到就算了，不影响转发本身
-        self.get("mSelectedAndSearchBar")?.let { bar ->
-            bar.javaClass.declaredMethods
-                .firstOrNull { it.returnType == Void.TYPE && it.parameterTypes.contentEquals(arrayOf(List::class.java, Boolean::class.java)) }
-                ?.invoke(bar, ArrayList(map.values), true)
-        }
-        true
-        // ponytail: 搜索页的勾选状态没同步（上游那半是死代码，mSearchFragment 这条路没核）。
-        // 真机上搜索页勾选对不上的话，再去找它的 setSelectedAndJoinedUins。
-    }
-}
 
 // ---- 「+」面板：只留正经附件（照片、拍摄、文件、位置、红包……），娱乐入口剔掉。
 

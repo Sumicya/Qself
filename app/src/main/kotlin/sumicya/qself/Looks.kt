@@ -48,8 +48,14 @@ private fun walk(v: View, inDrawer: Boolean) {
         else -> trim(v, inDrawer)
     }
     if (v is ViewGroup) {
-        val drawer = inDrawer || name.contains("QQSettingMe") // 侧栏根是 QQSettingMeRelativeLayout
-        for (i in 0 until v.childCount) walk(v.getChildAt(i), drawer)
+        val drawer = inDrawer || name.contains("QQSettingMe")
+        var i = 0
+        while (i < v.childCount) {
+            val child = v.getChildAt(i)
+            walk(child, drawer)
+            // tgInput 会原地重排孩子；不要跳过新孩子，也不要访问已经不存在的下标。
+            if (v.getChildAt(i) === child) i++
+        }
     }
 }
 
@@ -152,9 +158,7 @@ private fun float(bar: ViewGroup) {
     bar.getChildAt(0)?.setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0) // 两端留白收掉，玻璃贴着按钮
     val glass = Glass(bar) { selectedTab(bar) }
     bar.background = glass
-    // 内容一滚、布局一变就重画一次玻璃（底栏自己不会因为身后的东西动而重画）；选中页签换了也要重画。
-    bar.viewTreeObserver.addOnScrollChangedListener { bar.invalidate() }
-    bar.viewTreeObserver.addOnGlobalLayoutListener { bar.invalidate() }
+    // 只在页签按下或选中变化时重画；半透明材质由系统自然合成，无须重录身后视图。
     bar.viewTreeObserver.addOnPreDrawListener { glass.sync(); true }
 }
 
@@ -198,12 +202,14 @@ fun exactCount() {
     val text = badge.getDeclaredField("mText").apply { isAccessible = true }
     val num = badge.getDeclaredField("mNum").apply { isAccessible = true }
     val paint = badge.getDeclaredField("mTextPaint").apply { isAccessible = true }
-    hook(badge.method("updateNum")) { chain ->
-        chain.proceed().also {
-            val n = chain.args[0] as Int
-            if (n > 99) text.set(chain.thisObject, n.toString())
+    // updateNum 是 private 小方法，ART 可能内联；改从 QQ 对外暴露的设置入口落钩。
+    for (name in listOf("setRedNum", "setGrayNum", "setAIOBarNum", "setRedNumWithIcon", "setGrayNumWIthIcon"))
+        hook(badge.method(name)) { chain ->
+            chain.proceed().also {
+                val n = chain.args[0] as Int
+                if (n > 99) text.set(chain.thisObject, n.toString())
+            }
         }
-    }
     // QQ 给 99+ 固定 31dp 宽；真数字多一位，就补上那一位的像素宽度。
     hook(badge.method("getMinWidth")) { chain ->
         val width = chain.proceed() as Int

@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 
 /**
@@ -19,12 +20,12 @@ import java.util.WeakHashMap
  * 它们的镜子 —— 同一个 drawable，所以表情 ⇄ 键盘的状态跟着走 —— 点下去调原按钮的
  * performClick()，每个面板还是 QQ 自己的行为（相册在 + 里，TG 也没有单独的相册钮）。
  */
-private val rows = WeakHashMap<View, Row>()
+private val rows = WeakHashMap<View, WeakReference<Row>>()
 
 private const val ROW = "qself-row"
 
 fun tgInput(strip: ViewGroup) {
-    rows[strip]?.let { it.sync(); return }
+    rows[strip]?.get()?.takeIf { it.active() }?.let { it.sync(); return }
     val scope = strip.parent as? ViewGroup ?: return
     val edit = find(scope) { it is TextView && (idName(it) == "input" || it.javaClass.simpleName.contains("EditText")) } as? TextView ?: return
     val box = edit.parent as? ViewGroup ?: return
@@ -32,7 +33,9 @@ fun tgInput(strip: ViewGroup) {
     val host = box.parent as? ViewGroup ?: return
     if (generateSequence(box as View) { it.parent as? View }.any { it.tag == ROW || it === strip }) return
     // 热重载前已排过的行不再重包；strip 包住 box 时隐藏它会连输入框一起藏掉。
-    rows[strip] = Row(strip, edit, box, host, find(box) { idName(it) == "send_btn" }).also { it.sync() }
+    val row = Row(strip, edit, box, host, find(box) { idName(it) == "send_btn" })
+    rows[strip] = WeakReference(row)
+    row.sync()
 }
 
 private fun find(v: View, pred: (View) -> Boolean): View? {
@@ -61,7 +64,9 @@ private class Mirror(val from: ImageView, val view: ImageView) {
 private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, val host: ViewGroup, val send: View?) {
     private val row = LinearLayout(strip.context)
     private val mirrors = ArrayList<Mirror>(4)
-    private val squeezed = HashMap<View, Int>()
+    private val slot = (generateSequence(strip as View) { it.parent as? View }
+        .firstOrNull { it.parent === host } as? ViewGroup)?.takeIf { it !== box }
+    private var slotHeight: Int? = null
     private var sendVisibility: Int? = null
     private val mic: Mirror?
 
@@ -94,9 +99,8 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
         row.tag = ROW
-        strip.visibility = View.GONE
 
-        // 玻璃胶囊就是输入框：[表情][QQ 的框（去掉自己的底色）][+]；多行时圆角封顶 22dp。
+        // 原位重排：[表情][QQ 的输入框][+]；没有任何对 QQ 父链或背后画面的取样。
         val field = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -109,8 +113,6 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
         val index = host.indexOfChild(box)
         val boxLp = box.layoutParams.also { if (it.height > 0) it.height += (12 * dp).toInt() } // 胶囊上下各留 6dp
         host.removeView(box)
-        edit.background = null
-        box.background = null // 框自己那层圆角底还留着就会在玻璃胶囊里挡一道
         emoji?.view?.let(field::addView)
         field.addView(box, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         more?.view?.let(field::addView)
@@ -124,22 +126,34 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
             (it.layoutParams as LinearLayout.LayoutParams).marginEnd = (8 * dp).toInt()
             row.addView(it)
         }
-        host.addView(row, index.coerceIn(0, host.childCount), boxLp)
-        // 输入栏自己的底色去掉，胶囊才是浮在聊天背景上的。
-        generateSequence(host as View) { it.parent as? View }.take(2).forEach { it.background = null }
+        host.addView(row, index, boxLp)
+        strip.visibility = View.GONE // 确认新行插回后才隐藏 QQ 原图标带
+        clearBackgrounds()
+        edit.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> clearBackgrounds() }
 
         edit.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(s: Editable?) = swap()
+            override fun afterTextChanged(s: Editable?) { swap(); clearBackgrounds() }
         })
     }
 
+    fun active() = row.parent === host && edit.parent === box
+
     fun sync() {
+        clearBackgrounds()
         mirrors.forEach { it.sync() }
         swap()
         star()
         collapse()
+    }
+
+    private fun clearBackgrounds() {
+        if (edit.background != null) edit.background = null
+        if (box.background != null) box.background = null
+        // 只清输入栏自己的浅层背景，绝不清聊天根容器/壁纸。
+        for (v in listOf(host, strip.parent as? View))
+            if (v != null && v.height in 1..(120 * v.dp).toInt() && v.background != null) v.background = null
     }
 
     /** QQ 塞在输入框右端的 AI 星星之类的图标钮：框里除了「发送」只留文字。 */
@@ -151,22 +165,19 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
         go(box)
     }
 
-    /** 图标带没了，QQ 还留着那块空位。里面什么都没有的兄弟槽位压到 0 高；QQ 一往里放东西它自己长回来。 */
+    /** 只压图标带所在的空槽；聊天列表哪怕暂时为空也不能动。 */
     private fun collapse() {
-        for (i in 0 until host.childCount) {
-            val child = host.getChildAt(i)
-            if (child === row || child !is ViewGroup ||
-                generateSequence(strip as View) { it.parent as? View }.none { it === child }) continue
-            val lp = child.layoutParams ?: continue
-            if (blank(child)) {
-                if (child !in squeezed && child.height > 0) {
-                    squeezed[child] = lp.height
-                    lp.height = 0
-                    child.layoutParams = lp
-                }
-            } else {
-                squeezed.remove(child)?.let { lp.height = it; child.layoutParams = lp }
+        val v = slot ?: return
+        val lp = v.layoutParams ?: return
+        if (blank(v)) {
+            if (slotHeight == null && v.height > 0) {
+                slotHeight = lp.height
+                lp.height = 0
+                v.layoutParams = lp
             }
+        } else {
+            slotHeight?.let { lp.height = it; v.layoutParams = lp }
+            slotHeight = null
         }
     }
 
