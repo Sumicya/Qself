@@ -32,19 +32,20 @@ private const val KNOB = "qself-knob"
 private const val SHEET = "qself-sheet"
 private val owners = WeakHashMap<View, View>()
 
-fun knob(bar: View): Boolean {
-    val decor = bar.rootView as? ViewGroup ?: return false
+fun knob(bar: View) {
+    val decor = bar.rootView as? ViewGroup ?: return
     val old = decor.findViewWithTag<View>(KNOB)
     if (!bar.isShown || bar.height == 0 || decor.width == 0) { // 底栏不在这页上：钮藏起来
         if (old != null && owners[old] === bar) old.visibility = View.GONE
-        return false
+        return
     }
     val dp = bar.dp
     val size = bar.height // 和胶囊同一个尺寸，顶边底边自然齐平
     val at = IntArray(2).also(bar::getLocationInWindow)
-    val room = decor.width - at[0] - bar.width // 胶囊右边剩多少
+    val origin = IntArray(2).also(decor::getLocationInWindow)
+    val room = decor.width - (at[0] - origin[0]) - bar.width // 胶囊右边剩多少
     val beside = room >= (8 * dp).toInt() + size
-    val lift = decor.height - at[1] - bar.height // 钮和胶囊同高，这一个数同时管顶和底
+    val lift = decor.height - (at[1] - origin[1]) - bar.height // 坐标统一以 decor 为原点
     val end = if (beside) room - (8 * dp).toInt() - size else (8 * dp).toInt()
     if (old != null) {
         owners[old] = bar
@@ -57,7 +58,7 @@ fun knob(bar: View): Boolean {
             lp.marginEnd = end
             old.layoutParams = lp
         }
-        return false
+        return
     }
     val knob = ImageView(bar.context).apply {
         tag = KNOB
@@ -81,7 +82,6 @@ fun knob(bar: View): Boolean {
         bottomMargin = lift
     })
     owners[knob] = bar
-    return true // 新钮需要一轮布局：让首帧等它量好，再与胶囊一同出现。
 }
 
 fun borderlessRipple(v: View): Drawable? = TypedValue().let {

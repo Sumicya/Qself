@@ -53,7 +53,9 @@ class Qself : XposedModule() {
     }
 
     override fun onPackageLoaded(param: PackageLoadedParam) {
-        if (param.isFirstPackage) install(param.defaultClassLoader)
+        // scope.list 之外再核一次实际包与进程，避免作用域被误扩大时向无关应用装钩子。
+        if (param.isFirstPackage && param.packageName == "com.tencent.mobileqq" && qqProcess(process))
+            install(param.defaultClassLoader)
     }
 
     /** 换 APK 时 LSPosed 热重载：旧的一代把 ClassLoader 传给新的一代，新的一代重装。 */
@@ -65,8 +67,10 @@ class Qself : XposedModule() {
     override fun onHotReloaded(param: HotReloadedParam) {
         param.oldHookHandles.forEach { runCatching { it.unhook() } }
         process = param.processName
-        (param.savedInstanceState as? ClassLoader)?.let(::install)
+        if (qqProcess(process)) (param.savedInstanceState as? ClassLoader)?.let(::install)
     }
+
+    private fun qqProcess(name: String) = name == "com.tencent.mobileqq" || name.startsWith("com.tencent.mobileqq:")
 
     private fun install(classLoader: ClassLoader) {
         xposed = this

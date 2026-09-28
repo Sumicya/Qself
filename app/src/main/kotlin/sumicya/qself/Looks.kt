@@ -33,11 +33,24 @@ private val watched: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 private fun watch(decor: View) {
     if (!watched.add(decor)) return
     var queued = false
+    var lastBar: ViewGroup? = null
     val scan = Runnable { queued = false; walk(decor, false) }
+    // 底栏不等全量规则的 150ms 节流；已找到后复用宿主，只在它消失时重找。
     decor.viewTreeObserver.addOnGlobalLayoutListener {
-        if (!queued) { queued = true; decor.postDelayed(scan, 150) }
+        lastBar?.takeUnless { it.isShown }?.let(::knob) // 离开主页时藏钮
+        val bar = lastBar?.takeIf { it.isShown && it.isAttachedToWindow && it.rootView === decor }
+            ?: findHomeBar(decor).also { lastBar = it }
+        bar?.let { homeBar(it); knob(it) }
+        if (!queued) { queued = true; decor.postDelayed(scan, 150) } // 其他外观规则仍节流
     }
     scan.run()
+}
+
+private fun findHomeBar(v: View): ViewGroup? {
+    if (v.javaClass.name.endsWith(".QQTabLayout") && v.isShown) return v as? ViewGroup
+    if (v is ViewGroup) for (i in 0 until v.childCount)
+        findHomeBar(v.getChildAt(i))?.let { return it }
+    return null
 }
 
 fun refreshLooks(decor: View) = walk(decor, false)
@@ -117,12 +130,10 @@ private val floated: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 private val positioned: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 
 private fun homeBar(bar: ViewGroup) {
-    // 和胶囊同一帧定位圆钮；不等下一轮 150ms 的视图树扫描。
+    // 首次处理在全局布局同步完成；pre-draw 只跟进选中态和之后的位移，不取消绘制帧。
     if (positioned.add(bar)) bar.viewTreeObserver.addOnPreDrawListener {
-        if (!bar.isAttachedToWindow) true else {
-            (bar.background as? Glass)?.sync()
-            !knob(bar) // 新钮尚未布局，取消这一帧，避免只画胶囊没有圆钮。
-        }
+        if (bar.isAttachedToWindow) { (bar.background as? Glass)?.sync(); knob(bar) }
+        true
     }
     // 热重载后是新一代代码、新的 floated 集合：靠背景认出上一代已经浮过的底栏，别再加一次边距。
     // ponytail: 浮起来之后关掉开关不会沉回去，重启 QQ 才复原；复原要存一堆原值，不值。
