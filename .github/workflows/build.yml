@@ -81,6 +81,7 @@ jobs:
           report = []
           a, b = old.stat().st_size, new.stat().st_size
           report.append(f'原始 APK 字节：{a} -> {b}；差值 {b-a:+d}')
+          changes = {}
           for label, pick in [
               ('DEX', lambda n: n.startswith('classes') and n.endswith('.dex')),
               ('resources.arsc', lambda n: n == 'resources.arsc'),
@@ -91,17 +92,19 @@ jobs:
                   with ZipFile(apk) as z:
                       infos = [f for f in z.infolist() if pick(f.filename)]
                       values.append((sum(f.compress_size for f in infos), sum(f.file_size for f in infos)))
+              changes[label] = values[1][0] - values[0][0]
               report.append(f'{label}（APK 压缩字节/解压字节）：{values[0]} -> {values[1]}')
           result = '\n'.join(report) + '\n'
           print(result)
           Path(os.environ['RUNNER_TEMP'], 'qself-apk-size.txt').write_text(result)
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               out.write(f'old_bytes={a}\nnew_bytes={b}\n')
+              out.write(f'dex_delta={changes["DEX"]}\narsc_delta={changes["resources.arsc"]}\nres_delta={changes["res/"]}\n')
           PY
       - uses: actions/upload-artifact@v7
         if: steps.size.outcome == 'success'
         with:
-          name: Qself-APK-bytes-${{ steps.size.outputs.old_bytes }}-to-${{ steps.size.outputs.new_bytes }}
+          name: Qself-APK-bytes-${{ steps.size.outputs.old_bytes }}-to-${{ steps.size.outputs.new_bytes }}-dex-${{ steps.size.outputs.dex_delta }}-arsc-${{ steps.size.outputs.arsc_delta }}-res-${{ steps.size.outputs.res_delta }}
           path: ${{ runner.temp }}/qself-apk-size.txt
           if-no-files-found: error
 

@@ -67,8 +67,7 @@ fun knob(bar: View) {
         tag = KNOB
         contentDescription = "Qself"
         setImageResource(android.R.drawable.ic_menu_preferences)
-        imageTintList = ColorStateList.valueOf(
-            monet(night(), 0xFF) ?: if (night()) 0xFFFFFFFF.toInt() else 0xFF1C1C1E.toInt())
+        tintKnob(this)
         scaleType = ImageView.ScaleType.CENTER_INSIDE
         val p = (12 * dp).toInt()
         setPadding(p, p, p, p)
@@ -84,6 +83,18 @@ fun knob(bar: View) {
         bottomMargin = lift
     })
     owners[knob] = bar
+}
+
+private fun tintKnob(v: ImageView) {
+    val night = night()
+    v.imageTintList = ColorStateList.valueOf(
+        monet(night, 0xFF) ?: if (night) 0xFFFFFFFF.toInt() else 0xFF1C1C1E.toInt())
+}
+
+/** Monet 只作用在自己的玻璃上；切换后立即让现有镜片用新颜色重绘。 */
+private fun refreshGlassTint(v: View) {
+    (v.background as? Glass)?.invalidateSelf()
+    if (v is ViewGroup) for (i in 0 until v.childCount) refreshGlassTint(v.getChildAt(i))
 }
 
 fun borderlessRipple(v: View): Drawable? = TypedValue().let {
@@ -204,6 +215,10 @@ private fun sheet(anchor: View) {
             marker.animate().scaleX(1f).scaleY(1f).setDuration(240)
                 .setInterpolator(android.view.animation.OvershootInterpolator(2f)).start()
             if (f.name == "TG输入栏") refreshLooks(decor)
+            if (f.name == "Monet取色") {
+                decor.findViewWithTag<ImageView>(KNOB)?.let(::tintKnob)
+                refreshGlassTint(decor)
+            }
         }
         return view
     }

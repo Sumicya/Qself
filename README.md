@@ -1,7 +1,7 @@
 # Qself
 
 给 NT QQ 的一个 LSPosed 模块：**自由、简单、现代、原生**。装上即全部生效，不联网、没有第三方库、没有一个 `.so`。
-开关不在模块里，在 QQ 主页底栏胶囊旁边那颗玻璃圆钮里：点开是紧凑的双列设置面板（不重录 QQ 内容），
+开关不在模块里，在 QQ 主页底栏胶囊旁边那颗玻璃圆钮里：点开是紧凑的双列设置面板（遮罩出现前录制一次 QQ 底图），
 画出来的 ✓/–/✗ 表示状态（✗ = 这版 QQ 没装上）；功能说明可由无障碍朗读，状态存进 QQ 自己的 SharedPreferences。
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
@@ -11,7 +11,7 @@
 
 外观（导航底板的柔和色层参考 [Miuix-KernelSU](https://github.com/suqi8/Miuix-KernelSU)；QQ 的视图结构不同，并非直接移植其 Compose/Haze 组件）
 - 首页底栏浮成居中的玻璃胶囊（每个页签 56dp，只包住页签）：实验性地录制可见底图并用 AGSL 折射，
-  遇到模糊层或取样失败就退回透明材质；未启用 Monet 时使用灰阶底色。底栏按压由 QQTabLayout 自身的触摸入口驱动，选中项保持正圆。设置面板因重录 QQ 内容产生矩形伪影，现改为不透明中性色卡片并限制高度；实际 QQ 效果需真机验收
+  遇到模糊层或取样失败就退回中性色材质；未启用 Monet 时使用灰阶底色。底栏按压由 QQTabLayout 自身的触摸入口驱动，选中项保持正圆、无描边。静止时没有面反射，按住才有局部体积光与向内形变，松手即消失。设置面板先录 QQ 底图并模糊聊天文字，再折射这一隔离图层、覆中性色遮罩；取样失败则用不透底色避免透字。实际 QQ 视觉与触摸效果仍需安装后核对
 - **Monet 取色**：玻璃的罩色、选中圆、圆钮的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色
 - 聊天输入栏暂用保守模式：只给 QQ 原编辑框换圆角玻璃背景，原输入框、表情/附件/发送按钮与触摸链保持原位；先前重挂编辑框的 TG 镜像行会导致无法点击，已撤销，待真机确认稳定后再设计布局
@@ -62,7 +62,7 @@ app/src/main/kotlin/sumicya/qself/
   Chat.kt    聊天，含防撤回用的几十行 protobuf 读取、撤回灰字、连发合并、回复不@
   Looks.kt   外观：盯住每个 Activity 的视图树套规则
   Input.kt   TG 式输入栏
-  Glass.kt   RenderNode + AGSL 折射 Drawable（取样失败退回透明材质、Monet、按压反馈、选中滑块）
+  Glass.kt   RenderNode + AGSL 折射 Drawable（取样失败退回中性色材质、Monet、按压反馈、选中滑块）
 app/src/test/kotlin/sumicya/qself/ProtoTest.kt   防撤回判断的唯一一份可跑检查
 app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop、作用域
 tools/symbols.txt    落点表：代码依赖的每一个名字
