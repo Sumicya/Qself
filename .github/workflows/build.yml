@@ -4,10 +4,16 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      compare_run:
+        description: '可选：对比该 run 的原始 debug APK 字节数'
+        required: false
+        type: string
 
-# PR 构建不应持有写令牌或发布签名；故障日志在 Actions 页面读取。
+# PR 构建不应持有写令牌或发布签名；仅允许读取已有构建产物。
 permissions:
   contents: read
+  actions: read
 
 jobs:
   dex:
@@ -52,6 +58,51 @@ jobs:
         with:
           name: Qself-test-debug-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - name: Compare APK bytes (optional manual run)
+        id: size
+        if: github.event_name == 'workflow_dispatch' && inputs.compare_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMPARE_RUN: ${{ inputs.compare_run }}
+        run: |
+          set -euo pipefail
+          old_name=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$COMPARE_RUN/artifacts" \
+            --jq '.artifacts[] | select(.name | startswith("Qself-test-debug-")) | .name' | head -n 1)
+          test -n "$old_name"
+          mkdir -p "$RUNNER_TEMP/previous"
+          gh run download "$COMPARE_RUN" --repo "$GITHUB_REPOSITORY" --name "$old_name" --dir "$RUNNER_TEMP/previous"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+          old, = Path(os.environ['RUNNER_TEMP'], 'previous').glob('*.apk')
+          new = Path('app/build/outputs/apk/debug/app-debug.apk')
+          report = []
+          a, b = old.stat().st_size, new.stat().st_size
+          report.append(f'原始 APK 字节：{a} -> {b}；差值 {b-a:+d}')
+          for label, pick in [
+              ('DEX', lambda n: n.startswith('classes') and n.endswith('.dex')),
+              ('resources.arsc', lambda n: n == 'resources.arsc'),
+              ('res/', lambda n: n.startswith('res/')),
+          ]:
+              values = []
+              for apk in (old, new):
+                  with ZipFile(apk) as z:
+                      infos = [f for f in z.infolist() if pick(f.filename)]
+                      values.append((sum(f.compress_size for f in infos), sum(f.file_size for f in infos)))
+              report.append(f'{label}（APK 压缩字节/解压字节）：{values[0]} -> {values[1]}')
+          result = '\n'.join(report) + '\n'
+          print(result)
+          Path(os.environ['RUNNER_TEMP'], 'qself-apk-size.txt').write_text(result)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write(f'old_bytes={a}\nnew_bytes={b}\n')
+          PY
+      - uses: actions/upload-artifact@v7
+        if: github.event_name == 'workflow_dispatch' && inputs.compare_run != '' && steps.size.outcome == 'success'
+        with:
+          name: Qself-APK-bytes-${{ steps.size.outputs.old_bytes }}-to-${{ steps.size.outputs.new_bytes }}
+          path: ${{ runner.temp }}/qself-apk-size.txt
           if-no-files-found: error
 
   # 私钥不交给 PR、普通 push 或仓库文件；维护者配好 secrets 后从 main 手动发布。

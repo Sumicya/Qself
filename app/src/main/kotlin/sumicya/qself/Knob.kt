@@ -7,8 +7,10 @@ import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
+import android.graphics.RenderEffect
+import android.graphics.RenderNode
+import android.graphics.Shader
 import android.graphics.drawable.Drawable
-import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
@@ -74,8 +76,7 @@ fun knob(bar: View) {
         clipToOutline = true
         elevation = 6 * dp
         background = Glass(this)
-        // 按压反馈：foreground 一层无边界涟漪，background 还是玻璃
-        foreground = borderlessRipple(this)
+        // 只由 Glass 的按压态产生光斑，避免系统涟漪在松手后仍残留高光。
         setOnClickListener { if (decor.findViewWithTag<View>(SHEET) != null) dismiss(decor) else sheet(it) }
     }
     decor.addView(knob, FrameLayout.LayoutParams(size, size, Gravity.END or Gravity.BOTTOM).apply {
@@ -225,15 +226,20 @@ private fun sheet(anchor: View) {
         foreground = borderlessRipple(this)
         setOnClickListener { body() }
     }
+    // 先录 QQ 的底图，再挂遮罩：之后镜片仅折射这一层，不会采到自己的遮罩和子控件。
+    // 适度模糊源图中的聊天文字；卡片仍由 RuntimeShader 在局部作真实位移取样。
+    val backdrop = runCatching {
+        RenderNode("qself-sheet-backdrop").apply {
+            setPosition(0, 0, decor.width, decor.height)
+            val recording = beginRecording(decor.width, decor.height)
+            try { decor.draw(recording) } finally { endRecording() }
+            setRenderEffect(RenderEffect.createBlurEffect(8 * dp, 8 * dp, Shader.TileMode.CLAMP))
+        }
+    }.onFailure { log("设置面板底图录制失败", it) }.getOrNull()
     val card = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         val r = 28 * dp
-        // 对话框不能重录整棵 QQ 视图：旧 RenderNode 会把聊天内容及矩形裁剪边带进面板。
-        // 用不透明中性色保证文字可读；折射仍留给底栏等不覆盖大块内容的表面。
-        background = GradientDrawable().apply {
-            cornerRadius = r
-            setColor(if (night) 0xFF29292C.toInt() else 0xFFF7F7F8.toInt())
-        }
+        background = Glass(this, r, snapshot = backdrop, liveSample = false)
         outlineProvider = capsule(r)
         clipToOutline = true
         elevation = 8 * dp

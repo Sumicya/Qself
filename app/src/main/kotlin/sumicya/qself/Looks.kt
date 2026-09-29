@@ -195,7 +195,7 @@ private fun float(bar: ViewGroup) {
     // 两头的留白放在页签条上而不是 bar 上：material 固定模式会把页签条量成 bar 的整宽（含 padding），放 bar 上会挤歪。
     bar.setPadding(0, bar.paddingTop, 0, bar.paddingBottom)
     bar.getChildAt(0)?.setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0) // 两端留白收掉，玻璃贴着按钮
-    bar.background = Glass(bar) { selectedTab(bar) }
+    bar.background = Glass(bar, selected = { selectedTab(bar) })
     // 选中态与圆钮的定位共用 homeBar 注册的 pre-draw 回调。
 }
 

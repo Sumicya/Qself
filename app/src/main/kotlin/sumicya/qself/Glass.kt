@@ -7,7 +7,6 @@ import android.content.res.Resources
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
-import android.graphics.LinearGradient
 import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.Path
@@ -29,7 +28,9 @@ import kotlin.math.max
 import kotlin.math.min
 
 /** 有明确可画的背后内容时做折射；QQ 的模糊控件不取样，失效时保留原生透明材质。 */
-class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, private val selected: (() -> View?)? = null) : Drawable() {
+class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
+            private val selected: (() -> View?)? = null, private val snapshot: RenderNode? = null,
+            private val liveSample: Boolean = true) : Drawable() {
     private val dp = host.dp
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val node = RenderNode("qself-lens")
@@ -73,41 +74,31 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             .onFailure { if (++failures <= 2) log("玻璃取样失败 ${host.javaClass.simpleName}，使用透明材质", it) }
             .getOrDefault(false)
         paint.style = Paint.Style.FILL
+        paint.shader = null
         paint.color = Color.WHITE
-        // 参考 Miuix-KernelSU 的透明导航底板：连贯的柔和色层，不用三段强对比渐变。
-        val colors = intArrayOf(
-            wash(if (night) 0xB4373737.toInt() else 0xCEFFFFFF.toInt(), accent),
-            wash(if (night) 0xA8434343.toInt() else 0xBEF5F5F5.toInt(), accent),
-        )
-        if (refracted) for (i in colors.indices)
-            colors[i] = (colors[i] and 0xFFFFFF) or ((Color.alpha(colors[i]) * 0.52f).toInt() shl 24)
-        paint.shader = LinearGradient(rect.left, rect.top, rect.left, rect.bottom,
-            colors[0], colors[1], Shader.TileMode.CLAMP)
+        // 静止时没有高光。Monet 关掉即纯灰阶；有真实底图时才降低遮罩透明度。
+        val base = wash(if (night) 0xAE333333.toInt() else 0xC0F5F5F5.toInt(), accent)
+        paint.color = if (refracted) {
+            val opacity = if (snapshot != null) 0.72f else 0.38f
+            (base and 0xFFFFFF) or ((Color.alpha(base) * opacity).toInt() shl 24)
+        } else if (!liveSample) (base and 0xFFFFFF) or 0xFF000000.toInt() else base
         canvas.drawRoundRect(rect, r, r, paint)
 
-        contour.reset()
-        contour.addRoundRect(rect, r, r, Path.Direction.CW)
-        val save = canvas.save()
-        canvas.clipPath(contour)
-        // 宽而淡的面反射，不沿轮廓走线；小圆钮和长胶囊共用同一光源。
-        paint.shader = RadialGradient(
-            rect.left + rect.width() * 0.25f, rect.top - rect.height() * 0.28f,
-            max(rect.width() * 0.82f, rect.height() * 1.35f),
-            intArrayOf(if (night) 0x28FFFFFF else 0x40FFFFFF, 0x10FFFFFF, 0x00FFFFFF),
-            floatArrayOf(0f, 0.48f, 1f), Shader.TileMode.CLAMP)
-        canvas.drawRect(rect, paint)
-        // 按压光斑有缓坡而非刺眼白点；实际形变仍由 rect.inset 驱动。
         if (press > 0f) {
+            contour.reset()
+            contour.addRoundRect(rect, r, r, Path.Direction.CW)
+            val save = canvas.save()
+            canvas.clipPath(contour)
             val x = if (touchX.isNaN()) rect.centerX() else touchX.coerceIn(rect.left, rect.right)
             val y = if (touchY.isNaN()) rect.centerY() else touchY.coerceIn(rect.top, rect.bottom)
-            paint.shader = RadialGradient(x, y, max(48 * dp, min(rect.width() * 0.65f, 150 * dp)),
-                intArrayOf(((press * 0x62).toInt() shl 24) or 0xFFFFFF,
-                    ((press * 0x1C).toInt() shl 24) or 0xFFFFFF, 0x00FFFFFF),
-                floatArrayOf(0f, 0.40f, 1f), Shader.TileMode.CLAMP)
+            paint.color = Color.WHITE
+            paint.shader = RadialGradient(x, y, max(1f, min(rect.width(), rect.height()) * 0.52f),
+                intArrayOf(((press * 0x76).toInt() shl 24) or 0xFFFFFF, 0x00FFFFFF),
+                null, Shader.TileMode.CLAMP)
             canvas.drawRect(rect, paint)
+            canvas.restoreToCount(save)
+            paint.shader = null
         }
-        canvas.restoreToCount(save)
-        paint.shader = null
         pill(canvas, night)
     }
 
@@ -125,7 +116,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     }
 
     private fun backdrop(canvas: Canvas): Boolean {
-        if (!host.isAttachedToWindow) return false
+        if (!host.isAttachedToWindow || (snapshot == null && !liveSample)) return false
         val b = bounds
         val w = b.width() + 2 * pad
         val h = b.height() + 2 * pad
@@ -145,7 +136,13 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             val rc = node.beginRecording(w, h)
             val count = try {
                 rc.translate((pad - b.left).toFloat(), (pad - b.top).toFloat())
-                behind(rc)
+                if (snapshot != null) {
+                    host.getLocationInWindow(here)
+                    host.rootView.getLocationInWindow(there)
+                    rc.translate((there[0] - here[0]).toFloat(), (there[1] - here[1]).toFloat())
+                    rc.drawRenderNode(snapshot)
+                    1
+                } else behind(rc)
             } finally { node.endRecording() }
             if (count == 0) {
                 if (!missing) { log("玻璃无可见底图: ${host.javaClass.simpleName}，使用透明材质"); missing = true }
@@ -215,8 +212,13 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         if (value == pressed) return
         pressed = value
         pressAnim.cancel()
-        pressAnim.duration = if (value) 120 else 260
-        pressAnim.setFloatValues(press, if (value) 1f else 0f)
+        if (!value) {
+            press = 0f // 松手立刻灭光、恢复形状，不留离手后的尾光
+            invalidateSelf()
+            return
+        }
+        pressAnim.duration = 120
+        pressAnim.setFloatValues(press, 1f)
         pressAnim.start()
     }
 
@@ -248,13 +250,9 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         val cx = fromX + (toX - fromX) * (if (slide.isRunning) spring(slide.animatedFraction) else 1f)
         val inset = 4 * dp
         val d = min(tab.width.toFloat(), bounds.height().toFloat()) - 2 * inset
-        val accent = monet(night, 0xFF)
-        val top = wash(if (night) 0x40FFFFFF else 0xC8FFFFFF.toInt(), accent)
-        val bottom = wash(if (night) 0x24FFFFFF else 0x8CFFFFFF.toInt(), accent)
-        paint.color = Color.WHITE
-        paint.shader = LinearGradient(0f, bounds.top + inset, 0f, bounds.bottom - inset, top, bottom, Shader.TileMode.CLAMP)
-        canvas.drawCircle(cx, bounds.centerY().toFloat(), d / 2f, paint)
+        paint.color = wash(if (night) 0x4AFFFFFF else 0xAAFFFFFF.toInt(), monet(night, 0xFF))
         paint.shader = null
+        canvas.drawCircle(cx, bounds.centerY().toFloat(), d / 2f, paint)
     }
 
     private fun spring(t: Float): Float = (1.0 - exp(-6.0 * t) * cos(2 * PI * 0.9 * t)).toFloat()
@@ -285,8 +283,7 @@ half4 main(float2 p) {
     float2 n = v / max(d, 0.001);
     float w = d / r;
     half4 col = content.eval(p - n * bend * w * w + n * press * bend * 0.55 * (1.0 - w));
-    half l = dot(col.rgb, half3(0.299, 0.587, 0.114));
-    col.rgb = mix(half3(l), col.rgb, half(1.14));
+    col.rgb *= half(1.0 - press * 0.12 * smoothstep(0.35, 1.0, w));
     return col;
 }
 """
