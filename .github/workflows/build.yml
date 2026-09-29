@@ -59,12 +59,12 @@ jobs:
           name: Qself-test-debug-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      - name: Compare APK bytes (optional manual run)
+      - name: Compare APK bytes (optional manual run or current branch push)
         id: size
-        if: github.event_name == 'workflow_dispatch' && inputs.compare_run != ''
+        if: (github.event_name == 'workflow_dispatch' && inputs.compare_run != '') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/01a0e334-qself')
         env:
           GH_TOKEN: ${{ github.token }}
-          COMPARE_RUN: ${{ inputs.compare_run }}
+          COMPARE_RUN: ${{ inputs.compare_run || '36557089207' }}
         run: |
           set -euo pipefail
           old_name=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$COMPARE_RUN/artifacts" \
@@ -99,7 +99,7 @@ jobs:
               out.write(f'old_bytes={a}\nnew_bytes={b}\n')
           PY
       - uses: actions/upload-artifact@v7
-        if: github.event_name == 'workflow_dispatch' && inputs.compare_run != '' && steps.size.outcome == 'success'
+        if: steps.size.outcome == 'success'
         with:
           name: Qself-APK-bytes-${{ steps.size.outputs.old_bytes }}-to-${{ steps.size.outputs.new_bytes }}
           path: ${{ runner.temp }}/qself-apk-size.txt
