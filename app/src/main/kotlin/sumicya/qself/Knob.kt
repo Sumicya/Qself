@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
@@ -227,7 +228,12 @@ private fun sheet(anchor: View) {
     val card = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         val r = 28 * dp
-        background = Glass(this, r)
+        // 对话框不能重录整棵 QQ 视图：旧 RenderNode 会把聊天内容及矩形裁剪边带进面板。
+        // 用不透明中性色保证文字可读；折射仍留给底栏等不覆盖大块内容的表面。
+        background = GradientDrawable().apply {
+            cornerRadius = r
+            setColor(if (night) 0xFF29292C.toInt() else 0xFFF7F7F8.toInt())
+        }
         outlineProvider = capsule(r)
         clipToOutline = true
         elevation = 8 * dp
@@ -254,8 +260,8 @@ private fun sheet(anchor: View) {
         setBackgroundColor(0x66000000)
         setOnClickListener { dismiss(decor) }
         addView(card, FrameLayout.LayoutParams(
-            min(decor.width - (40 * dp).toInt(), (400 * dp).toInt()),
-            min((decor.height * 0.62f).toInt(), (((features.size + 1) / 2 * 48 + 104) * dp).toInt()), Gravity.CENTER))
+            min(decor.width - (48 * dp).toInt(), (340 * dp).toInt()),
+            min((decor.height * 0.48f).toInt(), (340 * dp).toInt()), Gravity.CENTER))
         // 遮罩盖在圆钮上方，原钮收不到第二次触摸；同一屏幕位置留明确的关闭命中区。
         val pos = IntArray(2).also(anchor::getLocationInWindow)
         val origin = IntArray(2).also(decor::getLocationInWindow)

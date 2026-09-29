@@ -17,10 +17,10 @@ val failed = mutableSetOf<String>()
 class Feature(val name: String, val main: Boolean, val desc: String, val install: () -> Any?)
 
 val features = listOf(
-    Feature("玻璃底栏", true, "底栏浮成一颗玻璃胶囊", {}),
+    Feature("玻璃底栏", true, "底栏浮成一颗玻璃胶囊", ::barTouch),
     Feature("Monet取色", true, "玻璃的颜色跟壁纸走", {}),
     Feature("藏频道动态", true, "底栏藏掉频道/动态/小世界", {}),
-    Feature("TG输入栏", true, "输入栏改 Telegram 式玻璃胶囊", {}),
+    Feature("TG输入栏", true, "原编辑框玻璃化，QQ 的输入与按钮保持原样", {}),
     Feature("标题栏侧栏精简", true, "藏一起听/一起看和侧栏会员那排", ::drawerMenu),
     Feature("统一气泡", true, "充值气泡归零，按默认画", ::plainBubble),
     Feature("统一字体", true, "魔法字体归零", ::plainFont),

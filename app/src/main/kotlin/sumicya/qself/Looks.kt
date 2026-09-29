@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.Instrumentation
 import android.graphics.Paint
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -126,6 +127,24 @@ fun texts(v: View, depth: Int = 4): List<String> {
 
 // ---- 首页底栏：QQ 自己的 TabLayout 原地浮成一颗玻璃胶囊，频道 / 动态页签藏掉。
 
+/** QQ 页签自己消费触摸，不会给父 TabLayout 设置 pressed；仅拦它自己的事件入口，原事件照常走。 */
+fun barTouch() {
+    val bar = cls("com.tencent.mobileqq.widget.QQTabLayout")
+    val intercept = bar.getDeclaredMethod("onInterceptTouchEvent", MotionEvent::class.java)
+    hook(intercept) { chain ->
+        val v = chain.thisObject as View
+        val e = chain.args[0] as MotionEvent
+        (v.background as? Glass)?.let { glass ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> glass.press(e.x, e.y, true)
+                MotionEvent.ACTION_MOVE -> glass.press(e.x, e.y, e.x in 0f..v.width.toFloat() && e.y in 0f..v.height.toFloat())
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> glass.press(e.x, e.y, false)
+            }
+        }
+        chain.proceed()
+    }
+}
+
 private val floated: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 private val positioned: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 
@@ -236,6 +255,14 @@ fun exactCount() {
             val p = paint.get(b) as Paint
             width + ceil(p.measureText(text.get(b) as String) - p.measureText("99+")).toInt().coerceAtLeast(0)
         }
+    }
+    // 主页页签的角标不是 QUIBadge：TabFrameControllerImpl.generateRedTouch 创建 RedTouch，
+    // 它还有独立的 maxNum 截断值。只在排版数字前提高上限，保留 QQ 自己的更新/点击流程。
+    val red = cls("com.tencent.mobileqq.tianshu.ui.RedTouch")
+    val maxNum = red.getDeclaredField("maxNum").apply { isAccessible = true }
+    hook(red.method("getTextRedPoint")) { chain ->
+        maxNum.setInt(chain.thisObject, Int.MAX_VALUE)
+        chain.proceed()
     }
     hook(cls("com.tencent.widget.d").method("d")) { chain ->
         chain.proceed().also {

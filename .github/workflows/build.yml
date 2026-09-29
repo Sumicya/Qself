@@ -22,7 +22,9 @@ jobs:
           cat qq/qq.a* > qq.apk && rm -rf qq
           echo '34bdea66e738062c3f762f7da98132addc7170394605a4f5ca1944bee1280c84  qq.apk' | sha256sum -c -
       - name: 逐个核对模块的 QQ 挂点（不等于模块检测审计）
-        run: python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin --quiet
+        run: |
+          python3 tools/test_dexq.py
+          python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin --quiet
 
   apk:
     runs-on: ubuntu-24.04

@@ -76,8 +76,8 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         paint.color = Color.WHITE
         // 参考 Miuix-KernelSU 的透明导航底板：连贯的柔和色层，不用三段强对比渐变。
         val colors = intArrayOf(
-            wash(if (night) 0xB43B414D.toInt() else 0xCEFFFFFF.toInt(), accent),
-            wash(if (night) 0xA8474D59.toInt() else 0xBEF3F5FA.toInt(), accent),
+            wash(if (night) 0xB4373737.toInt() else 0xCEFFFFFF.toInt(), accent),
+            wash(if (night) 0xA8434343.toInt() else 0xBEF5F5F5.toInt(), accent),
         )
         if (refracted) for (i in colors.indices)
             colors[i] = (colors[i] and 0xFFFFFF) or ((Color.alpha(colors[i]) * 0.52f).toInt() shl 24)
@@ -116,6 +116,12 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         touchX = x
         touchY = y
         if (pressed) invalidateSelf()
+    }
+
+    /** QQ 的页签消耗触摸，底栏自身不进入 pressed；从其专用触摸入口驱动反馈。 */
+    fun press(x: Float, y: Float, down: Boolean) {
+        touch(x, y)
+        setPress(down)
     }
 
     private fun backdrop(canvas: Canvas): Boolean {
@@ -216,15 +222,13 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
 
     override fun isStateful() = true
     override fun onStateChange(state: IntArray): Boolean {
-        setPress(state.contains(android.R.attr.state_pressed))
+        if (selected == null) setPress(state.contains(android.R.attr.state_pressed))
         return true
     }
 
-    /** 底栏的触摸由页签接收；其他玻璃用系统 pressed 状态，不需要轮询取样。 */
+    /** 选中目标可能变化而底栏自身未失效；按压由 QQTabLayout 专用触摸钩子驱动。 */
     fun sync() {
         if (selected?.invoke() !== target) invalidateSelf()
-        val strip = (host as? ViewGroup)?.getChildAt(0) as? ViewGroup
-        setPress(host.isPressed || (strip != null && (0 until strip.childCount).any { strip.getChildAt(it).isPressed }))
     }
 
     private fun pill(canvas: Canvas, night: Boolean) {

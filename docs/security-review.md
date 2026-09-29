@@ -1,6 +1,6 @@
 # QQ 9.2.10 / Qself 安全核查（静态证据）
 
-2026-09-29 重新从 `Sumicya/qqapk` 的提交 `bb1d7154d657182f12af13bce20e66909722beae` 克隆分卷 `qq.aa`～`qq.ae`，按文件名排序拼出 389.6 MB QQ APK。完整 SHA-256：`34bdea66e738062c3f762f7da98132addc7170394605a4f5ca1944bee1280c84`；包内有 37 个 dex。`tools/dexcheck.py` 检查 **175 条 Qself 挂点符号均存在**，并不检测 QQ 如何识别模块；下述发现是另用 `tools/dexq.py` 解方法引用所得。**只有静态调用线索，没有真机运行轨迹**；不能把“包含检测代码”说成“已检测到 Qself”或“会封号”。
+2026-09-29 重新从 `Sumicya/qqapk` 的提交 `bb1d7154d657182f12af13bce20e66909722beae` 克隆分卷 `qq.aa`～`qq.ae`，按文件名排序拼出 389.6 MB QQ APK。完整 SHA-256：`34bdea66e738062c3f762f7da98132addc7170394605a4f5ca1944bee1280c84`；包内有 37 个 dex。`tools/dexcheck.py` 当前检查 **180 条 Qself 挂点符号均存在**，并不检测 QQ 如何识别模块；下述发现是另用 `tools/dexq.py` 解方法引用所得。**只有静态调用线索，没有真机运行轨迹**；不能把“包含检测代码”说成“已检测到 Qself”或“会封号”。
 
 ## 找到的线索
 

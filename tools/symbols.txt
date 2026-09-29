@@ -17,6 +17,8 @@ member! com.tencent.mobileqq.utils.QQTheme#isNowThemeIsNight
 
 # ---------- 视图扫描 Looks.kt（按长相认，所以是后缀和文案）
 class~ .QQTabLayout
+class  com.tencent.mobileqq.widget.QQTabLayout
+member! com.tencent.mobileqq.widget.QQTabLayout#onInterceptTouchEvent
 class~ QQSettingMeRelativeLayout
 class~ WeatherSettingMeItemView
 class  com.tencent.mobileqq.activity.qqsettingme.config.QQSettingMeMenuConfigBeanV3
@@ -153,6 +155,9 @@ member! com.tencent.mobileqq.quibadge.QUIBadge#getMinWidth
 field  com.tencent.mobileqq.quibadge.QUIBadge#mText
 field  com.tencent.mobileqq.quibadge.QUIBadge#mNum
 field  com.tencent.mobileqq.quibadge.QUIBadge#mTextPaint
+class  com.tencent.mobileqq.tianshu.ui.RedTouch
+member! com.tencent.mobileqq.tianshu.ui.RedTouch#getTextRedPoint
+field  com.tencent.mobileqq.tianshu.ui.RedTouch#maxNum
 class  com.tencent.widget.d
 member! com.tencent.widget.d#d
 
