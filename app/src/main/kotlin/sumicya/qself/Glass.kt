@@ -27,7 +27,6 @@ import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.sin
 
 /** 有明确可画的背后内容时做折射；QQ 的模糊控件不取样，失效时保留原生透明材质。 */
 class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, private val selected: (() -> View?)? = null) : Drawable() {
@@ -75,44 +74,39 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             .getOrDefault(false)
         paint.style = Paint.Style.FILL
         paint.color = Color.WHITE
+        // 参考 Miuix-KernelSU 的透明导航底板：连贯的柔和色层，不用三段强对比渐变。
         val colors = intArrayOf(
-            wash(if (night) 0xA05E6881.toInt() else 0xACFFFFFF.toInt(), accent),
-            wash(if (night) 0x76505C78 else 0x66EBF4FF, accent),
-            wash(if (night) 0x8A323E56.toInt() else 0x7DD7E4F2, accent),
+            wash(if (night) 0xB43B414D.toInt() else 0xCEFFFFFF.toInt(), accent),
+            wash(if (night) 0xA8474D59.toInt() else 0xBEF3F5FA.toInt(), accent),
         )
         if (refracted) for (i in colors.indices)
-            colors[i] = (colors[i] and 0xFFFFFF) or ((Color.alpha(colors[i]) * 0.42f).toInt() shl 24)
-        paint.shader = LinearGradient(rect.left, rect.top, rect.right, rect.bottom,
-            colors, floatArrayOf(0f, 0.52f, 1f), Shader.TileMode.CLAMP)
+            colors[i] = (colors[i] and 0xFFFFFF) or ((Color.alpha(colors[i]) * 0.52f).toInt() shl 24)
+        paint.shader = LinearGradient(rect.left, rect.top, rect.left, rect.bottom,
+            colors[0], colors[1], Shader.TileMode.CLAMP)
         canvas.drawRoundRect(rect, r, r, paint)
 
         contour.reset()
         contour.addRoundRect(rect, r, r, Path.Direction.CW)
         val save = canvas.save()
         canvas.clipPath(contour)
-        // 按压才出现聚焦的亮斑；按在镜像按钮上也传过来，松手 260ms 淡出。
+        // 宽而淡的面反射，不沿轮廓走线；小圆钮和长胶囊共用同一光源。
+        paint.shader = RadialGradient(
+            rect.left + rect.width() * 0.25f, rect.top - rect.height() * 0.28f,
+            max(rect.width() * 0.82f, rect.height() * 1.35f),
+            intArrayOf(if (night) 0x28FFFFFF else 0x40FFFFFF, 0x10FFFFFF, 0x00FFFFFF),
+            floatArrayOf(0f, 0.48f, 1f), Shader.TileMode.CLAMP)
+        canvas.drawRect(rect, paint)
+        // 按压光斑有缓坡而非刺眼白点；实际形变仍由 rect.inset 驱动。
         if (press > 0f) {
             val x = if (touchX.isNaN()) rect.centerX() else touchX.coerceIn(rect.left, rect.right)
-            val y = if (touchY.isNaN()) rect.top else touchY.coerceIn(rect.top, rect.bottom)
-            paint.shader = RadialGradient(x, y, max(52 * dp, min(rect.width() * 0.6f, 170 * dp)),
-                intArrayOf(((press * 0x9C).toInt() shl 24) or 0xFFFFFF, 0x00FFFFFF),
-                null, Shader.TileMode.CLAMP)
+            val y = if (touchY.isNaN()) rect.centerY() else touchY.coerceIn(rect.top, rect.bottom)
+            paint.shader = RadialGradient(x, y, max(48 * dp, min(rect.width() * 0.65f, 150 * dp)),
+                intArrayOf(((press * 0x62).toInt() shl 24) or 0xFFFFFF,
+                    ((press * 0x1C).toInt() shl 24) or 0xFFFFFF, 0x00FFFFFF),
+                floatArrayOf(0f, 0.40f, 1f), Shader.TileMode.CLAMP)
             canvas.drawRect(rect, paint)
         }
         canvas.restoreToCount(save)
-        // 只沿上缘的定向反射，不用整圈白描边冒充玻璃。
-        val edge = rect.height() * 0.55f
-        val top = canvas.save()
-        canvas.clipRect(rect.left, rect.top, rect.right, rect.top + edge)
-        paint.shader = LinearGradient(rect.left, rect.top, rect.right, rect.top,
-            intArrayOf(0x00FFFFFF, ((0x70 + press * 0x80).toInt() shl 24) or 0xFFFFFF, 0x00FFFFFF),
-            floatArrayOf(0f, 0.40f, 1f), Shader.TileMode.CLAMP)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = (1.2f + press * 1.5f) * dp
-        rect.inset(paint.strokeWidth / 2f, paint.strokeWidth / 2f)
-        canvas.drawRoundRect(rect, r, r, paint)
-        canvas.restoreToCount(top)
-        paint.style = Paint.Style.FILL
         paint.shader = null
         pill(canvas, night)
     }
@@ -255,10 +249,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         val bottom = wash(if (night) 0x24FFFFFF else 0x8CFFFFFF.toInt(), accent)
         paint.color = Color.WHITE
         paint.shader = LinearGradient(0f, bounds.top + inset, 0f, bounds.bottom - inset, top, bottom, Shader.TileMode.CLAMP)
-        val stretch = if (slide.isRunning) sin(PI * slide.animatedFraction).toFloat() * 0.16f else 0f
-        val cy = bounds.centerY().toFloat()
-        canvas.drawOval(cx - d * (0.5f + stretch), cy - d / 2f,
-            cx + d * (0.5f + stretch), cy + d / 2f, paint)
+        canvas.drawCircle(cx, bounds.centerY().toFloat(), d / 2f, paint)
         paint.shader = null
     }
 

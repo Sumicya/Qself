@@ -9,9 +9,9 @@
 
 ## 做了什么
 
-外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
-- 首页底栏浮成一颗居中的玻璃胶囊（每个页签 56dp，只包住页签）：实验性地录制可见底图并用 AGSL 折射，
-  遇到模糊层或取样失败就退回透明材质；带渐变透色、弧形上缘反光与跟手按压亮斑。按下收缩轮廓，选中项滑动时略微拉伸。聊天输入栏和设置面板使用同一材质；实际 QQ 效果需真机验收
+外观（导航底板的柔和色层参考 [Miuix-KernelSU](https://github.com/suqi8/Miuix-KernelSU)；QQ 的视图结构不同，并非直接移植其 Compose/Haze 组件）
+- 首页底栏浮成居中的玻璃胶囊（每个页签 56dp，只包住页签）：实验性地录制可见底图并用 AGSL 折射，
+  遇到模糊层或取样失败就退回透明材质；没有轮廓描边，只有柔和面反射与跟手按压光斑。按下收缩轮廓，选中项保持正圆并滑动。聊天输入栏和设置面板使用同一材质；实际 QQ 效果需真机验收
 - **Monet 取色**：玻璃的罩色、选中圆、圆钮的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色
 - 聊天输入栏 Telegram 化：一颗悬浮玻璃胶囊 [表情 · 输入框 · +] 加右侧玻璃圆钮 麦克风⇄发送，
@@ -86,6 +86,7 @@ python3 tools/dexq.py qq.apk com.tencent.qqperf.monitor.crash.c       # 另查�
 公开仓库旧 `app/qself.p12` 已停用（Git 历史里仍可取得，不能再信任）。PR 与普通 push 只生成使用临时调试签名的测试 APK；**不要把它当可信更新**。维护者在自己的设备上创建并离线备份新密钥，再设置仓库 secrets（不要将密钥或密码发给 agent／贴在 issue）：
 
 ```sh
+# Termux：先安装 pkg install openjdk-21 gh coreutils，并登录自己的 GitHub 会话。
 umask 077
 keytool -genkeypair -keystore "$HOME/qself-release.p12" -storetype PKCS12 \
   -alias qself -keyalg RSA -keysize 3072 -validity 3650 -dname 'CN=Qself Release'
@@ -95,6 +96,7 @@ read -rs -p '密钥库密码: ' pass; printf '\n'
 printf '%s' "$pass" | gh secret set QSELF_SIGNING_PASSWORD -R Sumicya/Qself
 unset pass
 # PR 合并到 main、两项 secret 均设好以后手动触发 Build 工作流（仅 main 能生成 release）。
+gh workflow run build.yml --ref main -R Sumicya/Qself
 ```
 
 新签名与旧包不同：普通 Android 安装必须先卸载旧模块再安装新包；不能保证依靠第三方“核心破解”绕过签名迁移后仍能正确升级或热重载。
