@@ -247,7 +247,11 @@ private fun sheet(anchor: View) {
         RenderNode("qself-sheet-backdrop").apply {
             setPosition(0, 0, decor.width, decor.height)
             val recording = beginRecording(decor.width, decor.height)
-            try { decor.draw(recording) } finally { endRecording() }
+            try {
+                // QQ 根视图若有透明区域，也先补成不透底图，避免绕过镜片漏出清晰聊天文字。
+                recording.drawColor(if (night) 0xFF29292C.toInt() else 0xFFF7F7F8.toInt())
+                decor.draw(recording)
+            } finally { endRecording() }
             setRenderEffect(RenderEffect.createBlurEffect(8 * dp, 8 * dp, Shader.TileMode.CLAMP))
         }
     }.onFailure { log("设置面板底图录制失败", it) }.getOrNull()
