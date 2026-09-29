@@ -67,10 +67,6 @@
 
 ## 构建
 
-本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）出 APK。
-**agent 的 token 没有 workflow 权限，push 不动 `.github/workflows/`**：要改 workflow，agent 把改法写成
-一段命令交给仓库主人在 Termux 里跑（`pkg install git gh && gh auth login` 之后 clone、改、push）。
-
-CI 两个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 跑单元测试再出包；
-失败时把 Gradle 日志尾巴贴成提交评论，agent 也读得到。
-签名固定在 `app/qself.p12`（密码 `qself`），换签名会导致覆盖安装失败。
+本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）运行 `dex`（真包哈希与挂点核对）和 `apk`（测试及临时 debug 包）。
+工作流现已获维护者授权可改；若 push 仍提示缺少 `workflow` 权限，不要索取 token，给维护者可在 Termux 执行的补丁命令。PR／普通 push 不得使用发布签名；main 上手动触发的 `release` 作业从仓库 secrets 读取维护者私钥。密钥和密码不可进入 Git、日志或对话。
+旧仓库密钥 `app/qself.p12` 已公开且停用，即使从当前树删除也仍在历史中；新签名默认不能直接覆盖安装旧 APK。详见 README 私有发布签名一节。

@@ -19,12 +19,14 @@ android {
             (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0)
     }
 
-    // 固定签名（app/qself.p12，密码 qself）：每次 CI 出的包都能直接覆盖安装，热重载才接得上。
-    signingConfigs.getByName("debug") {
-        storeFile = file("qself.p12")
-        storePassword = "qself"
+    // 可信发布包只能用维护者私钥；日常 debug 包用 AGP 默认临时调试签名。
+    val privateStore = providers.environmentVariable("QSELF_SIGNING_STORE").orNull
+    val privatePassword = providers.environmentVariable("QSELF_SIGNING_PASSWORD").orNull
+    if (privateStore != null && privatePassword != null) signingConfigs.create("privateRelease") {
+        storeFile = file(privateStore)
+        storePassword = privatePassword
         keyAlias = "qself"
-        keyPassword = "qself"
+        keyPassword = privatePassword
     }
 
     buildTypes {
@@ -36,7 +38,8 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            if (privateStore != null && privatePassword != null)
+                signingConfig = signingConfigs.getByName("privateRelease")
         }
     }
 

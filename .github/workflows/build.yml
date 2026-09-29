@@ -1,10 +1,3 @@
-# Qself CI。agent 没有 workflow 权限，这份要由人复制过去：
-#
-#   cp ci/build.yml .github/workflows/build.yml
-#   git add .github/workflows/build.yml && git commit -m "ci: 上 workflow" && git push
-#
-# 每次 push 两个作业：dex 拿真 QQ 包核每一个落点；apk 跑 ProtoTest 再出 debug APK 放进 Artifacts，
-# 失败时把 Gradle 日志尾巴贴成提交评论。
 name: Build
 
 on:
@@ -12,23 +5,23 @@ on:
   pull_request:
   workflow_dispatch:
 
+# PR 构建不应持有写令牌或发布签名；故障日志在 Actions 页面读取。
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  # 落点核对：真包在 Sumicya/qqapk（qq.aa..qq.ae 拼起来）。表红了就是这版 QQ 里名字对不上，
-  # 出包也是白出 —— 所以这个作业和出包平行跑，谁红都拦得住。
   dex:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - name: 拼出真 QQ 包
+      - name: 拼出并校验 QQ 9.2.10 真包
         run: |
           git clone -q --depth 1 https://github.com/Sumicya/qqapk qq
+          git -C qq rev-parse HEAD
           cat qq/qq.a* > qq.apk && rm -rf qq
-          ls -l qq.apk
-      - name: 逐个核落点
+          echo '34bdea66e738062c3f762f7da98132addc7170394605a4f5ca1944bee1280c84  qq.apk' | sha256sum -c -
+      - name: 逐个核对模块的 QQ 挂点（不等于模块检测审计）
         run: python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin --quiet
 
   apk:
@@ -45,10 +38,8 @@ jobs:
           packages: 'platform-tools'
       - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
       - uses: gradle/actions/setup-gradle@v6
-      - name: Test and build
-        run: |
-          set -o pipefail
-          ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug 2>&1 | tee build.log
+      - name: Test and build (untrusted debug key)
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
       - name: Check libxposed packaging
         run: |
           APK=app/build/outputs/apk/debug/app-debug.apk
@@ -57,13 +48,53 @@ jobs:
           sha256sum "$APK"
       - uses: actions/upload-artifact@v7
         with:
-          name: Qself-${{ github.sha }}
+          name: Qself-test-debug-${{ github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      - name: Publish the build log on failure
-        if: failure()
+
+  # 私钥不交给 PR、普通 push 或仓库文件；维护者配好 secrets 后从 main 手动发布。
+  release:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+      - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Load maintainer signing key
         env:
-          GH_TOKEN: ${{ github.token }}
+          KEYSTORE_B64: ${{ secrets.QSELF_KEYSTORE_B64 }}
+          QSELF_SIGNING_PASSWORD: ${{ secrets.QSELF_SIGNING_PASSWORD }}
         run: |
-          [ -f build.log ] || echo "failed before gradle" > build.log
-          gh api -X POST "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" -f body="$(tail -c 6000 build.log)"
+          set -euo pipefail
+          if [[ -z "$KEYSTORE_B64" || -z "$QSELF_SIGNING_PASSWORD" ]]; then
+            echo 'Configure QSELF_KEYSTORE_B64 and QSELF_SIGNING_PASSWORD first (see README).' >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/qself.p12"
+          echo "QSELF_SIGNING_STORE=$RUNNER_TEMP/qself.p12" >> "$GITHUB_ENV"
+      - name: Test and build signed release
+        env:
+          QSELF_SIGNING_PASSWORD: ${{ secrets.QSELF_SIGNING_PASSWORD }}
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleRelease
+      - name: Verify release signature
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs "$APK"
+          sha256sum "$APK"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Qself-release-${{ github.sha }}
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+      - name: Remove private key from runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/qself.p12"

@@ -43,14 +43,14 @@
 
 ## 用
 
-1. Actions 里下载最新一次构建的 APK（或 `gh run download -R Sumicya/Qself`），安装
+1. Actions 里区分 `Qself-test-debug-*`（每次可能换调试签名，仅用于测试）和维护者从 main 手动构建的 `Qself-release-*`（私钥签名）。安装可信发布包；换签名后标准 Android 必须先卸载旧模块。
 2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开
 3. 主页底栏胶囊旁边那颗圆钮（右边放不下就在胶囊右上方）：点开勾选即时生效（钩子每次被调用都查开关）；
    TG 输入栏可以当场撤销并恢复 QQ 原按钮；已浮起来的底栏仍要点「重启 QQ」才复原
 4. 每个 QQ 进程启动时打一行日志，`logcat -s Qself` 或 LSPosed 管理器的日志页可见，形如
    `Qself 26.9.27.12 @ com.tencent.mobileqq ✓系统WebView ✓防撤回 … ✗某功能(NoSuchMethodException: …)`
    —— ✗ 就是那个功能在这版 QQ 里找不到落点，其余不受影响。**把这一行贴回来就能修。**
-5. 之后换 APK 直接覆盖安装即可，LSPosed 会热重载（签名固定在 `app/qself.p12`）
+5. 同一把**私有发布密钥**签的 APK 可覆盖并热重载；旧公开密钥、CI 临时 debug 签名与新发布密钥之间不能保证覆盖安装。第三方安装绕过工具不能作为标准更新路径。
 
 ## 结构
 
@@ -76,8 +76,27 @@ ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
 
 ```sh
 git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
-python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 全绿才算数
-python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
+echo '34bdea66e738062c3f762f7da98132addc7170394605a4f5ca1944bee1280c84  qq.apk' | sha256sum -c -
+python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 只验证 Qself 挂点，不代表审计 QQ 的检测逻辑
+python3 tools/dexq.py qq.apk com.tencent.qqperf.monitor.crash.c       # 另查静态引用；详见 docs/security-review.md
 ```
+
+## 私有发布签名（维护者）
+
+公开仓库旧 `app/qself.p12` 已停用（Git 历史里仍可取得，不能再信任）。PR 与普通 push 只生成使用临时调试签名的测试 APK；**不要把它当可信更新**。维护者在自己的设备上创建并离线备份新密钥，再设置仓库 secrets（不要将密钥或密码发给 agent／贴在 issue）：
+
+```sh
+umask 077
+keytool -genkeypair -keystore "$HOME/qself-release.p12" -storetype PKCS12 \
+  -alias qself -keyalg RSA -keysize 3072 -validity 3650 -dname 'CN=Qself Release'
+# 生成时将私钥密码设成与密钥库密码相同；妥善备份密钥和密码。
+base64 "$HOME/qself-release.p12" | gh secret set QSELF_KEYSTORE_B64 -R Sumicya/Qself
+read -rs -p '密钥库密码: ' pass; printf '\n'
+printf '%s' "$pass" | gh secret set QSELF_SIGNING_PASSWORD -R Sumicya/Qself
+unset pass
+# PR 合并到 main、两项 secret 均设好以后手动触发 Build 工作流（仅 main 能生成 release）。
+```
+
+新签名与旧包不同：普通 Android 安装必须先卸载旧模块再安装新包；不能保证依靠第三方“核心破解”绕过签名迁移后仍能正确升级或热重载。
 
 GPL-3.0-or-later。源自 [QAuxiliary](https://github.com/cinit/QAuxiliary)，只留了思路，代码全部重写。
