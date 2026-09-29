@@ -18,6 +18,7 @@ class Feature(val name: String, val main: Boolean, val desc: String, val install
 
 val features = listOf(
     Feature("玻璃底栏", true, "底栏浮成一颗玻璃胶囊", ::barTouch),
+    Feature("底栏数字与图标", true, "消息图标显示未读数，其他图标统一重绘", ::tabGlyphs),
     Feature("Monet取色", true, "玻璃的颜色跟壁纸走", {}),
     Feature("藏频道动态", true, "底栏藏掉频道/动态/小世界", {}),
     Feature("TG输入栏", true, "原编辑框玻璃化，QQ 的输入与按钮保持原样", {}),

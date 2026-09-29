@@ -19,6 +19,8 @@ member! com.tencent.mobileqq.utils.QQTheme#isNowThemeIsNight
 class~ .QQTabLayout
 class  com.tencent.mobileqq.widget.QQTabLayout
 member! com.tencent.mobileqq.widget.QQTabLayout#onInterceptTouchEvent
+class  com.tencent.mobileqq.widget.TabDragAnimationView
+member! com.tencent.mobileqq.widget.TabDragAnimationView#onDraw
 class~ QQSettingMeRelativeLayout
 class~ WeatherSettingMeItemView
 class  com.tencent.mobileqq.activity.qqsettingme.config.QQSettingMeMenuConfigBeanV3

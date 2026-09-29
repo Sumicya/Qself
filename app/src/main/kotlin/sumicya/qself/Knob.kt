@@ -214,7 +214,7 @@ private fun sheet(anchor: View) {
             marker.scaleY = 0.55f
             marker.animate().scaleX(1f).scaleY(1f).setDuration(240)
                 .setInterpolator(android.view.animation.OvershootInterpolator(2f)).start()
-            if (f.name == "TG输入栏") refreshLooks(decor)
+            if (f.name == "TG输入栏" || f.name == "底栏数字与图标") refreshLooks(decor)
             if (f.name == "Monet取色") {
                 decor.findViewWithTag<ImageView>(KNOB)?.let(::tintKnob)
                 refreshGlassTint(decor)
@@ -252,7 +252,7 @@ private fun sheet(anchor: View) {
                 recording.drawColor(if (night) 0xFF29292C.toInt() else 0xFFF7F7F8.toInt())
                 decor.draw(recording)
             } finally { endRecording() }
-            setRenderEffect(RenderEffect.createBlurEffect(8 * dp, 8 * dp, Shader.TileMode.CLAMP))
+            setRenderEffect(RenderEffect.createBlurEffect(6 * dp, 6 * dp, Shader.TileMode.CLAMP))
         }
     }.onFailure { log("设置面板底图录制失败", it) }.getOrNull()
     val card = LinearLayout(ctx).apply {
@@ -280,13 +280,16 @@ private fun sheet(anchor: View) {
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
+    // 内容优先完整展开；只在屏幕放不下时让网格滚动，且给上下留出关闭区域。
+    val preferredHeight = ((features.size + 1) / 2 * 48 * dp + 100 * dp).toInt()
+    val availableHeight = (decor.height - 48 * dp).toInt().coerceAtLeast((180 * dp).toInt())
     val dim = FrameLayout(ctx).apply {
         tag = SHEET
         setBackgroundColor(0x66000000)
         setOnClickListener { dismiss(decor) }
         addView(card, FrameLayout.LayoutParams(
             min(decor.width - (48 * dp).toInt(), (340 * dp).toInt()),
-            min((decor.height * 0.48f).toInt(), (340 * dp).toInt()), Gravity.CENTER))
+            min(preferredHeight, availableHeight), Gravity.CENTER))
         // 遮罩盖在圆钮上方，原钮收不到第二次触摸；同一屏幕位置留明确的关闭命中区。
         val pos = IntArray(2).also(anchor::getLocationInWindow)
         val origin = IntArray(2).also(decor::getLocationInWindow)

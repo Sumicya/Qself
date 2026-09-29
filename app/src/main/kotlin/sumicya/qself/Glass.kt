@@ -79,7 +79,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         // 静止时没有高光。Monet 关掉即纯灰阶；有真实底图时才降低遮罩透明度。
         val base = wash(if (night) 0xAE333333.toInt() else 0xC0F5F5F5.toInt(), accent)
         paint.color = if (refracted) {
-            val opacity = if (snapshot != null) 0.72f else 0.38f
+            val opacity = if (snapshot != null) 0.56f else 0.38f
             (base and 0xFFFFFF) or ((Color.alpha(base) * opacity).toInt() shl 24)
         } else if (!liveSample) (base and 0xFFFFFF) or 0xFF000000.toInt() else base
         canvas.drawRoundRect(rect, r, r, paint)
@@ -126,7 +126,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
                 lens.setFloatUniform("size", w.toFloat(), h.toFloat())
                 lens.setFloatUniform("pad", pad.toFloat())
                 lens.setFloatUniform("dp", dp)
-                lens.setFloatUniform("bend", 12 * dp)
+                lens.setFloatUniform("bend", (if (snapshot != null) 18 else 12) * dp)
                 node.setRenderEffect(RenderEffect.createRuntimeShaderEffect(lens, "content"))
                 effectSize = w.toLong() shl 32 or h.toLong()
             }

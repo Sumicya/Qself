@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import java.util.WeakHashMap
+import kotlin.math.abs
 
 /**
  * QQ 的真实编辑框、发送和附件按钮必须留在 QQ 自己的父容器里。
@@ -23,19 +24,28 @@ fun tgInput(strip: ViewGroup) {
     }
     if (old?.active() == true) { old.sync(); return }
     val scope = strip.parent as? ViewGroup ?: return
-    val edit = findInput(scope) ?: return
+    val edit = findInput(scope, strip) ?: return
     val box = edit.parent as? ViewGroup ?: return
     // 只动原生编辑框的背景，不重挂节点，也不隐藏 QQ 的按钮与事件监听。
     fields[strip] = InputGlass(strip, edit, box, box.parent as? ViewGroup)
 }
 
-private fun findInput(v: View): EditText? {
-    if (v is EditText && v.isShown && (v.id == View.NO_ID || runCatching {
+private fun findInput(scope: View, strip: View): EditText? {
+    val y = IntArray(2).also(strip::getLocationInWindow)[1]
+    val candidates = ArrayList<EditText>(2)
+    fun collect(v: View) {
+        if (v is EditText && v.isShown && v.height > 0 &&
+            abs(IntArray(2).also(v::getLocationInWindow)[1] - y) < 120 * strip.dp) candidates += v
+        if (v is ViewGroup) for (i in 0 until v.childCount) collect(v.getChildAt(i))
+    }
+    collect(scope)
+    // 同一输入行里优先认 QQ 的 input 资源；不能因 NO_ID 就拿到别的编辑框。
+    return candidates.minByOrNull { v ->
+        val input = v.id != View.NO_ID && runCatching {
             v.resources.getResourceEntryName(v.id) == "input"
-        }.getOrDefault(false) || v.javaClass.simpleName.contains("EditText"))) return v
-    if (v is ViewGroup) for (i in 0 until v.childCount)
-        findInput(v.getChildAt(i))?.let { return it }
-    return null
+        }.getOrDefault(false)
+        (if (input) 0 else 10000) + abs(IntArray(2).also(v::getLocationInWindow)[1] - y)
+    }
 }
 
 private class InputGlass(private val strip: View, private val edit: EditText, private val box: ViewGroup,
@@ -55,7 +65,8 @@ private class InputGlass(private val strip: View, private val edit: EditText, pr
     init {
         strip.addOnAttachStateChangeListener(detach)
         box.outlineProvider = capsule(22 * dp)
-        box.clipToOutline = true
+        // Glass 自己裁镜片；不要裁 QQ 原生编辑框和附件按钮的内容与触摸区域。
+        box.clipToOutline = false
         sync()
     }
 

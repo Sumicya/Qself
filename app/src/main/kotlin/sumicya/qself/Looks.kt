@@ -169,6 +169,7 @@ private fun homeBar(bar: ViewGroup) {
         }
     }
     if (bar.height == 0) return
+    tabBadge(bar)
     // QQ 给底栏铺的通栏模糊带、分割细线、纯色垫底：胶囊两侧会露出来，都藏。
     if (!glass) return
     val frame = generateSequence(bar.parent as? ViewGroup) { it.parent as? ViewGroup }
