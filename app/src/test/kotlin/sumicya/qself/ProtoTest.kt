@@ -8,7 +8,10 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 防撤回那几十行 protobuf 判断的唯一一份可跑检查。 */
+class TestMsgRecord(val senderUid: String, val msgType: Int, val msgTime: Long)
+class TestMsgItem(private val value: TestMsgRecord) { fun getMsgRecord() = value }
+
+/** 防撤回 protobuf 与连发分组边界的可跑检查。 */
 class ProtoTest {
     private fun varint(v: Long): ByteArray {
         var x = v
@@ -30,6 +33,14 @@ class ProtoTest {
         assertEquals(1, r.chatType)
         assertEquals("u_abc", r.peer)
         assertEquals(listOf(4567L), r.seqs)
+    }
+
+    @Test fun groupOnlyAdjacentSenderWithinFiveMinutes() {
+        val first = TestMsgItem(TestMsgRecord("u_a", 2, 1000))
+        assertTrue(follows(first, TestMsgItem(TestMsgRecord("u_a", 2, 1300))))
+        assertFalse(follows(first, TestMsgItem(TestMsgRecord("u_a", 2, 1301))))
+        assertFalse(follows(first, TestMsgItem(TestMsgRecord("u_b", 2, 1200))))
+        assertFalse(follows(first, TestMsgItem(TestMsgRecord("u_a", 5, 1200))))
     }
 
     @Test fun ordinaryMessage() = assertTrue(recall(push(166, 11)) == null)

@@ -54,9 +54,12 @@ private class InputGlass(private val strip: View, private val edit: EditText, pr
     private val editBg: Drawable? = edit.background
     private val boxBg: Drawable? = box.background
     private val frameBg: Drawable? = frame?.background
-    private val outline = box.outlineProvider
-    private val clip = box.clipToOutline
-    private val glass = Glass(box, 22 * dp)
+    private val editPadding = intArrayOf(edit.paddingLeft, edit.paddingTop, edit.paddingRight, edit.paddingBottom)
+    private val boxPadding = intArrayOf(box.paddingLeft, box.paddingTop, box.paddingRight, box.paddingBottom)
+    private val framePadding = frame?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
+    // 镜片放在真正接收按压的 QQ EditText 上，避免父盒子不进入 pressed、始终不亮。
+    private val glass = Glass(edit, 22 * dp)
+    private var frameCleared = false
     private val detach = object : View.OnAttachStateChangeListener {
         override fun onViewAttachedToWindow(v: View) {}
         override fun onViewDetachedFromWindow(v: View) { restore(); fields.remove(strip) }
@@ -64,27 +67,44 @@ private class InputGlass(private val strip: View, private val edit: EditText, pr
 
     init {
         strip.addOnAttachStateChangeListener(detach)
-        box.outlineProvider = capsule(22 * dp)
-        // Glass 自己裁镜片；不要裁 QQ 原生编辑框和附件按钮的内容与触摸区域。
-        box.clipToOutline = false
         sync()
     }
 
     fun active() = edit.parent === box
 
     fun sync() {
-        if (edit.background != null) edit.background = null
-        if (box.background !== glass) box.background = glass
-        if (frame != null && frame !== box && frame.height in 1..(120 * dp).toInt() && frame.background != null)
+        if (edit.background !== glass) {
+            edit.background = glass
+            edit.setPadding(editPadding[0], editPadding[1], editPadding[2], editPadding[3])
+        }
+        // 外层原来的矩形背景去掉；保留 QQ 原来的间距、按钮、输入法与触摸处理。
+        if (box.background != null) {
+            box.background = null
+            box.setPadding(boxPadding[0], boxPadding[1], boxPadding[2], boxPadding[3])
+        }
+        if (frame != null && frame !== box && frame.height in 1..(120 * dp).toInt() &&
+            frame.background === frameBg) {
             frame.background = null
+            framePadding?.let { frame.setPadding(it[0], it[1], it[2], it[3]) }
+            frameCleared = true
+        }
     }
 
     fun restore() {
         strip.removeOnAttachStateChangeListener(detach)
-        if (edit.background == null) edit.background = editBg
-        if (box.background === glass) box.background = boxBg
-        if (frame != null && frame !== box && frame.background == null) frame.background = frameBg
-        box.outlineProvider = outline
-        box.clipToOutline = clip
+        if (edit.background === glass) {
+            edit.background = editBg
+            edit.setPadding(editPadding[0], editPadding[1], editPadding[2], editPadding[3])
+        }
+        if (box.background == null) {
+            box.background = boxBg
+            box.setPadding(boxPadding[0], boxPadding[1], boxPadding[2], boxPadding[3])
+        }
+        if (frameCleared) frame?.let { v ->
+            if (v.background == null) {
+                v.background = frameBg
+                framePadding?.let { v.setPadding(it[0], it[1], it[2], it[3]) }
+            }
+        }
     }
 }

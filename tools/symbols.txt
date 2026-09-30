@@ -19,8 +19,6 @@ member! com.tencent.mobileqq.utils.QQTheme#isNowThemeIsNight
 class~ .QQTabLayout
 class  com.tencent.mobileqq.widget.QQTabLayout
 member! com.tencent.mobileqq.widget.QQTabLayout#onInterceptTouchEvent
-class  com.tencent.mobileqq.widget.TabDragAnimationView
-member! com.tencent.mobileqq.widget.TabDragAnimationView#onDraw
 class~ QQSettingMeRelativeLayout
 class~ WeatherSettingMeItemView
 class  com.tencent.mobileqq.activity.qqsettingme.config.QQSettingMeMenuConfigBeanV3
@@ -154,12 +152,21 @@ member! com.tencent.mobileqq.quibadge.QUIBadge#setAIOBarNum
 member! com.tencent.mobileqq.quibadge.QUIBadge#setRedNumWithIcon
 member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayNumWIthIcon
 member! com.tencent.mobileqq.quibadge.QUIBadge#getMinWidth
+member! com.tencent.mobileqq.quibadge.QUIBadge#drawText
+member! com.tencent.mobileqq.quibadge.QUIBadge#drawIconAndText
+member! com.tencent.mobileqq.quibadge.QUIBadge#onDraw
 field  com.tencent.mobileqq.quibadge.QUIBadge#mText
 field  com.tencent.mobileqq.quibadge.QUIBadge#mNum
 field  com.tencent.mobileqq.quibadge.QUIBadge#mTextPaint
 class  com.tencent.mobileqq.tianshu.ui.RedTouch
 member! com.tencent.mobileqq.tianshu.ui.RedTouch#getTextRedPoint
 field  com.tencent.mobileqq.tianshu.ui.RedTouch#maxNum
+class  com.tencent.mobileqq.tianshu.ui.b
+member! com.tencent.mobileqq.tianshu.ui.b#b
+class  com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl
+member! com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl#updateTabInfo
+class  com.tencent.mobileqq.tianshu.pb.BusinessInfoCheckUpdate$RedTypeInfo
+field  com.tencent.mobileqq.tianshu.pb.BusinessInfoCheckUpdate$RedTypeInfo#red_content
 class  com.tencent.widget.d
 member! com.tencent.widget.d#d
 

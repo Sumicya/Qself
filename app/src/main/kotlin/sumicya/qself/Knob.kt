@@ -214,7 +214,8 @@ private fun sheet(anchor: View) {
             marker.scaleY = 0.55f
             marker.animate().scaleX(1f).scaleY(1f).setDuration(240)
                 .setInterpolator(android.view.animation.OvershootInterpolator(2f)).start()
-            if (f.name == "TG输入栏" || f.name == "底栏数字与图标") refreshLooks(decor)
+            if (f.name == "TG输入栏") refreshLooks(decor)
+            if (f.name == "连发合并") refreshGroupRuns()
             if (f.name == "Monet取色") {
                 decor.findViewWithTag<ImageView>(KNOB)?.let(::tintKnob)
                 refreshGlassTint(decor)

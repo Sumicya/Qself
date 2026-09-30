@@ -3,6 +3,7 @@ package sumicya.qself
 
 import android.app.Activity
 import android.app.Instrumentation
+import android.graphics.Canvas
 import android.graphics.Paint
 import android.view.Gravity
 import android.view.MotionEvent
@@ -169,7 +170,6 @@ private fun homeBar(bar: ViewGroup) {
         }
     }
     if (bar.height == 0) return
-    tabBadge(bar)
     // QQ 给底栏铺的通栏模糊带、分割细线、纯色垫底：胶囊两侧会露出来，都藏。
     if (!glass) return
     val frame = generateSequence(bar.parent as? ViewGroup) { it.parent as? ViewGroup }
@@ -245,16 +245,33 @@ fun exactCount() {
         hook(badge.method(name)) { chain ->
             chain.proceed().also {
                 val n = chain.args[0] as Int
-                if (n > 99) text.set(chain.thisObject, n.toString())
+                if (n > 99) {
+                    text.set(chain.thisObject, n.toString())
+                    (chain.thisObject as View).apply { requestLayout(); invalidate() }
+                }
             }
         }
-    // QQ 给 99+ 固定 31dp 宽；真数字多一位，就补上那一位的像素宽度。
+    // 首页也走 QUIBadge：RedTypeInfo.red_content 经 tianshu.ui.b.b() 原样解析成数字，
+    // updateTabInfo() 调 setRedNum()，真正的“99+”出自 QUIBadge.updateNum()。
+    // 若 QQ 内联了 setter 或后来又调用 updateNum，绘制当帧从 mNum 恢复真实文字。
+    for (name in listOf("drawText", "drawIconAndText")) {
+        val draw = badge.getDeclaredMethod(name, Canvas::class.java)
+        hook(draw) { chain ->
+            val b = chain.thisObject
+            val n = num.getInt(b)
+            if (n > 99 && text.get(b) != n.toString()) text.set(b, n.toString())
+            chain.proceed()
+        }
+    }
+    xposed.deoptimize(badge.getDeclaredMethod("onDraw", Canvas::class.java))
+    // QQ 原布局给 99+ 固定 31dp，onMeasure() 调 getMinWidth()：按原始 mNum 测宽。
     hook(badge.method("getMinWidth")) { chain ->
         val width = chain.proceed() as Int
         val b = chain.thisObject
-        if (num.getInt(b) <= 99) width else {
+        val n = num.getInt(b)
+        if (n <= 99) width else {
             val p = paint.get(b) as Paint
-            width + ceil(p.measureText(text.get(b) as String) - p.measureText("99+")).toInt().coerceAtLeast(0)
+            width + ceil(p.measureText(n.toString()) - p.measureText("99+")).toInt().coerceAtLeast(0)
         }
     }
     // 主页页签的角标不是 QUIBadge：TabFrameControllerImpl.generateRedTouch 创建 RedTouch，

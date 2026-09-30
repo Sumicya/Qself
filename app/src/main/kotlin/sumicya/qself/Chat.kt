@@ -2,6 +2,8 @@
 package sumicya.qself
 
 import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
 import org.json.JSONArray
 import org.json.JSONObject
 import java.lang.reflect.Proxy
@@ -200,7 +202,25 @@ fun stripSyncRecall(sync: ByteArray): ByteArray {
 // 列表适配器绑定每一行时先看它跟上一行是不是「连发」，头像 / 昵称组件绑定完再按结果折起来。
 
 private val grouped: MutableSet<Long> = Collections.newSetFromMap(ConcurrentHashMap())
+private val runKeys = ConcurrentHashMap<Long, Long>()
 private val folded = WeakHashMap<View, Int>()
+private val senderColors = WeakHashMap<TextView, Int>()
+private data class AvatarSlot(val key: Long, val visibility: Int, val translation: Float)
+private val avatars = WeakHashMap<View, AvatarSlot>()
+private val observedLists: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
+
+fun refreshGroupRuns() {
+    if (on("连发合并")) return
+    for ((v, slot) in avatars.toList()) {
+        v.visibility = slot.visibility
+        v.translationY = slot.translation
+    }
+    avatars.clear()
+    for ((v, visibility) in folded.toList()) v.visibility = visibility
+    folded.clear()
+    for ((text, color) in senderColors.toList()) text.setTextColor(color)
+    senderColors.clear()
+}
 
 fun groupRuns() {
     val adapter = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a")
@@ -212,27 +232,126 @@ fun groupRuns() {
         val list = runCatching { data.invoke(self)?.let { it.javaClass.getMethod("u").invoke(it) } as? List<*> }.getOrNull()
         val i = chain.getArg(1) as Int - (runCatching { head.invoke(self) as Int }.getOrNull() ?: 0)
         val cur = list?.getOrNull(i)
-        msgId(cur)?.let { if (follows(list?.getOrNull(i - 1), cur)) grouped.add(it) else grouped.remove(it) }
+        msgId(cur)?.let { id ->
+            val same = follows(list?.getOrNull(i - 1), cur)
+            if (same) grouped.add(id) else grouped.remove(id)
+            // 同组的第一条 id 作锚点；消息列表可倒序绑定，不依赖绑定先后。
+            var start = i
+            while (start > 0 && follows(list?.getOrNull(start - 1), list?.getOrNull(start))) start--
+            if (same || follows(cur, list?.getOrNull(i + 1)))
+                runKeys[id] = msgId(list?.getOrNull(start)) ?: id
+            else runKeys.remove(id)
+        }
         chain.proceed()
     }
     val avatar = cls("com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent")
     val nick = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2")
-    for ((c, mode) in listOf(avatar to View.INVISIBLE, nick to View.GONE)) {
-        val root = c.getMethod("f1") // 组件的根视图，声明在 MVVM 基类上
-        hook(c.method("d1")) { chain ->
-            // 先还原上一次折的，让 QQ 自己的绑定从干净状态开始；绑完再按需要折。
-            val v = runCatching { root.invoke(chain.thisObject) as? View }.getOrNull()
-            v?.let { view -> folded.remove(view)?.let { view.visibility = it } }
-            chain.proceed().also {
-                val id = runCatching { msgId(chain.getArg(1)) }.getOrNull()
-                if (v != null && id != null && id in grouped) { folded[v] = v.visibility; v.visibility = mode }
+    val avatarRoot = avatar.getMethod("f1")
+    hook(avatar.method("d1")) { chain ->
+        val v = runCatching { avatarRoot.invoke(chain.thisObject) as? View }.getOrNull()
+        v?.let { view -> avatars.remove(view)?.let { slot ->
+            view.visibility = slot.visibility
+            view.translationY = slot.translation
+        } }
+        chain.proceed().also {
+            val id = runCatching { msgId(chain.getArg(1)) }.getOrNull()
+            val key = id?.let(runKeys::get)
+            if (v != null && key != null && v.visibility == View.VISIBLE) {
+                avatars[v] = AvatarSlot(key, v.visibility, v.translationY)
+                v.post { watchAvatars(v) }
+            }
+        }
+    }
+    val nickRoot = nick.getMethod("f1")
+    hook(nick.method("d1")) { chain ->
+        val v = runCatching { nickRoot.invoke(chain.thisObject) as? View }.getOrNull()
+        v?.let { view ->
+            folded.remove(view)?.let { view.visibility = it }
+            fun reset(node: View) {
+                if (node is TextView) senderColors.remove(node)?.let(node::setTextColor)
+                if (node is ViewGroup) for (i in 0 until node.childCount) reset(node.getChildAt(i))
+            }
+            reset(view)
+        }
+        chain.proceed().also {
+            val item = runCatching { chain.getArg(1) }.getOrNull()
+            val id = msgId(item)
+            if (v != null && id != null) {
+                if (id in grouped) { folded[v] = v.visibility; v.visibility = View.GONE }
+                else if (runKeys.containsKey(id)) showSenderName(v, record(item))
             }
         }
     }
 }
 
+/** Telegram 式头像：复用 QQ 自己的头像 View，每组只露出最靠下的可见那颗，滚动时贴住当前可视边界。 */
+private fun watchAvatars(v: View) {
+    val list = generateSequence(v.parent) { it.parent }.filterIsInstance<ViewGroup>()
+        .firstOrNull { it.javaClass.name.contains("RecyclerView") } ?: return
+    if (!observedLists.add(list)) return
+    list.viewTreeObserver.addOnPreDrawListener {
+        if (list.isAttachedToWindow && on("连发合并")) floatAvatars(list)
+        true
+    }
+}
+
+private fun floatAvatars(list: ViewGroup) {
+    val at = IntArray(2)
+    list.getLocationInWindow(at)
+    val bottom = at[1] + list.height
+    val top = at[1]
+    data class Visible(val view: View, val slot: AvatarSlot, val rowBottom: Int, val visibleBottom: Int)
+    val groups = HashMap<Long, MutableList<Visible>>()
+    for ((v, slot) in avatars.toList()) {
+        var row: View = v
+        while (row.parent is View && row.parent !== list) row = row.parent as View
+        if (row.parent !== list || !row.isShown) continue
+        row.getLocationInWindow(at)
+        val rowBottom = at[1] + row.height
+        if (rowBottom <= top || at[1] >= bottom) continue
+        groups.getOrPut(slot.key) { ArrayList() }
+            .add(Visible(v, slot, rowBottom, minOf(rowBottom, bottom)))
+    }
+    for (group in groups.values) {
+        val last = group.maxByOrNull { it.visibleBottom } ?: continue
+        for (item in group) {
+            val v = item.view
+            val visible = item === last
+            val wanted = if (visible) item.slot.visibility else View.INVISIBLE
+            if (v.visibility != wanted) v.visibility = wanted
+            val base = item.slot.translation
+            if (visible) {
+                v.getLocationInWindow(at)
+                val unshiftedY = at[1] - (v.translationY - base).toInt()
+                val offset = (item.visibleBottom - unshiftedY - v.height - 4 * v.resources.displayMetrics.density)
+                    .coerceIn(0f, (item.rowBottom - unshiftedY - v.height).coerceAtLeast(0).toFloat())
+                if (v.translationY != base + offset) v.translationY = base + offset
+            } else if (v.translationY != base) v.translationY = base
+        }
+    }
+}
+
+/** 组首沿用 QQ 昵称与点击事件；仅在 QQ 给出内部 UID 时用真实显示名替换，并按发送者稳定着色。 */
+private fun showSenderName(root: View, rec: Any?) {
+    val name = (rec?.get("sendMemberName") as? String)?.takeIf { it.isNotBlank() }
+        ?: (rec?.get("sendNickName") as? String)?.takeIf { it.isNotBlank() } ?: return
+    fun label(v: View): TextView? {
+        if (v is TextView && (v.text?.toString() == name || v.text?.toString()?.startsWith("u_") == true)) return v
+        if (v is ViewGroup) for (i in 0 until v.childCount) label(v.getChildAt(i))?.let { return it }
+        return null
+    }
+    val text = label(root) ?: return
+    if (text.text?.toString()?.startsWith("u_") == true) text.text = name
+    val uid = rec?.get("senderUid") as? String ?: return
+    val dark = root.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+    val palette = if (dark) intArrayOf(0xFF80CBC4.toInt(), 0xFFFFCC80.toInt(), 0xFFB39DDB.toInt(), 0xFF90CAF9.toInt())
+        else intArrayOf(0xFF00796B.toInt(), 0xFFAD5000.toInt(), 0xFF673AB7.toInt(), 0xFF1565C0.toInt())
+    senderColors.putIfAbsent(text, text.currentTextColor)
+    text.setTextColor(palette[(uid.hashCode() and Int.MAX_VALUE) % palette.size])
+}
+
 /** 两条都是正经消息（不是灰字 5 / 开场白 29）、同一发送者、相隔不到 5 分钟。 */
-private fun follows(prev: Any?, cur: Any?): Boolean {
+internal fun follows(prev: Any?, cur: Any?): Boolean {
     val a = record(prev) ?: return false
     val b = record(cur) ?: return false
     val sender = a.get("senderUid") as? String

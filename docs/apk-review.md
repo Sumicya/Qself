@@ -24,6 +24,6 @@ Qself 已独立构建、独立安装（`sumicya.qself`，libxposed API 102，作
 | --- | --- | --- |
 | 好友名片点赞 | `com.tencent.mobileqq.profile.vote.VoteHelper`：`b(CardProfile)` 查可用/当日已赞次数，`h(CardProfile,ImageView)` 走点击检查，`c(CardProfile,ImageView,boolean)` 使用 `VisitorsActivity`、`CardHandler` 请求并更新 `CardProfile` | 有**页面级**的原生链。后台批量需要可靠好友列表、异步加载每人 `CardProfile`、每日/单人配额及账号切换处理；只靠重复调用点击方法不能保证成功，暂未装自动钩子。 |
 | 等级相关签到 | `DailySignInWebviewPlugin.callActionSignIn` 通过网页 JS 桥把 `action.userSignInForSettingMe` 交给 `SignInModule`；`QQLevelJsPlugin` 名空间是 `levelicon` | 证明有设置页签到请求，不证明可以脱离页面每天自动完成、更不证明签到等于全部等级加速任务。等级由服务器结算，不能靠本地改数值加速；暂未装自动钩子。 |
-| 底栏数字/图标 | `QQTabLayout` 子树使用 `TabDragAnimationView.onDraw(Canvas)` 绘制图标，触摸仍由 QQ 自己处理；`RedTouch.getTextRedPoint` 用 `maxNum` 排版 | Qself 只替换已识别页签的绘制，不接管触摸。数字从 QQ 已显示的纯数字读取；若只得到 `99+` 则不伪造精确数。 |
+| 底栏角标 | `TabFrameControllerImpl.updateTabInfo` 从 `RedTypeInfo.red_content` 解析原始数值，交给 `QUIBadge.setRedNum`；后者 `updateNum` 将大于 99 的 `mText` 截成 `99+` | Qself 保留 QQ 原生图标，按 `mNum` 恢复真实文本并重新测宽；不从 `99+` 字样反猜数。 |
 
 静态符号核对只能证明方法存在，不能证明服务端响应、好友列表迭代完整性或实际触摸观感。要实施后台遍历，需先在用户允许的测试账号中记录 QQ 原生点赞和签到的一次完整调用/返回链，并设计每账号每天总次数、每人间隔、失败退避和显式停用。不要用循环发请求或伪造客户端等级替代验证。
