@@ -25,21 +25,18 @@ class ProtoTest {
         field(1, field(2, field(1, type) + field(2, sub) + field(4, 1L shl 40)) + field(3, field(2, content)))
 
     @Test fun c2cRecall() {
-        assertTrue(recall(push(528, 138)) != null) // 解不出细节也照样吞
-        val r = recall(push(528, 138, field(1, field(1, "u_abc".toByteArray()) + field(2, "u_me".toByteArray()) + field(3, 4567L))))!!
-        assertEquals(1, r.chatType)
-        assertEquals("u_abc", r.peer)
-        assertEquals(listOf(4567L), r.seqs)
+        assertEquals(emptyList<String>(), recall(push(528, 138))) // 解不出细节也照样吞，只是标不了
+        // from / to 两个 uid 各记一条：别的设备上自己撤回时，会话的 peerUid 是对面那条
+        val keys = recall(push(528, 138, field(1, field(1, "u_abc".toByteArray()) + field(2, "u_me".toByteArray()) + field(3, 4567L))))
+        assertEquals(listOf("1:u_abc:4567", "1:u_me:4567"), keys)
     }
 
     @Test fun ordinaryMessage() = assertTrue(recall(push(166, 11)) == null)
 
+    /** 群撤回和别的群通知共用 732/17，只有 NotifyMsgBody 字段 1 = 7 才是撤回，别的一律不能吞。 */
     @Test fun groupRecallNeedsOpType7() {
         val body = field(1, 7L) + field(4, 123L) + field(11, field(1, "u_op".toByteArray()) + field(3, field(1, 88L)) + field(3, field(1, 89L)))
-        val r = recall(push(732, 17, ByteArray(7) + body))!!
-        assertEquals(2, r.chatType)
-        assertEquals("123", r.peer)
-        assertEquals(listOf(88L, 89L), r.seqs)
+        assertEquals(listOf("2:123:88", "2:123:89"), recall(push(732, 17, ByteArray(7) + body)))
         assertTrue(recall(push(732, 17, ByteArray(7) + field(1, 6L))) == null)
         assertTrue(recall(push(732, 17, ByteArray(3))) == null)
     }

@@ -1,145 +1,152 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself
 
+import android.graphics.Canvas
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.PixelFormat
+import android.graphics.drawable.Drawable
 import android.view.View
-import org.json.JSONArray
-import org.json.JSONObject
-import java.lang.reflect.Proxy
 import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
+import kotlin.math.min
 
 /** 聊天：会员装饰归零、防撤回、连发合并、转发、「+」面板、昵称行、轻互动、表情雨。 */
 
 // ---- 会员装饰：NT 内核把气泡/字体/挂件放在几个纯数据结构里，构造完立刻清零，界面就按默认画。
 
-fun plainBubble() = cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble").afterNew {
-    it.set("bubbleId", 0)
-    it.set("subBubbleId", 0)
-}
-
-fun plainFont() = cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgFont").afterNew {
-    it.set("fontId", 0)
-    it.set("magicFontType", 0)
-}
-
-fun noPendant() = cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant").afterNew {
-    it.set("pendantId", 0L)
-    it.set("pendantDiyInfoId", 0)
+fun plainDecor() {
+    cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble")
+        .afterNew { it.set("bubbleId", 0); it.set("subBubbleId", 0) }
+    cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgFont")
+        .afterNew { it.set("fontId", 0); it.set("magicFontType", 0) }
+    cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant")
+        .afterNew { it.set("pendantId", 0L); it.set("pendantDiyInfoId", 0) }
 }
 
 
-// ---- 防撤回：服务器推来的撤回通知在进 NT 内核之前吞掉，消息留在本地；再按 seq 把那条消息捞出来，
-// 记下 msgId（列表里画成半透明），并往会话里插一条本地灰字「xx 尝试撤回一条消息」。
+// ---- 防撤回：服务器推来的撤回通知在进 NT 内核之前整个吞掉，消息留在本地；同时把被撤回的消息
+// 按「会话类型:对方:seq」记进 SharedPreferences，列表绑定每一行时拿 MsgRecord 对 key，
+// 命中就压半透明、右上角画一个 ✗。全程同步 —— 不按 seq 回内核捞消息，也不插灰字。
 
 private const val MSG_PUSH = "trpc.msg.olpush.OlPushService.MsgPush"
 private const val INFO_SYNC = "trpc.msg.register_proxy.RegisterProxy.InfoSyncPush"
-private const val MSG_CB = "com.tencent.qqnt.kernel.nativeinterface.IMsgOperateCallback"
-private const val TIP_CB = "com.tencent.qqnt.kernel.nativeinterface.IAddJsonGrayTipMsgCallback"
 
-/** 被撤回过的消息 msgId，存 SharedPreferences「recalled」；ponytail: 只留最近 500 条，更早的标记会消失。 */
-private val recalled: MutableSet<Long> = Collections.synchronizedSet(LinkedHashSet())
-private val loaded by lazy { store()?.getString("recalled", null)?.split(',')?.mapNotNullTo(recalled) { it.toLongOrNull() }; true }
+/** 被撤回消息的 key（「类型:peerUid:seq」），存 SharedPreferences「recalled」；ponytail: 只留最近 500 条，更早的标记会消失。 */
+private val recalled: MutableSet<String> = Collections.synchronizedSet(LinkedHashSet())
+private val loaded by lazy { store()?.getString("recalled", null)?.split(',')?.filterTo(recalled) { ':' in it }; true }
 
 fun antiRecall() {
     val proxy = cls("com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession\$CppProxy")
     hook(proxy.method("onMsfPush")) { chain ->
         val cmd = chain.getArg(0) as? String
         val body = chain.getArg(1) as? ByteArray
-        val r = if (body != null && cmd == MSG_PUSH) recall(body) else null
         when {
             body == null -> chain.proceed()
-            r != null -> { runCatching { tip(chain.thisObject, r) }.onFailure { log("撤回灰字失败", it) }; null }
+            cmd == MSG_PUSH && recall(body).also(::remember) != null -> null // 吞
             cmd == INFO_SYNC -> chain.proceed(chain.args.toTypedArray().also { it[1] = stripSyncRecall(body) })
             else -> chain.proceed()
         }
     }
-    // 列表里被撤回过的那条压到半透明。k1 / s1 都声明在列表 VB 的基类上，钩子会盖住所有子类，
-    // 所以取视图和取参数都包起来：兄弟子类走进来就当没这回事，别把异常抛回 QQ。
+    // 列表绑定每一行时标记。k1 / s1 声明在 AIOBubbleMsgItemVB 本类（dex 核过）；
+    // 参数是 AIOMsgItem 或它基类的兄弟子类，取记录包在 runCatching 里，兄弟走进来就当没这回事。
     val vb = cls("com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB")
     hook(vb.method("k1")) { chain ->
         chain.proceed().also {
             val root = runCatching { vb.getMethod("s1").invoke(chain.thisObject) as? View }.getOrNull() ?: return@also
-            val id = runCatching { msgId(chain.getArg(1)) }.getOrNull()
-            if (loaded && id != null && id in recalled) root.alpha = 0.5f else if (root.alpha == 0.5f) root.alpha = 1f
+            val rec = record(chain.getArg(1)) ?: return@also
+            mark(root, loaded && "${rec.get("chatType")}:${rec.get("peerUid")}:${rec.get("msgSeq")}" in recalled)
         }
     }
 }
 
-/** 一次撤回：会话类型（1 私聊 / 2 群）、会话 peerUid（对方 uid / 群号）、被撤回的 seq。 */
-class Recall(val chatType: Int, val peer: String, val seqs: List<Long>)
-
 /**
+ * 一次撤回推送 → 标记 key 列表；**返回 null = 不是撤回（或判不出来），不吞**。
  * MsgPush{1: Message{2: ContentHead{1: type, 2: subType}, 3: Body{2: content}}}。
  * 私聊撤回 528/138：content = FriendRecall{1: Info{1: fromUid, 2: toUid, 3: seq}}；
  * 群撤回 732/17：content = 4 字节群号 + 类型 + 长度 + NotifyMsgBody{1: type(7 = 撤回), 4: 群号, 11: Recall{3: [{1: seq}]}}。
+ *
+ * ponytail: 私聊撤回 from / to 两个 uid 各记一条 —— 自己在别的设备上撤回时 from 是自己、
+ * 会话的 peerUid 是对方，懒得判自己是谁，两条都记总有一条对上。
  */
-fun recall(push: ByteArray): Recall? {
+fun recall(push: ByteArray): List<String>? {
     val message = push.pb().bytes(1)?.pb() ?: return null
     val head = message.bytes(2)?.pb() ?: return null
     val content = message.bytes(3)?.pb()?.bytes(2)
     return when (head.long(1) to head.long(2)) {
         528L to 138L -> {
-            // ponytail: 自己在别的设备上撤回时 fromUid 是自己，灰字会插到跟自己的会话里；懒得查 toUid 是不是本人。
             val info = content?.pb()?.bytes(1)?.pb()
-            Recall(1, info?.bytes(1)?.let { String(it) }.orEmpty(), listOfNotNull(info?.long(3)))
+            val seq = info?.long(3) ?: return emptyList() // 解不出细节也照样吞，只是标不了
+            listOfNotNull(info.bytes(1)?.let { "1:${String(it)}:$seq" }, info.bytes(2)?.let { "1:${String(it)}:$seq" })
         }
         732L to 17L -> {
+            // 群通知共用这个通道，判不出 opType=7 的一律放行，别吞错
             if (content == null || content.size <= 7) return null
             val body = content.copyOfRange(7, content.size).pb()
             if (body.long(1) != 7L) return null
-            val seqs = body.bytes(11)?.pb()?.filter { it.num == 3 }?.mapNotNull { (it.value as? ByteArray)?.pb()?.long(1) }.orEmpty()
-            Recall(2, body.long(4)?.toString().orEmpty(), seqs)
+            val group = body.long(4)?.toString().orEmpty()
+            body.bytes(11)?.pb()?.filter { it.num == 3 }
+                ?.mapNotNull { (it.value as? ByteArray)?.pb()?.long(1)?.let { s -> "2:$group:$s" } }.orEmpty()
         }
         else -> null
     }
 }
 
-/** 按 seq 捞出被撤回的消息 → 记 msgId、拿发送者名字 → 插灰字。内核回调在内核线程上来。 */
-private fun tip(session: Any, r: Recall) {
-    if (r.peer.isEmpty() || r.seqs.isEmpty()) return
-    val svc = session.javaClass.getMethod("getMsgService").invoke(session) ?: return
-    val contact = cls("com.tencent.qqnt.kernelpublic.nativeinterface.Contact")
-        .getConstructor(Int::class.java, String::class.java, String::class.java).newInstance(r.chatType, r.peer, "")
-    val fetch = svc.javaClass.getMethod("getMsgsBySeqAndCount", contact.javaClass, Long::class.java, Int::class.java, Boolean::class.java, Boolean::class.java, cls(MSG_CB))
-    for (seq in r.seqs) fetch.invoke(svc, contact, seq, 1, true, true, proxy(MSG_CB) { args ->
-        val rec = (args?.get(2) as? List<*>)?.firstOrNull { it?.get("msgSeq") == seq }
-        rec?.let { remember(it.get("msgId") as Long) }
-        val name = (rec?.get("sendMemberName") as? String)?.ifEmpty { null } ?: rec?.get("sendNickName") as? String
-        gray(svc, contact, name, rec?.get("senderUid") as? String)
-        null
-    })
-}
-
-private fun remember(id: Long) {
-    if (loaded) recalled += id
+private fun remember(keys: List<String>?) {
+    if (keys.isNullOrEmpty() || !loaded) return
+    recalled += keys
     store()?.edit()?.putString("recalled", synchronized(recalled) { recalled.toList() }.takeLast(500).joinToString(","))?.apply()
 }
 
-private fun gray(svc: Any, contact: Any, name: String?, uid: String?) {
-    val items = JSONArray()
-    if (name != null && uid != null) items.put(JSONObject().put("txt", name).put("type", "qq").put("uid", uid).put("col", "3").put("nm", ""))
-    items.put(JSONObject().put("txt", if (name != null && uid != null) " 尝试撤回一条消息" else "对方尝试撤回一条消息").put("type", "nor"))
-    val json = JSONObject().put("align", "center").put("items", items).toString()
-    val element = cls("com.tencent.qqnt.kernelpublic.nativeinterface.JsonGrayElement")
-        .getConstructor(Long::class.java, String::class.java, String::class.java, Boolean::class.java, cls("com.tencent.qqnt.kernelpublic.nativeinterface.XmlToJsonParam"))
-        .newInstance(2201L, json, "尝试撤回一条消息", true, null)
-    svc.javaClass.getMethod("addLocalJsonGrayTipMsg", contact.javaClass, element.javaClass, Boolean::class.java, Boolean::class.java, cls(TIP_CB))
-        .invoke(svc, contact, element, true, true, proxy(TIP_CB) { null })
+// ---- 撤回标记：压半透明 + 右上角一个画出来的 ✗（系统字体里叉的字形各家各样，自己画才稳）。
+// ✗ 走 ViewOverlay：不进视图树，行复用、布局变化都不干扰。
+
+private val marks = WeakHashMap<View, Drawable>()
+
+private fun mark(root: View, on: Boolean) {
+    if (on) {
+        root.alpha = 0.5f
+        if (root !in marks) {
+            val x = XMark(root.dp)
+            marks[root] = x
+            root.overlay.add(x)
+            // ponytail: 等一帧布局完再摆位，✗ 只摆这一次；转屏 / 改字号后摆歪了就再加 layout 监听。
+            root.post { if (marks[root] === x && root.width > 0) {
+                val s = (12 * root.dp).toInt(); val m = (6 * root.dp).toInt()
+                x.setBounds(root.width - s - m, m, root.width - m, m + s)
+            } }
+        }
+    } else if (root in marks || root.alpha == 0.5f) {
+        root.alpha = 1f
+        marks.remove(root)?.let(root.overlay::remove)
+    }
 }
 
-/** 内核回调接口的动态代理：Object 那几个方法自己答，其余交给 [body]。 */
-private fun proxy(iface: String, body: (Array<*>?) -> Any?): Any {
-    val c = cls(iface)
-    return Proxy.newProxyInstance(loader, arrayOf(c)) { self, m, args ->
-        when (m.name) {
-            "toString" -> "Qself$" + c.simpleName
-            "hashCode" -> System.identityHashCode(self)
-            "equals" -> self === args?.get(0)
-            else -> body(args)
-        }
+private class XMark(dp: Float) : Drawable() {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2.2f * dp
+        strokeCap = Paint.Cap.ROUND
+        color = 0xFFFF453A.toInt()
     }
+
+    override fun draw(c: Canvas) {
+        val b = bounds
+        if (b.isEmpty) return
+        val cx = b.exactCenterX()
+        val cy = b.exactCenterY()
+        val u = min(b.width(), b.height()) * 0.32f
+        c.drawLine(cx - u, cy - u, cx + u, cy + u, paint)
+        c.drawLine(cx + u, cy - u, cx - u, cy + u, paint)
+    }
+
+    override fun setAlpha(alpha: Int) {}
+    override fun setColorFilter(colorFilter: ColorFilter?) {}
+
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
 private fun msgId(item: Any?): Long? = item?.let { runCatching { it.javaClass.getMethod("getMsgId").invoke(it) as? Long }.getOrNull() }

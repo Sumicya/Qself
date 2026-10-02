@@ -1,17 +1,18 @@
 # Qself
 
 给 NT QQ 的一个 LSPosed 模块：**自由、简单、现代、原生**。装上即全部生效，不联网、没有第三方库、没有一个 `.so`。
-开关不在模块里，在 QQ 主页底栏胶囊旁边那颗玻璃圆钮里：点开是一整块玻璃大卡片，一行两张卡、
-画出来的 ✓/–/✗ 加一句描述（✗ = 这版 QQ 没装上），存进 QQ 自己的 SharedPreferences。
+开关不在模块里，在 QQ 主页底栏胶囊旁边那颗玻璃圆钮里：点开是系统的多选对话框，
+只有 4 个开关（玻璃底栏 / Monet取色 / TG输入栏 / 防撤回）——其余一律装上即生效。
+状态存进 QQ 自己的 SharedPreferences；哪个功能在这版 QQ 里没装上，看 `logcat -s Qself` 那一行的 ✗。
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
-但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，176 条）——换版本先看那张表红哪条，别猜。
+但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，163 条）——换版本先看那张表红哪条，别猜。
 
 ## 做了什么
 
 外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
-- 首页底栏浮成一颗居中的液态玻璃胶囊（每个页签 76dp，只包住页签）：不模糊，系统 `RenderEffect` + AGSL 做边缘折射、
-  贴边高光、提饱和、淡色罩，没有描边；选中项是一块弹着滑过去的亮胶囊
+- 首页底栏浮成一颗居中的液态玻璃胶囊（每个页签 56dp，只包住页签）：不模糊，系统 `RenderEffect` + AGSL 做边缘折射、
+  贴边高光、提饱和、淡色罩，没有描边；选中项是一块弹着滑过去的亮胶囊，按下去整面往内凹一点
 - **Monet 取色**：玻璃的罩色、选中圆、圆钮的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色
 - 聊天输入栏 Telegram 化：一颗悬浮玻璃胶囊 [表情 · 输入框 · +] 加右侧玻璃圆钮 麦克风⇄发送，
@@ -19,12 +20,12 @@
 - 藏掉「频道」「动态」「小世界」页签
 - 聊天标题栏去掉一起听 / 一起看 / 群游戏那排；侧栏去掉打卡、天气、等级、会员、装扮、钱包一类的入口（数据源和视图两头都拦）
 - 隐藏好友聊天标题栏那行在线状态（在线 / 手机在线 / WiFi在线 / 忙碌 / 隐身…）
-- 统一气泡、统一字体、去头像挂件；昵称行只留名字（不显示群等级、头衔、成员等级、会员图标）
+- 会员装饰归零：充值气泡、魔法字体、头像挂件一律按默认画；昵称行只留名字（不显示群等级、头衔、成员等级、会员图标）
 - **屏蔽红点引导**：群红点、王者小队、群头衔、游戏中心红点、乐吧引导气泡、资料卡引导、虚拟形象角标一律不亮
 - **去会员等级**：资料卡上 SVIP / VIP / 大会员 / 大会员年费那排图标不画
 
 聊天
-- 防撤回：私聊、群聊、重连补发的撤回都吞掉，被撤回的那条压成半透明，会话里插一条「xx 尝试撤回一条消息」灰字
+- 防撤回：私聊、群聊、重连补发的撤回都吞掉；被撤回的那条压成半透明、右上角画一个 ✗（标记存在 QQ 自己的偏好里，重启还在）
 - 连发合并：同一人 5 分钟内连着发的消息，后面的不再画头像（占位留着）和昵称行，像 Telegram 那样成组
 - **回复不@**：回复消息时不再往输入框插「@昵称 」
 - **转发不限人数**：转发选人到 9 个就不再卡住，顶部「已选 N 人」跟着走
@@ -42,7 +43,8 @@
 
 ## 用
 
-1. Actions 里下载最新一次构建的 APK（或 `gh run download -R Sumicya/Qself`），安装
+1. 装最新一次 CI 构建（挂在 release `latest` 上，Termux 里一条命令，不用装 `gh`）：
+   `curl -L -o qself.apk https://github.com/Sumicya/Qself/releases/download/latest/app-debug.apk`
 2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开
 3. 主页底栏胶囊旁边那颗圆钮（右边放不下就在胶囊右上方）：点开勾选即时生效（钩子每次被调用都查开关）；
    已经浮起来的底栏、排好的输入行要点「重启 QQ」才复原
@@ -55,11 +57,11 @@
 
 ```
 app/src/main/kotlin/sumicya/qself/
-  Qself.kt   入口：功能清单（也是开关列表）、按进程装、日志
+  Qself.kt   入口：功能清单、4 个开关（玻璃底栏 / Monet取色 / TG输入栏 / 防撤回）、按进程装、日志
   Hook.kt    libxposed 封装（hook / constant / afterNew / 反射读写字段方法）与开关读取
-  Knob.kt    主页那颗圆钮与开关面板（玻璃大卡片）
+  Knob.kt    主页那颗圆钮与开关面板（系统对话框）
   Quiet.kt   自由化
-  Chat.kt    聊天，含防撤回用的几十行 protobuf 读取、撤回灰字、连发合并、回复不@
+  Chat.kt    聊天，含防撤回用的几十行 protobuf 读取、撤回标记（半透明 + ✗）、连发合并、回复不@
   Looks.kt   外观：盯住每个 Activity 的视图树套规则
   Input.kt   TG 式输入栏
   Glass.kt   液态玻璃 Drawable（RenderNode + AGSL + Monet 取色，底栏用时自带滑动亮胶囊）
@@ -75,7 +77,7 @@ ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
 
 ```sh
 git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
-python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 176 条全绿才算数
+python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 163 条全绿才算数
 python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
 ```
 

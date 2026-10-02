@@ -70,10 +70,10 @@ private fun trim(v: View, inDrawer: Boolean) {
     // 侧栏里一行行可点的：打卡、天气、等级、会员、装扮……（文案多半带「我的」前缀，所以用包含）
     val row = inDrawer && v.isClickable && v.height in 1..(96 * v.dp).toInt() &&
         texts(v).any { t -> DRAWER.any { it in t } }
+    // 昵称下面那行在线状态（文案是服务器发的，所以只能按长相认：小、在顶部、字就是这些）
     val status = v is TextView && (v.text?.toString()?.trim() ?: "") in ONLINE &&
         v.height in 1..(40 * v.dp).toInt() && windowY(v) < 200 * v.dp
-    hide(v, on("标题栏侧栏精简") && (title || row || v.javaClass.simpleName == "WeatherSettingMeItemView") ||
-        on("隐藏在线状态") && status)
+    hide(v, title || row || status || v.javaClass.simpleName == "WeatherSettingMeItemView")
 }
 
 private val hidden = WeakHashMap<View, Int>()
@@ -116,7 +116,7 @@ private fun homeBar(bar: ViewGroup) {
     (bar.getChildAt(0) as? ViewGroup)?.let { strip ->
         for (i in 0 until strip.childCount) {
             val tab = strip.getChildAt(i)
-            hide(tab, on("藏频道动态") && texts(tab).any { "频道" in it || "动态" in it || "小世界" in it })
+            hide(tab, texts(tab).any { "频道" in it || "动态" in it || "小世界" in it })
             if (glass) fit(tab)
         }
     }

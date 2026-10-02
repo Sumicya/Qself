@@ -1,9 +1,5 @@
-# Qself CI。agent 没有 workflow 权限，这份要由人复制过去：
-#
-#   cp ci/build.yml .github/workflows/build.yml
-#   git add .github/workflows/build.yml && git commit -m "ci: 上 workflow" && git push
-#
-# 每次 push 两个作业：dex 拿真 QQ 包核每一个落点；apk 跑 ProtoTest 再出 debug APK 放进 Artifacts，
+# Qself CI。每次 push 两个作业：dex 拿真 QQ 包核每一个落点；
+# apk 跑 ProtoTest 再出 debug APK 挂到 release `latest`（覆盖式，手机上 curl 一条命令就装），
 # 失败时把 Gradle 日志尾巴贴成提交评论。
 name: Build
 
@@ -55,11 +51,14 @@ jobs:
           for f in java_init.list module.prop scope.list; do unzip -l "$APK" | grep -F "META-INF/xposed/$f"; done
           if unzip -l "$APK" | grep -q 'assets/xposed_init'; then echo 'legacy entry packaged' >&2; exit 1; fi
           sha256sum "$APK"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: Qself-${{ github.sha }}
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+      # 包直接挂到 latest 这个 release 上：手机上不用装 gh、不用 auth login，一条 curl 就够。
+      - name: 挂到 latest release
+        if: github.event_name == 'push'      # PR 构建不许覆盖 latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create latest --title latest --notes "最新一次 CI 构建，装这个就行（覆盖式，永远只有一个包）" 2>/dev/null || true
+          gh release upload latest app/build/outputs/apk/debug/app-debug.apk --clobber
       - name: Publish the build log on failure
         if: failure()
         env:

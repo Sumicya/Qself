@@ -49,28 +49,17 @@ field  com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant#pendantId
 field  com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant#pendantDiyInfoId
 
 # ---------- 防撤回 Chat.kt
-class  com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession
 class  com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession$CppProxy
 member! com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession$CppProxy#onMsfPush
-member! com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession#getMsgService
-class  com.tencent.qqnt.kernel.nativeinterface.IKernelMsgService
-member! com.tencent.qqnt.kernel.nativeinterface.IKernelMsgService#getMsgsBySeqAndCount
-member! com.tencent.qqnt.kernel.nativeinterface.IKernelMsgService#addLocalJsonGrayTipMsg
-class  com.tencent.qqnt.kernel.nativeinterface.IMsgOperateCallback
-class  com.tencent.qqnt.kernel.nativeinterface.IAddJsonGrayTipMsgCallback
-class  com.tencent.qqnt.kernelpublic.nativeinterface.Contact
-member! com.tencent.qqnt.kernelpublic.nativeinterface.Contact#init
-class  com.tencent.qqnt.kernelpublic.nativeinterface.JsonGrayElement
-member! com.tencent.qqnt.kernelpublic.nativeinterface.JsonGrayElement#init
-class  com.tencent.qqnt.kernelpublic.nativeinterface.XmlToJsonParam
+# 标记撤回的消息不再按 msgId 认（那要回内核按 seq 捞消息）：推送给「类型:对方:seq」的 key，
+# 列表绑定时拿 MsgRecord 自己这几个字段拼 key 对上。
 class  com.tencent.qqnt.kernel.nativeinterface.MsgRecord
+field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#chatType
+field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#peerUid
 field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgSeq
-field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgId
 field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgType
 field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgTime
 field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#senderUid
-field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#sendNickName
-field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#sendMemberName
 class  com.tencent.mobileqq.aio.msg.AIOMsgItem
 member! com.tencent.mobileqq.aio.msg.AIOMsgItem#getMsgRecord
 member! com.tencent.mobileqq.aio.msg.AIOMsgItem#getMsgId

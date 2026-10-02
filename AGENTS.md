@@ -3,7 +3,7 @@
 ## 是什么
 
 一个纯钩子的 LSPosed 模块（libxposed API 102），只针对 QQ 9.2.10 / Android 16。模块 APK 没有界面；
-纯 Kotlin，八个文件（约 1500 行），没有第三方依赖、没有 `.so`、不联网。外观照 NagramXF 那套长相做（液态玻璃 + Monet 取色 + TG 式输入栏）。
+纯 Kotlin，八个文件（约 1400 行），没有第三方依赖、没有 `.so`、不联网。外观照 NagramXF 那套长相做（液态玻璃 + Monet 取色 + TG 式输入栏）。
 
 开关是 QQ 主页底栏右上角一颗圆钮弹出的系统对话框，状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
 
@@ -14,7 +14,8 @@
 
 按 [ponytail](https://github.com/DietrichGebert/ponytail) 来：
 - 先问「不做行不行」；再看仓库里有没有现成的；再看 Kotlin 标准库；再看 Android 原生 API；最后才写代码
-- 不加抽象、不加依赖、不加样板；能删就删；一个功能 = 一个顶层函数 + `Qself.kt` 清单里一行（清单顺序就是开关顺序）
+- 不加抽象、不加依赖、不加样板；能删就删；一个功能 = 一个顶层函数 + `Qself.kt` 清单里一行
+- 开关只有面板里那 4 个（`knobs`），新加的东西默认装上即生效，别再塞开关
 - 钩子体不要 try/catch 兜底整个功能：libxposed 默认异常模式下，钩子抛异常等于这一次没装。
   但**从 `chain` 取参数、反射取视图这类可能落在兄弟子类上的动作要包 `runCatching`** —— 挂点在基类时，钩子会盖住所有子类
 - 钩子经 `hook()` 装就自动受开关管；视图规则自己 `on("功能名")`
@@ -68,9 +69,9 @@
 ## 构建
 
 本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）出 APK。
-**agent 的 token 没有 workflow 权限，push 不动 `.github/workflows/`**：要改 workflow，agent 把改法写成
-一段命令交给仓库主人在 Termux 里跑（`pkg install git gh && gh auth login` 之后 clone、改、push）。
+agent 的 token 有 `contents: write`，能直接 push `.github/workflows/`，改 workflow 自己来。
 
 CI 两个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 跑单元测试再出包；
+包挂到 release `latest`（覆盖式），手机上一条 `curl` 就能装；
 失败时把 Gradle 日志尾巴贴成提交评论，agent 也读得到。
 签名固定在 `app/qself.p12`（密码 `qself`），换签名会导致覆盖安装失败。

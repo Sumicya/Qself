@@ -42,5 +42,6 @@ JAVA=$(find "$T/libxposed-api/api/src/main/java" "$T/stubs" -name "*.java")
 rm -rf "$T/out" "$T/t"
 kotlinc/bin/kotlinc -jvm-target 21 -cp android.jar -d "$T/out" "$R"/app/src/main/kotlin/sumicya/qself/*.kt "$R"/app/src/test/kotlin/sumicya/qself/*.kt kstub/junit.kt $JAVA bc/sumicya/qself/BuildConfig.java 2>&1 | grep -v "^$" || true
 echo "compiled: $(ls "$T/out/sumicya/qself" 2>/dev/null | wc -l) classes"
-kotlinc/bin/kotlinc -nowarn -jvm-target 21 -cp android.jar -d "$T/t" "$R"/app/src/main/kotlin/sumicya/qself/Chat.kt "$R"/app/src/main/kotlin/sumicya/qself/Hook.kt "$R"/app/src/test/kotlin/sumicya/qself/ProtoTest.kt kstub/junit.kt kstub/run.kt $JAVA 2>&1 | grep -v "^$" || true
-java -cp "$T/t:$T/kotlinc/lib/kotlin-stdlib.jar" RunKt
+# ProtoTest 直接吃上面全量编译的产物：不再挑子集重编一遍（子集凑不齐跨文件的扩展）。
+kotlinc/bin/kotlinc -nowarn -jvm-target 21 -cp "android.jar:$T/out" -d "$T/t" kstub/run.kt 2>&1 | grep -v "^$" || true
+java -cp "$T/t:$T/out:$T/kotlinc/lib/kotlin-stdlib.jar" RunKt
