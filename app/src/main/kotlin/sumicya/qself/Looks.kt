@@ -162,25 +162,35 @@ private fun feed(bar: ViewGroup, e: MotionEvent) {
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> glass.press(false)
         }
     }
-    tabPress(bar, e.x, e.actionMasked != MotionEvent.ACTION_UP && e.actionMasked != MotionEvent.ACTION_CANCEL)
+    tabPress(bar, e)
 }
 
 private val pressedTab = WeakHashMap<View, View>()
+private val tabLoc = IntArray(2)
 
-private fun tabPress(bar: ViewGroup, x: Float, down: Boolean) {
+/** KSU 页签按压手感：指下的页签缩到 0.86 并上浮（比胶囊的背景形变强一截），松手弹回。
+ *  命中判定用 window 坐标 —— 和选中亮胶囊的定位同一套，页签条带不带偏移都不怕。 */
+private fun tabPress(bar: ViewGroup, e: MotionEvent) {
     val strip = bar.getChildAt(0) as? ViewGroup ?: return
+    val down = e.actionMasked != MotionEvent.ACTION_UP && e.actionMasked != MotionEvent.ACTION_CANCEL
     var target: View? = null
-    if (down) for (i in 0 until strip.childCount) strip.getChildAt(i).let {
-        if (it.visibility == View.VISIBLE && x in it.left.toFloat()..it.right.toFloat()) target = it
+    if (down) {
+        bar.getLocationInWindow(tabLoc)
+        val px = tabLoc[0] + e.x
+        for (i in 0 until strip.childCount) strip.getChildAt(i).let {
+            if (it.visibility != View.VISIBLE) return@let
+            it.getLocationInWindow(tabLoc)
+            if (px in tabLoc[0].toFloat()..(tabLoc[0] + it.width).toFloat()) target = it
+        }
     }
     val cur = pressedTab[bar]
     if (cur != null && cur !== target) {
-        cur.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
+        cur.animate().scaleX(1f).scaleY(1f).translationY(0f).setDuration(150).start()
         pressedTab.remove(bar)
     }
     if (target != null && target !== cur) {
         pressedTab[bar] = target
-        target.animate().scaleX(0.92f).scaleY(0.92f).setDuration(50).start()
+        target.animate().scaleX(0.86f).scaleY(0.86f).translationY(-2f * bar.dp).setDuration(50).start()
     }
     bar.animate().translationY((if (down) -1.5f else 0f) * bar.dp).setDuration(if (down) 50 else 150).start()
 }
