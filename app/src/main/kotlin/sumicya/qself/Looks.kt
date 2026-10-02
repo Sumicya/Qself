@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.Instrumentation
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.drawable.Drawable
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -248,20 +249,27 @@ fun exactCount() {
     badgeNum = badge.getDeclaredField("mNum").apply { isAccessible = true }
     val paint = badge.getDeclaredField("mTextPaint").apply { isAccessible = true }
     var hits = 0
-    // 最后一个拼写是 QQ 自己的错别字（setGrayNumWIthIcon）
-    for (name in listOf("setRedNum", "setGrayNum", "setAIOBarNum", "setRedNumWithIcon", "setGrayNumWIthIcon")) {
+    fun fix(b: Any, n: Int) {
+        badgeNum?.setInt(b, n)
+        badgeText?.set(b, n.toString())
+        (b as View).apply { requestLayout(); postInvalidate() }
+        if (hits < 3) { hits++; log("角标 真数字 $n") }
+    }
+    for (name in listOf("setRedNum", "setGrayNum", "setAIOBarNum"))
         hook(badge.getDeclaredMethod(name, Integer.TYPE)) { chain ->
             chain.proceed().also {
                 val n = chain.args[0] as Int
-                if (n > 99 && badgeText?.get(chain.thisObject) as? String != n.toString()) {
-                    badgeNum?.setInt(chain.thisObject, n)
-                    badgeText?.set(chain.thisObject, n.toString())
-                    (chain.thisObject as View).apply { requestLayout(); postInvalidate() }
-                    if (hits < 3) { hits++; log("角标 $name 真数字 $n") }
-                }
+                if (n > 99 && badgeText?.get(chain.thisObject) as? String != n.toString()) fix(chain.thisObject, n)
             }
         }
-    }
+    // 带图标的两个多一个 Drawable 参（最后那个拼写是 QQ 自己的错别字），签名不同分开查
+    for (name in listOf("setRedNumWithIcon", "setGrayNumWIthIcon"))
+        hook(badge.getDeclaredMethod(name, Integer.TYPE, Drawable::class.java)) { chain ->
+            chain.proceed().also {
+                val n = chain.args[0] as Int
+                if (n > 99 && badgeText?.get(chain.thisObject) as? String != n.toString()) fix(chain.thisObject, n)
+            }
+        }
     // 宽度：QQ 按「99+」量出来的宽度放不下三位数，按真数字补宽
     hook(badge.method("getMinWidth")) { chain ->
         val width = chain.proceed() as Int
