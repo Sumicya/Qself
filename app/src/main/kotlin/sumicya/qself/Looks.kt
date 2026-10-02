@@ -164,8 +164,10 @@ private fun homeBar(bar: ViewGroup) {
     (bar.getChildAt(0) as? ViewGroup)?.let { strip ->
         for (i in 0 until strip.childCount) {
             val tab = strip.getChildAt(i)
-            hide(tab, texts(tab).any { "频道" in it || "动态" in it || "小世界" in it })
+            val label = texts(tab)
+            hide(tab, label.any { "频道" in it || "动态" in it || "小世界" in it })
             if (glass) fit(tab)
+            if (on("显示具体未读条数") && label.any { "消息" in it }) badgeExact(tab)
         }
     }
     if (bar.height == 0) return
@@ -233,40 +235,50 @@ private fun settle(bar: ViewGroup) {
     }
 }
 
-/** 具体未读：「99+」是 QUIBadge.updateNum 写进 mText 的（dex 核过，唯一写点）。
- *  上一版钩 setter + 绘制小方法没生效 —— 私有绘制方法多半被 QQ 自己的 R8 内联，运行时没人调。
- *  这版只盯两个必定被调的点：updateNum 本尊（反优化防内联）+ onDraw 画前兜底。 */
+/** 具体未读。上两版盯 QUIBadge.updateNum —— dex 体核过它全 QQ 零调用（死代码），所以设备上诊断一条不响。
+ *  真正的写入是 setRedNum 家族（tianshu 红点、transformUIInfo2UI 都调它）；底栏数字还可能是服务端截好的「99+」。
+ *  两层兜底：setter 抓 >99 的真数字；视图规则在消息页签把残留「99+」换成本地总未读（QRoute）。 */
+private var badgeText: java.lang.reflect.Field? = null
+private var badgeNum: java.lang.reflect.Field? = null
+private var qbadgeG: java.lang.reflect.Field? = null
+
 fun exactCount() {
     val badge = cls("com.tencent.mobileqq.quibadge.QUIBadge")
-    val text = badge.getDeclaredField("mText").apply { isAccessible = true }
-    val num = badge.getDeclaredField("mNum").apply { isAccessible = true }
+    badgeText = badge.getDeclaredField("mText").apply { isAccessible = true }
+    badgeNum = badge.getDeclaredField("mNum").apply { isAccessible = true }
     val paint = badge.getDeclaredField("mTextPaint").apply { isAccessible = true }
     var hits = 0
-    fun fix(b: Any, from: String) {
-        val n = num.getInt(b)
-        if (n <= 99 || text.get(b) == n.toString()) return
-        text.set(b, n.toString())
-        (b as View).apply { requestLayout(); postInvalidate() }
-        if (hits < 3) { hits++; log("角标 $from 溢出 $n") } // 诊断：真数字到底从哪条路来
-    }
-    val update = badge.getDeclaredMethod("updateNum", Integer.TYPE)
-    hook(update) { chain -> chain.proceed().also { fix(chain.thisObject, "updateNum") } }
-    xposed.deoptimize(update) // ART 别想把它内联进调用方让钩子落空
-    hook(badge.getDeclaredMethod("onDraw", Canvas::class.java)) { chain ->
-        fix(chain.thisObject, "onDraw")
-        chain.proceed()
+    // 最后一个拼写是 QQ 自己的错别字（setGrayNumWIthIcon）
+    for (name in listOf("setRedNum", "setGrayNum", "setAIOBarNum", "setRedNumWithIcon", "setGrayNumWIthIcon")) {
+        hook(badge.getDeclaredMethod(name, Integer.TYPE)) { chain ->
+            chain.proceed().also {
+                val n = chain.args[0] as Int
+                if (n > 99 && badgeText?.get(chain.thisObject) as? String != n.toString()) {
+                    badgeNum?.setInt(chain.thisObject, n)
+                    badgeText?.set(chain.thisObject, n.toString())
+                    (chain.thisObject as View).apply { requestLayout(); postInvalidate() }
+                    if (hits < 3) { hits++; log("角标 $name 真数字 $n") }
+                }
+            }
+        }
     }
     // 宽度：QQ 按「99+」量出来的宽度放不下三位数，按真数字补宽
     hook(badge.method("getMinWidth")) { chain ->
         val width = chain.proceed() as Int
-        val b = chain.thisObject
-        val n = num.getInt(b)
+        val n = badgeNum!!.getInt(chain.thisObject)
         if (n <= 99) width else {
-            val p = paint.get(b) as Paint
+            val p = paint.get(chain.thisObject) as Paint
             width + ceil(p.measureText(n.toString()) - p.measureText("99+")).toInt().coerceAtLeast(0)
         }
     }
-    // 主页页签角标走 RedTouch，它有自己的 maxNum 截断；排版数字前把上限抬掉
+    // QBadgeView 也自绘文本（字段 G）；调用方走反射钩不着，只记一笔、视图规则会兜
+    val qb = cls("com.tencent.qqnt.widget.badgeview.QBadgeView")
+    qbadgeG = qb.getDeclaredField("G").apply { isAccessible = true }
+    hook(qb.getDeclaredMethod("onDraw", Canvas::class.java)) { chain ->
+        if (qbHits < 3) { qbHits++; log("角标 QBadgeView 在画 G=${qbadgeG?.get(chain.thisObject)}") }
+        chain.proceed()
+    }
+    // 动态/「我」等页签的红点走 RedTouch，有自己的 maxNum 截断；排版数字前把上限抬掉
     var redHits = 0
     val red = cls("com.tencent.mobileqq.tianshu.ui.RedTouch")
     val maxNum = red.getDeclaredField("maxNum").apply { isAccessible = true }
@@ -290,6 +302,62 @@ fun exactCount() {
             }
         }
     }
+}
+
+private var qbHits = 0
+private var fixHits = 0
+private var dumped = false
+private var totalCache = -1
+private var totalAt = 0L
+
+/** 本地总未读（NT 内核实时），缓存 3 秒。QRoute 没就绪或取不到返回 null。 */
+private fun totalUnread(): Int? {
+    val now = System.currentTimeMillis()
+    if (now - totalAt < 3000) return totalCache.takeIf { it >= 0 }
+    return runCatching {
+        val iface = cls("com.tencent.qqnt.msg.api.IUnreadCountChangeApi")
+        val api = cls("com.tencent.mobileqq.qroute.QRoute").getMethod("api", Class::class.java).invoke(null, iface)!!
+        (iface.getMethod("getTotalUnreadCount").invoke(api) as Int).also { totalCache = it; totalAt = now }
+    }.getOrNull()
+}
+
+/** 消息页签里还挂着「99+」的角标（服务端已截断）：换成本地总未读。 */
+private fun badgeExact(v: View) {
+    val f = when {
+        v.javaClass.name.endsWith(".QUIBadge") -> badgeText
+        v.javaClass.name.endsWith(".QBadgeView") -> qbadgeG
+        else -> null
+    }
+    if (f != null && f.get(v) as? String == "99+") {
+        val total = totalUnread()
+        if (total != null) {
+            f.set(v, total.toString())
+            if (v.javaClass.name.endsWith(".QUIBadge")) badgeNum?.setInt(v, total)
+            v.requestLayout(); v.postInvalidate()
+            if (fixHits < 3) { fixHits++; log("角标 99+→$total (${v.javaClass.simpleName})") }
+        } else if (!dumped) { dumped = true; tabDump(v) }
+    } else if (v is TextView && v.text?.toString() == "99+") {
+        totalUnread()?.let {
+            v.text = it.toString()
+            if (fixHits < 3) { fixHits++; log("角标 99+→$it (TextView)") }
+        }
+    }
+    if (v is ViewGroup) for (i in 0 until v.childCount) badgeExact(v.getChildAt(i))
+}
+
+/** 换不进去就一次性把消息页签子树 dump 出来：99+ 到底画在什么控件上。 */
+private fun tabDump(badge: View) {
+    val root = generateSequence<View>(badge) { it.parent as? View }.take(6).last()
+    val sb = StringBuilder("角标 兜底没配上，页签子树：")
+    fun go(x: View, d: Int) {
+        if (d > 4) return
+        (x as? TextView)?.text?.toString()?.takeIf { it.isNotBlank() }?.let { sb.append(" [").append(x.javaClass.simpleName).append('=').append(it).append(']') }
+        if (x.javaClass.name.endsWith("Badge") || x.javaClass.name.endsWith("BadgeView"))
+            sb.append(" {").append(x.javaClass.name).append('}')
+        if (x is ViewGroup) for (i in 0 until x.childCount) go(x.getChildAt(i), d + 1)
+    }
+    go(root, 0)
+    log(sb.toString())
 }
 
 /** 侧栏菜单的数据源：会员 / 钱包 / 装扮 / 小世界……这些行连生成都不生成（视图规则是兜底）。 */

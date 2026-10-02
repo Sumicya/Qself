@@ -127,14 +127,24 @@ member com.tencent.mobileqq.statistics.StatisticCollector#report
 class  com.tencent.feedback.eup.CrashReport
 member com.tencent.feedback.eup.CrashReport#initCrashReport
 
-# ---------- 具体未读条数：「99+」由 QUIBadge.updateNum 写 mText；onDraw 前兜底、宽度补测
+# ---------- 具体未读条数：setRedNum 家族才是真写点（updateNum 全 dex 零调用）；服务端截断的「99+」用 QRoute 本地总未读兜底
 class  com.tencent.mobileqq.quibadge.QUIBadge
-member! com.tencent.mobileqq.quibadge.QUIBadge#updateNum
-member! com.tencent.mobileqq.quibadge.QUIBadge#onDraw
+member! com.tencent.mobileqq.quibadge.QUIBadge#setRedNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setAIOBarNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setRedNumWithIcon
+member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayNumWIthIcon
 member! com.tencent.mobileqq.quibadge.QUIBadge#getMinWidth
 field  com.tencent.mobileqq.quibadge.QUIBadge#mText
 field  com.tencent.mobileqq.quibadge.QUIBadge#mNum
 field  com.tencent.mobileqq.quibadge.QUIBadge#mTextPaint
+class  com.tencent.qqnt.widget.badgeview.QBadgeView
+member! com.tencent.qqnt.widget.badgeview.QBadgeView#onDraw
+field  com.tencent.qqnt.widget.badgeview.QBadgeView#G
+class  com.tencent.mobileqq.qroute.QRoute
+member! com.tencent.mobileqq.qroute.QRoute#api
+class  com.tencent.qqnt.msg.api.IUnreadCountChangeApi
+member! com.tencent.qqnt.msg.api.IUnreadCountChangeApi#getTotalUnreadCount
 class  com.tencent.mobileqq.tianshu.ui.RedTouch
 member! com.tencent.mobileqq.tianshu.ui.RedTouch#getTextRedPoint
 field  com.tencent.mobileqq.tianshu.ui.RedTouch#maxNum
