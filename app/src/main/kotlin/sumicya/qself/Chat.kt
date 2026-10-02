@@ -193,15 +193,9 @@ fun noForwardLimit() {
         val key = keyOf.invoke(self, r.get("uin"), typeOf.invoke(r)) ?: return@hook chain.proceed()
         map[key] = copyOf.invoke(r, r)
         refresh.invoke(self)
-        // 顶部那条「已选 N 人」按签名找（void(List, boolean)），找不到就算了，不影响转发本身
-        self.get("mSelectedAndSearchBar")?.let { bar ->
-            bar.javaClass.declaredMethods
-                .firstOrNull { it.returnType == Void.TYPE && it.parameterTypes.contentEquals(arrayOf(List::class.java, Boolean::class.java)) }
-                ?.invoke(bar, ArrayList(map.values), true)
-        }
         true
-        // ponytail: 搜索页的勾选状态没同步（上游那半是死代码，mSearchFragment 这条路没核）。
-        // 真机上搜索页勾选对不上的话，再去找它的 setSelectedAndJoinedUins。
+        // ponytail: 顶部「已选 N 人」会停在 9（那是搜索栏自己的方法，签名扫出来的，不保真），搜索页勾选也不同步
+        // （上游那半是死代码）。选人本身不受影响。真碍事就去找 mSelectedAndSearchBar.setSelectedAndJoinedUins。
     }
 }
 

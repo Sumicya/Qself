@@ -13,30 +13,32 @@ import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
  */
 val knobs = listOf("玻璃底栏", "Monet取色", "TG输入栏", "防撤回")
 
-/** 装得上东西的功能：名字（= ✓/✗ 日志里的名字）、是不是只在主进程装、装法。
- *  纯视图规则（玻璃底栏 / Monet取色 / TG输入栏 / 藏页签 / 藏在线状态）不进这张表 —— 它们没东西可装，
+/** 装得上东西的功能：名字（= ✓/✗ 日志里的名字）+ 装法，顺序即安装顺序。
+ *  纯视图规则（玻璃底栏 / Monet取色 / TG输入栏 / 藏页签 / 藏在线状态）不进这两张表 —— 它们没东西可装，
  *  自己在 Looks.kt / Input.kt 里按名字查开关。 */
-class Feature(val name: String, val main: Boolean = true, val install: () -> Any?)
-
 val features = listOf(
-    Feature("防撤回", install = ::antiRecall),
-    Feature("标题栏侧栏精简", install = ::drawerMenu),
-    Feature("会员装饰归零", install = ::plainDecor),
-    Feature("昵称只留名字", install = ::plainNick),
-    Feature("连发合并", install = ::groupRuns),
-    Feature("回复不@", install = ::replyNoAt),
-    Feature("转发多选", install = ::multiForward),
-    Feature("转发不限人数", install = ::noForwardLimit),
-    Feature("左滑回复不设限", install = ::replyAnyMsg),
-    Feature("显示具体未读条数", install = ::exactCount),
-    Feature("+面板精简", install = ::plusPanel),
-    Feature("屏蔽红点引导", install = ::noRedDot),
-    Feature("去会员等级", install = ::plainCard),
-    Feature("屏蔽轻互动", install = ::noLightInteraction),
-    Feature("屏蔽表情雨", install = ::noEmojiRain),
-    Feature("系统WebView", main = false, install = ::systemWebView),
-    Feature("屏蔽统计上报", main = false, install = ::noTelemetry),
-    Feature("屏蔽崩溃上报", main = false, install = ::noCrashReport),
+    "防撤回" to ::antiRecall,
+    "标题栏侧栏精简" to ::drawerMenu,
+    "会员装饰归零" to ::plainDecor,
+    "昵称只留名字" to ::plainNick,
+    "连发合并" to ::groupRuns,
+    "回复不@" to ::replyNoAt,
+    "转发多选" to ::multiForward,
+    "转发不限人数" to ::noForwardLimit,
+    "左滑回复不设限" to ::replyAnyMsg,
+    "显示具体未读条数" to ::exactCount,
+    "+面板精简" to ::plusPanel,
+    "屏蔽红点引导" to ::noRedDot,
+    "去会员等级" to ::plainCard,
+    "屏蔽轻互动" to ::noLightInteraction,
+    "屏蔽表情雨" to ::noEmojiRain,
+)
+
+/** 自由化那三个在每个进程都要装（QQ 把 webview / 上报都甩到独立进程里）。 */
+val everyProcess = listOf(
+    "系统WebView" to ::systemWebView,
+    "屏蔽统计上报" to ::noTelemetry,
+    "屏蔽崩溃上报" to ::noCrashReport,
 )
 
 /** libxposed 入口。装上即全部生效；那 4 个开关在 QQ 主页底栏那颗圆钮里。 */
@@ -74,10 +76,9 @@ class Qself : XposedModule() {
             .onSuccess { report.append(" ✓").append(name) }
             // ✗ = 这版 QQ 里找不到落点。只有这一行日志能看到，面板里不画（真机上核不准）。
             .onFailure { report.append(" ✗").append(name).append('(').append(it.toString().take(120)).append(')') }
-        for (f in features) {
-            if (f.main && !main) continue
-            feature = if (f.name in knobs) f.name else null // 只有面板里那几行受开关管，其余钩子不查偏好
-            run(f.name, f.install)
+        for ((name, fn) in (if (main) features else emptyList()) + everyProcess) {
+            feature = if (name in knobs) name else null // 只有面板里那几行受开关管，其余钩子不查偏好
+            run(name, fn)
         }
         feature = null // 视图扫描器不归任何开关管，它自己按名字查
         if (main) run("视图扫描", ::looks)

@@ -82,7 +82,6 @@ member! com.tencent.mobileqq.activity.ForwardRecentActivity#add2ForwardTargetLis
 member! com.tencent.mobileqq.activity.ForwardRecentActivity#getForwardTargetKey
 member! com.tencent.mobileqq.activity.ForwardRecentActivity#refreshRightBtn
 field  com.tencent.mobileqq.activity.ForwardRecentActivity#mForwardTargetMap
-field  com.tencent.mobileqq.activity.ForwardRecentActivity#mSelectedAndSearchBar
 # 在线状态那行（Looks.kt 的 ONLINE）是视图规则，认的是服务器发的文案，dex 里没有对应落点。
 
 # ---------- 昵称行只留名字 Chat.kt
