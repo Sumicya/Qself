@@ -62,7 +62,6 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         val night = night()
         rect.set(b)
         rect.inset(press * 8 * dp, press * 5 * dp) // 按压形变：整颗胶囊缩进去，松手弹回
-        if (press > 0f && !drawLogged) { drawLogged = true; log("玻璃 形变在画 press=$press") } // 诊断：渲染这一层到没到
         val r = min(radius, rect.height() / 2f)
         val accent = monet(night, 0xFF)
         val refracted = canvas.isHardwareAccelerated && failures < 3 && !busy && runCatching { backdrop(canvas) }

@@ -138,10 +138,7 @@ fun barTouch() {
         val e = chain.args[0] as MotionEvent
         (v.background as? Glass)?.let { glass ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    if (!touchLogged) { touchLogged = true; log("玻璃 触摸入口A down") }
-                    glass.press(true)
-                }
+                MotionEvent.ACTION_DOWN -> glass.press(true)
                 MotionEvent.ACTION_MOVE -> glass.press(e.x in 0f..v.width.toFloat() && e.y in 0f..v.height.toFloat())
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> glass.press(false)
             }
@@ -150,7 +147,6 @@ fun barTouch() {
     }
 }
 
-private var touchLogged = false
 private val driven: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 
 /** 第二驱动：视图规则直接给底栏挂 OnTouchListener。QQ 要是自己先挂过，
@@ -162,10 +158,7 @@ private fun pressDrive(bar: ViewGroup) {
     bar.setOnTouchListener { v, e ->
         (v.background as? Glass)?.let { glass ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    if (!touchLogged) { touchLogged = true; log("玻璃 触摸入口B down") }
-                    glass.press(true)
-                }
+                MotionEvent.ACTION_DOWN -> glass.press(true)
                 MotionEvent.ACTION_MOVE -> glass.press(e.x in 0f..v.width.toFloat() && e.y in 0f..v.height.toFloat())
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> glass.press(false)
             }
