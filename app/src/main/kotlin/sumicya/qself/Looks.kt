@@ -153,7 +153,7 @@ private fun pressDrive(bar: ViewGroup) {
     }
 }
 
-/** 触摸喂给玻璃：胶囊形变 + 指下页签缩放 + 整颗微浮（KernelSU 页签的按压手感）。 */
+/** 触摸喂给玻璃：KSU 式「充气」——胶囊放大、指下页签放大、选中圆放大，松手弹回。 */
 private fun feed(bar: ViewGroup, e: MotionEvent) {
     (bar.background as? Glass)?.let { glass ->
         when (e.actionMasked) {
@@ -168,7 +168,7 @@ private fun feed(bar: ViewGroup, e: MotionEvent) {
 private val pressedTab = WeakHashMap<View, View>()
 private val tabLoc = IntArray(2)
 
-/** KSU 页签按压手感：指下的页签缩到 0.86 并上浮（比胶囊的背景形变强一截），松手弹回。
+/** KSU 页签按压手感：指下的页签充气到 1.2 倍（比胶囊的 1.05 强），松手弹回。
  *  命中判定用 window 坐标 —— 和选中亮胶囊的定位同一套，页签条带不带偏移都不怕。 */
 private fun tabPress(bar: ViewGroup, e: MotionEvent) {
     val strip = bar.getChildAt(0) as? ViewGroup ?: return
@@ -185,14 +185,16 @@ private fun tabPress(bar: ViewGroup, e: MotionEvent) {
     }
     val cur = pressedTab[bar]
     if (cur != null && cur !== target) {
-        cur.animate().scaleX(1f).scaleY(1f).translationY(0f).setDuration(150).start()
+        cur.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
         pressedTab.remove(bar)
     }
     if (target != null && target !== cur) {
         pressedTab[bar] = target
-        target.animate().scaleX(0.86f).scaleY(0.86f).translationY(-2f * bar.dp).setDuration(50).start()
+        target.animate().scaleX(1.2f).scaleY(1.2f).setDuration(50).start()
     }
-    bar.animate().translationY((if (down) -1.5f else 0f) * bar.dp).setDuration(if (down) 50 else 150).start()
+    // 整颗胶囊充气约 5%（KSU 的 1 + 16dp/宽度）
+    val s = if (down) 1.05f else 1f
+    bar.animate().scaleX(s).scaleY(s).setDuration(if (down) 50 else 150).start()
 }
 
 private val floated: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
@@ -232,7 +234,7 @@ private fun float(bar: ViewGroup) {
     bar.outlineProvider = capsule()
     bar.clipToOutline = true
     val dp = bar.dp
-    bar.elevation = 4 * dp
+    bar.elevation = 8 * dp // KSU 的悬浮阴影比 4dp 深
     // 胶囊只包住页签、居中：iOS 那样不是通栏。
     bar.layoutParams?.let {
         it.width = ViewGroup.LayoutParams.WRAP_CONTENT

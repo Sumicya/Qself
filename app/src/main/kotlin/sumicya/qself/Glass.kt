@@ -7,6 +7,8 @@ import android.content.res.Resources
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.PixelFormat
@@ -14,6 +16,7 @@ import android.graphics.RectF
 import android.graphics.RenderEffect
 import android.graphics.RenderNode
 import android.graphics.RuntimeShader
+import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.view.View
 import android.view.ViewGroup
@@ -23,14 +26,18 @@ import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.min
 
-/** 有明确可画的背后内容时做折射；QQ 的模糊控件不取样，失效时保留原生透明材质。 */
+/** 液态玻璃，完全照 KernelSU 管理器的配方（Apache 2.0，源自 Kyant0/AndroidLiquidGlass）：
+ *  背板取样 → 提饱和 1.5 → 模糊 4dp → 边缘 24dp 透镜折射；表面是 40% 的表面色 + 1dp 高光细线。
+ *  按压是「充气」不是「凹陷」：胶囊、页签、选中圆都放大，松手弹回。
+ *  ponytail: KSU 的高光是双光源 BloomStroke、选中圆带色散透镜，这里用 1dp 白细线和纯放大近似，
+ *  要完全体得把 miuix-blur 的 Highlight 系统搬过来，不值。 */
 class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             private val selected: (() -> View?)? = null) : Drawable() {
     private val dp = host.dp
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val node = RenderNode("qself-lens")
     private val lens by lazy { RuntimeShader(LENS) }
-    private val pad = (12 * dp).toInt()
+    private val pad = (40 * dp).toInt() // KSU 给模糊留的取样外扩
     private var effectSize = 0L
     private var failures = 0
     private var sampled = false
@@ -42,7 +49,6 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     private var press = 0f
     private var pressed = false
     private val pressAnim = ValueAnimator.ofFloat(0f, 0f).apply {
-        duration = 140
         addUpdateListener { press = it.animatedValue as Float; invalidateSelf() }
     }
     private var target: View? = null
@@ -59,26 +65,30 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         if (b.isEmpty) return
         val night = night()
         rect.set(b)
-        rect.inset(press * 8 * dp, press * 5 * dp) // 按压形变：整颗胶囊缩进去，松手弹回
+        // 底栏走 KSU 的充气（放大在外层视图做）；输入栏/圆钮没有外层缩放，保留缩进形变
+        if (selected == null) rect.inset(press * 6 * dp, press * 4 * dp)
         val r = min(radius, rect.height() / 2f)
-        val accent = monet(night, 0xFF)
-        val refracted = canvas.isHardwareAccelerated && failures < 3 && !busy && runCatching { backdrop(canvas) }
+        val refracted = canvas.isHardwareAccelerated && failures < 3 && !busy && runCatching { backdrop(canvas, r) }
             .onFailure { if (++failures <= 2) log("玻璃取样失败 ${host.javaClass.simpleName}，使用透明材质", it) }
             .getOrDefault(false)
         paint.style = Paint.Style.FILL
         paint.shader = null
-        // 静止时没有高光。Monet 关掉即纯灰阶；有真实底图时才降低遮罩透明度。按压整体略压暗。
-        val base = wash(if (night) 0xAE333333.toInt() else 0xC0F5F5F5.toInt(), accent)
-        val alpha = (Color.alpha(base) * (if (refracted) 0.38f else 1f) * (1f - press * 0.12f)).toInt()
-        paint.color = (base and 0xFFFFFF) or (alpha shl 24)
+        // KSU：surfaceContainer 40% 罩在折射层上；取不到底图就用近实色，别透字
+        val surface = wash(if (night) 0xFF2E2E2E.toInt() else 0xFFF2F2F2.toInt(), monet(night, 0xFF))
+        paint.color = if (refracted) (surface and 0xFFFFFF) or 0x66000000 else (surface and 0xFFFFFF) or 0xE6000000.toInt()
         canvas.drawRoundRect(rect, r, r, paint)
+        // 1dp 高光细线（KSU BloomStroke 的近似）
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = dp
+        paint.color = if (night) 0x28FFFFFF else 0x33FFFFFF
+        canvas.drawRoundRect(rect.left + dp / 2, rect.top + dp / 2, rect.right - dp / 2, rect.bottom - dp / 2, r, r, paint)
         pill(canvas, night)
     }
 
-    /** QQ 的页签消耗触摸，底栏自身不进入 pressed；从其专用触摸入口驱动反馈。 */
+    /** 页签消耗触摸，底栏自身不进入 pressed；从专用触摸入口驱动。按压值喂给选中圆的充气。 */
     fun press(down: Boolean) = setPress(down)
 
-    private fun backdrop(canvas: Canvas): Boolean {
+    private fun backdrop(canvas: Canvas, r: Float): Boolean {
         if (!host.isAttachedToWindow) return false
         val b = bounds
         val w = b.width() + 2 * pad
@@ -86,15 +96,20 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         busy = true
         try {
             if (effectSize != (w.toLong() shl 32 or h.toLong())) {
+                // KSU 顺序：vibrancy（饱和 1.5）→ blur（4dp）→ lens（24dp 边缘折射）
+                val vibrancy = RenderEffect.createColorFilterEffect(
+                    ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.5f) }))
+                val blur = RenderEffect.createBlurEffect(4 * dp, 4 * dp, Shader.TileMode.CLAMP)
                 lens.setFloatUniform("size", w.toFloat(), h.toFloat())
-                lens.setFloatUniform("pad", pad.toFloat())
-                lens.setFloatUniform("dp", dp)
-                lens.setFloatUniform("bend", 12 * dp)
-                node.setRenderEffect(RenderEffect.createRuntimeShaderEffect(lens, "content"))
+                lens.setFloatUniform("offset", -pad.toFloat(), -pad.toFloat())
+                lens.setFloatUniform("refractionHeight", 24 * dp)
+                lens.setFloatUniform("refractionAmount", -24 * dp) // KSU 传负值：向内折
+                node.setRenderEffect(RenderEffect.createChainEffect(
+                    RenderEffect.createChainEffect(vibrancy, blur),
+                    RenderEffect.createRuntimeShaderEffect(lens, "content")))
                 effectSize = w.toLong() shl 32 or h.toLong()
             }
             lens.setFloatUniform("rad", min(radius, b.height() / 2f))
-            lens.setFloatUniform("press", press)
             node.setPosition(b.left - pad, b.top - pad, b.right + pad, b.bottom + pad)
             val rc = node.beginRecording(w, h)
             val count = try {
@@ -169,7 +184,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         if (value == pressed) return
         pressed = value
         pressAnim.cancel()
-        // 按下去快、弹回来慢：轻点一下也能看见凹下去再弹回，不会只剩一帧
+        // 按下去快、弹回来慢：轻点一下也能看见，不会只剩一帧
         pressAnim.duration = if (value) 50 else 150
         pressAnim.setFloatValues(press, if (value) 1f else 0f)
         pressAnim.start()
@@ -202,7 +217,9 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         toX = x
         val cx = fromX + (toX - fromX) * (if (slide.isRunning) spring(slide.animatedFraction) else 1f)
         val inset = 4 * dp
-        val d = min(tab.width.toFloat(), bounds.height().toFloat()) - 2 * inset
+        // KSU：选中的亮圆按压时充气到 1.39 倍
+        val d = (min(tab.width.toFloat(), bounds.height().toFloat()) - 2 * inset) * (1f + press * 0.39f)
+        paint.style = Paint.Style.FILL
         paint.color = wash(if (night) 0x4AFFFFFF else 0xAAFFFFFF.toInt(), monet(night, 0xFF))
         paint.shader = null
         canvas.drawCircle(cx, bounds.centerY().toFloat(), d / 2f, paint)
@@ -216,28 +233,47 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     override fun getOpacity() = PixelFormat.TRANSLUCENT
 
     private companion object {
+        // KernelSU 管理器 liquid/Lens.kt 的圆角矩形折射（单圆角版）：
+        // 形状内 24dp 边缘带按圆弧剖面把背后的画面往内折，中心不折。
         const val LENS = """
 uniform shader content;
 uniform float2 size;
-uniform float pad;
-uniform float dp;
+uniform float2 offset;
 uniform float rad;
-uniform float bend;
-uniform float press;
-half4 main(float2 p) {
-    float2 c = size * 0.5;
-    float2 h = c - float2(pad, pad) - press * dp * float2(8.0, 5.0);
-    float r = min(rad, min(h.x, h.y));
-    if (r <= 0.0) return half4(0.0);
-    float2 spine = clamp(p, c - h + r, c + h - r);
-    float2 v = p - spine;
-    float d = length(v);
-    if (d > r) return half4(0.0);
-    float2 n = v / max(d, 0.001);
-    float w = d / r;
-    half4 col = content.eval(p - n * bend * w * w + n * press * bend * 0.55 * (1.0 - w));
-    col.rgb *= half(1.0 - press * 0.12 * smoothstep(0.35, 1.0, w));
-    return col;
+uniform float refractionHeight;
+uniform float refractionAmount;
+
+float sdRoundedRect(float2 coord, float2 halfSize, float radius) {
+    float2 cornerCoord = abs(coord) - (halfSize - float2(radius));
+    float outside = length(max(cornerCoord, 0.0)) - radius;
+    float inside = min(max(cornerCoord.x, cornerCoord.y), 0.0);
+    return outside + inside;
+}
+
+float2 gradSdRoundedRect(float2 coord, float2 halfSize, float radius) {
+    float2 cornerCoord = abs(coord) - (halfSize - float2(radius));
+    if (cornerCoord.x >= 0.0 || cornerCoord.y >= 0.0) {
+        return sign(coord) * normalize(max(cornerCoord, 0.0));
+    }
+    float gradX = step(cornerCoord.y, cornerCoord.x);
+    return sign(coord) * float2(gradX, 1.0 - gradX);
+}
+
+float circleMap(float x) {
+    return 1.0 - sqrt(1.0 - x * x);
+}
+
+half4 main(float2 coord) {
+    float2 halfSize = size * 0.5;
+    float2 centeredCoord = (coord + offset) - halfSize;
+    float sd = sdRoundedRect(centeredCoord, halfSize, rad);
+    if (sd > 0.0) return half4(0.0);
+    if (-sd >= refractionHeight) return content.eval(coord);
+    sd = min(sd, 0.0);
+    float d = circleMap(1.0 - -sd / refractionHeight) * refractionAmount;
+    float gradRadius = min(rad * 1.5, min(halfSize.x, halfSize.y));
+    float2 grad = normalize(gradSdRoundedRect(centeredCoord, halfSize, gradRadius));
+    return content.eval(coord + d * grad);
 }
 """
     }
