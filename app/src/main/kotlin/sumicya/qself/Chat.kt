@@ -2,9 +2,6 @@
 package sumicya.qself
 
 import android.view.View
-import org.json.JSONArray
-import org.json.JSONObject
-import java.lang.reflect.Proxy
 import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
@@ -14,135 +11,60 @@ import kotlin.math.abs
 
 // ---- 会员装饰：NT 内核把气泡/字体/挂件放在几个纯数据结构里，构造完立刻清零，界面就按默认画。
 
-fun plainBubble() = cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble").afterNew {
-    it.set("bubbleId", 0)
-    it.set("subBubbleId", 0)
+fun plainDecor() {
+    cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble")
+        .afterNew { it.set("bubbleId", 0); it.set("subBubbleId", 0) }
+    cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgFont")
+        .afterNew { it.set("fontId", 0); it.set("magicFontType", 0) }
+    cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant")
+        .afterNew { it.set("pendantId", 0L); it.set("pendantDiyInfoId", 0) }
 }
 
-fun plainFont() = cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgFont").afterNew {
-    it.set("fontId", 0)
-    it.set("magicFontType", 0)
-}
-
-fun noPendant() = cls("com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant").afterNew {
-    it.set("pendantId", 0L)
-    it.set("pendantDiyInfoId", 0)
-}
-
-
-// ---- 防撤回：服务器推来的撤回通知在进 NT 内核之前吞掉，消息留在本地；再按 seq 把那条消息捞出来，
-// 记下 msgId（列表里画成半透明），并往会话里插一条本地灰字「xx 尝试撤回一条消息」。
+// ---- 防撤回：服务器推来的撤回通知在进 NT 内核之前整个吞掉，消息就留在本地。
+// ponytail: 只吞。上游那套「被撤回那条压半透明」+「会话里插一条 xx 尝试撤回一条消息」真机上没做到过，
+// 要按 seq 回捞消息（getMsgsBySeqAndCount）再插本地灰字（addLocalJsonGrayTipMsg），还得存 msgId ——
+// 一百行换个看不见的标记，不值。真想要就照这条路上加。
 
 private const val MSG_PUSH = "trpc.msg.olpush.OlPushService.MsgPush"
 private const val INFO_SYNC = "trpc.msg.register_proxy.RegisterProxy.InfoSyncPush"
-private const val MSG_CB = "com.tencent.qqnt.kernel.nativeinterface.IMsgOperateCallback"
-private const val TIP_CB = "com.tencent.qqnt.kernel.nativeinterface.IAddJsonGrayTipMsgCallback"
 
-/** 被撤回过的消息 msgId，存 SharedPreferences「recalled」；ponytail: 只留最近 500 条，更早的标记会消失。 */
-private val recalled: MutableSet<Long> = Collections.synchronizedSet(LinkedHashSet())
-private val loaded by lazy { store()?.getString("recalled", null)?.split(',')?.mapNotNullTo(recalled) { it.toLongOrNull() }; true }
-
-fun antiRecall() {
-    val proxy = cls("com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession\$CppProxy")
-    hook(proxy.method("onMsfPush")) { chain ->
-        val cmd = chain.getArg(0) as? String
-        val body = chain.getArg(1) as? ByteArray
-        val r = if (body != null && cmd == MSG_PUSH) recall(body) else null
-        when {
-            body == null -> chain.proceed()
-            r != null -> { runCatching { tip(chain.thisObject, r) }.onFailure { log("撤回灰字失败", it) }; null }
-            cmd == INFO_SYNC -> chain.proceed(chain.args.toTypedArray().also { it[1] = stripSyncRecall(body) })
-            else -> chain.proceed()
-        }
-    }
-    // 列表里被撤回过的那条压到半透明。k1 / s1 都声明在列表 VB 的基类上，钩子会盖住所有子类，
-    // 所以取视图和取参数都包起来：兄弟子类走进来就当没这回事，别把异常抛回 QQ。
-    val vb = cls("com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB")
-    hook(vb.method("k1")) { chain ->
-        chain.proceed().also {
-            val root = runCatching { vb.getMethod("s1").invoke(chain.thisObject) as? View }.getOrNull() ?: return@also
-            val id = runCatching { msgId(chain.getArg(1)) }.getOrNull()
-            if (loaded && id != null && id in recalled) root.alpha = 0.5f else if (root.alpha == 0.5f) root.alpha = 1f
-        }
+fun antiRecall() = hook(cls("com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession\$CppProxy").method("onMsfPush")) { chain ->
+    val cmd = chain.getArg(0) as? String
+    val body = chain.getArg(1) as? ByteArray
+    when {
+        body == null -> chain.proceed()
+        cmd == MSG_PUSH && recall(body) -> null // 不调 proceed 就是丢掉这条推送
+        cmd == INFO_SYNC -> chain.proceed(chain.args.toTypedArray().also { it[1] = stripSyncRecall(body) })
+        else -> chain.proceed()
     }
 }
-
-/** 一次撤回：会话类型（1 私聊 / 2 群）、会话 peerUid（对方 uid / 群号）、被撤回的 seq。 */
-class Recall(val chatType: Int, val peer: String, val seqs: List<Long>)
 
 /**
- * MsgPush{1: Message{2: ContentHead{1: type, 2: subType}, 3: Body{2: content}}}。
- * 私聊撤回 528/138：content = FriendRecall{1: Info{1: fromUid, 2: toUid, 3: seq}}；
- * 群撤回 732/17：content = 4 字节群号 + 类型 + 长度 + NotifyMsgBody{1: type(7 = 撤回), 4: 群号, 11: Recall{3: [{1: seq}]}}。
+ * 是不是撤回通知。MsgPush{1: Message{2: ContentHead{1: type, 2: subType}, 3: Body{2: content}}}：
+ * 私聊撤回 528/138；群撤回 732/17 且 content = 4 字节群号 + 类型 + 长度 + NotifyMsgBody{1: opType(7 = 撤回)}
+ * —— 同 732/17 的别的 op 不能吞，所以解到 opType 才罢手。
  */
-fun recall(push: ByteArray): Recall? {
-    val message = push.pb().bytes(1)?.pb() ?: return null
-    val head = message.bytes(2)?.pb() ?: return null
-    val content = message.bytes(3)?.pb()?.bytes(2)
+fun recall(push: ByteArray): Boolean {
+    val message = push.pb().bytes(1)?.pb() ?: return false
+    val head = message.bytes(2)?.pb() ?: return false
     return when (head.long(1) to head.long(2)) {
-        528L to 138L -> {
-            // ponytail: 自己在别的设备上撤回时 fromUid 是自己，灰字会插到跟自己的会话里；懒得查 toUid 是不是本人。
-            val info = content?.pb()?.bytes(1)?.pb()
-            Recall(1, info?.bytes(1)?.let { String(it) }.orEmpty(), listOfNotNull(info?.long(3)))
-        }
+        528L to 138L -> true
         732L to 17L -> {
-            if (content == null || content.size <= 7) return null
-            val body = content.copyOfRange(7, content.size).pb()
-            if (body.long(1) != 7L) return null
-            val seqs = body.bytes(11)?.pb()?.filter { it.num == 3 }?.mapNotNull { (it.value as? ByteArray)?.pb()?.long(1) }.orEmpty()
-            Recall(2, body.long(4)?.toString().orEmpty(), seqs)
+            val content = message.bytes(3)?.pb()?.bytes(2) ?: return false
+            content.size > 7 && content.copyOfRange(7, content.size).pb().long(1) == 7L
         }
-        else -> null
+        else -> false
     }
 }
 
-/** 按 seq 捞出被撤回的消息 → 记 msgId、拿发送者名字 → 插灰字。内核回调在内核线程上来。 */
-private fun tip(session: Any, r: Recall) {
-    if (r.peer.isEmpty() || r.seqs.isEmpty()) return
-    val svc = session.javaClass.getMethod("getMsgService").invoke(session) ?: return
-    val contact = cls("com.tencent.qqnt.kernelpublic.nativeinterface.Contact")
-        .getConstructor(Int::class.java, String::class.java, String::class.java).newInstance(r.chatType, r.peer, "")
-    val fetch = svc.javaClass.getMethod("getMsgsBySeqAndCount", contact.javaClass, Long::class.java, Int::class.java, Boolean::class.java, Boolean::class.java, cls(MSG_CB))
-    for (seq in r.seqs) fetch.invoke(svc, contact, seq, 1, true, true, proxy(MSG_CB) { args ->
-        val rec = (args?.get(2) as? List<*>)?.firstOrNull { it?.get("msgSeq") == seq }
-        rec?.let { remember(it.get("msgId") as Long) }
-        val name = (rec?.get("sendMemberName") as? String)?.ifEmpty { null } ?: rec?.get("sendNickName") as? String
-        gray(svc, contact, name, rec?.get("senderUid") as? String)
-        null
-    })
+/** InfoSyncPush 的字段 8 是 SyncMsgRecall（重连补发的撤回），整段剪掉，其余原样。 */
+fun stripSyncRecall(sync: ByteArray): ByteArray {
+    val fields = sync.pb()
+    if (fields.none { it.num == 8 }) return sync
+    val out = java.io.ByteArrayOutputStream(sync.size)
+    fields.filter { it.num != 8 }.forEach { out.write(sync, it.start, it.end - it.start) }
+    return out.toByteArray()
 }
-
-private fun remember(id: Long) {
-    if (loaded) recalled += id
-    store()?.edit()?.putString("recalled", synchronized(recalled) { recalled.toList() }.takeLast(500).joinToString(","))?.apply()
-}
-
-private fun gray(svc: Any, contact: Any, name: String?, uid: String?) {
-    val items = JSONArray()
-    if (name != null && uid != null) items.put(JSONObject().put("txt", name).put("type", "qq").put("uid", uid).put("col", "3").put("nm", ""))
-    items.put(JSONObject().put("txt", if (name != null && uid != null) " 尝试撤回一条消息" else "对方尝试撤回一条消息").put("type", "nor"))
-    val json = JSONObject().put("align", "center").put("items", items).toString()
-    val element = cls("com.tencent.qqnt.kernelpublic.nativeinterface.JsonGrayElement")
-        .getConstructor(Long::class.java, String::class.java, String::class.java, Boolean::class.java, cls("com.tencent.qqnt.kernelpublic.nativeinterface.XmlToJsonParam"))
-        .newInstance(2201L, json, "尝试撤回一条消息", true, null)
-    svc.javaClass.getMethod("addLocalJsonGrayTipMsg", contact.javaClass, element.javaClass, Boolean::class.java, Boolean::class.java, cls(TIP_CB))
-        .invoke(svc, contact, element, true, true, proxy(TIP_CB) { null })
-}
-
-/** 内核回调接口的动态代理：Object 那几个方法自己答，其余交给 [body]。 */
-private fun proxy(iface: String, body: (Array<*>?) -> Any?): Any {
-    val c = cls(iface)
-    return Proxy.newProxyInstance(loader, arrayOf(c)) { self, m, args ->
-        when (m.name) {
-            "toString" -> "Qself$" + c.simpleName
-            "hashCode" -> System.identityHashCode(self)
-            "equals" -> self === args?.get(0)
-            else -> body(args)
-        }
-    }
-}
-
-private fun msgId(item: Any?): Long? = item?.let { runCatching { it.javaClass.getMethod("getMsgId").invoke(it) as? Long }.getOrNull() }
 
 /** 一条 protobuf 字段：编号、在原 buffer 里的起止、值（varint→Long，bytes→ByteArray）。 */
 class Pb(val num: Int, val start: Int, val end: Int, val value: Any)
@@ -179,15 +101,6 @@ fun ByteArray.pb(): List<Pb> {
 
 fun List<Pb>.bytes(num: Int) = firstOrNull { it.num == num }?.value as? ByteArray
 fun List<Pb>.long(num: Int) = firstOrNull { it.num == num }?.value as? Long
-
-/** InfoSyncPush 的字段 8 是 SyncMsgRecall（重连补发的撤回），整段剪掉，其余原样。 */
-fun stripSyncRecall(sync: ByteArray): ByteArray {
-    val fields = sync.pb()
-    if (fields.none { it.num == 8 }) return sync
-    val out = java.io.ByteArrayOutputStream(sync.size)
-    fields.filter { it.num != 8 }.forEach { out.write(sync, it.start, it.end - it.start) }
-    return out.toByteArray()
-}
 
 // ---- 连发合并：同一人 5 分钟内连着发的消息，后面那些不再画头像（占位留着，气泡不会往边上挪）和昵称行。
 // 列表适配器绑定每一行时先看它跟上一行是不是「连发」，头像 / 昵称组件绑定完再按结果折起来。
@@ -236,12 +149,15 @@ private fun follows(prev: Any?, cur: Any?): Boolean {
 
 private fun record(item: Any?): Any? = item?.let { runCatching { it.javaClass.getMethod("getMsgRecord").invoke(it) }.getOrNull() }
 
+private fun msgId(item: Any?): Long? =
+    item?.let { runCatching { it.javaClass.getMethod("getMsgId").invoke(it) as? Long }.getOrNull() }
+
 // ---- 回复不@：QQ 回复消息时会往输入框插一个「@昵称 」，这一步整个跳过。
 
 /**
  * ponytail: 直接不跑插 @ 的那个方法（上游 QAuxiliary 的 fallback 策略）。上游更稳的做法是双钩子——
  * 进回复流程时置标志、让「这条消息是不是匿名」的判断返回 true，于是只跳掉 @ 那一段；
- * 但那个判断读的 anonymousExtInfo 字段在 9.2.10 的 dex 里找不到读点，不硬凑。
+ * 但那个判断读的字段在 9.2.10 的 dex 里找不到读点，不硬凑。
  * 真机上回复要是掉帧、或者引用条出不来，就回来上双钩子。
  */
 fun replyNoAt() = hook(cls("com.tencent.mobileqq.aio.input.reply.i").method("k")) { null }

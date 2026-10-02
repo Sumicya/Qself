@@ -8,8 +8,6 @@
 # ---------- 入口 / 全局 Qself.kt, Hook.kt
 lit    android.app.ActivityThread
 lit    com.tencent.mobileqq
-lit    trpc.msg.olpush.OlPushService.MsgPush
-lit    trpc.msg.register_proxy.RegisterProxy.InfoSyncPush
 
 # ---------- 开关圆钮 Knob.kt
 class  com.tencent.mobileqq.utils.QQTheme
@@ -49,36 +47,20 @@ field  com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant#pendantId
 field  com.tencent.qqnt.kernel.nativeinterface.VASMsgAvatarPendant#pendantDiyInfoId
 
 # ---------- 防撤回 Chat.kt
-class  com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession
+lit    trpc.msg.olpush.OlPushService.MsgPush
+lit    trpc.msg.register_proxy.RegisterProxy.InfoSyncPush
 class  com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession$CppProxy
 member! com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession$CppProxy#onMsfPush
-member! com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession#getMsgService
-class  com.tencent.qqnt.kernel.nativeinterface.IKernelMsgService
-member! com.tencent.qqnt.kernel.nativeinterface.IKernelMsgService#getMsgsBySeqAndCount
-member! com.tencent.qqnt.kernel.nativeinterface.IKernelMsgService#addLocalJsonGrayTipMsg
-class  com.tencent.qqnt.kernel.nativeinterface.IMsgOperateCallback
-class  com.tencent.qqnt.kernel.nativeinterface.IAddJsonGrayTipMsgCallback
-class  com.tencent.qqnt.kernelpublic.nativeinterface.Contact
-member! com.tencent.qqnt.kernelpublic.nativeinterface.Contact#init
-class  com.tencent.qqnt.kernelpublic.nativeinterface.JsonGrayElement
-member! com.tencent.qqnt.kernelpublic.nativeinterface.JsonGrayElement#init
-class  com.tencent.qqnt.kernelpublic.nativeinterface.XmlToJsonParam
+
+# ---------- 连发合并 Chat.kt
+# 下面这些既是连发合并读的，也是它判断「同一人 5 分钟内」用的
 class  com.tencent.qqnt.kernel.nativeinterface.MsgRecord
-field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgSeq
-field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgId
 field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgType
 field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgTime
 field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#senderUid
-field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#sendNickName
-field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#sendMemberName
 class  com.tencent.mobileqq.aio.msg.AIOMsgItem
 member! com.tencent.mobileqq.aio.msg.AIOMsgItem#getMsgRecord
 member! com.tencent.mobileqq.aio.msg.AIOMsgItem#getMsgId
-class  com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB
-member! com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB#k1
-member! com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB#s1
-
-# ---------- 连发合并 Chat.kt
 class  com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a
 member! com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a#n0
 member! com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a#d0
@@ -101,7 +83,7 @@ member! com.tencent.mobileqq.activity.ForwardRecentActivity#getForwardTargetKey
 member! com.tencent.mobileqq.activity.ForwardRecentActivity#refreshRightBtn
 field  com.tencent.mobileqq.activity.ForwardRecentActivity#mForwardTargetMap
 field  com.tencent.mobileqq.activity.ForwardRecentActivity#mSelectedAndSearchBar
-# 「隐藏在线状态」是视图规则，认的是服务器发的文案，dex 里没有对应落点。
+# 在线状态那行（Looks.kt 的 ONLINE）是视图规则，认的是服务器发的文案，dex 里没有对应落点。
 
 # ---------- 昵称行只留名字 Chat.kt
 class  com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock

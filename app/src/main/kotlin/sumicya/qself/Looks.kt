@@ -58,7 +58,6 @@ private val DRAWER = setOf(
     "会员", "SVIP", "钱包", "装扮", "小世界", "免流量", "小游戏", "厘米秀", "QQ秀", "QQ空间", "游戏中心", "腾讯文档", "打卡", "天气", "等级",
 )
 
-// 好友聊天标题栏昵称下面那行在线状态（文案是服务器发的，所以只能按长相认：小、在顶部、字就是这些）
 private val ONLINE = setOf(
     "在线", "离线", "忙碌", "隐身", "Q我", "手机在线", "WiFi在线", "Wi-Fi在线", "4G在线", "5G在线", "PC在线", "平板在线",
 )
@@ -70,10 +69,10 @@ private fun trim(v: View, inDrawer: Boolean) {
     // 侧栏里一行行可点的：打卡、天气、等级、会员、装扮……（文案多半带「我的」前缀，所以用包含）
     val row = inDrawer && v.isClickable && v.height in 1..(96 * v.dp).toInt() &&
         texts(v).any { t -> DRAWER.any { it in t } }
+    // 昵称下面那行在线状态（文案是服务器发的，所以只能按长相认：小、在顶部、字就是这些）
     val status = v is TextView && (v.text?.toString()?.trim() ?: "") in ONLINE &&
         v.height in 1..(40 * v.dp).toInt() && windowY(v) < 200 * v.dp
-    hide(v, on("标题栏侧栏精简") && (title || row || v.javaClass.simpleName == "WeatherSettingMeItemView") ||
-        on("隐藏在线状态") && status)
+    hide(v, title || row || status || v.javaClass.simpleName == "WeatherSettingMeItemView")
 }
 
 private val hidden = WeakHashMap<View, Int>()
@@ -116,7 +115,7 @@ private fun homeBar(bar: ViewGroup) {
     (bar.getChildAt(0) as? ViewGroup)?.let { strip ->
         for (i in 0 until strip.childCount) {
             val tab = strip.getChildAt(i)
-            hide(tab, on("藏频道动态") && texts(tab).any { "频道" in it || "动态" in it || "小世界" in it })
+            hide(tab, texts(tab).any { "频道" in it || "动态" in it || "小世界" in it })
             if (glass) fit(tab)
         }
     }

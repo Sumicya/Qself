@@ -3,9 +3,11 @@
 ## 是什么
 
 一个纯钩子的 LSPosed 模块（libxposed API 102），只针对 QQ 9.2.10 / Android 16。模块 APK 没有界面；
-纯 Kotlin，八个文件（约 1500 行），没有第三方依赖、没有 `.so`、不联网。外观照 NagramXF 那套长相做（液态玻璃 + Monet 取色 + TG 式输入栏）。
+纯 Kotlin，八个文件（约 1300 行），没有第三方依赖、没有 `.so`、不联网。外观照 NagramXF 那套长相做（液态玻璃 + Monet 取色 + TG 式输入栏）。
 
-开关是 QQ 主页底栏右上角一颗圆钮弹出的系统对话框，状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
+开关是 QQ 主页底栏右上角那颗玻璃圆钮弹出的**系统多选对话框**，状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
+面板里只有 `Qself.kt` 的 `knobs` 那四个（玻璃底栏 / Monet取色 / TG输入栏 / 防撤回）：会互相打架的、或关掉要重启才复原的才配开关，
+其余功能一律生效。**加新功能默认不给开关** —— 先问「这个真需要单独关吗」。
 
 **改任何落点之前先跑 `tools/dexcheck.py`**（真包在 `Sumicya/qqapk`，`cat qq.a* > qq.apk`）。
 本地没有 Android SDK 时用 `ci/check.sh` 做类型检查 + 跑 ProtoTest（第一次会拉工具链到 `~/.cache/qself-tc`）。
@@ -14,12 +16,15 @@
 
 按 [ponytail](https://github.com/DietrichGebert/ponytail) 来：
 - 先问「不做行不行」；再看仓库里有没有现成的；再看 Kotlin 标准库；再看 Android 原生 API；最后才写代码
-- 不加抽象、不加依赖、不加样板；能删就删；一个功能 = 一个顶层函数 + `Qself.kt` 清单里一行（清单顺序就是开关顺序）
+- 不加抽象、不加依赖、不加样板；能删就删；一个功能 = 一个顶层函数 + `Qself.kt` 的 `features` 里一行；
+  纯视图规则（只在 `Looks.kt` / `Input.kt` 里按名字查开关的）不进 `features`，要进面板就只写进 `knobs`
 - 钩子体不要 try/catch 兜底整个功能：libxposed 默认异常模式下，钩子抛异常等于这一次没装。
   但**从 `chain` 取参数、反射取视图这类可能落在兄弟子类上的动作要包 `runCatching`** —— 挂点在基类时，钩子会盖住所有子类
-- 钩子经 `hook()` 装就自动受开关管；视图规则自己 `on("功能名")`
+- 只有名字在 `knobs` 里的功能，`hook()` 才查开关（`install` 里给 `feature` 赋值）；不受管的功能 `feature = null`，
+  钩子少一次 SharedPreferences 读；视图规则自己 `on("功能名")`，只准查 `knobs` 里的名字
 - minSdk 36：只有 Android 16，别写 `SDK_INT` 判断和降级分支
 - 故意省掉的地方写 `ponytail:` 注释，说清上限和往上走的路
+- 面板就是系统对话框，别自己画卡片：对话框是独立窗口，录不到宿主身后的画面，玻璃只能用在钮上
 - 非平凡逻辑留一份能跑的检查（目前只有 `ProtoTest.kt`）
 - 外观那三个文件（`Glass.kt` / `Input.kt` / `Looks.kt`）全是视图规则，dex 核不到，只能靠真机；
   改完说清楚改了哪块长相，别让人猜
@@ -48,6 +53,11 @@
 4. 装上后看 `logcat -s Qself` 那一行，✗ 的再修
 
 ## 做不到的（别再去挖一遍）
+
+- **防撤回做装饰**：把被撤回那条压成半透明、往会话里插一条「xx 尝试撤回一条消息」灰字 —— 真机上没做到过（要按 seq
+  回捞 `getMsgsBySeqAndCount`、再 `addLocalJsonGrayTipMsg`、还得把 msgId 存下来，约一百行），已删，只保留「吞掉推送」。
+- **面板上标 ✗**：给「这版 QQ 没装上的功能」画叉没意义 —— 视图规则压根不参与安装，标出来也是假的。✗ 只写在
+  `logcat -s Qself` 那一行里。
 
 - **全量 Monet 化**：QQ 没有集中的取色入口。`com.tencent.mobileqq.theme` 包里只有 DarkModeManager /
   ThemeConstants，一个返回颜色的方法都没有；界面颜色散在 QUI 设计系统的几百个 drawable 里
