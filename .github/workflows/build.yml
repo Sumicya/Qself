@@ -54,18 +54,20 @@ jobs:
           if unzip -l "$APK" | grep -q 'assets/xposed_init'; then echo 'legacy entry packaged' >&2; exit 1; fi
           sha256sum "$APK"
       # 包直接挂到 latest 这个 release 上：手机上不用装 gh、不用 auth login，一条 curl 就够。
-      # 产物名带版本号（qself-26.10.2.140.apk），和 versionName 同源。
+      # 版本化产物（qself-26.10.2.140.apk，和 versionName 同源）+ 固定别名 qself.apk 给手机下载用。
       - name: 挂到 latest release
         if: github.event_name == 'push'      # PR 构建不许覆盖 latest
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create latest --title latest --notes "最新一次 CI 构建，版本 $QSELF_VERSION，装这个就行（覆盖式，永远只有一个包）" 2>/dev/null || true
-          mv app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/qself-$QSELF_VERSION.apk"
-          gh release upload latest "app/build/outputs/apk/debug/qself-$QSELF_VERSION.apk" --clobber
-          # 永远只有一个包：别的版本名（含旧固定名）全清掉
+          APK=app/build/outputs/apk/debug
+          mv "$APK/app-debug.apk" "$APK/qself-$QSELF_VERSION.apk"
+          cp "$APK/qself-$QSELF_VERSION.apk" "$APK/qself.apk"
+          gh release upload latest "$APK/qself-$QSELF_VERSION.apk" "$APK/qself.apk" --clobber
+          # 永远只有当前版本的两个文件：别的全清掉
           for a in $(gh release view latest --json assets --jq '.assets[].name'); do
-            [ "$a" = "qself-$QSELF_VERSION.apk" ] || gh release delete-asset latest "$a" --yes
+            case "$a" in "qself-$QSELF_VERSION.apk"|qself.apk) ;; *) gh release delete-asset latest "$a" --yes ;; esac
           done
       - name: Publish the build log on failure
         if: failure()

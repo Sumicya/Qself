@@ -24,11 +24,11 @@
 
 前置：root、LSPosed 2.x。Termux 里：
 
-1. 取最新构建。产物名带版本号（如 `qself-26.10.2.140.apk`，版本 = 年.月.日.CI 序号，
-   永远挂在 release `latest` 上），第一条命令自动解析出下载地址：
+1. 取最新构建。永远挂在 release `latest` 上，固定入口 `qself.apk`
+   （旁边还有一份同内容的版本化副本，如 `qself-26.10.2.156.apk`；版本 = 年.月.日.CI 序号）：
 
    ```sh
-   curl -s https://api.github.com/repos/Sumicya/Qself/releases/tags/latest | sed -n 's/.*"browser_download_url": *"\([^"]*\)".*/\1/p' | head -1 | xargs curl -L -o qself.apk
+   curl -L -o qself.apk https://github.com/Sumicya/Qself/releases/download/latest/qself.apk
    ```
 
 2. 安装。Termux 主目录系统读不到，先挪到 `/data/local/tmp`（root），装完连临时文件一起删；
