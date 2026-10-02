@@ -43,7 +43,8 @@
 
 ## 用
 
-1. Actions 里下载最新一次构建的 APK（或 `gh run download -R Sumicya/Qself`），安装
+1. 下最新一次的包（CI 每次 push 覆盖式挂到 release `latest`，公开可下，不用装 gh、不用登录）：
+   `curl -L -o qself.apk https://github.com/Sumicya/Qself/releases/download/latest/app-debug.apk`
 2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开
 3. 主页底栏胶囊旁边那颗圆钮（右边放不下就在胶囊右上方）：点开那四行勾选即时生效（受开关管的钩子每次被调用都查一遍）；
    已经浮起来的底栏、排好的输入行要点「重启 QQ」才复原

@@ -1,4 +1,4 @@
-# Qself CI。每次 push 两个作业：dex 拿真 QQ 包核每一个落点；apk 跑 ProtoTest 再出 debug APK 放进 Artifacts，
+# Qself CI。每次 push 两个作业：dex 拿真 QQ 包核每一个落点；apk 跑 ProtoTest 再出 debug APK 挂到 release `latest`（覆盖式，手机上 curl 一条命令就装），
 # 失败时把 Gradle 日志尾巴贴成提交评论。
 name: Build
 
