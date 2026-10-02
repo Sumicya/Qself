@@ -77,7 +77,8 @@
 
 ## 构建
 
-出包只在 CI：push 之后 GitHub Actions（`.github/workflows/build.yml`）产 APK，`.github/workflows/` 本身 agent 也改得动。
+出包只在 CI：push 之后 GitHub Actions（`.github/workflows/build.yml`）产 APK，覆盖式挂到 release `latest`（公开，手机上 `curl -L` 直接下，别在手机上装 gh）。
+`.github/workflows/` 本身 agent 也改得动（刚验证过：改 workflow 的提交推得动）。
 本地不装 SDK 就 `bash ci/check.sh`（Termux 上 `pkg install nodejs-lts python gh` 之后能跑：类型检查 + ProtoTest）。
 
 CI 两个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 跑单元测试再出包；
