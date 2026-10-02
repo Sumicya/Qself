@@ -1,4 +1,5 @@
-import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
 
 plugins {
     id("com.android.application")
@@ -12,11 +13,19 @@ android {
         applicationId = "sumicya.qself"
         minSdk = 36 // 只对着 Android 16 写：RenderEffect / AGSL 都不用判版本
         targetSdk = 37
-        // 版本 = 构建日期.CI 构建号（本地编译没 run 号就是 .0）。vc 就是 run 号本身：
-        // 会比装着的旧包小（判降级），模块是手动装的，卸了重装就行。
+        // 版本 = 构建日（Asia/Shanghai）.CI 序号。CI 上 QSELF_VERSION 由工作流从提交时间算好喂进来，
+        // 重试、跨日重试都不变；本地自己按提交时间算，没有 run 号就 .0。
+        // versionCode 就是 run 号本身：单调递增（模块是手动覆盖装的，够用）。
+        versionName = System.getenv("QSELF_VERSION") ?: run {
+            val epoch = runCatching {
+                val out = java.io.ByteArrayOutputStream()
+                exec { commandLine("git", "show", "-s", "--format=%ct", "HEAD"); standardOutput = out }
+                out.toString().trim().toLong()
+            }.getOrDefault(System.currentTimeMillis() / 1000)
+            val d = Instant.ofEpochSecond(epoch).atZone(ZoneId.of("Asia/Shanghai")).toLocalDate()
+            "${d.year % 100}.${d.monthValue}.${d.dayOfMonth}.0"
+        }
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = LocalDate.now().let { "${it.year % 100}.${it.monthValue}.${it.dayOfMonth}." } +
-            (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0)
     }
 
     // 固定签名（app/qself.p12，密码 qself）：每次 CI 出的包都能直接覆盖安装，热重载才接得上。

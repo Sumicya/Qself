@@ -32,6 +32,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+      - name: 版本号：提交日（Asia/Shanghai）.run 号；重试、跨日重试不变
+        run: echo "QSELF_VERSION=$(TZ=Asia/Shanghai date -d "@$(git show -s --format=%ct HEAD)" +%y.%-m.%-d).$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -52,13 +54,16 @@ jobs:
           if unzip -l "$APK" | grep -q 'assets/xposed_init'; then echo 'legacy entry packaged' >&2; exit 1; fi
           sha256sum "$APK"
       # 包直接挂到 latest 这个 release 上：手机上不用装 gh、不用 auth login，一条 curl 就够。
+      # 产物名带版本号（qself-26.10.2.140.apk），和 versionName 同源。
       - name: 挂到 latest release
         if: github.event_name == 'push'      # PR 构建不许覆盖 latest
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create latest --title latest --notes "最新一次 CI 构建，装这个就行（覆盖式，永远只有一个包）" 2>/dev/null || true
-          gh release upload latest app/build/outputs/apk/debug/app-debug.apk --clobber
+          gh release create latest --title latest --notes "最新一次 CI 构建，版本 $QSELF_VERSION，装这个就行（覆盖式，永远只有一个包）" 2>/dev/null || true
+          mv app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/qself-$QSELF_VERSION.apk"
+          gh release upload latest "app/build/outputs/apk/debug/qself-$QSELF_VERSION.apk" --clobber
+          gh release delete-asset latest app-debug.apk --yes 2>/dev/null || true   # 旧的固定名清掉
       - name: Publish the build log on failure
         if: failure()
         env:

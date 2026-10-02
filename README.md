@@ -1,79 +1,76 @@
 # Qself
 
-给 NT QQ 的一个 LSPosed 模块：**自由、简单、现代、原生**。装上即全部生效，不联网、没有第三方库、没有一个 `.so`。
-开关不在模块里，在 QQ 主页底栏胶囊旁边那颗玻璃圆钮里：点开是系统的多选对话框，
-只有 4 个开关（玻璃底栏 / Monet取色 / TG输入栏 / 防撤回）——其余一律装上即生效。
-状态存进 QQ 自己的 SharedPreferences；哪个功能在这版 QQ 里没装上，看 `logcat -s Qself` 那一行的 ✗。
+给 NT QQ 的一个 LSPosed 模块：装上即全部生效，不联网、没有第三方库、没有一个 `.so`。
+开关只有底栏玻璃圆钮里那 4 个（玻璃底栏 / Monet 取色 / TG 输入栏 / 防撤回），其余不配开关。
+只对一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。
 
-只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
-但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，167 条）——换版本先看那张表红哪条，别猜。
+落点（类名、方法名）全部写死，但每一个都在 CI 里拿真 dex 逐条核过
+（[`tools/symbols.txt`](tools/symbols.txt)，167 条）——换版本先看那张表红哪条，别猜。
 
 ## 做了什么
 
-外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
-- 首页底栏浮成一颗居中的液态玻璃胶囊（每个页签 56dp，只包住页签）：不模糊，系统 `RenderEffect` + AGSL 做边缘折射、
-  提饱和、淡色罩，没有描边；选中项是一块弹着滑过去的亮胶囊；按下去透镜往内凹、指头底下浮一团柔光，松手即灭
-- **Monet 取色**：玻璃的罩色、选中圆、圆钮的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
-  关掉就退回原来那套写死的中性色
-- 输入栏玻璃化：原生输入框的背景换成液态玻璃（按压同样凹 + 柔光），输入栏外层的底色去掉；
-  QQ 自己的按钮、输入法和触摸逻辑一律不动，开关一关原样复原
-- 藏掉「频道」「动态」「小世界」页签
-- 聊天标题栏去掉一起听 / 一起看 / 群游戏那排；侧栏去掉打卡、天气、等级、会员、装扮、钱包一类的入口（数据源和视图两头都拦）
-- 隐藏好友聊天标题栏那行在线状态（在线 / 手机在线 / WiFi在线 / 忙碌 / 隐身…）
-- 会员装饰归零：充值气泡、魔法字体、头像挂件一律按默认画；昵称行只留名字（不显示群等级、头衔、成员等级、会员图标）
-- **屏蔽红点引导**：群红点、王者小队、群头衔、游戏中心红点、乐吧引导气泡、资料卡引导、虚拟形象角标一律不亮
-- **去会员等级**：资料卡上 SVIP / VIP / 大会员 / 大会员年费那排图标不画
+- 外观：首页底栏浮成一颗居中的液态玻璃胶囊（系统 `RenderEffect` + AGSL 边缘折射，不加模糊）；
+  按压整颗缩进并压暗，松手弹回；选中项是一块弹着滑过去的亮胶囊。Monet 取色（系统动态色，可关）。
+  输入栏玻璃化（只换材质，不动 QQ 的输入控件）。藏「频道」「动态」「小世界」页签；
+  清理标题栏、侧栏的运营入口；会员装饰归零、昵称只留名字；红点引导、在线状态、轻互动与表情雨一律屏蔽
+- 聊天：防撤回（吞掉撤回推送，被撤回那条压成半透明、右上角画 ✗，标记重启还在）；
+  连发合并（成组不重复读头像昵称）；回复不 @；左滑回复不设限；转发页常驻多选
+- 自由化：网页走系统 WebView；统计上报（灯塔 / StatisticCollector）空转；不初始化崩溃上报
 
-聊天
-- 防撤回：私聊、群聊、重连补发的撤回都吞掉；被撤回的那条压成半透明、右上角画一个 ✗（标记存在 QQ 自己的偏好里，重启还在）
-- 连发合并：同一人 5 分钟内连着发的消息，后面的不再画头像（占位留着）和昵称行，像 Telegram 那样成组
-- **回复不@**：回复消息时不再往输入框插「@昵称 」
-- **左滑回复不设限**：卡片 (Ark) 消息也能左滑回复
-- 转发页一直显示好友 / 群 / 多选入口
+防撤回那批的思路来自上游 [QAuxiliary](https://github.com/cinit/QAuxiliary)，落点按 9.2.10 的真 dex 重新核过。
+外观参照 [NagramXF](https://github.com/Keeperorowner/NagramXF) 的长相。
 
-以上加防撤回那批都是从上游 [QAuxiliary](https://github.com/cinit/QAuxiliary) 同步过来的思路，落点重新按 9.2.10 的真 dex 核过。
-「转发不限人数」试过又删了：往 QQ 自己的转发 map 里塞是绕过它的状态机，这版钩子也落不进去，不硬凑。
-- 「+」面板只留正经附件，一起派对、礼物、直播间之类剔掉
-- 屏蔽轻互动特效与表情雨
+## 装
 
-自由化
-- 网页一律走系统 WebView，不加载 X5
-- 灯塔 (beacon) 与 StatisticCollector 的统计上报空转
-- 不初始化崩溃上报
+前置：root、LSPosed 2.x。Termux 里：
 
-## 用
+1. 取最新构建。产物名带版本号（如 `qself-26.10.2.140.apk`，版本 = 年.月.日.CI 序号，
+   永远挂在 release `latest` 上），第一条命令自动解析出下载地址：
 
-1. 装最新一次 CI 构建（挂在 release `latest` 上，Termux 里两条命令，不用装 `gh`）：
    ```sh
-   curl -L -o qself.apk https://github.com/Sumicya/Qself/releases/download/latest/app-debug.apk
-   # Termux 主目录系统读不到，挪到 /data/local/tmp 再装（root）；装完连临时文件一起删。没 root 就 `termux-open qself.apk` 手动装
-   su -c 'mv /data/data/com.termux/files/home/qself.apk /data/local/tmp/qself.apk && pm install -r /data/local/tmp/qself.apk && rm /data/local/tmp/qself.apk'
+   curl -s https://api.github.com/repos/Sumicya/Qself/releases/tags/latest | sed -n 's/.*"browser_download_url": *"\([^"]*\)".*/\1/p' | head -1 | xargs curl -L -o qself.apk
    ```
-2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开（Termux 的 `am` 是残缺版，用 `su -c 'am force-stop com.tencent.mobileqq'`）
-3. 主页底栏胶囊旁边那颗圆钮（右边放不下就在胶囊右上方）：点开勾选即时生效（钩子每次被调用都查开关）；
-   已经浮起来的底栏、排好的输入行要点「重启 QQ」才复原
-4. 每个 QQ 进程启动时打一行日志，`su -c 'logcat -d -s Qself'` 或 LSPosed 管理器的日志页可见，形如
-   `Qself 26.9.27.12 @ com.tencent.mobileqq ✓系统WebView ✓防撤回 … ✗某功能(NoSuchMethodException: …)`
-   —— ✗ 就是那个功能在这版 QQ 里找不到落点，其余不受影响。**把这一行贴回来就能修。**
-5. 之后换 APK 直接覆盖安装即可，LSPosed 会热重载（签名固定在 `app/qself.p12`）
+
+2. 安装。Termux 主目录系统读不到，先挪到 `/data/local/tmp`（root），装完连临时文件一起删；
+   没有 root 就 `termux-open qself.apk` 手动装：
+
+   ```sh
+   su -c 'mv /data/data/com.termux/files/home/qself.apk /data/local/tmp/qself.apk'
+   su -c 'pm install -r /data/local/tmp/qself.apk'
+   su -c 'rm /data/local/tmp/qself.apk'
+   ```
+
+3. LSPosed 里启用 Qself（作用域已写死为 QQ），强行停止 QQ 再打开。
+   Termux 自带的 `am` 是残缺版，用 `su -c 'am force-stop com.tencent.mobileqq'`。
+   之后换包直接覆盖安装，签名固定在 `app/qself.p12`，LSPosed 会热重载。
+
+## 查错
+
+每个 QQ 进程启动时打一行日志，`su -c 'logcat -d -s Qself'` 或 LSPosed 管理器的日志页可见，形如：
+
+```
+Qself 26.10.2.140 @ com.tencent.mobileqq ✓防撤回 ✓玻璃底栏 … ✗某功能(NoSuchMethodException: …)
+```
+
+✗ 表示该功能在这版 QQ 里找不到落点，其余不受影响。**把这一行贴回来就能修。**
 
 ## 结构
 
 ```
 app/src/main/kotlin/sumicya/qself/
-  Qself.kt   入口：功能清单、4 个开关（玻璃底栏 / Monet取色 / TG输入栏 / 防撤回）、按进程装、日志
+  Qself.kt   入口：功能清单、4 个开关、按进程装、日志
   Hook.kt    libxposed 封装（hook / constant / afterNew / 反射读写字段方法）与开关读取
   Knob.kt    主页那颗圆钮与开关面板（系统对话框）
   Quiet.kt   自由化
-  Chat.kt    聊天，含防撤回用的几十行 protobuf 读取、撤回标记（半透明 + ✗）、连发合并、回复不@
+  Chat.kt    聊天：防撤回（含几十行 protobuf 读取与撤回标记）、连发合并、回复不 @
   Looks.kt   外观：盯住每个 Activity 的视图树套规则
-  Input.kt   输入栏玻璃化（只换材质，不动 QQ 的输入控件）
+  Input.kt   输入栏玻璃化（只换材质）
   Glass.kt   液态玻璃 Drawable（RenderNode + AGSL + Monet 取色，底栏用时自带滑动亮胶囊）
 app/src/test/kotlin/sumicya/qself/ProtoTest.kt   防撤回判断的唯一一份可跑检查
 app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop、作用域
 tools/symbols.txt    落点表：代码依赖的每一个名字
 tools/dexcheck.py    拿真 dex 逐条核落点，顺带 lint 源码里没登记的名字
-tools/dexq.py        最小反汇编器：按签名找落点（上游用 DexKit 在运行时搜，这里离线搜）
+tools/dexq.py        最小反汇编器：按签名找落点
 ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
 ```
 
@@ -82,7 +79,8 @@ ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
 ```sh
 git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
 python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 167 条全绿才算数
-python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
 ```
+
+## 许可
 
 GPL-3.0-or-later。源自 [QAuxiliary](https://github.com/cinit/QAuxiliary)，只留了思路，代码全部重写。
