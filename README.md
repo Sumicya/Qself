@@ -46,8 +46,8 @@
 1. 装最新一次 CI 构建（挂在 release `latest` 上，Termux 里两条命令，不用装 `gh`）：
    ```sh
    curl -L -o qself.apk https://github.com/Sumicya/Qself/releases/download/latest/app-debug.apk
-   # Termux 主目录系统读不到，拷到 /data/local/tmp 再装（root）；没 root 就 `termux-open qself.apk` 手动装
-   su -c 'cp /data/data/com.termux/files/home/qself.apk /data/local/tmp/qself.apk && pm install -r /data/local/tmp/qself.apk'
+   # Termux 主目录系统读不到，挪到 /data/local/tmp 再装（root）；装完连临时文件一起删。没 root 就 `termux-open qself.apk` 手动装
+   su -c 'mv /data/data/com.termux/files/home/qself.apk /data/local/tmp/qself.apk && pm install -r /data/local/tmp/qself.apk && rm /data/local/tmp/qself.apk'
    ```
 2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开（Termux 的 `am` 是残缺版，用 `su -c 'am force-stop com.tencent.mobileqq'`）
 3. 主页底栏胶囊旁边那颗圆钮（右边放不下就在胶囊右上方）：点开勾选即时生效（钩子每次被调用都查开关）；
