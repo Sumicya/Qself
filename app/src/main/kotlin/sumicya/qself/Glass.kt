@@ -9,14 +9,11 @@ import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.Outline
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.PixelFormat
-import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.RenderEffect
 import android.graphics.RenderNode
 import android.graphics.RuntimeShader
-import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.view.View
 import android.view.ViewGroup
@@ -24,7 +21,6 @@ import android.view.ViewOutlineProvider
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.exp
-import kotlin.math.max
 import kotlin.math.min
 
 /** 有明确可画的背后内容时做折射；QQ 的模糊控件不取样，失效时保留原生透明材质。 */
@@ -41,13 +37,11 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     private var missing = false
     private var busy = false
     private val rect = RectF()
-    private val contour = Path()
     private val here = IntArray(2)
     private val there = IntArray(2)
-    private var touchX = Float.NaN
-    private var touchY = Float.NaN
     private var press = 0f
     private var pressed = false
+    private var pressLogged = false
     private val pressAnim = ValueAnimator.ofFloat(0f, 0f).apply {
         duration = 140
         addUpdateListener { press = it.animatedValue as Float; invalidateSelf() }
@@ -66,7 +60,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         if (b.isEmpty) return
         val night = night()
         rect.set(b)
-        rect.inset(press * 4 * dp, press * 2 * dp) // 背景缩进去；命中区域和文字保持原位
+        rect.inset(press * 6 * dp, press * 4 * dp) // 按压形变：整颗胶囊缩进去，松手弹回
         val r = min(radius, rect.height() / 2f)
         val accent = monet(night, 0xFF)
         val refracted = canvas.isHardwareAccelerated && failures < 3 && !busy && runCatching { backdrop(canvas) }
@@ -74,44 +68,16 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             .getOrDefault(false)
         paint.style = Paint.Style.FILL
         paint.shader = null
-        paint.color = Color.WHITE
-        // 静止时没有高光。Monet 关掉即纯灰阶；有真实底图时才降低遮罩透明度。
+        // 静止时没有高光。Monet 关掉即纯灰阶；有真实底图时才降低遮罩透明度。按压整体略压暗。
         val base = wash(if (night) 0xAE333333.toInt() else 0xC0F5F5F5.toInt(), accent)
-        paint.color = if (refracted) {
-            (base and 0xFFFFFF) or ((Color.alpha(base) * 0.38f).toInt() shl 24)
-        } else base
+        val alpha = (Color.alpha(base) * (if (refracted) 0.38f else 1f) * (1f - press * 0.12f)).toInt()
+        paint.color = (base and 0xFFFFFF) or (alpha shl 24)
         canvas.drawRoundRect(rect, r, r, paint)
-
-        if (press > 0f) {
-            contour.reset()
-            contour.addRoundRect(rect, r, r, Path.Direction.CW)
-            val save = canvas.save()
-            canvas.clipPath(contour)
-            val x = if (touchX.isNaN()) rect.centerX() else touchX.coerceIn(rect.left, rect.right)
-            val y = if (touchY.isNaN()) rect.centerY() else touchY.coerceIn(rect.top, rect.bottom)
-            paint.color = Color.WHITE
-            paint.shader = RadialGradient(x, y, max(1f, min(rect.width(), rect.height()) * 0.52f),
-                intArrayOf(((press * 0x76).toInt() shl 24) or 0xFFFFFF, 0x00FFFFFF),
-                null, Shader.TileMode.CLAMP)
-            canvas.drawRect(rect, paint)
-            canvas.restoreToCount(save)
-            paint.shader = null
-        }
         pill(canvas, night)
     }
 
-    /** 输入框的子按钮接收点击时，按压亮斑仍跟随实际手指位置。 */
-    fun touch(x: Float, y: Float) {
-        touchX = x
-        touchY = y
-        if (pressed) invalidateSelf()
-    }
-
     /** QQ 的页签消耗触摸，底栏自身不进入 pressed；从其专用触摸入口驱动反馈。 */
-    fun press(x: Float, y: Float, down: Boolean) {
-        touch(x, y)
-        setPress(down)
-    }
+    fun press(down: Boolean) = setPress(down)
 
     private fun backdrop(canvas: Canvas): Boolean {
         if (!host.isAttachedToWindow) return false
@@ -205,10 +171,11 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         pressed = value
         pressAnim.cancel()
         if (!value) {
-            press = 0f // 松手立刻灭光、恢复形状，不留离手后的尾光
+            press = 0f // 松手立刻恢复形状
             invalidateSelf()
             return
         }
+        if (!pressLogged) { pressLogged = true; log("玻璃 按压形变触发") } // 诊断：驱动到底有没有到
         pressAnim.duration = 120
         pressAnim.setFloatValues(press, 1f)
         pressAnim.start()
@@ -265,7 +232,7 @@ uniform float bend;
 uniform float press;
 half4 main(float2 p) {
     float2 c = size * 0.5;
-    float2 h = c - float2(pad, pad) - press * dp * float2(4.0, 2.0);
+    float2 h = c - float2(pad, pad) - press * dp * float2(6.0, 4.0);
     float r = min(rad, min(h.x, h.y));
     if (r <= 0.0) return half4(0.0);
     float2 spine = clamp(p, c - h + r, c + h - r);

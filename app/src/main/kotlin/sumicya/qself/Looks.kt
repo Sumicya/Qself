@@ -137,9 +137,9 @@ fun barTouch() {
         val e = chain.args[0] as MotionEvent
         (v.background as? Glass)?.let { glass ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> glass.press(e.x, e.y, true)
-                MotionEvent.ACTION_MOVE -> glass.press(e.x, e.y, e.x in 0f..v.width.toFloat() && e.y in 0f..v.height.toFloat())
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> glass.press(e.x, e.y, false)
+                MotionEvent.ACTION_DOWN -> glass.press(true)
+                MotionEvent.ACTION_MOVE -> glass.press(e.x in 0f..v.width.toFloat() && e.y in 0f..v.height.toFloat())
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> glass.press(false)
             }
         }
         chain.proceed()
