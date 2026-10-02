@@ -134,15 +134,7 @@ fun barTouch() {
     val bar = cls("com.tencent.mobileqq.widget.QQTabLayout")
     val intercept = bar.getDeclaredMethod("onInterceptTouchEvent", MotionEvent::class.java)
     hook(intercept) { chain ->
-        val v = chain.thisObject as View
-        val e = chain.args[0] as MotionEvent
-        (v.background as? Glass)?.let { glass ->
-            when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> glass.press(true)
-                MotionEvent.ACTION_MOVE -> glass.press(e.x in 0f..v.width.toFloat() && e.y in 0f..v.height.toFloat())
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> glass.press(false)
-            }
-        }
+        feed(chain.thisObject as ViewGroup, chain.args[0] as MotionEvent)
         chain.proceed()
     }
 }
@@ -156,15 +148,41 @@ private fun pressDrive(bar: ViewGroup) {
     val orig = bar.get("mListenerInfo")?.get("onTouchListener") as? View.OnTouchListener
     if (orig != null) log("玻璃 底栏原有一个触摸监听器，接力")
     bar.setOnTouchListener { v, e ->
-        (v.background as? Glass)?.let { glass ->
-            when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> glass.press(true)
-                MotionEvent.ACTION_MOVE -> glass.press(e.x in 0f..v.width.toFloat() && e.y in 0f..v.height.toFloat())
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> glass.press(false)
-            }
-        }
+        feed(v as ViewGroup, e)
         orig?.onTouch(v, e) ?: false
     }
+}
+
+/** 触摸喂给玻璃：胶囊形变 + 指下页签缩放 + 整颗微浮（KernelSU 页签的按压手感）。 */
+private fun feed(bar: ViewGroup, e: MotionEvent) {
+    (bar.background as? Glass)?.let { glass ->
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> glass.press(true)
+            MotionEvent.ACTION_MOVE -> glass.press(e.x in 0f..bar.width.toFloat() && e.y in 0f..bar.height.toFloat())
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> glass.press(false)
+        }
+    }
+    tabPress(bar, e.x, e.actionMasked != MotionEvent.ACTION_UP && e.actionMasked != MotionEvent.ACTION_CANCEL)
+}
+
+private val pressedTab = WeakHashMap<View, View>()
+
+private fun tabPress(bar: ViewGroup, x: Float, down: Boolean) {
+    val strip = bar.getChildAt(0) as? ViewGroup ?: return
+    var target: View? = null
+    if (down) for (i in 0 until strip.childCount) strip.getChildAt(i).let {
+        if (it.visibility == View.VISIBLE && x in it.left.toFloat()..it.right.toFloat()) target = it
+    }
+    val cur = pressedTab[bar]
+    if (cur != null && cur !== target) {
+        cur.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
+        pressedTab.remove(bar)
+    }
+    if (target != null && target !== cur) {
+        pressedTab[bar] = target
+        target.animate().scaleX(0.92f).scaleY(0.92f).setDuration(50).start()
+    }
+    bar.animate().translationY((if (down) -1.5f else 0f) * bar.dp).setDuration(if (down) 50 else 150).start()
 }
 
 private val floated: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
