@@ -77,9 +77,8 @@
 
 ## 构建
 
-本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）出 APK。
-**agent 的 token 没有 workflow 权限，push 不动 `.github/workflows/`**：要改 workflow，agent 把改法写成
-一段命令交给仓库主人在 Termux 里跑（`pkg install git gh && gh auth login` 之后 clone、改、push）。
+出包只在 CI：push 之后 GitHub Actions（`.github/workflows/build.yml`）产 APK，`.github/workflows/` 本身 agent 也改得动。
+本地不装 SDK 就 `bash ci/check.sh`（Termux 上 `pkg install nodejs-lts python gh` 之后能跑：类型检查 + ProtoTest）。
 
 CI 两个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 跑单元测试再出包；
 失败时把 Gradle 日志尾巴贴成提交评论，agent 也读得到。
