@@ -6,7 +6,7 @@
 状态存进 QQ 自己的 SharedPreferences；哪个功能在这版 QQ 里没装上，看 `logcat -s Qself` 那一行的 ✗。
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
-但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，169 条）——换版本先看那张表红哪条，别猜。
+但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，157 条）——换版本先看那张表红哪条，别猜。
 
 ## 做了什么
 
@@ -81,7 +81,7 @@ ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
 
 ```sh
 git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
-python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 169 条全绿才算数
+python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 157 条全绿才算数
 python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
 ```
 

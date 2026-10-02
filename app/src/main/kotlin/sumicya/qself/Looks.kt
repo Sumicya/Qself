@@ -233,37 +233,30 @@ private fun settle(bar: ViewGroup) {
     }
 }
 
-/** QQ 两种角标：QUIBadge 自己画 mText，旧版 TextView 用第三个参数做数量；别去视图树找不存在的子 TextView。 */
+/** 具体未读：「99+」是 QUIBadge.updateNum 写进 mText 的（dex 核过，唯一写点）。
+ *  上一版钩 setter + 绘制小方法没生效 —— 私有绘制方法多半被 QQ 自己的 R8 内联，运行时没人调。
+ *  这版只盯两个必定被调的点：updateNum 本尊（反优化防内联）+ onDraw 画前兜底。 */
 fun exactCount() {
     val badge = cls("com.tencent.mobileqq.quibadge.QUIBadge")
     val text = badge.getDeclaredField("mText").apply { isAccessible = true }
     val num = badge.getDeclaredField("mNum").apply { isAccessible = true }
     val paint = badge.getDeclaredField("mTextPaint").apply { isAccessible = true }
-    // updateNum 是 private 小方法，ART 可能内联；改从 QQ 对外暴露的设置入口落钩。
-    for (name in listOf("setRedNum", "setGrayNum", "setAIOBarNum", "setRedNumWithIcon", "setGrayNumWIthIcon"))
-        hook(badge.method(name)) { chain ->
-            chain.proceed().also {
-                val n = chain.args[0] as Int
-                if (n > 99) {
-                    text.set(chain.thisObject, n.toString())
-                    (chain.thisObject as View).apply { requestLayout(); invalidate() }
-                }
-            }
-        }
-    // 首页也走 QUIBadge：RedTypeInfo.red_content 经 tianshu.ui.b.b() 原样解析成数字，
-    // updateTabInfo() 调 setRedNum()，真正的“99+”出自 QUIBadge.updateNum()。
-    // 若 QQ 内联了 setter 或后来又调用 updateNum，绘制当帧从 mNum 恢复真实文字。
-    for (name in listOf("drawText", "drawIconAndText")) {
-        val draw = badge.getDeclaredMethod(name, Canvas::class.java)
-        hook(draw) { chain ->
-            val b = chain.thisObject
-            val n = num.getInt(b)
-            if (n > 99 && text.get(b) != n.toString()) text.set(b, n.toString())
-            chain.proceed()
-        }
+    var hits = 0
+    fun fix(b: Any, from: String) {
+        val n = num.getInt(b)
+        if (n <= 99 || text.get(b) == n.toString()) return
+        text.set(b, n.toString())
+        (b as View).apply { requestLayout(); postInvalidate() }
+        if (hits < 3) { hits++; log("角标 $from 溢出 $n") } // 诊断：真数字到底从哪条路来
     }
-    xposed.deoptimize(badge.getDeclaredMethod("onDraw", Canvas::class.java))
-    // QQ 原布局给 99+ 固定 31dp，onMeasure() 调 getMinWidth()：按原始 mNum 测宽。
+    val update = badge.getDeclaredMethod("updateNum", Integer.TYPE)
+    hook(update) { chain -> chain.proceed().also { fix(chain.thisObject, "updateNum") } }
+    xposed.deoptimize(update) // ART 别想把它内联进调用方让钩子落空
+    hook(badge.getDeclaredMethod("onDraw", Canvas::class.java)) { chain ->
+        fix(chain.thisObject, "onDraw")
+        chain.proceed()
+    }
+    // 宽度：QQ 按「99+」量出来的宽度放不下三位数，按真数字补宽
     hook(badge.method("getMinWidth")) { chain ->
         val width = chain.proceed() as Int
         val b = chain.thisObject
@@ -273,23 +266,27 @@ fun exactCount() {
             width + ceil(p.measureText(n.toString()) - p.measureText("99+")).toInt().coerceAtLeast(0)
         }
     }
-    // 主页页签的角标不是 QUIBadge：TabFrameControllerImpl.generateRedTouch 创建 RedTouch，
-    // 它还有独立的 maxNum 截断值。只在排版数字前提高上限，保留 QQ 自己的更新/点击流程。
+    // 主页页签角标走 RedTouch，它有自己的 maxNum 截断；排版数字前把上限抬掉
+    var redHits = 0
     val red = cls("com.tencent.mobileqq.tianshu.ui.RedTouch")
     val maxNum = red.getDeclaredField("maxNum").apply { isAccessible = true }
     hook(red.method("getTextRedPoint")) { chain ->
         maxNum.setInt(chain.thisObject, Int.MAX_VALUE)
+        if (redHits < 3) { redHits++; log("角标 RedTouch 放行") }
         chain.proceed()
     }
+    // 老式 TextView 角标：数量是第三个实参（dex 体已核）
+    var dHits = 0
     hook(cls("com.tencent.widget.d").method("d")) { chain ->
         chain.proceed().also {
             val n = chain.args[2] as Int // d(TextView, type, count, background, limit, label, isRed)
             val v = chain.args[0] as? TextView
-            if (n > 99 && v?.text?.toString() == "99+") {
+            if (n > 99 && v != null && v.text?.toString() == "99+") {
                 v.text = n.toString()
                 val lp = v.layoutParams
                 val width = ceil(v.paint.measureText(v.text.toString()) + v.paddingLeft + v.paddingRight + 4 * v.dp).toInt()
                 if (lp != null && lp.width in 1 until width) { lp.width = width; v.layoutParams = lp }
+                if (dHits < 3) { dHits++; log("角标 widget.d $n") }
             }
         }
     }

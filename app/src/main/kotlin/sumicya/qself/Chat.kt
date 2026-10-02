@@ -40,24 +40,37 @@ private val loaded by lazy { store()?.getString("recalled", null)?.split(',')?.f
 
 fun antiRecall() {
     val proxy = cls("com.tencent.qqnt.kernel.nativeinterface.IQQNTWrapperSession\$CppProxy")
+    var pushHits = 0
     hook(proxy.method("onMsfPush")) { chain ->
         val cmd = chain.getArg(0) as? String
         val body = chain.getArg(1) as? ByteArray
         when {
             body == null -> chain.proceed()
-            cmd == MSG_PUSH && recall(body).also(::remember) != null -> null // 吞
             cmd == INFO_SYNC -> chain.proceed(chain.args.toTypedArray().also { it[1] = stripSyncRecall(body) })
+            cmd == MSG_PUSH -> {
+                val keys = recall(body)
+                if (keys == null) chain.proceed()
+                else {
+                    remember(keys)
+                    if (pushHits < 2) { pushHits++; log("撤回推送已吞 ${keys.size} 条标记") }
+                    null
+                }
+            }
             else -> chain.proceed()
         }
     }
     // 列表绑定每一行时标记。k1 / s1 声明在 AIOBubbleMsgItemVB 本类（dex 核过）；
     // 参数是 AIOMsgItem 或它基类的兄弟子类，取记录包在 runCatching 里，兄弟走进来就当没这回事。
     val vb = cls("com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB")
+    var markHits = 0
     hook(vb.method("k1")) { chain ->
         chain.proceed().also {
             val root = runCatching { vb.getMethod("s1").invoke(chain.thisObject) as? View }.getOrNull() ?: return@also
             val rec = record(chain.getArg(1)) ?: return@also
-            mark(root, loaded && "${rec.get("chatType")}:${rec.get("peerUid")}:${rec.get("msgSeq")}" in recalled)
+            val key = "${rec.get("chatType")}:${rec.get("peerUid")}:${rec.get("msgSeq")}"
+            val hit = loaded && key in recalled
+            if (markHits < 2 && loaded && recalled.isNotEmpty()) { markHits++; log("撤回标记 $key ${if (hit) "命中" else "没对上"}") }
+            mark(root, hit)
         }
     }
 }
