@@ -52,6 +52,7 @@ jobs:
           sha256sum "$APK"
       # 包直接挂到 latest 这个 release 上：手机上不用装 gh、不用 auth login，一条 curl 就够。
       - name: 挂到 latest release
+        if: github.event_name == 'push'      # PR 构建不许覆盖 latest
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
