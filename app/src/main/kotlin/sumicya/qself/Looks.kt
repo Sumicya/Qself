@@ -153,7 +153,7 @@ private fun pressDrive(bar: ViewGroup) {
     }
 }
 
-/** 触摸喂给玻璃：KSU 式「充气」——胶囊放大、指下页签放大、选中圆放大，松手弹回。 */
+/** 触摸喂给玻璃：KSU 式「充气」——胶囊放大、指下页签放大、选中亮胶囊放大，松手弹回。 */
 private fun feed(bar: ViewGroup, e: MotionEvent) {
     (bar.background as? Glass)?.let { glass ->
         when (e.actionMasked) {

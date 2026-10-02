@@ -28,8 +28,8 @@ import kotlin.math.min
 
 /** 液态玻璃，完全照 KernelSU 管理器的配方（Apache 2.0，源自 Kyant0/AndroidLiquidGlass）：
  *  背板取样 → 提饱和 1.5 → 模糊 4dp → 边缘 24dp 透镜折射；表面是 40% 的表面色 + 1dp 高光细线。
- *  按压是「充气」不是「凹陷」：胶囊、页签、选中圆都放大，松手弹回。
- *  ponytail: KSU 的高光是双光源 BloomStroke、选中圆带色散透镜，这里用 1dp 白细线和纯放大近似，
+ *  按压是「充气」不是「凹陷」：胶囊、页签、选中胶囊都放大，松手弹回。
+ *  ponytail: KSU 的高光是双光源 BloomStroke、选中胶囊带色散透镜，这里用 1dp 白细线和纯放大近似，
  *  要完全体得把 miuix-blur 的 Highlight 系统搬过来，不值。 */
 class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             private val selected: (() -> View?)? = null) : Drawable() {
@@ -85,7 +85,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         pill(canvas, night)
     }
 
-    /** 页签消耗触摸，底栏自身不进入 pressed；从专用触摸入口驱动。按压值喂给选中圆的充气。 */
+    /** 页签消耗触摸，底栏自身不进入 pressed；从专用触摸入口驱动。按压值喂给选中亮胶囊的充气。 */
     fun press(down: Boolean) = setPress(down)
 
     private fun backdrop(canvas: Canvas, r: Float): Boolean {
@@ -217,7 +217,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         toX = x
         val cx = fromX + (toX - fromX) * (if (slide.isRunning) spring(slide.animatedFraction) else 1f)
         val inset = 4 * dp
-        // KSU：选中的亮圆按压时充气到 1.39 倍
+        // KSU：选中的亮胶囊按压时充气到 1.39 倍
         val d = (min(tab.width.toFloat(), bounds.height().toFloat()) - 2 * inset) * (1f + press * 0.39f)
         paint.style = Paint.Style.FILL
         paint.color = wash(if (night) 0x4AFFFFFF else 0xAAFFFFFF.toInt(), monet(night, 0xFF))
