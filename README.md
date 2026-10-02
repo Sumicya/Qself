@@ -43,12 +43,16 @@
 
 ## 用
 
-1. 装最新一次 CI 构建（挂在 release `latest` 上，Termux 里一条命令，不用装 `gh`）：
-   `curl -L -o qself.apk https://github.com/Sumicya/Qself/releases/download/latest/app-debug.apk`
-2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开
+1. 装最新一次 CI 构建（挂在 release `latest` 上，Termux 里两条命令，不用装 `gh`）：
+   ```sh
+   curl -L -o qself.apk https://github.com/Sumicya/Qself/releases/download/latest/app-debug.apk
+   # Termux 主目录系统读不到，拷到 /data/local/tmp 再装（root）；没 root 就 `termux-open qself.apk` 手动装
+   su -c 'cp /data/data/com.termux/files/home/qself.apk /data/local/tmp/qself.apk && pm install -r /data/local/tmp/qself.apk'
+   ```
+2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开（Termux 的 `am` 是残缺版，用 `su -c 'am force-stop com.tencent.mobileqq'`）
 3. 主页底栏胶囊旁边那颗圆钮（右边放不下就在胶囊右上方）：点开勾选即时生效（钩子每次被调用都查开关）；
    已经浮起来的底栏、排好的输入行要点「重启 QQ」才复原
-4. 每个 QQ 进程启动时打一行日志，`logcat -s Qself` 或 LSPosed 管理器的日志页可见，形如
+4. 每个 QQ 进程启动时打一行日志，`su -c 'logcat -d -s Qself'` 或 LSPosed 管理器的日志页可见，形如
    `Qself 26.9.27.12 @ com.tencent.mobileqq ✓系统WebView ✓防撤回 … ✗某功能(NoSuchMethodException: …)`
    —— ✗ 就是那个功能在这版 QQ 里找不到落点，其余不受影响。**把这一行贴回来就能修。**
 5. 之后换 APK 直接覆盖安装即可，LSPosed 会热重载（签名固定在 `app/qself.p12`）
