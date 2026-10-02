@@ -1,5 +1,4 @@
-import java.io.ByteArrayOutputStream
-import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 
 plugins {
@@ -7,18 +6,11 @@ plugins {
 }
 
 // 版本 = 构建日（Asia/Shanghai）.CI 序号。CI 上 QSELF_VERSION 由工作流从提交时间算好喂进来，
-// 重试、跨日重试都不变；本地自己按提交时间算，没有 run 号就 .0。
+// 重试、跨日重试都不变；本地构建没 run 号，日期取当天、尾号 .0。
 // versionCode 就是 run 号本身：单调递增（模块是手动覆盖装的，够用）。
 val qselfCi = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
-val qselfVersion: String = System.getenv("QSELF_VERSION") ?: run {
-    val epoch = runCatching {
-        val out = ByteArrayOutputStream()
-        exec { commandLine("git", "show", "-s", "--format=%ct", "HEAD"); standardOutput = out }
-        out.toString().trim().toLong()
-    }.getOrDefault(System.currentTimeMillis() / 1000)
-    val d = Instant.ofEpochSecond(epoch).atZone(ZoneId.of("Asia/Shanghai")).toLocalDate()
-    "${d.year % 100}.${d.monthValue}.${d.dayOfMonth}.0"
-}
+val qselfVersion: String = System.getenv("QSELF_VERSION")
+    ?: LocalDate.now(ZoneId.of("Asia/Shanghai")).let { "${it.year % 100}.${it.monthValue}.${it.dayOfMonth}.0" }
 
 android {
     namespace = "sumicya.qself"
