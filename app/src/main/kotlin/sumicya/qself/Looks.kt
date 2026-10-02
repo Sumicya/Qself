@@ -128,7 +128,8 @@ fun texts(v: View, depth: Int = 4): List<String> {
 
 // ---- 首页底栏：QQ 自己的 TabLayout 原地浮成一颗玻璃胶囊，频道 / 动态页签藏掉。
 
-/** QQ 页签自己消费触摸，不会给父 TabLayout 设置 pressed；仅拦它自己的事件入口，原事件照常走。 */
+/** QQ 页签自己消费触摸，不会给父 TabLayout 设置 pressed；两个驱动喂按压态：
+ *  这里钩 QQTabLayout 自己的事件入口；homeBar 再补一个 OnTouchListener（见 pressDrive），谁响算谁。 */
 fun barTouch() {
     val bar = cls("com.tencent.mobileqq.widget.QQTabLayout")
     val intercept = bar.getDeclaredMethod("onInterceptTouchEvent", MotionEvent::class.java)
@@ -137,12 +138,39 @@ fun barTouch() {
         val e = chain.args[0] as MotionEvent
         (v.background as? Glass)?.let { glass ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> glass.press(true)
+                MotionEvent.ACTION_DOWN -> {
+                    if (!touchLogged) { touchLogged = true; log("玻璃 触摸入口A down") }
+                    glass.press(true)
+                }
                 MotionEvent.ACTION_MOVE -> glass.press(e.x in 0f..v.width.toFloat() && e.y in 0f..v.height.toFloat())
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> glass.press(false)
             }
         }
         chain.proceed()
+    }
+}
+
+private var touchLogged = false
+private val driven: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
+
+/** 第二驱动：视图规则直接给底栏挂 OnTouchListener。QQ 要是自己先挂过，
+ *  反射把它挖出来接着调，不吞它的事件；没挂过我们就独占。 */
+private fun pressDrive(bar: ViewGroup) {
+    if (!driven.add(bar)) return
+    val orig = bar.get("mListenerInfo")?.get("onTouchListener") as? View.OnTouchListener
+    if (orig != null) log("玻璃 底栏原有一个触摸监听器，接力")
+    bar.setOnTouchListener { v, e ->
+        (v.background as? Glass)?.let { glass ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    if (!touchLogged) { touchLogged = true; log("玻璃 触摸入口B down") }
+                    glass.press(true)
+                }
+                MotionEvent.ACTION_MOVE -> glass.press(e.x in 0f..v.width.toFloat() && e.y in 0f..v.height.toFloat())
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> glass.press(false)
+            }
+        }
+        orig?.onTouch(v, e) ?: false
     }
 }
 
@@ -160,7 +188,7 @@ private fun homeBar(bar: ViewGroup) {
     if (bar.background?.javaClass?.name == Glass::class.java.name) floated.add(bar)
     else if (on("玻璃底栏") && floated.add(bar)) float(bar)
     val glass = bar in floated
-    if (glass) settle(bar)
+    if (glass) { settle(bar); pressDrive(bar) }
     // material TabLayout：bar → SlidingTabIndicator → TabView × N
     (bar.getChildAt(0) as? ViewGroup)?.let { strip ->
         for (i in 0 until strip.childCount) {

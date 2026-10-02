@@ -42,6 +42,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     private var press = 0f
     private var pressed = false
     private var pressLogged = false
+    private var drawLogged = false
     private val pressAnim = ValueAnimator.ofFloat(0f, 0f).apply {
         duration = 140
         addUpdateListener { press = it.animatedValue as Float; invalidateSelf() }
@@ -60,7 +61,8 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         if (b.isEmpty) return
         val night = night()
         rect.set(b)
-        rect.inset(press * 6 * dp, press * 4 * dp) // 按压形变：整颗胶囊缩进去，松手弹回
+        rect.inset(press * 8 * dp, press * 5 * dp) // 按压形变：整颗胶囊缩进去，松手弹回
+        if (press > 0f && !drawLogged) { drawLogged = true; log("玻璃 形变在画 press=$press") } // 诊断：渲染这一层到没到
         val r = min(radius, rect.height() / 2f)
         val accent = monet(night, 0xFF)
         val refracted = canvas.isHardwareAccelerated && failures < 3 && !busy && runCatching { backdrop(canvas) }
@@ -232,7 +234,7 @@ uniform float bend;
 uniform float press;
 half4 main(float2 p) {
     float2 c = size * 0.5;
-    float2 h = c - float2(pad, pad) - press * dp * float2(6.0, 4.0);
+    float2 h = c - float2(pad, pad) - press * dp * float2(8.0, 5.0);
     float r = min(rad, min(h.x, h.y));
     if (r <= 0.0) return half4(0.0);
     float2 spine = clamp(p, c - h + r, c + h - r);
