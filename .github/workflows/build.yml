@@ -63,7 +63,10 @@ jobs:
           gh release create latest --title latest --notes "最新一次 CI 构建，版本 $QSELF_VERSION，装这个就行（覆盖式，永远只有一个包）" 2>/dev/null || true
           mv app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/qself-$QSELF_VERSION.apk"
           gh release upload latest "app/build/outputs/apk/debug/qself-$QSELF_VERSION.apk" --clobber
-          gh release delete-asset latest app-debug.apk --yes 2>/dev/null || true   # 旧的固定名清掉
+          # 永远只有一个包：别的版本名（含旧固定名）全清掉
+          for a in $(gh release view latest --json assets --jq '.assets[].name'); do
+            [ "$a" = "qself-$QSELF_VERSION.apk" ] || gh release delete-asset latest "$a" --yes
+          done
       - name: Publish the build log on failure
         if: failure()
         env:
