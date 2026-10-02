@@ -18,7 +18,7 @@ android {
 
     defaultConfig {
         applicationId = "sumicya.qself"
-        minSdk = 36 // 只对着 Android 16 写：RenderEffect / AGSL 都不用判版本
+        minSdk = 36 // 只对着 Android 16 写，不判版本、不写降级分支
         targetSdk = 37
         versionName = qselfVersion
         versionCode = qselfCi ?: 1

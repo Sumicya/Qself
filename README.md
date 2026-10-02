@@ -9,7 +9,7 @@
 
 ## 做了什么
 
-- 外观：首页底栏浮成一颗居中的液态玻璃胶囊（系统 `RenderEffect` + AGSL 边缘折射，不加模糊）；
+- 外观：首页底栏浮成一颗居中的实色胶囊（KernelSU 管理器式：不模糊、不取样、无描边）；
   按压整颗缩进并压暗，松手弹回；选中项是一块弹着滑过去的亮胶囊。Monet 取色（系统动态色，可关）。
   输入栏玻璃化（只换材质，不动 QQ 的输入控件）。藏「频道」「动态」「小世界」页签；
   清理标题栏、侧栏的运营入口；会员装饰归零、昵称只留名字；红点引导、在线状态、轻互动与表情雨一律屏蔽
@@ -65,7 +65,7 @@ app/src/main/kotlin/sumicya/qself/
   Chat.kt    聊天：防撤回（含几十行 protobuf 读取与撤回标记）、连发合并、回复不 @
   Looks.kt   外观：盯住每个 Activity 的视图树套规则
   Input.kt   输入栏玻璃化（只换材质）
-  Glass.kt   液态玻璃 Drawable（RenderNode + AGSL + Monet 取色，底栏用时自带滑动亮胶囊）
+  Glass.kt   底栏/输入栏/圆钮共用的实色胶囊 Drawable（按压形变 + 滑动亮圆 + Monet 取色）
 app/src/test/kotlin/sumicya/qself/ProtoTest.kt   防撤回判断的唯一一份可跑检查
 app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop、作用域
 tools/symbols.txt    落点表：代码依赖的每一个名字
