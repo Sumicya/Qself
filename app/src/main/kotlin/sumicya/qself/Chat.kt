@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlin.math.min
 
-/** 聊天：会员装饰归零、防撤回、连发合并、转发、「+」面板、昵称行、轻互动、表情雨。 */
+/** 聊天：会员装饰归零、防撤回、连发/重复合并、消息 ID 时间、转发、「+」面板、轻互动、表情雨。 */
 
 // ---- 会员装饰：NT 内核把气泡/字体/挂件放在几个纯数据结构里，构造完立刻清零，界面就按默认画。
 
@@ -263,6 +263,131 @@ private fun follows(prev: Any?, cur: Any?): Boolean {
 
 private fun record(item: Any?): Any? = item?.let { runCatching { it.javaClass.getMethod("getMsgRecord").invoke(it) }.getOrNull() }
 
+// ---- 重复项合并：同一人连着发一模一样的文字（复读），第一条之后整行收起。
+// 判定在列表绑定前（和连发合并同一个数据口子），收起在气泡行的根视图上：高度归零 + GONE。
+
+private val dupes: MutableSet<Long> = Collections.newSetFromMap(ConcurrentHashMap())
+private val squashed = WeakHashMap<View, Int>() // 根视图 → 收起前的原始高度
+
+fun dedupe() {
+    val adapter = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a")
+    val data = adapter.getMethod("d0")
+    val head = adapter.getMethod("i0")
+    hook(adapter.method("n0")) { chain ->
+        val self = chain.thisObject
+        val list = runCatching { data.invoke(self)?.let { it.javaClass.getMethod("u").invoke(it) } as? List<*> }.getOrNull()
+        val i = chain.getArg(1) as Int - (runCatching { head.invoke(self) as Int }.getOrNull() ?: 0)
+        val cur = list?.getOrNull(i)
+        msgId(cur)?.let { if (sameText(list?.getOrNull(i - 1), cur)) dupes.add(it) else dupes.remove(it) }
+        chain.proceed()
+    }
+    val vb = cls("com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB")
+    val rootOf = vb.getMethod("s1")
+    hook(vb.method("k1")) { chain ->
+        chain.proceed().also {
+            val v = runCatching { rootOf.invoke(chain.thisObject) as? View }.getOrNull() ?: return@also
+            // 先还原上一次收的，行复用从干净状态开始
+            squashed.remove(v)?.let { h -> v.layoutParams?.let { lp -> lp.height = h; v.layoutParams = lp }; v.visibility = View.VISIBLE }
+            val id = msgId(chain.getArg(1)) ?: return@also
+            if (id in dupes) v.layoutParams?.let { lp ->
+                squashed[v] = lp.height
+                lp.height = 0
+                v.layoutParams = lp
+                v.visibility = View.GONE
+            }
+        }
+    }
+}
+
+/** 同一人、连着、纯文字内容一模一样。非文字消息（图片表情那些）不参与。 */
+private fun sameText(prev: Any?, cur: Any?): Boolean {
+    val a = textOf(prev)
+    if (a.isNullOrEmpty() || a != textOf(cur)) return false
+    val sa = record(prev)?.get("senderUid") as? String
+    val sb = record(cur)?.get("senderUid") as? String
+    return !sa.isNullOrEmpty() && sa == sb
+}
+
+/** 一条消息的纯文字：MsgRecord.elements 里所有 textElement 拼起来；非文字消息得 null。 */
+private var textLogged = false
+private fun textOf(item: Any?): String? = runCatching {
+    val rec = record(item) ?: return null
+    val elements = rec.get("elements") as? List<*>
+    if (elements == null) {
+        if (!textLogged) { textLogged = true; log("重复项合并：MsgRecord 上没有 elements 字段，这个功能空转") }
+        return null
+    }
+    buildString { for (e in elements) (e?.get("textElement")?.get("content") as? String)?.let(::append) }
+        .takeIf { it.isNotEmpty() }
+}.getOrNull()
+
+// ---- 消息 ID 和时间：每条消息挂一个灰色圆角小标签（上游 QAuxiliary 同款）。
+// 默认格式「{seq} · {time}」，长按面板里那行开关可改；可用占位符 {seq} 服务器序号、{id} 客户端消息 ID、{time} 时分秒。
+
+const val STAMP_KEY = "消息ID和时间格式"
+
+fun msgStamp() {
+    val vb = cls("com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB")
+    val rootOf = vb.getMethod("s1")
+    hook(vb.method("k1")) { chain ->
+        chain.proceed().also {
+            val root = runCatching { rootOf.invoke(chain.thisObject) as? View }.getOrNull() ?: return@also
+            val rec = record(chain.getArg(1)) ?: return@also
+            stamp(root, rec, msgId(chain.getArg(1)))
+        }
+    }
+}
+
+private val stamps = WeakHashMap<View, Stamp>()
+private val stampFmt = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+
+private fun stamp(root: View, rec: Any, id: Long?) {
+    val fmt = store()?.getString(STAMP_KEY, null) ?: "{seq} · {time}"
+    val secs = rec.get("msgTime") as? Long ?: 0
+    val text = fmt.replace("{seq}", (rec.get("msgSeq") ?: "?").toString())
+        .replace("{id}", id?.toString() ?: "?")
+        .replace("{time}", if (secs > 0) stampFmt.format(java.util.Date(secs * 1000)) else "?")
+    val s = stamps[root] ?: Stamp(root.dp).also { s -> stamps[root] = s; root.overlay.add(s) }
+    s.set(text)
+    // 行复用时只换字；摆位等一帧布局完按当前行宽算，转屏后下一行消息自己会重新摆。
+    root.post {
+        if (root.width > 0 && root.height > 0) {
+            val m = (6 * root.dp).toInt()
+            val w = s.width(); val h = s.height()
+            s.setBounds(root.width - m - w, root.height - m - h, root.width - m, root.height - m)
+        }
+    }
+}
+
+/** 灰底小标签：自己画，不塞 TextView，行复用和布局变化都不干扰。 */
+private class Stamp(dp: Float) : Drawable() {
+    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x29808080 }
+    private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 9.5f * dp
+        color = 0xFF8E8E93.toInt()
+    }
+    private var text = ""
+
+    fun set(t: String) { if (t != text) { text = t; invalidateSelf() } }
+    fun width() = (ink.measureText(text) + 14 * ink.textSize / 9.5f).toInt()
+    fun height() = (ink.textSize + 8 * ink.textSize / 9.5f).toInt()
+
+    override fun draw(c: Canvas) {
+        val b = bounds
+        if (b.isEmpty || text.isEmpty()) return
+        val r = 6 * ink.textSize / 9.5f
+        c.drawRoundRect(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(), r, r, bg)
+        c.drawText(text, b.exactCenterX() - ink.measureText(text) / 2,
+            b.exactCenterY() - (ink.descent() + ink.ascent()) / 2, ink)
+    }
+
+    override fun setAlpha(alpha: Int) {}
+    override fun setColorFilter(colorFilter: ColorFilter?) {}
+
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity() = PixelFormat.TRANSLUCENT
+}
+
 // ---- 回复不@：QQ 回复消息时会往输入框插一个「@昵称 」，这一步整个跳过。
 
 /**
@@ -303,33 +428,6 @@ fun plusPanel() {
 private fun title(item: Any): String? =
     runCatching { item.javaClass.getMethod("getTitle").invoke(item) as? String }.getOrNull()
         ?: runCatching { item.javaClass.getMethod("getName").invoke(item) as? String }.getOrNull()
-
-// ---- 昵称行只留名字：群等级、头衔、成员等级、会员图标各是一个 block，问「这条消息要不要我」时一律答否。
-
-private val NICK_DROP = setOf(
-    "com.tencent.qqnt.aio.gradelevel.AIOTroopMemberGradeLevelBlock",
-    "com.tencent.qqnt.aio.mutualmark.AIOTroopHonorNickBlock",
-    "com.tencent.qqnt.aio.nick.memberlevel.AIOTroopMemberLevelBlock",
-    "com.tencent.mobileqq.vas.vipicon.AIOVipIconProcessor",
-    "com.tencent.mobileqq.vas.vipicon.AIOVipIconExProcessor",
-    "com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.block.AIONickIconSimpleBlock",
-)
-
-fun plainNick() {
-    val block = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock")
-    val viewOf = block.method("h") // 该 block 已经建出来的 View（可能还没有）
-    hook(block.method("l")) { chain ->
-        val self = chain.thisObject
-        if (generateSequence<Class<*>>(self.javaClass) { it.superclass }.none { it.name in NICK_DROP }) return@hook chain.proceed()
-        (viewOf.invoke(self) as? View)?.visibility = View.GONE
-        false
-    }
-    // 调用 l() 的两处都是小方法，ART 可能把它们内联，钩子就落空；反优化保证走钩子。
-    cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickSlotContainer").declaredMethods
-        .filter { it.name == "d" }.forEach { xposed.deoptimize(it) }
-    cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2").declaredMethods
-        .filter { it.name == "d1" }.forEach { xposed.deoptimize(it) }
-}
 
 // ---- 轻互动（戳一戳那类全屏特效）与表情雨：配置列表永远为空。
 

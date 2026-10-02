@@ -5,7 +5,8 @@
 一个纯钩子的 LSPosed 模块（libxposed API 102），只针对 QQ 9.2.10 / Android 16。模块 APK 没有界面；
 纯 Kotlin，八个文件（约 1500 行），没有第三方依赖、没有 `.so`、不联网。外观照 NagramXF 那套长相做（液态玻璃 + Monet 取色 + 输入栏玻璃化）；玻璃配方参照 KernelSU 管理器（Apache 2.0，源自 Kyant0/AndroidLiquidGlass）。
 
-开关是 QQ 主页底栏右上角一颗圆钮弹出的系统对话框，状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
+开关是 QQ 主页底栏右上角一颗圆钮弹出的玻璃卡片面板（挂在 decor 上），一个功能一行、默认全开；
+状态存 QQ 的 SharedPreferences「qself」，键就是功能名；没装上的功能进 `failed`，面板画 ✗。
 
 **改任何落点之前先跑 `tools/dexcheck.py`**（真包在 `Sumicya/qqapk`，`cat qq.a* > qq.apk`）。
 本地没有 Android SDK 时用 `ci/check.sh` 做类型检查 + 跑 ProtoTest（第一次会拉工具链到 `~/.cache/qself-tc`）。
@@ -15,7 +16,7 @@
 按 [ponytail](https://github.com/DietrichGebert/ponytail) 来：
 - 先问「不做行不行」；再看仓库里有没有现成的；再看 Kotlin 标准库；再看 Android 原生 API；最后才写代码
 - 不加抽象、不加依赖、不加样板；能删就删；一个功能 = 一个顶层函数 + `Qself.kt` 清单里一行
-- 开关只有面板里那 4 个（`knobs`），新加的东西默认装上即生效，别再塞开关
+- 一个功能一个开关：`Qself.kt` 的 `features` 表里加一行 `Feature(名字, 只在主进程?, 一句描述, 装法)`，面板自动长出来
 - 钩子体不要 try/catch 兜底整个功能：libxposed 默认异常模式下，钩子抛异常等于这一次没装。
   但**从 `chain` 取参数、反射取视图这类可能落在兄弟子类上的动作要包 `runCatching`** —— 挂点在基类时，钩子会盖住所有子类
 - 钩子经 `hook()` 装就自动受开关管；视图规则自己 `on("功能名")`
