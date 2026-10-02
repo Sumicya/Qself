@@ -6,17 +6,17 @@
 状态存进 QQ 自己的 SharedPreferences；哪个功能在这版 QQ 里没装上，看 `logcat -s Qself` 那一行的 ✗。
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
-但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，163 条）——换版本先看那张表红哪条，别猜。
+但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，169 条）——换版本先看那张表红哪条，别猜。
 
 ## 做了什么
 
 外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
 - 首页底栏浮成一颗居中的液态玻璃胶囊（每个页签 56dp，只包住页签）：不模糊，系统 `RenderEffect` + AGSL 做边缘折射、
-  贴边高光、提饱和、淡色罩，没有描边；选中项是一块弹着滑过去的亮胶囊，按下去整面往内凹一点
+  提饱和、淡色罩，没有描边；选中项是一块弹着滑过去的亮胶囊；按下去透镜往内凹、指头底下浮一团柔光，松手即灭
 - **Monet 取色**：玻璃的罩色、选中圆、圆钮的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色
-- 聊天输入栏 Telegram 化：一颗悬浮玻璃胶囊 [表情 · 输入框 · +] 加右侧玻璃圆钮 麦克风⇄发送，
-  输入栏底色去掉、框里的 AI 星星藏掉，原来那条图标带收起
+- 输入栏玻璃化：原生输入框的背景换成液态玻璃（按压同样凹 + 柔光），输入栏外层的底色去掉；
+  QQ 自己的按钮、输入法和触摸逻辑一律不动，开关一关原样复原
 - 藏掉「频道」「动态」「小世界」页签
 - 聊天标题栏去掉一起听 / 一起看 / 群游戏那排；侧栏去掉打卡、天气、等级、会员、装扮、钱包一类的入口（数据源和视图两头都拦）
 - 隐藏好友聊天标题栏那行在线状态（在线 / 手机在线 / WiFi在线 / 忙碌 / 隐身…）
@@ -28,11 +28,11 @@
 - 防撤回：私聊、群聊、重连补发的撤回都吞掉；被撤回的那条压成半透明、右上角画一个 ✗（标记存在 QQ 自己的偏好里，重启还在）
 - 连发合并：同一人 5 分钟内连着发的消息，后面的不再画头像（占位留着）和昵称行，像 Telegram 那样成组
 - **回复不@**：回复消息时不再往输入框插「@昵称 」
-- **转发不限人数**：转发选人到 9 个就不再卡住，顶部「已选 N 人」跟着走
 - **左滑回复不设限**：卡片 (Ark) 消息也能左滑回复
 - 转发页一直显示好友 / 群 / 多选入口
 
-以上三条加防撤回那批都是从上游 [QAuxiliary](https://github.com/cinit/QAuxiliary) 同步过来的思路，落点重新按 9.2.10 的真 dex 核过。
+以上加防撤回那批都是从上游 [QAuxiliary](https://github.com/cinit/QAuxiliary) 同步过来的思路，落点重新按 9.2.10 的真 dex 核过。
+「转发不限人数」试过又删了：往 QQ 自己的转发 map 里塞是绕过它的状态机，这版钩子也落不进去，不硬凑。
 - 「+」面板只留正经附件，一起派对、礼物、直播间之类剔掉
 - 屏蔽轻互动特效与表情雨
 
@@ -67,7 +67,7 @@ app/src/main/kotlin/sumicya/qself/
   Quiet.kt   自由化
   Chat.kt    聊天，含防撤回用的几十行 protobuf 读取、撤回标记（半透明 + ✗）、连发合并、回复不@
   Looks.kt   外观：盯住每个 Activity 的视图树套规则
-  Input.kt   TG 式输入栏
+  Input.kt   输入栏玻璃化（只换材质，不动 QQ 的输入控件）
   Glass.kt   液态玻璃 Drawable（RenderNode + AGSL + Monet 取色，底栏用时自带滑动亮胶囊）
 app/src/test/kotlin/sumicya/qself/ProtoTest.kt   防撤回判断的唯一一份可跑检查
 app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop、作用域
@@ -81,7 +81,7 @@ ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
 
 ```sh
 git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
-python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 163 条全绿才算数
+python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 169 条全绿才算数
 python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
 ```
 

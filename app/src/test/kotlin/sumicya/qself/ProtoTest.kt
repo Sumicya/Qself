@@ -51,4 +51,12 @@ class ProtoTest {
         assertTrue(recall(byteArrayOf()) == null)
         assertTrue(recall(field(1, field(2, field(1, 528L)))) == null)
     }
+
+    /** 截断 / 溢出的坏数据必须抛出来让钩子按没装处理，不能解出半个假撤回。 */
+    @Test fun truncatedFieldsCannotProduceFakeRecalls() {
+        assertTrue(runCatching { byteArrayOf(0x0a, 0x05, 0x01).pb() }.isFailure)
+        assertTrue(runCatching { byteArrayOf(0x80.toByte()).pb() }.isFailure)
+        assertTrue(runCatching { byteArrayOf(0x09, 1).pb() }.isFailure)
+        assertFalse(runCatching { stripSyncRecall(field(3, 1L)) }.isFailure)
+    }
 }

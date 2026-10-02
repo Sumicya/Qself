@@ -3,13 +3,12 @@ package sumicya.qself
 
 import android.app.AlertDialog
 import android.content.res.ColorStateList
-import android.graphics.drawable.Drawable
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
+import java.util.WeakHashMap
 
 /**
  * 开关入口：主页那颗玻璃圆钮 —— 和胶囊同高、顶底对齐，胶囊右边放得下就跟胶囊并排。
@@ -22,22 +21,26 @@ import android.widget.ImageView
  */
 private const val KNOB = "qself-knob"
 
+/** 钮归属于哪条底栏：别家底栏来调 knob() 时不动它。 */
+private val owners = WeakHashMap<View, View>()
+
 fun knob(bar: View) {
     val decor = bar.rootView as? ViewGroup ?: return
     val old = decor.findViewWithTag<View>(KNOB)
-    if (bar.height == 0) return
-    if (!bar.isShown) { // 底栏不在这页上：钮藏起来，别侵入别的页面
-        old?.visibility = View.GONE
+    if (!bar.isShown || bar.height == 0 || decor.width == 0) { // 底栏不在这页上：钮藏起来，别侵入别的页面
+        if (old != null && owners[old] === bar) old.visibility = View.GONE
         return
     }
     val dp = bar.dp
     val size = bar.height // 和胶囊同一个尺寸，顶边底边自然齐平
     val at = IntArray(2).also(bar::getLocationInWindow)
-    val room = decor.width - at[0] - bar.width // 胶囊右边剩多少
+    val origin = IntArray(2).also(decor::getLocationInWindow) // decor 不一定贴着窗口原点，坐标统一以 decor 为原点
+    val room = decor.width - (at[0] - origin[0]) - bar.width // 胶囊右边剩多少
     val beside = room >= (8 * dp).toInt() + size
-    val lift = decor.height - at[1] - bar.height // 钮和胶囊同高，这一个数同时管顶和底
+    val lift = decor.height - (at[1] - origin[1]) - bar.height // 钮和胶囊同高，这一个数同时管顶和底
     val end = if (beside) room - (8 * dp).toInt() - size else (8 * dp).toInt()
     if (old != null) {
+        owners[old] = bar
         old.visibility = View.VISIBLE
         val lp = old.layoutParams as ViewGroup.MarginLayoutParams
         if (lp.width != size || lp.bottomMargin != lift || lp.marginEnd != end) {
@@ -62,21 +65,14 @@ fun knob(bar: View) {
         clipToOutline = true
         elevation = 6 * dp
         background = Glass(this)
-        // 按压反馈：foreground 一层无边界涟漪，background 还是玻璃
-        foreground = borderlessRipple(this)
+        // 按压反馈只由 Glass 的按压态产生（透镜凹陷 + 柔光），不叠系统涟漪
         setOnClickListener { sheet(it) }
-        viewTreeObserver.addOnScrollChangedListener { invalidate() }
-        viewTreeObserver.addOnGlobalLayoutListener { invalidate() }
     }
     decor.addView(knob, FrameLayout.LayoutParams(size, size, Gravity.END or Gravity.BOTTOM).apply {
         marginEnd = end
         bottomMargin = lift
     })
-}
-
-fun borderlessRipple(v: View): Drawable? = TypedValue().let {
-    if (v.context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, it, true))
-        v.context.getDrawable(it.resourceId) else null
+    owners[knob] = bar
 }
 
 /** 开关面板 = 系统多选对话框：一行一个，勾选即写盘；「重启 QQ」给已经改过的视图用。 */
@@ -89,6 +85,8 @@ private fun sheet(anchor: View) {
         .setTitle("Qself ${BuildConfig.VERSION_NAME}")
         .setMultiChoiceItems(names, names.map { store.getBoolean(it, true) }.toBooleanArray()) { _, i, on ->
             store.edit().putBoolean(names[i], on).apply()
+            // 输入栏的玻璃当场就能撤掉/贴上，不用等下一次布局事件
+            if (names[i] == "TG输入栏") refreshLooks(anchor.rootView)
         }
         .setNeutralButton("重启 QQ") { _, _ -> android.os.Process.killProcess(android.os.Process.myPid()) }
         .setNegativeButton("好", null)

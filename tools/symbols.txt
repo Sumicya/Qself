@@ -17,6 +17,8 @@ member! com.tencent.mobileqq.utils.QQTheme#isNowThemeIsNight
 
 # ---------- 视图扫描 Looks.kt（按长相认，所以是后缀和文案）
 class~ .QQTabLayout
+class  com.tencent.mobileqq.widget.QQTabLayout
+member! com.tencent.mobileqq.widget.QQTabLayout#onInterceptTouchEvent
 class~ QQSettingMeRelativeLayout
 class~ WeatherSettingMeItemView
 class  com.tencent.mobileqq.activity.qqsettingme.config.QQSettingMeMenuConfigBeanV3
@@ -28,14 +30,7 @@ member! com.tencent.mobileqq.aio.input.reply.i#k
 
 # ---------- 玻璃底栏 / TG 输入栏 Looks.kt, Input.kt（视图规则按长相认，所以是后缀和资源名）
 class~ PanelIconLinearLayout
-class  com.google.android.material.tabs.TabLayout
-member! com.google.android.material.tabs.TabLayout#setTabRippleColor
 res    input
-res    send_btn
-text   表情
-text   更多
-text   加号
-text   语音
 
 # ---------- 会员装饰归零 Chat.kt
 class  com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble
@@ -80,17 +75,8 @@ member! com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarConten
 class  com.tencent.mobileqq.ark.api.impl.ArkHelperImpl
 member! com.tencent.mobileqq.ark.api.impl.ArkHelperImpl#isSupportReply
 
-# ---------- 转发不限人数 Chat.kt
-class  com.tencent.mobileqq.selectmember.ResultRecord
-member! com.tencent.mobileqq.selectmember.ResultRecord#copyResultRecord
-member! com.tencent.mobileqq.selectmember.ResultRecord#getUinType
-field  com.tencent.mobileqq.selectmember.ResultRecord#uin
-member! com.tencent.mobileqq.activity.ForwardRecentActivity#add2ForwardTargetList
-member! com.tencent.mobileqq.activity.ForwardRecentActivity#getForwardTargetKey
-member! com.tencent.mobileqq.activity.ForwardRecentActivity#refreshRightBtn
-field  com.tencent.mobileqq.activity.ForwardRecentActivity#mForwardTargetMap
-field  com.tencent.mobileqq.activity.ForwardRecentActivity#mSelectedAndSearchBar
 # 「隐藏在线状态」是视图规则，认的是服务器发的文案，dex 里没有对应落点。
+# 「转发不限人数」已删：往 QQ 自己的转发 map 里塞是绕过它的状态机，9.2.10 里落点也转了私有。
 
 # ---------- 昵称行只留名字 Chat.kt
 class  com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock
@@ -141,9 +127,29 @@ member com.tencent.mobileqq.statistics.StatisticCollector#report
 class  com.tencent.feedback.eup.CrashReport
 member com.tencent.feedback.eup.CrashReport#initCrashReport
 
-# ---------- 具体未读条数：QQ 封顶 99+ 的两个出口，盖回真数字
+# ---------- 具体未读条数：QUIBadge 自绘 mText / 老角标 TextView（数量是第三个实参）
 class  com.tencent.mobileqq.quibadge.QUIBadge
-member! com.tencent.mobileqq.quibadge.QUIBadge#updateNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setRedNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setAIOBarNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setRedNumWithIcon
+member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayNumWIthIcon
+member! com.tencent.mobileqq.quibadge.QUIBadge#getMinWidth
+member! com.tencent.mobileqq.quibadge.QUIBadge#drawText
+member! com.tencent.mobileqq.quibadge.QUIBadge#drawIconAndText
+member! com.tencent.mobileqq.quibadge.QUIBadge#onDraw
+field  com.tencent.mobileqq.quibadge.QUIBadge#mText
+field  com.tencent.mobileqq.quibadge.QUIBadge#mNum
+field  com.tencent.mobileqq.quibadge.QUIBadge#mTextPaint
+class  com.tencent.mobileqq.tianshu.ui.RedTouch
+member! com.tencent.mobileqq.tianshu.ui.RedTouch#getTextRedPoint
+field  com.tencent.mobileqq.tianshu.ui.RedTouch#maxNum
+class  com.tencent.mobileqq.tianshu.ui.b
+member! com.tencent.mobileqq.tianshu.ui.b#b
+class  com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl
+member! com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl#updateTabInfo
+class  com.tencent.mobileqq.tianshu.pb.BusinessInfoCheckUpdate$RedTypeInfo
+field  com.tencent.mobileqq.tianshu.pb.BusinessInfoCheckUpdate$RedTypeInfo#red_content
 class  com.tencent.widget.d
 member! com.tencent.widget.d#d
 

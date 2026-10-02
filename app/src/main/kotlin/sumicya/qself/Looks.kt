@@ -3,7 +3,10 @@ package sumicya.qself
 
 import android.app.Activity
 import android.app.Instrumentation
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -12,6 +15,7 @@ import android.widget.RelativeLayout
 import android.widget.TextView
 import java.util.Collections
 import java.util.WeakHashMap
+import kotlin.math.ceil
 
 /**
  * 外观：每个 Activity 一到前台就盯住它的 decor，布局一变（节流 150ms）就走一遍视图树套规则。
@@ -31,23 +35,44 @@ private val watched: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 private fun watch(decor: View) {
     if (!watched.add(decor)) return
     var queued = false
+    var lastBar: ViewGroup? = null
     val scan = Runnable { queued = false; walk(decor, false) }
+    // 底栏不等全量规则的 150ms 节流；已找到后复用宿主，只在它消失时重找。
     decor.viewTreeObserver.addOnGlobalLayoutListener {
-        if (!queued) { queued = true; decor.postDelayed(scan, 150) }
+        lastBar?.takeUnless { it.isShown }?.let(::knob) // 离开主页时藏钮
+        val bar = lastBar?.takeIf { it.isShown && it.isAttachedToWindow && it.rootView === decor }
+            ?: findHomeBar(decor).also { lastBar = it }
+        bar?.let { homeBar(it); knob(it) }
+        if (!queued) { queued = true; decor.postDelayed(scan, 150) } // 其他外观规则仍节流
     }
     scan.run()
 }
+
+private fun findHomeBar(v: View): ViewGroup? {
+    if (v.javaClass.name.endsWith(".QQTabLayout") && v.isShown) return v as? ViewGroup
+    if (v is ViewGroup) for (i in 0 until v.childCount)
+        findHomeBar(v.getChildAt(i))?.let { return it }
+    return null
+}
+
+fun refreshLooks(decor: View) = walk(decor, false)
 
 private fun walk(v: View, inDrawer: Boolean) {
     val name = v.javaClass.name
     when {
         name.endsWith(".QQTabLayout") -> { homeBar(v as ViewGroup); return }
-        name.endsWith(".PanelIconLinearLayout") -> { if (on("TG输入栏")) tgInput(v as ViewGroup); return }
+        name.endsWith(".PanelIconLinearLayout") -> { tgInput(v as ViewGroup); return }
         else -> trim(v, inDrawer)
     }
     if (v is ViewGroup) {
-        val drawer = inDrawer || name.contains("QQSettingMe") // 侧栏根是 QQSettingMeRelativeLayout
-        for (i in 0 until v.childCount) walk(v.getChildAt(i), drawer)
+        val drawer = inDrawer || name.contains("QQSettingMe")
+        var i = 0
+        while (i < v.childCount) {
+            val child = v.getChildAt(i)
+            walk(child, drawer)
+            // 规则可能改动孩子列表；别跳过新孩子，也别访问已经不存在的下标。
+            if (v.getChildAt(i) === child) i++
+        }
     }
 }
 
@@ -70,7 +95,6 @@ private fun trim(v: View, inDrawer: Boolean) {
     // 侧栏里一行行可点的：打卡、天气、等级、会员、装扮……（文案多半带「我的」前缀，所以用包含）
     val row = inDrawer && v.isClickable && v.height in 1..(96 * v.dp).toInt() &&
         texts(v).any { t -> DRAWER.any { it in t } }
-    // 昵称下面那行在线状态（文案是服务器发的，所以只能按长相认：小、在顶部、字就是这些）
     val status = v is TextView && (v.text?.toString()?.trim() ?: "") in ONLINE &&
         v.height in 1..(40 * v.dp).toInt() && windowY(v) < 200 * v.dp
     hide(v, title || row || status || v.javaClass.simpleName == "WeatherSettingMeItemView")
@@ -103,9 +127,33 @@ fun texts(v: View, depth: Int = 4): List<String> {
 
 // ---- 首页底栏：QQ 自己的 TabLayout 原地浮成一颗玻璃胶囊，频道 / 动态页签藏掉。
 
+/** QQ 页签自己消费触摸，不会给父 TabLayout 设置 pressed；仅拦它自己的事件入口，原事件照常走。 */
+fun barTouch() {
+    val bar = cls("com.tencent.mobileqq.widget.QQTabLayout")
+    val intercept = bar.getDeclaredMethod("onInterceptTouchEvent", MotionEvent::class.java)
+    hook(intercept) { chain ->
+        val v = chain.thisObject as View
+        val e = chain.args[0] as MotionEvent
+        (v.background as? Glass)?.let { glass ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> glass.press(e.x, e.y, true)
+                MotionEvent.ACTION_MOVE -> glass.press(e.x, e.y, e.x in 0f..v.width.toFloat() && e.y in 0f..v.height.toFloat())
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> glass.press(e.x, e.y, false)
+            }
+        }
+        chain.proceed()
+    }
+}
+
 private val floated: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
+private val positioned: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 
 private fun homeBar(bar: ViewGroup) {
+    // 首次处理在全局布局同步完成；pre-draw 只跟进选中态和之后的位移，不取消绘制帧。
+    if (positioned.add(bar)) bar.viewTreeObserver.addOnPreDrawListener {
+        if (bar.isAttachedToWindow) { (bar.background as? Glass)?.sync(); knob(bar) }
+        true
+    }
     // 热重载后是新一代代码、新的 floated 集合：靠背景认出上一代已经浮过的底栏，别再加一次边距。
     // ponytail: 浮起来之后关掉开关不会沉回去，重启 QQ 才复原；复原要存一堆原值，不值。
     if (bar.background?.javaClass?.name == Glass::class.java.name) floated.add(bar)
@@ -121,7 +169,6 @@ private fun homeBar(bar: ViewGroup) {
         }
     }
     if (bar.height == 0) return
-    knob(bar)
     // QQ 给底栏铺的通栏模糊带、分割细线、纯色垫底：胶囊两侧会露出来，都藏。
     if (!glass) return
     val frame = generateSequence(bar.parent as? ViewGroup) { it.parent as? ViewGroup }
@@ -148,12 +195,8 @@ private fun float(bar: ViewGroup) {
     // 两头的留白放在页签条上而不是 bar 上：material 固定模式会把页签条量成 bar 的整宽（含 padding），放 bar 上会挤歪。
     bar.setPadding(0, bar.paddingTop, 0, bar.paddingBottom)
     bar.getChildAt(0)?.setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0) // 两端留白收掉，玻璃贴着按钮
-    val glass = Glass(bar) { selectedTab(bar) }
-    bar.background = glass
-    // 内容一滚、布局一变就重画一次玻璃（底栏自己不会因为身后的东西动而重画）；选中页签换了也要重画。
-    bar.viewTreeObserver.addOnScrollChangedListener { bar.invalidate() }
-    bar.viewTreeObserver.addOnGlobalLayoutListener { bar.invalidate() }
-    bar.viewTreeObserver.addOnPreDrawListener { glass.sync(); true }
+    bar.background = Glass(bar, selected = { selectedTab(bar) })
+    // 选中态与圆钮的定位共用 homeBar 注册的 pre-draw 回调。
 }
 
 /** 页签定宽 56dp：material 给的是平分整条的 weight，QQ 的页签视图又是 match_parent，胶囊就只能跟屏幕一样长。 */
@@ -190,19 +233,65 @@ private fun settle(bar: ViewGroup) {
     }
 }
 
-/** 未读角标不再停在 99+：QQ 封顶之后把真数字盖回去。两个出口都走一遍（QUIBadge 和老的widget绑定器）。 */
+/** QQ 两种角标：QUIBadge 自己画 mText，旧版 TextView 用第三个参数做数量；别去视图树找不存在的子 TextView。 */
 fun exactCount() {
-    fun fix(root: View?, n: Int) {
-        fun go(v: View): TextView? =
-            if (v is TextView && v.text.toString() == "99+") v
-            else if (v is ViewGroup) (0 until v.childCount).firstNotNullOfOrNull { go(v.getChildAt(it)) } else null
-        go(root ?: return)?.text = n.toString()
+    val badge = cls("com.tencent.mobileqq.quibadge.QUIBadge")
+    val text = badge.getDeclaredField("mText").apply { isAccessible = true }
+    val num = badge.getDeclaredField("mNum").apply { isAccessible = true }
+    val paint = badge.getDeclaredField("mTextPaint").apply { isAccessible = true }
+    // updateNum 是 private 小方法，ART 可能内联；改从 QQ 对外暴露的设置入口落钩。
+    for (name in listOf("setRedNum", "setGrayNum", "setAIOBarNum", "setRedNumWithIcon", "setGrayNumWIthIcon"))
+        hook(badge.method(name)) { chain ->
+            chain.proceed().also {
+                val n = chain.args[0] as Int
+                if (n > 99) {
+                    text.set(chain.thisObject, n.toString())
+                    (chain.thisObject as View).apply { requestLayout(); invalidate() }
+                }
+            }
+        }
+    // 首页也走 QUIBadge：RedTypeInfo.red_content 经 tianshu.ui.b.b() 原样解析成数字，
+    // updateTabInfo() 调 setRedNum()，真正的“99+”出自 QUIBadge.updateNum()。
+    // 若 QQ 内联了 setter 或后来又调用 updateNum，绘制当帧从 mNum 恢复真实文字。
+    for (name in listOf("drawText", "drawIconAndText")) {
+        val draw = badge.getDeclaredMethod(name, Canvas::class.java)
+        hook(draw) { chain ->
+            val b = chain.thisObject
+            val n = num.getInt(b)
+            if (n > 99 && text.get(b) != n.toString()) text.set(b, n.toString())
+            chain.proceed()
+        }
     }
-    hook(cls("com.tencent.mobileqq.quibadge.QUIBadge").method("updateNum")) { chain ->
-        chain.proceed().also { fix(chain.thisObject as? View, chain.args[0] as Int) }
+    xposed.deoptimize(badge.getDeclaredMethod("onDraw", Canvas::class.java))
+    // QQ 原布局给 99+ 固定 31dp，onMeasure() 调 getMinWidth()：按原始 mNum 测宽。
+    hook(badge.method("getMinWidth")) { chain ->
+        val width = chain.proceed() as Int
+        val b = chain.thisObject
+        val n = num.getInt(b)
+        if (n <= 99) width else {
+            val p = paint.get(b) as Paint
+            width + ceil(p.measureText(n.toString()) - p.measureText("99+")).toInt().coerceAtLeast(0)
+        }
+    }
+    // 主页页签的角标不是 QUIBadge：TabFrameControllerImpl.generateRedTouch 创建 RedTouch，
+    // 它还有独立的 maxNum 截断值。只在排版数字前提高上限，保留 QQ 自己的更新/点击流程。
+    val red = cls("com.tencent.mobileqq.tianshu.ui.RedTouch")
+    val maxNum = red.getDeclaredField("maxNum").apply { isAccessible = true }
+    hook(red.method("getTextRedPoint")) { chain ->
+        maxNum.setInt(chain.thisObject, Int.MAX_VALUE)
+        chain.proceed()
     }
     hook(cls("com.tencent.widget.d").method("d")) { chain ->
-        chain.proceed().also { fix(chain.args[0] as? View, chain.args[1] as Int) }
+        chain.proceed().also {
+            val n = chain.args[2] as Int // d(TextView, type, count, background, limit, label, isRed)
+            val v = chain.args[0] as? TextView
+            if (n > 99 && v?.text?.toString() == "99+") {
+                v.text = n.toString()
+                val lp = v.layoutParams
+                val width = ceil(v.paint.measureText(v.text.toString()) + v.paddingLeft + v.paddingRight + 4 * v.dp).toInt()
+                if (lp != null && lp.width in 1 until width) { lp.width = width; v.layoutParams = lp }
+            }
+        }
     }
 }
 

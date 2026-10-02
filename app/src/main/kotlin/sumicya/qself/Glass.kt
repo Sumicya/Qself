@@ -7,10 +7,11 @@ import android.content.res.Resources
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
-import android.graphics.LinearGradient
 import android.graphics.Outline
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PixelFormat
+import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.RenderEffect
 import android.graphics.RenderNode
@@ -23,43 +24,38 @@ import android.view.ViewOutlineProvider
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.max
 import kotlin.math.min
 
-/**
- * 液态玻璃（iOS 26 的「透明」款）：把宿主身后的内容（各级祖先的背景 + 排在宿主前面的兄弟）录进一个
- * RenderNode，不模糊，过一遍 AGSL：整块把底下的画面往外顶（凸透镜，中心轻边缘满）、整体提一点饱和、
- * 罩一层淡色。没有高光也没有描边；按下去透镜凹一点、整面浮一层柔光。全在 GPU 上，
- * 每帧只多录一遍身后的 display list。
- *
- * [radius] 圆角上限（默认全圆 = 胶囊 / 圆钮），[selected] 给底栏用：返回当前选中的页签，
- * 玻璃里就多一块会弹着滑过去的亮胶囊。
- */
-class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, private val selected: (() -> View?)? = null) : Drawable() {
+/** 有明确可画的背后内容时做折射；QQ 的模糊控件不取样，失效时保留原生透明材质。 */
+class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
+            private val selected: (() -> View?)? = null) : Drawable() {
     private val dp = host.dp
-    private val node = RenderNode("qself-glass")
-    private val pad = (12 * dp).toInt() // 边缘折射往里采样，留一点余量就够
-    private val lens = RuntimeShader(LENS)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val node = RenderNode("qself-lens")
+    private val lens by lazy { RuntimeShader(LENS) }
+    private val pad = (12 * dp).toInt()
+    private var effectSize = 0L
+    private var failures = 0
+    private var sampled = false
+    private var missing = false
+    private var busy = false
     private val rect = RectF()
+    private val contour = Path()
     private val here = IntArray(2)
     private val there = IntArray(2)
-    private var key = 0L
-    private var keyAccent = 0
-    private var busy = false
-    private var broken = false
-    // 按压：透镜往内凹一点 + 一层柔光，140ms 起落
+    private var touchX = Float.NaN
+    private var touchY = Float.NaN
     private var press = 0f
     private var pressed = false
     private val pressAnim = ValueAnimator.ofFloat(0f, 0f).apply {
         duration = 140
         addUpdateListener { press = it.animatedValue as Float; invalidateSelf() }
     }
-
-    // 选中高亮：圆心从 fromX 弹到 toX
     private var target: View? = null
     private var fromX = 0f
     private var toX = 0f
-    private val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+    private val slide = ValueAnimator.ofFloat(0f, 1f).apply {
         duration = 480
         interpolator = null
         addUpdateListener { invalidateSelf() }
@@ -69,73 +65,124 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         val b = bounds
         if (b.isEmpty) return
         val night = night()
-        lens.setFloatUniform("press", press)
-        val drawn = canvas.isHardwareAccelerated && !busy && !broken && runCatching { backdrop(canvas, night) }
-            .onFailure { broken = true; log("玻璃录制失败，退化为纯色", it) }.getOrDefault(false)
-        val r = min(radius, b.height() / 2f)
-        if (!drawn) { // 软件画布 / 录制失败时的霜色
-            rect.set(b)
+        rect.set(b)
+        rect.inset(press * 4 * dp, press * 2 * dp) // 背景缩进去；命中区域和文字保持原位
+        val r = min(radius, rect.height() / 2f)
+        val accent = monet(night, 0xFF)
+        val refracted = canvas.isHardwareAccelerated && failures < 3 && !busy && runCatching { backdrop(canvas) }
+            .onFailure { if (++failures <= 2) log("玻璃取样失败 ${host.javaClass.simpleName}，使用透明材质", it) }
+            .getOrDefault(false)
+        paint.style = Paint.Style.FILL
+        paint.shader = null
+        paint.color = Color.WHITE
+        // 静止时没有高光。Monet 关掉即纯灰阶；有真实底图时才降低遮罩透明度。
+        val base = wash(if (night) 0xAE333333.toInt() else 0xC0F5F5F5.toInt(), accent)
+        paint.color = if (refracted) {
+            (base and 0xFFFFFF) or ((Color.alpha(base) * 0.38f).toInt() shl 24)
+        } else base
+        canvas.drawRoundRect(rect, r, r, paint)
+
+        if (press > 0f) {
+            contour.reset()
+            contour.addRoundRect(rect, r, r, Path.Direction.CW)
+            val save = canvas.save()
+            canvas.clipPath(contour)
+            val x = if (touchX.isNaN()) rect.centerX() else touchX.coerceIn(rect.left, rect.right)
+            val y = if (touchY.isNaN()) rect.centerY() else touchY.coerceIn(rect.top, rect.bottom)
+            paint.color = Color.WHITE
+            paint.shader = RadialGradient(x, y, max(1f, min(rect.width(), rect.height()) * 0.52f),
+                intArrayOf(((press * 0x76).toInt() shl 24) or 0xFFFFFF, 0x00FFFFFF),
+                null, Shader.TileMode.CLAMP)
+            canvas.drawRect(rect, paint)
+            canvas.restoreToCount(save)
             paint.shader = null
-            paint.color = monet(night, if (night) 0xA6 else 0xB8)
-                ?: if (night) 0xA61C1C1E.toInt() else 0xB8F5F5F8.toInt()
-            canvas.drawRoundRect(rect, r, r, paint)
         }
         pill(canvas, night)
     }
 
-    private fun backdrop(canvas: Canvas, night: Boolean): Boolean {
+    /** 输入框的子按钮接收点击时，按压亮斑仍跟随实际手指位置。 */
+    fun touch(x: Float, y: Float) {
+        touchX = x
+        touchY = y
+        if (pressed) invalidateSelf()
+    }
+
+    /** QQ 的页签消耗触摸，底栏自身不进入 pressed；从其专用触摸入口驱动反馈。 */
+    fun press(x: Float, y: Float, down: Boolean) {
+        touch(x, y)
+        setPress(down)
+    }
+
+    private fun backdrop(canvas: Canvas): Boolean {
+        if (!host.isAttachedToWindow) return false
         val b = bounds
+        val w = b.width() + 2 * pad
+        val h = b.height() + 2 * pad
         busy = true
         try {
-            val w = b.width() + 2 * pad
-            val h = b.height() + 2 * pad
-            // Monet 关了或者系统没给动态色时，accent 就等于着色器里那套中性色，混进去等于没混。
-            val accent = monet(night, 0xFF) ?: if (night) 0xFF121212.toInt() else 0xFFFFFFFF.toInt()
-            val k = (w.toLong() shl 40) or (h.toLong() shl 8) or (if (night) 1L else 0L)
-            if (k != key || accent != keyAccent) { node.setRenderEffect(effect(w, h, night, accent)); key = k; keyAccent = accent }
+            if (effectSize != (w.toLong() shl 32 or h.toLong())) {
+                lens.setFloatUniform("size", w.toFloat(), h.toFloat())
+                lens.setFloatUniform("pad", pad.toFloat())
+                lens.setFloatUniform("dp", dp)
+                lens.setFloatUniform("bend", 12 * dp)
+                node.setRenderEffect(RenderEffect.createRuntimeShaderEffect(lens, "content"))
+                effectSize = w.toLong() shl 32 or h.toLong()
+            }
+            lens.setFloatUniform("rad", min(radius, b.height() / 2f))
+            lens.setFloatUniform("press", press)
             node.setPosition(b.left - pad, b.top - pad, b.right + pad, b.bottom + pad)
             val rc = node.beginRecording(w, h)
-            try {
+            val count = try {
                 rc.translate((pad - b.left).toFloat(), (pad - b.top).toFloat())
                 behind(rc)
-            } finally {
-                node.endRecording()
+            } finally { node.endRecording() }
+            if (count == 0) {
+                if (!missing) { log("玻璃无可见底图: ${host.javaClass.simpleName}，使用透明材质"); missing = true }
+                return false
             }
+            if (!sampled) { log("玻璃折射取样: ${host.javaClass.simpleName}, 图层 $count"); sampled = true }
             canvas.drawRenderNode(node)
             return true
-        } finally {
-            busy = false
-        }
+        } finally { busy = false }
     }
 
-    private fun effect(w: Int, h: Int, night: Boolean, accent: Int): RenderEffect {
-        lens.setFloatUniform("size", w.toFloat(), h.toFloat())
-        lens.setFloatUniform("pad", pad.toFloat())
-        lens.setFloatUniform("rad", radius)
-        lens.setFloatUniform("bend", 12 * dp)
-        lens.setFloatUniform("night", if (night) 1f else 0f)
-        lens.setFloatUniform("accent", Color.red(accent) / 255f, Color.green(accent) / 255f, Color.blue(accent) / 255f)
-        return RenderEffect.createRuntimeShaderEffect(lens, "content")
-    }
-
-    /** 按画家顺序（先远后近）把宿主底下的东西画到以宿主左上角为原点的画布上。 */
-    private fun behind(rc: Canvas) {
+    /** 只录背景和画在宿主之前的可见内容；QQ 的模糊层和另一块玻璃都不是原始底图。 */
+    private fun behind(rc: Canvas): Int {
         host.getLocationInWindow(here)
-        val levels = ArrayList<Pair<ViewGroup, View>>(8)
+        val levels = ArrayList<Pair<ViewGroup, View>>(6)
         var child: View = host
         while (true) {
             val p = child.parent as? ViewGroup ?: break
             levels += p to child
             child = p
         }
-        for ((p, c) in levels.asReversed()) {
-            p.background?.let { paint(rc, p) { bg -> it.draw(bg) } }
-            for (i in 0 until p.indexOfChild(c)) {
+        var count = 0
+        for ((p, current) in levels.asReversed()) {
+            p.background?.let { bg ->
+                if (p.tag != "qself-sheet" && bg !is Glass && !bg.javaClass.name.contains("blur", true)) {
+                    paint(rc, p) { bg.draw(it) }
+                    count++
+                }
+            }
+            for (i in 0 until p.indexOfChild(current)) {
                 val s = p.getChildAt(i)
-                if (s.visibility != View.VISIBLE || s.javaClass.simpleName.contains("Blur") || !overlaps(s)) continue
+                if (s.visibility != View.VISIBLE || s.width == 0 || s.height == 0 || !overlaps(s) || unsafe(s)) continue
                 paint(rc, s) { s.draw(it) }
+                count++
             }
         }
+        return count
+    }
+
+    // 模糊或另一块玻璃藏在容器里面时也不把整个容器当作原图重放。
+    private fun unsafe(v: View): Boolean {
+        if (v.background is Glass || v.javaClass.name.contains("blur", true) ||
+            v.background?.javaClass?.name?.contains("blur", true) == true) return true
+        if (v is ViewGroup) for (i in 0 until v.childCount) {
+            val child = v.getChildAt(i)
+            if (child.visibility == View.VISIBLE && overlaps(child) && unsafe(child)) return true
+        }
+        return false
     }
 
     private inline fun paint(rc: Canvas, v: View, body: (Canvas) -> Unit) {
@@ -143,7 +190,6 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         val save = rc.save()
         rc.translate((there[0] - here[0]).toFloat(), (there[1] - here[1]).toFloat())
         rc.clipRect(0, 0, v.width, v.height)
-        rc.translate(-v.scrollX.toFloat(), -v.scrollY.toFloat()) // 直接调 draw() 不经过父级，滚动量得自己减
         body(rc)
         rc.restoreToCount(save)
     }
@@ -154,98 +200,82 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             there[0] < here[0] + host.width + pad && there[0] + v.width > here[0] - pad
     }
 
-    private fun setPress(p: Boolean) {
-        if (p == pressed) return
-        pressed = p
+    private fun setPress(value: Boolean) {
+        if (value == pressed) return
+        pressed = value
         pressAnim.cancel()
-        pressAnim.setFloatValues(press, if (p) 1f else 0f)
+        if (!value) {
+            press = 0f // 松手立刻灭光、恢复形状，不留离手后的尾光
+            invalidateSelf()
+            return
+        }
+        pressAnim.duration = 120
+        pressAnim.setFloatValues(press, 1f)
         pressAnim.start()
     }
 
+    override fun isStateful() = true
     override fun onStateChange(state: IntArray): Boolean {
-        setPress(state.contains(android.R.attr.state_pressed))
-        return false
+        if (selected == null) setPress(state.contains(android.R.attr.state_pressed))
+        return true
     }
 
-    /** 选中页签换了就重画；每帧 pre-draw 时由宿主调一次。底栏自己拿不到 pressed
-     * （触摸被页签吃掉），在这里看子/孙视图有没有被按着。 */
+    /** 选中目标可能变化而底栏自身未失效；按压由 QQTabLayout 专用触摸钩子驱动。 */
     fun sync() {
         if (selected?.invoke() !== target) invalidateSelf()
-        val g = host as? ViewGroup
-        val kid = g?.let { p ->
-            p.isPressed || (0 until p.childCount).any { p.getChildAt(it).isPressed } ||
-                (p.getChildAt(0) as? ViewGroup)?.let { c -> (0 until c.childCount).any { c.getChildAt(it).isPressed } } == true
-        } == true
-        setPress(host.isPressed || kid)
     }
 
     private fun pill(canvas: Canvas, night: Boolean) {
-        val t = selected?.invoke() ?: return
+        val tab = selected?.invoke() ?: return
         host.getLocationInWindow(here)
-        t.getLocationInWindow(there)
-        val x = there[0] - here[0] + t.width / 2f
-        if (t !== target) {
-            // 从现在画着的位置弹过去；第一次直接落位
+        tab.getLocationInWindow(there)
+        val x = there[0] - here[0] + tab.width / 2f
+        if (tab !== target) {
             val first = target == null
-            val f = if (anim.isRunning) spring(anim.animatedFraction) else 1f
+            val f = if (slide.isRunning) spring(slide.animatedFraction) else 1f
             fromX = if (first) x else fromX + (toX - fromX) * f
-            target = t
-            anim.cancel()
-            if (!first) anim.start()
+            target = tab
+            slide.cancel()
+            if (!first) slide.start()
         }
         toX = x
-        val cx = fromX + (toX - fromX) * (if (anim.isRunning) spring(anim.animatedFraction) else 1f)
+        val cx = fromX + (toX - fromX) * (if (slide.isRunning) spring(slide.animatedFraction) else 1f)
         val inset = 4 * dp
-        // 圆贴着页签钮：直径取页签宽和栏高里小的那个，减一圈留白；窄页签不会溢到邻座
-        val d = min(t.width.toFloat(), bounds.height().toFloat()) - 2 * inset
-        // 上亮下暗一点，像一块有厚度的玻璃；白高光里混一点 Monet 强调色，跟玻璃罩色一个份量。
-        val accent = monet(night, 0xFF)
-        val top = wash(if (night) 0x40FFFFFF else 0xC8FFFFFF.toInt(), accent)
-        val bottom = wash(if (night) 0x24FFFFFF else 0x8CFFFFFF.toInt(), accent)
-        paint.color = -1
-        paint.shader = LinearGradient(0f, bounds.top + inset, 0f, bounds.bottom - inset, top, bottom, Shader.TileMode.CLAMP)
-        canvas.drawCircle(cx, bounds.centerY().toFloat(), d / 2f, paint)
+        val d = min(tab.width.toFloat(), bounds.height().toFloat()) - 2 * inset
+        paint.color = wash(if (night) 0x4AFFFFFF else 0xAAFFFFFF.toInt(), monet(night, 0xFF))
         paint.shader = null
+        canvas.drawCircle(cx, bounds.centerY().toFloat(), d / 2f, paint)
     }
 
-    /** 欠阻尼弹簧：冲过头一点再回来。 */
     private fun spring(t: Float): Float = (1.0 - exp(-6.0 * t) * cos(2 * PI * 0.9 * t)).toFloat()
 
     override fun setAlpha(alpha: Int) {}
     override fun setColorFilter(colorFilter: ColorFilter?) {}
-
     @Deprecated("Deprecated in Java")
     override fun getOpacity() = PixelFormat.TRANSLUCENT
 
     private companion object {
-        /** 输入是身后的原图（不模糊）。坐标是节点像素；胶囊 = 节点四周去掉 pad。 */
         const val LENS = """
 uniform shader content;
 uniform float2 size;
 uniform float pad;
+uniform float dp;
 uniform float rad;
 uniform float bend;
 uniform float press;
-uniform float night;
-uniform float3 accent;
 half4 main(float2 p) {
     float2 c = size * 0.5;
-    float2 h = c - float2(pad, pad);
+    float2 h = c - float2(pad, pad) - press * dp * float2(4.0, 2.0);
     float r = min(rad, min(h.x, h.y));
-    float2 spine = float2(clamp(p.x, c.x - (h.x - r), c.x + (h.x - r)), clamp(p.y, c.y - (h.y - r), c.y + (h.y - r)));
+    if (r <= 0.0) return half4(0.0);
+    float2 spine = clamp(p, c - h + r, c + h - r);
     float2 v = p - spine;
     float d = length(v);
-    if (d > r) { return half4(0.0); }
+    if (d > r) return half4(0.0);
     float2 n = v / max(d, 0.001);
-    float w = d / max(r, 0.001); // 全扭曲：折射量从中心 0 长到边缘满，整块都是透镜
-    // 按压变形：中心取样往外挪（凹进去），边缘不动
-    half4 col = content.eval(p - n * bend * w * w + n * (press * bend * 0.9) * (1.0 - w));
-    half l = dot(col.rgb, half3(0.299, 0.587, 0.114));
-    col.rgb = mix(half3(l), col.rgb, half(1.25));
-    half3 tint = mix(mix(half3(1.0), half3(0.07), half(night)), half3(accent), half(0.22));
-    col.rgb = mix(col.rgb, tint, mix(half(0.28), half(0.34), half(night)));
-    col.rgb += half3(press * mix(0.14, 0.08, night) * (1.0 - 0.55 * w)); // 按压高光：整面柔光，中心最亮
-    col.a = 1.0;
+    float w = d / r;
+    half4 col = content.eval(p - n * bend * w * w + n * press * bend * 0.55 * (1.0 - w));
+    col.rgb *= half(1.0 - press * 0.12 * smoothstep(0.35, 1.0, w));
     return col;
 }
 """
@@ -259,7 +289,7 @@ fun capsule(max: Float = Float.MAX_VALUE) = object : ViewOutlineProvider() {
 
 private val isNight by lazy { runCatching { cls("com.tencent.mobileqq.utils.QQTheme").getMethod("isNowThemeIsNight") }.getOrNull() }
 
-/** 把 Monet 强调色按 0.22 混进 [c]，保留 [c] 自己的透明度；accent 为 null（Monet 关着）就原样返回。 */
+/** Monet 混进中性色，保留中性色的透明度。 */
 private fun wash(c: Int, accent: Int?): Int {
     if (accent == null) return c
     fun mix(a: Int, b: Int) = (a + ((b - a) * 0.22f).toInt()).coerceIn(0, 255)
@@ -267,13 +297,11 @@ private fun wash(c: Int, accent: Int?): Int {
         (mix(Color.green(c), Color.green(accent)) shl 8) or mix(Color.blue(c), Color.blue(accent))
 }
 
-/** NagramX 那套 Monet：系统动态色跟壁纸走。开关关了返回 null，调用方用写死的中性色。 */
 fun monet(night: Boolean, alpha: Int): Int? =
     if (!on("Monet取色")) null else runCatching {
         val id = if (night) android.R.color.system_accent1_200 else android.R.color.system_accent1_600
         Resources.getSystem().getColor(id, null) and 0x00FFFFFF or (alpha shl 24)
     }.getOrNull()
 
-/** QQ 自己的夜间模式；拿不到就看系统。 */
 fun night(): Boolean = runCatching { isNight?.invoke(null) as? Boolean }.getOrNull()
     ?: (Resources.getSystem().configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES)

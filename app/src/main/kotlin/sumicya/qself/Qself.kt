@@ -21,13 +21,13 @@ val knobs = listOf("玻璃底栏", "Monet取色", "TG输入栏", "防撤回")
  */
 val features = listOf(
     "防撤回" to ::antiRecall,
+    "玻璃底栏" to ::barTouch, // 页签自己吃触摸，底栏拿不到 pressed；从页签的事件入口驱动玻璃按压
     "标题栏侧栏精简" to ::drawerMenu,
     "会员装饰归零" to ::plainDecor,
     "昵称只留名字" to ::plainNick,
     "连发合并" to ::groupRuns,
     "回复不@" to ::replyNoAt,
     "转发多选" to ::multiForward,
-    "转发不限人数" to ::noForwardLimit,
     "左滑回复不设限" to ::replyAnyMsg,
     "显示具体未读条数" to ::exactCount,
     "+面板精简" to ::plusPanel,
@@ -54,7 +54,9 @@ class Qself : XposedModule() {
     }
 
     override fun onPackageLoaded(param: PackageLoadedParam) {
-        if (param.isFirstPackage) install(param.defaultClassLoader)
+        // scope.list 之外再核一次实际包与进程，避免作用域被误扩大时向无关应用装钩子
+        if (param.isFirstPackage && param.packageName == "com.tencent.mobileqq" && qqProcess(process))
+            install(param.defaultClassLoader)
     }
 
     /** 换 APK 时 LSPosed 热重载：旧的一代把 ClassLoader 传给新的一代，新的一代重装。 */
@@ -66,8 +68,10 @@ class Qself : XposedModule() {
     override fun onHotReloaded(param: HotReloadedParam) {
         param.oldHookHandles.forEach { runCatching { it.unhook() } }
         process = param.processName
-        (param.savedInstanceState as? ClassLoader)?.let(::install)
+        if (qqProcess(process)) (param.savedInstanceState as? ClassLoader)?.let(::install)
     }
+
+    private fun qqProcess(name: String) = name == "com.tencent.mobileqq" || name.startsWith("com.tencent.mobileqq:")
 
     private fun install(classLoader: ClassLoader) {
         xposed = this
