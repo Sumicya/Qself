@@ -1,13 +1,14 @@
 #!/bin/bash
 # 没有 Android SDK / Gradle 的机器上做类型检查 + 跑 ProtoTest（CI 之外的快速回路）。
-# 第一次跑会把 kotlinc（npm）、JRE（PyPI jdk4py）、android.jar、libxposed 源码拉到 ~/.cache/qself-tc。
+# 第一次跑会把 kotlinc（npm）、JRE（PyPI jdk4py）、android.jar（android-37，与 Gradle 的 compileSdk 37 对齐）、
+# libxposed 源码拉到 ~/.cache/qself-tc。
 set -e
 T=${QSELF_TC:-$HOME/.cache/qself-tc}
 R=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$T" && cd "$T"
 [ -x kotlinc/bin/kotlinc ] || { npm pack kotlin-compiler@2.4.20 --silent >/dev/null 2>&1; tar xzf kotlin-compiler-2.4.20.tgz; mv package kotlinc; chmod +x kotlinc/bin/*; }
 [ -x jdk4py/jdk4py/java-runtime/bin/java ] || { pip download --quiet --no-deps -d . jdk4py; mkdir -p jdk4py; (cd jdk4py && unzip -qo ../jdk4py-*.whl); chmod +x jdk4py/jdk4py/java-runtime/bin/*; }
-[ -f android.jar ] || gh api "repos/Sable/android-platforms/contents/android-36/android.jar" -H "Accept: application/vnd.github.raw" > android.jar
+[ -f android-37.jar ] || gh api "repos/Sable/android-platforms/contents/android-37/android.jar" -H "Accept: application/vnd.github.raw" > android-37.jar
 [ -d libxposed-api ] || git clone -q --depth 1 https://github.com/Ahmoze/libxposed-api
 mkdir -p stubs/io/github/libxposed/annotation stubs/androidx/annotation bc/sumicya/qself kstub
 printf 'package io.github.libxposed.annotation;\npublic @interface InternalApi {}\n' > stubs/io/github/libxposed/annotation/InternalApi.java
@@ -40,8 +41,8 @@ EOK
 export JAVA_HOME=$T/jdk4py/jdk4py/java-runtime PATH=$T/jdk4py/jdk4py/java-runtime/bin:$PATH
 JAVA=$(find "$T/libxposed-api/api/src/main/java" "$T/stubs" -name "*.java")
 rm -rf "$T/out" "$T/t"
-kotlinc/bin/kotlinc -jvm-target 21 -cp android.jar -d "$T/out" "$R"/app/src/main/kotlin/sumicya/qself/*.kt "$R"/app/src/test/kotlin/sumicya/qself/*.kt kstub/junit.kt $JAVA bc/sumicya/qself/BuildConfig.java 2>&1 | grep -v "^$" || true
+kotlinc/bin/kotlinc -jvm-target 21 -cp android-37.jar -d "$T/out" "$R"/app/src/main/kotlin/sumicya/qself/*.kt "$R"/app/src/test/kotlin/sumicya/qself/*.kt kstub/junit.kt $JAVA bc/sumicya/qself/BuildConfig.java 2>&1 | grep -v "^$" || true
 echo "compiled: $(ls "$T/out/sumicya/qself" 2>/dev/null | wc -l) classes"
 # ProtoTest 直接吃上面全量编译的产物：不再挑子集重编一遍（子集凑不齐跨文件的扩展）。
-kotlinc/bin/kotlinc -nowarn -jvm-target 21 -cp "android.jar:$T/out" -d "$T/t" kstub/run.kt 2>&1 | grep -v "^$" || true
+kotlinc/bin/kotlinc -nowarn -jvm-target 21 -cp "android-37.jar:$T/out" -d "$T/t" kstub/run.kt 2>&1 | grep -v "^$" || true
 java -cp "$T/t:$T/out:$T/kotlinc/lib/kotlin-stdlib.jar" RunKt
