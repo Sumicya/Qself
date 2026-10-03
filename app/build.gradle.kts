@@ -5,9 +5,10 @@ plugins {
     id("com.android.application")
 }
 
-// 版本 = 构建日（Asia/Shanghai）.CI 序号。CI 上 QSELF_VERSION 由工作流从提交时间算好喂进来，
-// 重试、跨日重试都不变；本地构建没 run 号，日期取当天、尾号 .0。
-// versionCode 就是 run 号本身：单调递增（模块是手动覆盖装的，够用）。
+// 版本 = 提交日（Asia/Shanghai）.CI 序号。CI 上 QSELF_VERSION 由工作流从**提交时间**算好喂进来，
+// 一次固定，重试、跨日重试都不变；本地构建没有它，日期取当天、尾号 .0（本地包不是发行版本）。
+// versionCode = 本工作流的 run 号，单调递增；已发布最大值 168（2026-10-02），
+// 工作流删除重建会让 run 号回到 1，重建后先核验新序号大于它再发。
 val qselfCi = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
 val qselfVersion: String = System.getenv("QSELF_VERSION")
     ?: LocalDate.now(ZoneId.of("Asia/Shanghai")).let { "${it.year % 100}.${it.monthValue}.${it.dayOfMonth}.0" }

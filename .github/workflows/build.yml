@@ -1,6 +1,6 @@
-# Qself CI。每次 push 两个作业：dex 拿真 QQ 包核每一个落点；
-# apk 跑 ProtoTest 再出 debug APK 挂到 release `latest`（覆盖式，手机上 curl 一条命令就装），
-# 失败时把 Gradle 日志尾巴贴成提交评论。
+# Qself CI。每次 push 两个作业：dex 拿真 QQ 包核每一个落点；apk 跑 ProtoTest 再出 debug APK 挂进 Artifacts
+# （不发 release：包从 Actions 里最近一次成功的 run 取），失败时把 Gradle 日志尾巴贴成提交评论。
+# 版本只在这里算一次：提交时间（Asia/Shanghai）.本工作流 run 号 → QSELF_VERSION，Gradle 和产物名都读它。
 name: Build
 
 on:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write # 只为失败时那条提交评论
 
 jobs:
   # 落点核对：真包在 Sumicya/qqapk（qq.aa..qq.ae 拼起来）。表红了就是这版 QQ 里名字对不上，
@@ -53,22 +53,17 @@ jobs:
           for f in java_init.list module.prop scope.list; do unzip -l "$APK" | grep -F "META-INF/xposed/$f"; done
           if unzip -l "$APK" | grep -q 'assets/xposed_init'; then echo 'legacy entry packaged' >&2; exit 1; fi
           sha256sum "$APK"
-      # 包直接挂到 latest 这个 release 上：手机上不用装 gh、不用 auth login，一条 curl 就够。
-      # 版本化产物（qself-26.10.2.140.apk，和 versionName 同源）+ 固定别名 qself.apk 给手机下载用。
-      - name: 挂到 latest release
-        if: github.event_name == 'push'      # PR 构建不许覆盖 latest
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # 产物名与版本同源：Artifacts 里是 Qself-<版本>，里面是 qself-<版本>.apk（版本来自上面那一步）。
+      - name: 按版本给 APK 改名
         run: |
-          gh release create latest --title latest --notes "最新一次 CI 构建，版本 $QSELF_VERSION，装这个就行（覆盖式，永远只有一个包）" 2>/dev/null || true
           APK=app/build/outputs/apk/debug
           mv "$APK/app-debug.apk" "$APK/qself-$QSELF_VERSION.apk"
-          cp "$APK/qself-$QSELF_VERSION.apk" "$APK/qself.apk"
-          gh release upload latest "$APK/qself-$QSELF_VERSION.apk" "$APK/qself.apk" --clobber
-          # 永远只有当前版本的两个文件：别的全清掉
-          for a in $(gh release view latest --json assets --jq '.assets[].name'); do
-            case "$a" in "qself-$QSELF_VERSION.apk"|qself.apk) ;; *) gh release delete-asset latest "$a" --yes ;; esac
-          done
+          ls -l "$APK"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Qself-${{ env.QSELF_VERSION }}
+          path: app/build/outputs/apk/debug/qself-*.apk
+          if-no-files-found: error
       - name: Publish the build log on failure
         if: failure()
         env:
