@@ -77,7 +77,7 @@ fun knob(bar: View) {
         outlineProvider = capsule()
         clipToOutline = true
         elevation = 6 * dp
-        background = Glass(this)
+        background = Glass(this, preset = GlassHighlight.Small)
         // 按压反馈只由 Glass 的按压态产生（透镜凹陷 + 柔光），不叠系统涟漪
         setOnClickListener { sheet(it) }
     }
@@ -168,10 +168,10 @@ private fun sheet(anchor: View) {
         val view = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            val p = (10 * dp).toInt()
+            val p = (8 * dp).toInt()
             setPadding(p, p, p, p)
             addView(View(ctx).apply { background = mark },
-                LinearLayout.LayoutParams((22 * dp).toInt(), (22 * dp).toInt()).apply { marginEnd = (10 * dp).toInt() })
+                LinearLayout.LayoutParams((20 * dp).toInt(), (20 * dp).toInt()).apply { marginEnd = (8 * dp).toInt() })
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(title)
@@ -234,19 +234,19 @@ private fun sheet(anchor: View) {
     }
     val card = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
-        val r = 28 * dp
-        background = Glass(this, r)
+        val r = 24 * dp
+        background = Glass(this, r, preset = GlassHighlight.Big)
         outlineProvider = capsule(r)
         clipToOutline = true
         elevation = 8 * dp
-        setPadding((14 * dp).toInt(), (18 * dp).toInt(), (14 * dp).toInt(), (10 * dp).toInt())
+        setPadding((14 * dp).toInt(), (14 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
         addView(TextView(ctx).apply {
             text = "Qself ${BuildConfig.VERSION_NAME}"
             textSize = 18f
             gravity = Gravity.CENTER
             setTextColor(ink)
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            .apply { bottomMargin = (6 * dp).toInt() })
+            .apply { bottomMargin = (4 * dp).toInt() })
         addView(ScrollView(ctx).apply { addView(grid) },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         addView(LinearLayout(ctx).apply {
@@ -257,13 +257,16 @@ private fun sheet(anchor: View) {
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
+    // 面板收小：宽不超 400dp，高按行数估、最多占屏幕 62%，其余在卡片里滚动。
+    val rows = (features.size + 1) / 2
+    val want = ((100 + rows * 50) * dp).toInt()
     val dim = FrameLayout(ctx).apply {
         tag = SHEET
         setBackgroundColor(0x66000000)
         setOnClickListener { decor.removeView(this) } // 点卡片外面关掉
         addView(card, FrameLayout.LayoutParams(
-            min(decor.width - (32 * dp).toInt(), (520 * dp).toInt()),
-            (decor.height - (72 * dp).toInt()), Gravity.CENTER))
+            min(decor.width - (32 * dp).toInt(), (400 * dp).toInt()),
+            min(want, (decor.height * 0.62f).toInt()), Gravity.CENTER))
     }
     decor.addView(dim, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 }

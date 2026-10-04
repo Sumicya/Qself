@@ -192,9 +192,7 @@ private fun tabPress(bar: ViewGroup, e: MotionEvent) {
         pressedTab[bar] = target
         target.animate().scaleX(1.2f).scaleY(1.2f).setDuration(50).start()
     }
-    // 整颗胶囊充气约 5%（KSU 的 1 + 16dp/宽度）
-    val s = if (down) 1.05f else 1f
-    bar.animate().scaleX(s).scaleY(s).setDuration(if (down) 50 else 150).start()
+    // 整颗胶囊的充气（KSU 的 1 + 16dp/宽度）现在由 Glass 的按压弹簧自己管，别再插一脚。
 }
 
 private val floated: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
@@ -249,7 +247,10 @@ private fun float(bar: ViewGroup) {
     // 两头的留白放在页签条上而不是 bar 上：material 固定模式会把页签条量成 bar 的整宽（含 padding），放 bar 上会挤歪。
     bar.setPadding(0, bar.paddingTop, 0, bar.paddingBottom)
     bar.getChildAt(0)?.setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0) // 两端留白收掉，玻璃贴着按钮
-    bar.background = Glass(bar, selected = { selectedTab(bar) })
+    val glass = Glass(bar, selected = { selectedTab(bar) })
+    bar.background = glass
+    // KSU 的高光和亮胶囊画在内容之上：交给 foreground 那层，叠放顺序才对。
+    bar.foreground = glass.overlay()
     // 选中态与圆钮的定位共用 homeBar 注册的 pre-draw 回调。
 }
 

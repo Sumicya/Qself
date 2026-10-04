@@ -3,7 +3,7 @@
 ## 是什么
 
 一个纯钩子的 LSPosed 模块（libxposed API 102），只针对 QQ 9.2.10 / Android 16。模块 APK 没有界面；
-纯 Kotlin，八个文件（约 1800 行），没有第三方依赖、没有 `.so`、不联网。外观照 NagramXF 那套长相做（液态玻璃 + Monet 取色 + 输入栏玻璃化）；玻璃配方参照 KernelSU 管理器（Apache 2.0，源自 Kyant0/AndroidLiquidGlass）。
+纯 Kotlin，八个文件（约 2600 行），没有第三方依赖、没有 `.so`、不联网。外观照 NagramXF 那套长相做（液态玻璃 + Monet 取色 + 输入栏玻璃化）；玻璃配方参照 KernelSU 管理器（Apache 2.0，源自 Kyant0/AndroidLiquidGlass）。
 
 八个文件：`Qself.kt` 入口（功能清单也是开关列表）、`Hook.kt` libxposed 封装与开关读取、`Knob.kt` 圆钮与开关面板、
 `Quiet.kt` 自由化、`Chat.kt` 聊天、`Looks.kt` 视图规则、`Input.kt` 输入栏、`Glass.kt` 液态玻璃。
