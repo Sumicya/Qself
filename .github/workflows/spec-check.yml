@@ -26,7 +26,7 @@ jobs:
               raise SystemExit("缺少 AGENTS.md")
           text = agents.read_text(encoding="utf-8")
           required = [
-              "本仓库上次同步 = 第十六版",
+              "本仓库上次同步 = 第十七版",
               "规范指针",
               "Sumicya/selfs",
               "GLOBAL.md",
@@ -63,4 +63,4 @@ jobs:
               source = path.read_text(encoding="utf-8")
               if forbidden.search(source):
                   raise SystemExit(f"{path} 包含自动创建 Release、tag 或正式资产的实现")
-          print("第十六版规范检查通过")
+          print("第十七版规范检查通过")
