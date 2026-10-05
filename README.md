@@ -49,7 +49,7 @@
 4. 每个 QQ 进程启动时打一行日志，`logcat -s Qself` 或 LSPosed 管理器的日志页可见，形如
    `Qself 26.9.27.12 @ com.tencent.mobileqq ✓系统WebView ✓防撤回 … ✗某功能(NoSuchMethodException: …)`
    —— ✗ 就是那个功能在这版 QQ 里找不到落点，其余不受影响。**把这一行贴回来就能修。**
-5. 之后换 APK 直接覆盖安装即可，LSPosed 会热重载（签名固定在 `app/qself.p12`）
+5. 之后换 APK 直接覆盖安装；当前仓库不保存正式签名私钥，正式签名 APK 不能从本仓库自动推导。
 
 ## 结构
 
