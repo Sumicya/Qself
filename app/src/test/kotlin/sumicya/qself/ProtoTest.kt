@@ -50,6 +50,20 @@ class ProtoTest {
         assertSame(keep, stripSyncRecall(keep))
     }
 
+    @Test fun mergeGroupsOnlyAdjacentOrdinaryMessagesById() {
+        val first = RunKey(1, "u", 1_000, 166)
+        assertTrue(mergeRun(first, RunKey(2, "u", 1_300, 166))) // 五分钟边界包含
+        assertTrue(mergeRun(first, RunKey(3, "u", 700, 166))) // 列表时间方向不影响判定
+        assertFalse(mergeRun(first, RunKey(4, "u", 1_301, 166)))
+        assertFalse(mergeRun(first, RunKey(5, "other", 1_100, 166)))
+        assertFalse(mergeRun(first, RunKey(1, "u", 1_100, 166))) // 重复 ID 不自合并
+        assertFalse(mergeRun(first, RunKey(6, "u", 1_100, 5))) // 灰字不并
+        assertFalse(mergeRun(first, RunKey(7, "u", 1_100, 29))) // 开场白不并
+        assertFalse(mergeRun(first, RunKey(8, "u", Long.MAX_VALUE, 166))) // 溢出差值不误判
+        assertFalse(mergeRun(RunKey(9, "u", Long.MIN_VALUE, 166), RunKey(10, "u", Long.MAX_VALUE, 166)))
+        assertFalse(mergeRun(null, first))
+    }
+
     @Test fun garbageIsNotSilentlyARecall() {
         assertTrue(recall(byteArrayOf()) == null)
         assertTrue(recall(field(1, field(2, field(1, 528L)))) == null)

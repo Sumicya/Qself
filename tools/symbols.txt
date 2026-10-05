@@ -26,16 +26,9 @@ member! com.tencent.mobileqq.activity.qqsettingme.config.QQSettingMeMenuConfigBe
 class  com.tencent.mobileqq.aio.input.reply.i
 member! com.tencent.mobileqq.aio.input.reply.i#k
 
-# ---------- 玻璃底栏 / TG 输入栏 Looks.kt, Input.kt（视图规则按长相认，所以是后缀和资源名）
-class~ PanelIconLinearLayout
+# ---------- 玻璃底栏 Looks.kt（视图规则按长相认，所以是后缀和资源名）
 class  com.google.android.material.tabs.TabLayout
 member! com.google.android.material.tabs.TabLayout#setTabRippleColor
-res    input
-res    send_btn
-text   表情
-text   更多
-text   加号
-text   语音
 
 # ---------- 会员装饰归零 Chat.kt
 class  com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble
