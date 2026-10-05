@@ -7,3 +7,8 @@ local.properties
 *.apk
 __pycache__/
 *.pyc
+
+# Signing material must never be committed.
+*.p12
+*.jks
+*.keystore
