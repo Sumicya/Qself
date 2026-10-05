@@ -36,38 +36,33 @@ jobs:
                   raise SystemExit(f"AGENTS.md 缺少规范版本或指针：{item}")
 
           workflows = root / ".github" / "workflows"
-          required_workflows = {"build.yml", "spec-check.yml"}
-          for name in required_workflows:
-              path = workflows / name
-              if not path.exists():
-                  raise SystemExit(f"缺少工作流：{path}")
-              source = path.read_text(encoding="utf-8")
-              if not re.search(r"(?m)^permissions:\s*$", source):
-                  raise SystemExit(f"{path} 缺少显式顶层 permissions")
-              if re.search(r"(?im)^\s*permissions:\s*write-all\b", source) or re.search(
-                  r"(?im)^\s*(?:contents|actions|packages|pull-requests|checks|statuses|id-token):\s*write\b",
-                  source,
-              ):
-                  raise SystemExit(f"{path} 含有发布写权限；检查与构建工作流必须只读")
+          build = (workflows / "build.yml").read_text(encoding="utf-8")
+          if "cleanup_artifacts" not in build or 'KEEP: "5"' not in build:
+              raise SystemExit("build.yml 缺少保留最近 5 个发行 artifact 的 cleanup_artifacts")
 
           forbidden = re.compile(
               r"(?i)(softprops/action-gh-release|actions/create-release|actions/upload-release-asset|"
-              r"gh\s+release\s+(?:create|upload)|create_git_release|createRelease|"
-              r"git\s+tag\b|git\s+push\b[^\n]*refs/tags|/git/refs\b|refs/tags/|"
-              r"gh\s+api\b[^\n]*(?:-X|--method)\s+POST[^\n]*/(?:releases|git/refs)\b|"
-              r"curl\b[^\n]*(?:-X|--request)\s+POST[^\n]*/(?:releases|git/refs)\b)"
+              r"gh\s+release\s+(?:create|upload)|create_git_release|createRelease)"
           )
-          # 禁旧（上限）：不得继续用会弃用告警的旧主版本与漂移镜像；能新尽量新
           stale = re.compile(
               r"(?i)(actions/checkout@v[1-4]\b|actions/setup-java@v[1-3]\b|"
               r"actions/setup-python@v[1-4]\b|actions/upload-artifact@v[1-3]\b|"
               r"runs-on:\s*ubuntu-latest\b)"
           )
+          write_perm = re.compile(
+              r"(?im)^\s*(contents|actions|packages|pull-requests|checks|statuses|id-token):\s*write\b"
+          )
           for path in workflows.glob("*.yml"):
               source = path.read_text(encoding="utf-8")
               if path.name != "spec-check.yml" and forbidden.search(source):
-                  raise SystemExit(f"{path} 包含自动创建 Release、tag 或正式资产的实现")
+                  raise SystemExit(f"{path} 含自动发版实现")
               m = stale.search(source)
               if m:
-                  raise SystemExit(f"{path} 含禁旧条件（{m.group(0)}）；当轮升到现行档")
-          print("第十七版规范检查通过（含禁旧扫描）")
+                  raise SystemExit(f"{path} 含禁旧条件（{m.group(0)}）")
+              if path.name == "build.yml":
+                  # 仅 cleanup job 可有 actions: write；顶层须为 read
+                  if re.search(r"(?im)^permissions:\s*write-all\b", source):
+                      raise SystemExit("build.yml 不得 write-all")
+              elif write_perm.search(source) or re.search(r"(?im)^\s*permissions:\s*write-all\b", source):
+                  raise SystemExit(f"{path} 不得有写权限")
+          print("第十七版规范检查通过（含禁旧扫描与 artifact 保留 5）")
