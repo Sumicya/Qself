@@ -104,6 +104,8 @@ fun texts(v: View, depth: Int = 4): List<String> {
 // ---- 首页底栏：QQ 自己的 TabLayout 原地浮成一颗玻璃胶囊，频道 / 动态页签藏掉。
 
 private val floated: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
+private val originalFloatBottomMargin = WeakHashMap<View, Int>()
+private val clearedDecorations = WeakHashMap<View, Int>()
 
 private fun homeBar(bar: ViewGroup) {
     // 热重载后是新一代代码、新的 floated 集合：靠背景认出上一代已经浮过的底栏，别再加一次边距。
@@ -123,7 +125,10 @@ private fun homeBar(bar: ViewGroup) {
     if (bar.height == 0) return
     knob(bar)
     // QQ 给底栏铺的通栏模糊带、分割细线、纯色垫底：胶囊两侧会露出来，都藏。
-    if (!glass) return
+    if (!glass) {
+        restoreClearedDecorations()
+        return
+    }
     val frame = generateSequence(bar.parent as? ViewGroup) { it.parent as? ViewGroup }
         .firstOrNull { it.javaClass.simpleName == "TabFrameLayout" } ?: bar.parent as? ViewGroup
     frame?.let { clear(it, bar) }
@@ -142,7 +147,10 @@ private fun float(bar: ViewGroup) {
             is LinearLayout.LayoutParams -> it.gravity = Gravity.CENTER_HORIZONTAL
             is RelativeLayout.LayoutParams -> it.addRule(RelativeLayout.CENTER_HORIZONTAL)
         }
-        if (it is ViewGroup.MarginLayoutParams) it.bottomMargin += (12 * dp).toInt()
+        if (it is ViewGroup.MarginLayoutParams) {
+            val base = originalFloatBottomMargin.getOrPut(bar) { it.bottomMargin }
+            it.bottomMargin = base + (12 * dp).toInt()
+        }
         bar.layoutParams = it
     }
     // 两头的留白放在页签条上而不是 bar 上：material 固定模式会把页签条量成 bar 的整宽（含 padding），放 bar 上会挤歪。
@@ -235,12 +243,22 @@ private fun clear(root: ViewGroup, bar: View) {
         val name = v.javaClass.simpleName
         val strip = v.height <= bar.height * 2 && v.width > bar.width / 2
         val decorative = name.contains("Blur") || (strip && (v.javaClass == View::class.java || v.height <= 2))
-        if (decorative && v.visibility == View.VISIBLE && windowY(v) + v.height > top && !v.isAncestorOf(bar)) {
-            v.visibility = View.INVISIBLE
+        if (decorative && windowY(v) + v.height > top && !v.isAncestorOf(bar)) {
+            clearedDecorations.putIfAbsent(v, v.visibility)
+            if (v.visibility == View.VISIBLE) v.visibility = View.INVISIBLE
         }
         if (v is ViewGroup) for (i in 0 until v.childCount) go(v.getChildAt(i))
     }
     go(root)
+}
+
+private fun restoreClearedDecorations() {
+    val it = clearedDecorations.entries.iterator()
+    while (it.hasNext()) {
+        val (v, visibility) = it.next()
+        if (v.visibility == View.INVISIBLE) v.visibility = visibility
+        it.remove()
+    }
 }
 
 private fun View.isAncestorOf(v: View): Boolean = generateSequence(v.parent) { it.parent }.any { it === this }
