@@ -1,10 +1,7 @@
-# Qself CI。agent 没有 workflow 权限，这份要由人复制过去：
+# Qself CI。
 #
-#   cp ci/build.yml .github/workflows/build.yml
-#   git add .github/workflows/build.yml && git commit -m "ci: 上 workflow" && git push
-#
-# 每次 push 两个作业：dex 拿真 QQ 包核每一个落点；apk 跑 ProtoTest 再出 debug APK 放进 Artifacts，
-# 失败时把 Gradle 日志尾巴贴成提交评论。
+# 每次 push / PR / 手动运行：dex 作业拿真 QQ 包核每一个落点；apk 作业跑 ProtoTest 再出 debug APK 放进 Artifacts。
+# CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须按仓库规范由主人明确授权并人工完成。
 name: Build
 
 on:
