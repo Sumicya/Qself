@@ -13,7 +13,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  actions: read
 
 jobs:
   # 落点核对：真包在 Sumicya/qqapk（qq.aa..qq.ae 拼起来）。表红了就是这版 QQ 里名字对不上，
@@ -45,6 +46,18 @@ jobs:
           packages: 'platform-tools'
       - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
       - uses: gradle/actions/setup-gradle@v6
+      - name: Calculate daily build sequence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DATE=$(TZ=Asia/Shanghai date +%Y-%m-%d)
+          SEQ=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml --created "$DATE" --limit 1000 --json databaseId --jq 'length')
+          echo "QSELF_DAILY_SEQUENCE=$SEQ" >> "$GITHUB_ENV"
+          YY=$(TZ=Asia/Shanghai date +%y)
+          MM=$(TZ=Asia/Shanghai date +%-m)
+          DD=$(TZ=Asia/Shanghai date +%-d)
+          echo "QSELF_VERSION=$YY.$MM.$DD.$SEQ.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+
       - name: Test and build
         run: |
           set -o pipefail
@@ -57,13 +70,13 @@ jobs:
           sha256sum "$APK"
       - uses: actions/upload-artifact@v7
         with:
-          name: Qself-${{ github.sha }}
+          name: Qself-${{ env.QSELF_VERSION }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      - name: Publish the build log on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          [ -f build.log ] || echo "failed before gradle" > build.log
-          gh api -X POST "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" -f body="$(tail -c 6000 build.log)"
+          retention-days: 5
+      - uses: actions/upload-artifact@v7
+        if: failure() && hashFiles('build.log') != ''
+        with:
+          name: Qself-${{ env.QSELF_VERSION }}-log
+          path: build.log
+          retention-days: 5
