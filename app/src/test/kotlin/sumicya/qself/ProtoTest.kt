@@ -64,6 +64,14 @@ class ProtoTest {
         assertFalse(mergeRun(null, first))
     }
 
+    @Test fun exactUnreadBadgeCountOnlyExpandsOverflowLabel() {
+        assertEquals("100", exactBadgeText("99+", 100))
+        assertEquals("124", exactBadgeText("99+", 124))
+        assertTrue(exactBadgeText("99+", 99) == null)
+        assertTrue(exactBadgeText("99", 124) == null)
+        assertTrue(exactBadgeText(null, 124) == null)
+    }
+
     @Test fun garbageIsNotSilentlyARecall() {
         assertTrue(recall(byteArrayOf()) == null)
         assertTrue(recall(field(1, field(2, field(1, 528L)))) == null)

@@ -60,7 +60,7 @@ app/src/main/kotlin/sumicya/qself/
   Chat.kt    聊天，含防撤回用的几十行 protobuf 读取、撤回灰字、连发合并、回复不@
   Looks.kt   外观：盯住每个 Activity 的视图树套规则
   Glass.kt   液态玻璃 Drawable（RenderNode + AGSL + Monet 取色，底栏用时自带滑动亮胶囊）
-app/src/test/kotlin/sumicya/qself/ProtoTest.kt   防撤回判断的唯一一份可跑检查
+app/src/test/kotlin/sumicya/qself/ProtoTest.kt   防撤回、分组判定与角标精确数量的检查
 app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop、作用域
 tools/symbols.txt    落点表：代码依赖的每一个名字
 tools/dexcheck.py    拿真 dex 逐条核落点，顺带 lint 源码里没登记的名字

@@ -197,19 +197,36 @@ private fun settle(bar: ViewGroup) {
     }
 }
 
-/** 未读角标不再停在 99+：QQ 封顶之后把真数字盖回去。两个出口都走一遍（QUIBadge 和老的widget绑定器）。 */
+/** 只有 QQ 已经把标签压成 99+、且方法仍提供真实数值时才展开；不猜其它徽标文案。 */
+internal fun exactBadgeText(label: String?, count: Long): String? =
+    if (label == "99+" && count > 99) count.toString() else null
+
+/** 未读角标不再停在 99+：两个已核出口都走一遍，并修正根视图里的所有溢出标签。 */
 fun exactCount() {
-    fun fix(root: View?, n: Int) {
-        fun go(v: View): TextView? =
-            if (v is TextView && v.text.toString() == "99+") v
-            else if (v is ViewGroup) (0 until v.childCount).firstNotNullOfOrNull { go(v.getChildAt(it)) } else null
-        go(root ?: return)?.text = n.toString()
+    val badge = cls("com.tencent.mobileqq.quibadge.QUIBadge")
+    val update = badge.method("updateNum")
+    val legacy = cls("com.tencent.widget.d").method("d")
+
+    fun fix(root: View?, count: Long?) {
+        if (root == null || count == null || count <= 99) return
+        fun go(v: View) {
+            if (v is TextView) {
+                exactBadgeText(v.text?.toString(), count)?.let { v.text = it }
+            } else if (v is ViewGroup) {
+                for (i in 0 until v.childCount) go(v.getChildAt(i))
+            }
+        }
+        go(root)
     }
-    hook(cls("com.tencent.mobileqq.quibadge.QUIBadge").method("updateNum")) { chain ->
-        chain.proceed().also { fix(chain.thisObject as? View, chain.args[0] as Int) }
+
+    hook(update) { chain ->
+        val count = runCatching { (chain.getArg(0) as? Number)?.toLong() }.getOrNull()
+        chain.proceed().also { fix(chain.thisObject as? View, count) }
     }
-    hook(cls("com.tencent.widget.d").method("d")) { chain ->
-        chain.proceed().also { fix(chain.args[0] as? View, chain.args[1] as Int) }
+    hook(legacy) { chain ->
+        val root = runCatching { chain.getArg(0) as? View }.getOrNull()
+        val count = runCatching { (chain.getArg(1) as? Number)?.toLong() }.getOrNull()
+        chain.proceed().also { fix(root, count) }
     }
 }
 
