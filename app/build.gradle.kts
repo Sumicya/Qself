@@ -1,5 +1,3 @@
-import java.time.ZoneId
-import java.time.ZonedDateTime
 
 plugins {
     id("com.android.application")
@@ -13,12 +11,10 @@ android {
         applicationId = "sumicya.qself"
         minSdk = 36 // 只对着 Android 16 写：RenderEffect / AGSL 都不用判版本
         targetSdk = 37
-        // 版本 = yy.m.d.当日序号.总序号。日期固定按上海时区；本地构建没有 CI 序号时为 0.0。
-        val buildDate = ZonedDateTime.now(ZoneId.of("Asia/Shanghai"))
-        val dailySequence = System.getenv("QSELF_DAILY_SEQUENCE")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-        val totalSequence = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-        versionCode = totalSequence.coerceAtLeast(1)
-        versionName = "${buildDate.year % 100}.${buildDate.monthValue}.${buildDate.dayOfMonth}.$dailySequence.$totalSequence"
+        // CI 先固化完整版本；Gradle 只读取单一版本来源，不自行取时间或序号。
+        val releaseVersion = System.getenv("QSELF_VERSION") ?: "0.0.0.0.0"
+        versionName = releaseVersion
+        versionCode = releaseVersion.substringAfterLast(".").toIntOrNull()?.coerceAtLeast(1) ?: 1
     }
 
     // 仓库不保存私钥。debug 使用 Android 默认签名；正式发布签名由安全存储提供。
