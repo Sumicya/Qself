@@ -26,23 +26,41 @@ jobs:
               raise SystemExit("缺少 AGENTS.md")
           text = agents.read_text(encoding="utf-8")
           required = [
-              "全局规范同步",
-              "第十五版",
-              "任何本轮本地改动必须最终提交并推送",
-              "CI 不得自动创建 Release",
-              "Release 1 个",
-              "Actions artifact 5 个",
+              "本仓库上次同步 = 第十六版",
+              "规范指针",
+              "Sumicya/selfs",
+              "GLOBAL.md",
           ]
           for item in required:
               if item not in text:
-                  raise SystemExit(f"AGENTS.md 缺少全局规范条目：{item}")
+                  raise SystemExit(f"AGENTS.md 缺少规范版本或指针：{item}")
 
           workflows = root / ".github" / "workflows"
-          forbidden = re.compile(r"(?i)(softprops/action-gh-release|gh release create|createRelease|create_git_release|actions/create-release)")
+          required_workflows = {"build.yml", "spec-check.yml"}
+          for name in required_workflows:
+              path = workflows / name
+              if not path.exists():
+                  raise SystemExit(f"缺少工作流：{path}")
+              source = path.read_text(encoding="utf-8")
+              if not re.search(r"(?m)^permissions:\s*$", source):
+                  raise SystemExit(f"{path} 缺少显式顶层 permissions")
+              if re.search(r"(?im)^\s*permissions:\s*write-all\b", source) or re.search(
+                  r"(?im)^\s*(?:contents|actions|packages|pull-requests|checks|statuses|id-token):\s*write\b",
+                  source,
+              ):
+                  raise SystemExit(f"{path} 含有发布写权限；检查与构建工作流必须只读")
+
+          forbidden = re.compile(
+              r"(?i)(softprops/action-gh-release|actions/create-release|actions/upload-release-asset|"
+              r"gh\s+release\s+(?:create|upload)|create_git_release|createRelease|"
+              r"git\s+tag\b|git\s+push\b[^\n]*refs/tags|/git/refs\b|refs/tags/|"
+              r"gh\s+api\b[^\n]*(?:-X|--method)\s+POST[^\n]*/(?:releases|git/refs)\b|"
+              r"curl\b[^\n]*(?:-X|--request)\s+POST[^\n]*/(?:releases|git/refs)\b)"
+          )
           for path in workflows.glob("*.yml"):
               if path.name == "spec-check.yml":
                   continue
               source = path.read_text(encoding="utf-8")
               if forbidden.search(source):
-                  raise SystemExit(f"{path} 包含自动创建 Release 的实现；第十五版规范禁止 CI 自动发版")
-          print("第十五版全局规范检查通过")
+                  raise SystemExit(f"{path} 包含自动创建 Release、tag 或正式资产的实现")
+          print("第十六版规范检查通过")
