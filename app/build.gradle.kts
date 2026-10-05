@@ -50,8 +50,8 @@ dependencies {
 
 
 androidComponents {
-    onVariants(selector().all()) {
-        outputs.forEach { output ->
+    onVariants(selector().all()) { variant ->
+        variant.outputs.forEach { output ->
             val version = output.versionName.orNull ?: "0.0.0.0.0"
             output.outputFileName.set("Qself-$version.apk")
         }
