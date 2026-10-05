@@ -1,4 +1,5 @@
-import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 plugins {
     id("com.android.application")
@@ -12,20 +13,15 @@ android {
         applicationId = "sumicya.qself"
         minSdk = 36 // 只对着 Android 16 写：RenderEffect / AGSL 都不用判版本
         targetSdk = 37
-        // 版本 = 构建日期.CI 构建号（本地编译没 run 号就是 .0）。vc 就是 run 号本身：
-        // 会比装着的旧包小（判降级），模块是手动装的，卸了重装就行。
-        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = LocalDate.now().let { "${it.year % 100}.${it.monthValue}.${it.dayOfMonth}." } +
-            (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0)
+        // 版本 = yy.m.d.当日序号.总序号。日期固定按上海时区；本地构建没有 CI 序号时为 0.0。
+        val buildDate = ZonedDateTime.now(ZoneId.of("Asia/Shanghai"))
+        val dailySequence = System.getenv("QSELF_DAILY_SEQUENCE")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val totalSequence = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        versionCode = totalSequence.coerceAtLeast(1)
+        versionName = "${buildDate.year % 100}.${buildDate.monthValue}.${buildDate.dayOfMonth}.$dailySequence.$totalSequence"
     }
 
-    // 固定签名（app/qself.p12，密码 qself）：每次 CI 出的包都能直接覆盖安装，热重载才接得上。
-    signingConfigs.getByName("debug") {
-        storeFile = file("qself.p12")
-        storePassword = "qself"
-        keyAlias = "qself"
-        keyPassword = "qself"
-    }
+    // 仓库不保存私钥。debug 使用 Android 默认签名；正式发布签名由安全存储提供。
 
     buildTypes {
         // R8 只裁不混淆：把没用到的 kotlin-stdlib 裁掉，崩溃栈还是明文。
@@ -36,7 +32,7 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 
