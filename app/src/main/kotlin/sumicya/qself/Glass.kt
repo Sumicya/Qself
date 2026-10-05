@@ -85,7 +85,8 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             alpha = drawableAlpha
             colorFilter = drawableColorFilter
         }
-        val layer = canvas.saveLayer(b, layerPaint)
+        rect.set(b)
+        val layer = canvas.saveLayer(rect, layerPaint)
         try {
             val drawn = canvas.isHardwareAccelerated && !busy && runCatching { backdrop(canvas, night) }
                 .onFailure {
