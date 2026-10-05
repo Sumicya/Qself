@@ -2,7 +2,7 @@
 #
 # 每次 push / PR / 手动运行：dex 作业拿真 QQ 包核每一个落点；apk 作业跑 ProtoTest 再出 debug APK 放进 Artifacts。
 # CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须按仓库规范由主人明确授权并人工完成。
-# main 出包成功后清理：发行 artifact（非 *.0.0）保留最近 5 个；PR 的 0.0 包不占名额，靠 retention-days: 5 过期。
+# 出包成功后自动清：发行 artifact（非 *.0.0）保留最近 5 个；任意分支的 push / 手动触发都跑，PR 不跑（写权限不进未信任代码）。
 name: Build
 
 on:
@@ -84,7 +84,7 @@ jobs:
 
   cleanup_artifacts:
     name: 保留最近 5 个发行 artifact
-    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ github.event_name != 'pull_request' }}
     needs: apk
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -122,7 +122,6 @@ jobs:
                   break
               rows += batch
               page += 1
-          # 发行：Qself- 前缀且不是 PR 的 *.0.0
           release = [r for r in rows if r["name"].startswith("Qself-") and not re.search(r"\.0\.0$", r["name"])]
           skip = [r for r in rows if r["name"].startswith("Qself-") and re.search(r"\.0\.0$", r["name"])]
           release.sort(key=lambda r: r["created_at"], reverse=True)
