@@ -47,7 +47,9 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     private var key = 0L
     private var keyAccent = 0
     private var busy = false
-    private var broken = false
+    private var drawableAlpha = 255
+    private var drawableColorFilter: ColorFilter? = null
+    private var lastFailureKey = Long.MIN_VALUE
     // 按压：透镜往内凹一点 + 一层柔光，140ms 起落
     private var press = 0f
     private var pressed = false
@@ -60,6 +62,14 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     private var target: View? = null
     private var fromX = 0f
     private var toX = 0f
+    init {
+        host.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> key = 0L; invalidateSelf() }
+        host.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) { key = 0L; invalidateSelf() }
+            override fun onViewDetachedFromWindow(v: View) { busy = false; key = 0L }
+        })
+    }
+
     private val anim = ValueAnimator.ofFloat(0f, 1f).apply {
         duration = 480
         interpolator = null
@@ -71,17 +81,32 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         if (b.isEmpty) return
         val night = night()
         lens.setFloatUniform("press", press)
-        val drawn = canvas.isHardwareAccelerated && !busy && !broken && runCatching { backdrop(canvas, night) }
-            .onFailure { broken = true; log("玻璃录制失败，退化为纯色", it) }.getOrDefault(false)
-        val r = min(radius, b.height() / 2f)
-        if (!drawn) { // 软件画布 / 录制失败时的霜色
-            rect.set(b)
-            paint.shader = null
-            paint.color = monet(night, if (night) 0xA6 else 0xB8)
-                ?: if (night) 0xA61C1C1E.toInt() else 0xB8F5F5F8.toInt()
-            canvas.drawRoundRect(rect, r, r, paint)
+        val layerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            alpha = drawableAlpha
+            colorFilter = drawableColorFilter
         }
-        pill(canvas, night)
+        val layer = canvas.saveLayer(b, layerPaint)
+        try {
+            val drawn = canvas.isHardwareAccelerated && !busy && runCatching { backdrop(canvas, night) }
+                .onFailure {
+                    val failureKey = (b.width().toLong() shl 32) xor b.height().toLong()
+                    if (failureKey != lastFailureKey) {
+                        lastFailureKey = failureKey
+                        log("玻璃录制失败，本帧退化为纯色并继续重试", it)
+                    }
+                }.getOrDefault(false)
+            val r = min(radius, b.height() / 2f)
+            if (!drawn) {
+                rect.set(b)
+                paint.shader = null
+                paint.color = monet(night, if (night) 0xA6 else 0xB8)
+                    ?: if (night) 0xA61C1C1E.toInt() else 0xB8F5F5F8.toInt()
+                canvas.drawRoundRect(rect, r, r, paint)
+            }
+            pill(canvas, night)
+        } finally {
+            canvas.restoreToCount(layer)
+        }
     }
 
     private fun backdrop(canvas: Canvas, night: Boolean): Boolean {
@@ -131,8 +156,12 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         }
         for ((p, c) in levels.asReversed()) {
             p.background?.let { paint(rc, p) { bg -> it.draw(bg) } }
-            for (i in 0 until p.indexOfChild(c)) {
+            val hostIndex = p.indexOfChild(c)
+            val hostZ = c.z
+            for (i in 0 until p.childCount) {
+                if (i == hostIndex) continue
                 val s = p.getChildAt(i)
+                if (!isBehind(c, s, i, hostZ)) continue
                 if (s.visibility != View.VISIBLE || s.javaClass.simpleName.contains("Blur") || !overlaps(s)) continue
                 paint(rc, s) { s.draw(it) }
             }
@@ -143,10 +172,24 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         v.getLocationInWindow(there)
         val save = rc.save()
         rc.translate((there[0] - here[0]).toFloat(), (there[1] - here[1]).toFloat())
+        rc.concat(v.matrix)
         rc.clipRect(0, 0, v.width, v.height)
-        rc.translate(-v.scrollX.toFloat(), -v.scrollY.toFloat()) // 直接调 draw() 不经过父级，滚动量得自己减
-        body(rc)
+        rc.translate(-v.scrollX.toFloat(), -v.scrollY.toFloat())
+        if (v.alpha < 1f) {
+            val layerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { alpha = (v.alpha * 255f).toInt() }
+            val layer = rc.saveLayer(0f, 0f, v.width.toFloat(), v.height.toFloat(), layerPaint)
+            try { body(rc) } finally { rc.restoreToCount(layer) }
+        } else {
+            body(rc)
+        }
         rc.restoreToCount(save)
+    }
+
+    private fun isBehind(hostChild: View, sibling: View, index: Int, hostZ: Float): Boolean {
+        val parent = hostChild.parent as? ViewGroup ?: return false
+        val hostIndex = parent.indexOfChild(hostChild)
+        val z = sibling.z
+        return z < hostZ || (z == hostZ && index < hostIndex)
     }
 
     private fun overlaps(v: View): Boolean {
@@ -172,12 +215,14 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
      * （触摸被页签吃掉），在这里看子/孙视图有没有被按着。 */
     fun sync() {
         if (selected?.invoke() !== target) invalidateSelf()
-        val g = host as? ViewGroup
-        val kid = g?.let { p ->
-            p.isPressed || (0 until p.childCount).any { p.getChildAt(it).isPressed } ||
-                (p.getChildAt(0) as? ViewGroup)?.let { c -> (0 until c.childCount).any { c.getChildAt(it).isPressed } } == true
-        } == true
-        setPress(host.isPressed || kid)
+        setPress(host.isPressed || hasPressedDescendant(host))
+    }
+
+    private fun hasPressedDescendant(v: View): Boolean {
+        if (v.isPressed) return true
+        val g = v as? ViewGroup ?: return false
+        for (i in 0 until g.childCount) if (hasPressedDescendant(g.getChildAt(i))) return true
+        return false
     }
 
     private fun pill(canvas: Canvas, night: Boolean) {
@@ -212,8 +257,24 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     /** 欠阻尼弹簧：冲过头一点再回来。 */
     private fun spring(t: Float): Float = (1.0 - exp(-6.0 * t) * cos(2 * PI * 0.9 * t)).toFloat()
 
-    override fun setAlpha(alpha: Int) {}
-    override fun setColorFilter(colorFilter: ColorFilter?) {}
+    override fun setAlpha(alpha: Int) {
+        val next = alpha.coerceIn(0, 255)
+        if (drawableAlpha == next) return
+        drawableAlpha = next
+        invalidateSelf()
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        if (drawableColorFilter === colorFilter) return
+        drawableColorFilter = colorFilter
+        invalidateSelf()
+    }
+
+    override fun onBoundsChange(bounds: android.graphics.Rect) {
+        super.onBoundsChange(bounds)
+        key = 0L
+        invalidateSelf()
+    }
 
     @Deprecated("Deprecated in Java")
     override fun getOpacity() = PixelFormat.TRANSLUCENT
