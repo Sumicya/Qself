@@ -68,13 +68,10 @@
 ## 构建
 
 本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）出 APK。
-**agent 的 token 没有 workflow 权限，push 不动 `.github/workflows/`**：要改 workflow，agent 把改法写成
-一段命令交给仓库主人在 Termux 里跑（`pkg install git gh && gh auth login` 之后 clone、改、push）。
+当前仓库不保存签名私钥；debug APK 使用 Android 默认 debug 签名，正式签名需由仓库外的安全签名环境提供。
 
-CI 两个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 跑单元测试再出包；
-失败时把 Gradle 日志尾巴贴成提交评论，agent 也读得到。
-签名固定在 `app/qself.p12`（密码 `qself`），换签名会导致覆盖安装失败。
-
+CI 两个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 跑单元测试再出包；失败日志以 GitHub Actions 原始日志为准。
+CI 不自动创建 Release、正式发行 tag 或 Release asset。
 
 ## 全局规范同步（2026-10-05，第十五版）
 
