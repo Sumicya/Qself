@@ -64,6 +64,9 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
     private val mirrors = ArrayList<Mirror>(4)
     private val squeezed = HashMap<View, Int>()
     private var sendVisibility: Int? = null
+    private val originalVisibility = HashMap<View, Int>()
+    private val originalBackgrounds = HashMap<View, android.graphics.drawable.Drawable?>()
+    private val originalBoxHeight = box.layoutParams?.height ?: ViewGroup.LayoutParams.WRAP_CONTENT
     private val mic: Mirror?
 
     init {
@@ -95,6 +98,7 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
         row.tag = ROW
+        originalVisibility[strip] = strip.visibility
         strip.visibility = View.GONE
 
         // 玻璃胶囊就是输入框：[表情][QQ 的框（去掉自己的底色）][+]；多行时圆角封顶 22dp。
@@ -108,10 +112,14 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
             setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0)
         }
         val index = host.indexOfChild(box)
-        val boxLp = box.layoutParams.also { if (it.height > 0) it.height += (12 * dp).toInt() } // 胶囊上下各留 6dp
+        val boxLp = box.layoutParams.apply {
+            if (height > 0) height = originalBoxHeight + (12 * dp).toInt()
+        }
         host.removeView(box)
+        originalBackgrounds[edit] = edit.background
+        originalBackgrounds[box] = box.background
         edit.background = null
-        box.background = null // 框自己那层圆角底还留着就会在玻璃胶囊里挡一道
+        box.background = null
         emoji?.view?.let(field::addView)
         field.addView(box, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         more?.view?.let(field::addView)
@@ -126,8 +134,13 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
             row.addView(it)
         }
         host.addView(row, index.coerceIn(0, host.childCount), boxLp)
-        // 输入栏自己的底色去掉，胶囊才是浮在聊天背景上的。
-        generateSequence(host as View) { it.parent as? View }.take(2).forEach { it.background = null }
+        strip.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) = Unit
+            override fun onViewDetachedFromWindow(v: View) {
+                restore()
+                rows.remove(strip)
+            }
+        })
 
         edit.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -147,9 +160,30 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
     private fun star() {
         fun go(v: View) {
             if (v === send || v === edit) return
-            if (v is ImageView) { if (v.visibility != View.GONE) v.visibility = View.GONE } else if (v is ViewGroup) for (i in 0 until v.childCount) go(v.getChildAt(i))
+            if (v is ImageView) {
+                originalVisibility.putIfAbsent(v, v.visibility)
+                if (v.visibility != View.GONE) v.visibility = View.GONE
+            } else if (v is ViewGroup) for (i in 0 until v.childCount) go(v.getChildAt(i))
         }
         go(box)
+    }
+
+    private fun restore() {
+        squeezed.forEach { (view, height) ->
+            view.layoutParams?.let { lp -> lp.height = height; view.layoutParams = lp }
+        }
+        squeezed.clear()
+        originalVisibility.forEach { (view, visibility) ->
+            if (view !== strip) view.visibility = visibility
+        }
+        originalVisibility[strip]?.let { strip.visibility = it }
+        originalBackgrounds.forEach { (view, background) -> view.background = background }
+        box.layoutParams?.let { lp ->
+            if (originalBoxHeight > 0) {
+                lp.height = originalBoxHeight
+                box.layoutParams = lp
+            }
+        }
     }
 
     /** 图标带没了，QQ 还留着那块空位。里面什么都没有的兄弟槽位压到 0 高；QQ 一往里放东西它自己长回来。 */
