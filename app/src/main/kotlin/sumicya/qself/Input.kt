@@ -32,7 +32,13 @@ fun tgInput(strip: ViewGroup) {
     // 消息列表就成了 host 的兄弟槽位，会被 collapse 压掉、输入行也会被挤。
     val host = generateSequence(box.parent as? ViewGroup) { it.parent as? ViewGroup }
         .firstOrNull { p -> generateSequence(strip as View) { it.parent as? View }.any { it === p } } ?: return
-    if (host.tag == ROW) return // 热重载前的上一代已经排好了这一行
+    // 热重载会重置 rows，但上一代的 View 还留在窗口里；ROW 标在行本身，不是 host 上。
+    val previous = if (host.tag == ROW) host else host.findViewWithTag<View>(ROW)
+    if (previous != null) {
+        runCatching { previous.javaClass.getMethod("sync").apply { isAccessible = true }.invoke(previous) }
+        return
+    }
+    if (host.indexOfChild(box) < 0) return // 只在原输入框仍是 host 的直接子项时包装
     rows[strip] = Row(strip, edit, box, host, find(box) { idName(it) == "send_btn" }).also { it.sync() }
 }
 
@@ -66,8 +72,23 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
     private var sendVisibility: Int? = null
     private val originalVisibility = HashMap<View, Int>()
     private val originalBackgrounds = HashMap<View, android.graphics.drawable.Drawable?>()
-    private val originalBoxHeight = box.layoutParams?.height ?: ViewGroup.LayoutParams.WRAP_CONTENT
+    private val originalBoxParams = box.layoutParams
+    private val originalIndex = host.indexOfChild(box)
+    private val originalBoxHeight = originalBoxParams?.height ?: ViewGroup.LayoutParams.WRAP_CONTENT
+    private var restored = false
     private val mic: Mirror?
+    private val detachListener = object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(v: View) = Unit
+        override fun onViewDetachedFromWindow(v: View) {
+            restore()
+            rows.remove(strip)
+        }
+    }
+    private val textWatcher = object : TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+        override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+        override fun afterTextChanged(s: Editable?) = swap()
+    }
 
     init {
         val icons = (0 until strip.childCount).mapNotNull { i ->
@@ -111,10 +132,9 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
             isClickable = true // 空的地方按下去也有按压反馈（玻璃凹+柔光）；按钮在子视图里照旧先接触摸
             setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0)
         }
-        val index = host.indexOfChild(box)
-        val boxLp = box.layoutParams.apply {
-            if (height > 0) height = originalBoxHeight + (12 * dp).toInt()
-        }
+        val index = originalIndex
+        val boxLp = originalBoxParams
+        if (boxLp != null && boxLp.height > 0) boxLp.height = originalBoxHeight + (12 * dp).toInt()
         host.removeView(box)
         originalBackgrounds[edit] = edit.background
         originalBackgrounds[box] = box.background
@@ -134,19 +154,8 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
             row.addView(it)
         }
         host.addView(row, index.coerceIn(0, host.childCount), boxLp)
-        strip.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) = Unit
-            override fun onViewDetachedFromWindow(v: View) {
-                restore()
-                rows.remove(strip)
-            }
-        })
-
-        edit.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(s: Editable?) = swap()
-        })
+        strip.addOnAttachStateChangeListener(detachListener)
+        edit.addTextChangedListener(textWatcher)
     }
 
     fun sync() {
@@ -169,6 +178,10 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
     }
 
     private fun restore() {
+        if (restored) return
+        restored = true
+        strip.removeOnAttachStateChangeListener(detachListener)
+        edit.removeTextChangedListener(textWatcher)
         squeezed.forEach { (view, height) ->
             view.layoutParams?.let { lp -> lp.height = height; view.layoutParams = lp }
         }
@@ -178,12 +191,13 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
         }
         originalVisibility[strip]?.let { strip.visibility = it }
         originalBackgrounds.forEach { (view, background) -> view.background = background }
-        box.layoutParams?.let { lp ->
-            if (originalBoxHeight > 0) {
-                lp.height = originalBoxHeight
-                box.layoutParams = lp
-            }
-        }
+
+        // 不能只恢复 LayoutParams：热重载/窗口 detach 后 box 仍挂在旧 field 里，下一次扫描会重复 addView。
+        (box.parent as? ViewGroup)?.takeIf { it !== host }?.removeView(box)
+        host.removeView(row)
+        if (originalBoxHeight > 0) originalBoxParams?.height = originalBoxHeight
+        if (box.parent !== host && originalBoxParams != null)
+            host.addView(box, originalIndex.coerceIn(0, host.childCount), originalBoxParams)
     }
 
     /** 图标带没了，QQ 还留着那块空位。里面什么都没有的兄弟槽位压到 0 高；QQ 一往里放东西它自己长回来。 */

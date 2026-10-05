@@ -141,6 +141,13 @@ class  com.tencent.smtt.sdk.QbSdk
 member! com.tencent.smtt.sdk.QbSdk#getIsSysWebViewForcedByOuter
 class  com.tencent.beacon.event.UserAction
 member com.tencent.beacon.event.UserAction#on
+member! com.tencent.beacon.event.UserAction#onDTUserAction
+member! com.tencent.beacon.event.UserAction#onDTUserActionToTunnel
+member! com.tencent.beacon.event.UserAction#onUserAction
+member! com.tencent.beacon.event.UserAction#onUserActionToTunnel
+member! com.tencent.beacon.event.UserAction#onPageIn
+member! com.tencent.beacon.event.UserAction#onPageOut
+member! com.tencent.beacon.event.UserAction#doUploadRecords
 member! com.tencent.beacon.event.UserAction#loginEvent
 class  com.tencent.beacon.event.open.BeaconReport
 member! com.tencent.beacon.event.open.BeaconReport#report
