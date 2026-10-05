@@ -70,11 +70,11 @@
 本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）出 APK。
 当前仓库不保存签名私钥；debug APK 使用 Android 默认 debug 签名，正式签名需由仓库外的安全签名环境提供。
 
-CI 两个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 跑单元测试再出包；失败日志以 GitHub Actions 原始日志为准。
+CI 三个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 跑单元测试再出包，`cleanup_artifacts` 在出包后按全局规范保留最近 5 个本项目 artifact 并清理已核实的历史产物；失败日志以 GitHub Actions 原始日志为准。
 CI 不自动创建 Release、正式发行 tag 或 Release asset。
 
 ## 全局规范
 
-本仓库上次同步 = 第十七版。
+本仓库上次同步 = 第二十一版。
 
 规范指针：按 [Sumicya/selfs 的 GLOBAL.md](https://github.com/Sumicya/selfs/blob/main/GLOBAL.md) 最新版执行；本文件只保留 Qself 项目专属条目，不复制全局规则。

@@ -2,7 +2,7 @@
 #
 # 每次 push / PR / 手动运行：dex 作业拿真 QQ 包核每一个落点；apk 作业跑 ProtoTest 再出 debug APK 放进 Artifacts。
 # CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须按仓库规范由主人明确授权并人工完成。
-# 出包成功后自动清：发行 artifact（非 *.0.0）保留最近 5 个；任意分支的 push / 手动触发都跑，PR 不跑（写权限不进未信任代码）。
+# 出包成功后自动清：按 Qself- 前缀（不区分大小写）及已核实的历史产物名保留最近 5 个；PR 不跑清理（写权限不进未信任代码）。
 name: Build
 
 on:
@@ -83,7 +83,7 @@ jobs:
           retention-days: 5
 
   cleanup_artifacts:
-    name: 保留最近 5 个发行 artifact
+    name: 清理 Qself 历史 artifact
     if: ${{ github.event_name != 'pull_request' }}
     needs: apk
     runs-on: ubuntu-24.04
@@ -95,17 +95,18 @@ jobs:
       actions: write
       contents: read
     steps:
-      - name: Keep newest 5 release artifacts (prefix Qself-, skip *.0.0)
+      - name: 列出并清理 Qself 历史 artifact
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           KEEP: "5"
         run: |
           python3 - <<'PY'
-          import json, os, re, subprocess, sys
-          keep = int(os.environ["KEEP"])
-          if keep < 1:
+          import json, os, subprocess, sys
+          raw_keep = os.environ.get("KEEP", "")
+          if not raw_keep.isdecimal() or int(raw_keep) < 1:
               sys.exit("KEEP 必须为正整数")
+          keep = int(raw_keep)
           repo = os.environ["REPO"]
           def api(path, jq=None, method=None):
               cmd = ["gh", "api"] + (["--jq", jq] if jq else []) + (["-X", method] if method else []) + [path]
@@ -122,16 +123,23 @@ jobs:
                   break
               rows += batch
               page += 1
-          release = [r for r in rows if r["name"].startswith("Qself-") and not re.search(r"\.0\.0$", r["name"])]
-          skip = [r for r in rows if r["name"].startswith("Qself-") and re.search(r"\.0\.0$", r["name"])]
-          release.sort(key=lambda r: r["created_at"], reverse=True)
-          print(f"发行 {len(release)} 个，保留 {keep}；非发行(*.0.0) {len(skip)} 个不占名额")
-          for r in release[:keep]:
-              print(f"KEEP   {r['created_at']} {r['name']} id={r['id']}")
-          for r in skip:
-              print(f"SKIP   {r['created_at']} {r['name']} id={r['id']}")
-          for r in release[keep:]:
-              print(f"DELETE {r['created_at']} {r['name']} id={r['id']}")
+          # qself-debug matches the case-insensitive Qself- prefix. These legacy names
+          # were verified as Qself artifacts from former build/test workflows.
+          legacy_names = {"app-debug", "build-log", "test-reports"}
+          owned = [r for r in rows if r["name"].casefold().startswith("qself-") or r["name"].casefold() in legacy_names]
+          owned.sort(key=lambda r: (r["created_at"], r["id"]), reverse=True)
+          keep_rows, delete_rows = owned[:keep], owned[keep:]
+          print(f"Qself artifact {len(owned)} 个；保留 {len(keep_rows)} 个；其他 artifact {len(rows)-len(owned)} 个不在清理范围。", flush=True)
+          print("完整清理清单（以下清单全部输出后才开始删除）：", flush=True)
+          for r in keep_rows:
+              print(f"KEEP   {r['created_at']} {r['name']} id={r['id']}", flush=True)
+          for r in delete_rows:
+              print(f"DELETE {r['created_at']} {r['name']} id={r['id']}", flush=True)
+          if not delete_rows:
+              print("无待删除 artifact", flush=True)
+          sys.stdout.flush()
+          for r in delete_rows:
               api(f"repos/{repo}/actions/artifacts/{r['id']}", method="DELETE")
-          print(f"已删 {max(0, len(release)-keep)} 个；不碰 Release/tag")
+              print(f"DELETED {r['created_at']} {r['name']} id={r['id']}", flush=True)
+          print(f"清理完成：删除 {len(delete_rows)} 个 Qself artifact；未触碰 Release/tag。", flush=True)
           PY
