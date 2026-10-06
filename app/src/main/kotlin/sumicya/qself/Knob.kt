@@ -22,9 +22,9 @@ import kotlin.math.min
 /**
  * 开关：主页那颗玻璃圆钮 —— 和胶囊同高、顶底对齐，胶囊右边放得下就跟胶囊并排。
  * 底栏藏起来的页面（频道那些）钮也跟着藏，不留一颗钮飘在别的页面上。
- * 点开是一整块玻璃大卡片：一行两张卡、卡自己没底色，钩叉是画出来的（✓ 开着、– 没开、✗ 这版 QQ 没装上），
+ * 点开是紧凑的玻璃开关面板：一行两张卡、卡自己没底色，钩叉是画出来的（✓ 开着、– 没开、✗ 这版 QQ 没装上），
  * 每张卡带一句描述。状态存在 QQ 自己的 SharedPreferences「qself」里，钩子每次被调用时都查一遍，
- * 所以切换即时生效；已经改过的视图（浮起来的底栏、排好的输入行）要重启 QQ 才复原。
+ * 所以切换即时生效；已经改过的视图（如浮起来的底栏）要重启 QQ 才复原。
  */
 private const val KNOB = "qself-knob"
 private const val SHEET = "qself-sheet"
@@ -156,15 +156,14 @@ private fun sheet(anchor: View) {
     val grid = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     fun cell(f: Feature): View {
         val mark = Mark(dp)
-        val title = TextView(ctx).apply { text = f.name; textSize = 15f; setTextColor(ink) }
-        val desc = TextView(ctx).apply { text = f.desc; textSize = 11f; setTextColor(sub) }
+        val title = TextView(ctx).apply { text = f.name; textSize = 14f; setTextColor(ink) }
+        val desc = TextView(ctx).apply { text = f.desc; textSize = 10f; setTextColor(sub) }
         val view = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            val p = (10 * dp).toInt()
-            setPadding(p, p, p, p)
+            setPadding((8 * dp).toInt(), (6 * dp).toInt(), (8 * dp).toInt(), (6 * dp).toInt())
             addView(View(ctx).apply { background = mark },
-                LinearLayout.LayoutParams((22 * dp).toInt(), (22 * dp).toInt()).apply { marginEnd = (10 * dp).toInt() })
+                LinearLayout.LayoutParams((20 * dp).toInt(), (20 * dp).toInt()).apply { marginEnd = (8 * dp).toInt() })
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(title)
@@ -195,10 +194,10 @@ private fun sheet(anchor: View) {
 
     fun button(label: String, body: () -> Unit): TextView = TextView(ctx).apply {
         text = label
-        textSize = 15f
+        textSize = 14f
         setTextColor(ink)
         gravity = Gravity.CENTER
-        val p = (12 * dp).toInt()
+        val p = (8 * dp).toInt()
         setPadding(p * 2, p, p * 2, p)
         foreground = borderlessRipple(this)
         setOnClickListener { body() }
@@ -210,10 +209,11 @@ private fun sheet(anchor: View) {
         outlineProvider = capsule(r)
         clipToOutline = true
         elevation = 8 * dp
-        setPadding((14 * dp).toInt(), (18 * dp).toInt(), (14 * dp).toInt(), (10 * dp).toInt())
+        isClickable = true // 卡片空白处接收触摸，不冒泡成“点外侧关闭”
+        setPadding((12 * dp).toInt(), (12 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt())
         addView(TextView(ctx).apply {
             text = "Qself ${BuildConfig.VERSION_NAME}"
-            textSize = 18f
+            textSize = 16f
             gravity = Gravity.CENTER
             setTextColor(ink)
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -232,9 +232,12 @@ private fun sheet(anchor: View) {
         tag = SHEET
         setBackgroundColor(0x66000000)
         setOnClickListener { decor.removeView(this) } // 点卡片外面关掉
-        addView(card, FrameLayout.LayoutParams(
-            min(decor.width - (32 * dp).toInt(), (520 * dp).toInt()),
-            (decor.height - (72 * dp).toInt()), Gravity.CENTER))
+        val width = min((decor.width - (48 * dp).toInt()).coerceAtLeast(0), (440 * dp).toInt())
+        val height = min(
+            (decor.height - (48 * dp).toInt()).coerceAtLeast(0),
+            min((decor.height * 0.72f).toInt(), (500 * dp).toInt()),
+        )
+        addView(card, FrameLayout.LayoutParams(width, height, Gravity.CENTER))
     }
     decor.addView(dim, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 }

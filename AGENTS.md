@@ -3,7 +3,7 @@
 ## 是什么
 
 一个纯钩子的 LSPosed 模块（libxposed API 102），只针对 QQ 9.2.10 / Android 16。模块 APK 没有界面；
-纯 Kotlin，八个文件（约 1500 行），没有第三方依赖、没有 `.so`、不联网。外观照 NagramXF 那套长相做（液态玻璃 + Monet 取色 + TG 式输入栏）。
+纯 Kotlin，七个核心文件（约 1500 行），没有第三方依赖、没有 `.so`、不联网。外观照 NagramXF 那套长相做（液态玻璃 + Monet 取色）。
 
 开关是 QQ 主页底栏右上角一颗圆钮弹出的系统对话框，状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
 
@@ -21,7 +21,7 @@
 - minSdk 36：只有 Android 16，别写 `SDK_INT` 判断和降级分支
 - 故意省掉的地方写 `ponytail:` 注释，说清上限和往上走的路
 - 非平凡逻辑留一份能跑的检查（目前只有 `ProtoTest.kt`）
-- 外观那三个文件（`Glass.kt` / `Input.kt` / `Looks.kt`）全是视图规则，dex 核不到，只能靠真机；
+- 外观文件（`Glass.kt` / `Looks.kt`）全是视图规则，dex 核不到，只能靠真机；
   改完说清楚改了哪块长相，别让人猜
 - 代码先行，解释不超过三行；中文
 
@@ -70,20 +70,13 @@
 本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）出 APK。
 当前仓库不保存签名私钥；debug APK 使用 Android 默认 debug 签名，正式签名需由仓库外的安全签名环境提供。
 
-CI 两个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 跑单元测试再出包；失败日志以 GitHub Actions 原始日志为准。
+CI 三个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 跑单元测试再出包，`cleanup_artifacts` 在出包后按全局规范保留最近 5 个本项目 artifact 并清理已核实的历史产物；失败日志以 GitHub Actions 原始日志为准。
+清理必须覆盖每一个会上传 artifact 的事件（`push`、`workflow_dispatch`、同仓库分支的 `pull_request`）：只上传不清理的事件会让总数稳定超过保留上限。fork PR 的 token 只读、删除必然 403，所以跳过；改触发条件前先确认 head 仓库就是本仓库。
+版本序号来自 `Build` 的真实 run 记录：`push`、`pull_request`、`workflow_dispatch` 都计数；总序号用 `run_number`，当日序号是 UTC+8 当日、按 `run_number` 排序截至本次的位次。失败运行计一次，重跑沿用原 run；`ci/check.sh` 不出 APK、不计版本。本地 Gradle 出包必须显式提供符合五段规则的 `QSELF_VERSION`，缺失或无效时停止。2026-10-6 从旧口径切换到 run_number：旧总序号截至 `Qself-26.10.6.2.175`，新总序号因此允许向前跳号，不回退、不复用历史号。
 CI 不自动创建 Release、正式发行 tag 或 Release asset。
 
-## 全局规范同步（2026-10-05，第十五版）
+## 全局规范
 
-以下规则继承自 Sumicya/selfs 的 GLOBAL.md，适用于本仓库：
+本仓库上次同步 = 第二十二版。
 
-- 任何本轮本地改动必须最终提交并推送到当前远端分支；任务结束时不得留下未提交或已提交但未推送的改动。
-- CI 必须符合全局规范；应有只读规范检查，且规范检查不得拥有发布写权限。
-- CI 不得自动创建 Release、正式发行 tag 或正式 Release asset。正式发版必须先获得主人对项目、版本和触发条件的明确允许。
-- 发版授权与清理授权分离。获准人工发版完成后，CI 可以自动清理旧 Release、关联 tag 和 Actions artifact。
-- 默认保留：Release 1 个、关联 tag 1 个、Actions artifact 5 个；artifact 另以 retention-days: 5 作为时间兜底。
-- 自动清理必须完整分页、按时间排序并限定在本项目明确的发行对象范围内，不得误删手工或无关对象。
-- 发布/清理 job 只授予所需最小写权限；PR 检查与规范检查保持只读，不把写权限暴露给未信任 PR 代码。
-- 对外动作（正式发版、删除远程分支、删除标签等）不得由普通 CI 触发器隐式执行。
-
-本仓库若已有更严格的项目专属规则，以更严格者为准；若与全局规范冲突，以 Sumicya/selfs/GLOBAL.md 为准，并在修改时说明冲突。
+规范指针：按 [Sumicya/selfs 的 GLOBAL.md](https://github.com/Sumicya/selfs/blob/main/GLOBAL.md) 最新版执行；本文件只保留 Qself 项目专属条目，不复制全局规则。

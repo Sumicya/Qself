@@ -2,6 +2,9 @@
 #
 # 每次 push / PR / 手动运行：dex 作业拿真 QQ 包核每一个落点；apk 作业跑 ProtoTest 再出 debug APK 放进 Artifacts。
 # CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须按仓库规范由主人明确授权并人工完成。
+# 出包成功后自动清：按 Qself- 前缀（不区分大小写）及已核实的历史产物名保留最近 5 个。
+# 清理在本仓库 push / workflow_dispatch / 同仓库分支的 PR 上都跑；fork PR 不跑（token 只读，写权限不进未信任代码）。
+# 不跑清理的构建照样上传 artifact，所以只要漏掉一种事件，总数就会一直超过 5；清理必须覆盖所有会上传的事件。
 name: Build
 
 on:
@@ -14,8 +17,6 @@ permissions:
   actions: read
 
 jobs:
-  # 落点核对：真包在 Sumicya/qqapk（qq.aa..qq.ae 拼起来）。表红了就是这版 QQ 里名字对不上，
-  # 出包也是白出 —— 所以这个作业和出包平行跑，谁红都拦得住。
   dex:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -30,6 +31,7 @@ jobs:
         run: python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin --quiet
 
   apk:
+    needs: dex
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -46,22 +48,25 @@ jobs:
       - name: Calculate release version
         env:
           GH_TOKEN: ${{ github.token }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
+          set -euo pipefail
           stamp="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq '.created_at')"
           day="$(TZ=Asia/Shanghai date -d "$stamp" +%y.%-m.%-d)"
           local_day="$(TZ=Asia/Shanghai date -d "$stamp" +%Y-%m-%d)"
           since="$(TZ=Asia/Shanghai date -u -d "$local_day 00:00:00" +%Y-%m-%dT%H:%M:%SZ)"
-          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            push_runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=push&created=>=$since&per_page=1" --jq '.total_count')"
-            dispatch_runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=workflow_dispatch&created=>=$since&per_page=1" --jq '.total_count')"
-            total_push="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=push&per_page=1" --jq '.total_count')"
-            total_dispatch="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=workflow_dispatch&per_page=1" --jq '.total_count')"
-            daily="$((push_runs + dispatch_runs))"
-            total="$((total_push + total_dispatch))"
-          else
-            daily=0
-            total=0
-          fi
+          daily="$(
+            gh api --paginate \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?created=>=$since&per_page=100" \
+              --jq '.workflow_runs[] | [.run_number, .event] | @tsv' |
+            awk -F '\t' -v current="$RUN_NUMBER" '
+              $1 <= current && ($2 == "push" || $2 == "pull_request" || $2 == "workflow_dispatch") { n++ }
+              END { print n+0 }
+            '
+          )"
+          total="$RUN_NUMBER"
+          [[ "$daily" =~ ^[1-9][0-9]*$ ]] || { echo "invalid daily sequence: $daily" >&2; exit 1; }
+          [[ "$total" =~ ^[1-9][0-9]*$ ]] || { echo "invalid total sequence: $total" >&2; exit 1; }
           echo "QSELF_DAILY_SEQUENCE=$daily" >> "$GITHUB_ENV"
           echo "QSELF_VERSION=$day.$daily.$total" >> "$GITHUB_ENV"
 
@@ -81,3 +86,69 @@ jobs:
           path: app/build/outputs/apk/debug/Qself-${{ env.QSELF_VERSION }}.apk
           if-no-files-found: error
           retention-days: 5
+
+  cleanup_artifacts:
+    name: 清理 Qself 历史 artifact
+    # 凡是本次 run 会上传 Qself artifact 的事件都要清理，否则 artifact 总数会稳定超过保留上限。
+    # fork 来的 PR 拿到的是只读 token，删除必然 403，因此只在 head 仓库就是本仓库时才跑清理。
+    if: >-
+      ${{ github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository }}
+    needs: apk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: qself-artifact-retention
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: 列出并清理 Qself 历史 artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          KEEP: "5"
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess, sys
+          raw_keep = os.environ.get("KEEP", "")
+          if not raw_keep.isdecimal() or int(raw_keep) < 1:
+              sys.exit("KEEP 必须为正整数")
+          keep = int(raw_keep)
+          repo = os.environ["REPO"]
+          def api(path, jq=None, method=None):
+              cmd = ["gh", "api"] + (["--jq", jq] if jq else []) + (["-X", method] if method else []) + [path]
+              r = subprocess.run(cmd, capture_output=True, text=True)
+              if r.returncode:
+                  sys.exit(f"gh api {path} 失败: {r.stderr.strip()}")
+              return r.stdout
+          rows, page = [], 1
+          while True:
+              batch = [json.loads(line) for line in
+                       api(f"repos/{repo}/actions/artifacts?per_page=100&page={page}",
+                           jq=".artifacts[]|{id,name,created_at}").splitlines() if line.strip()]
+              if not batch:
+                  break
+              rows += batch
+              page += 1
+          # qself-debug matches the case-insensitive Qself- prefix. These legacy names
+          # were verified as Qself artifacts from former build/test workflows.
+          legacy_names = {"app-debug", "build-log", "test-reports"}
+          owned = [r for r in rows if r["name"].casefold().startswith("qself-") or r["name"].casefold() in legacy_names]
+          owned.sort(key=lambda r: (r["created_at"], r["id"]), reverse=True)
+          keep_rows, delete_rows = owned[:keep], owned[keep:]
+          print(f"Qself artifact {len(owned)} 个；保留 {len(keep_rows)} 个；其他 artifact {len(rows)-len(owned)} 个不在清理范围。", flush=True)
+          print("完整清理清单（以下清单全部输出后才开始删除）：", flush=True)
+          for r in keep_rows:
+              print(f"KEEP   {r['created_at']} {r['name']} id={r['id']}", flush=True)
+          for r in delete_rows:
+              print(f"DELETE {r['created_at']} {r['name']} id={r['id']}", flush=True)
+          if not delete_rows:
+              print("无待删除 artifact", flush=True)
+          sys.stdout.flush()
+          for r in delete_rows:
+              api(f"repos/{repo}/actions/artifacts/{r['id']}", method="DELETE")
+              print(f"DELETED {r['created_at']} {r['name']} id={r['id']}", flush=True)
+          print(f"清理完成：删除 {len(delete_rows)} 个 Qself artifact；未触碰 Release/tag。", flush=True)
+          PY

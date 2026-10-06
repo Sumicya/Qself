@@ -2,13 +2,13 @@
 package sumicya.qself
 
 import android.view.View
+import android.view.ViewGroup
 import org.json.JSONArray
 import org.json.JSONObject
 import java.lang.reflect.Proxy
 import java.util.Collections
+import java.util.LinkedHashMap
 import java.util.WeakHashMap
-import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.abs
 
 /** 聊天：会员装饰归零、防撤回、连发合并、转发、「+」面板、昵称行、轻互动、表情雨。 */
 
@@ -142,7 +142,7 @@ private fun proxy(iface: String, body: (Array<*>?) -> Any?): Any {
     }
 }
 
-private fun msgId(item: Any?): Long? = item?.let { runCatching { it.javaClass.getMethod("getMsgId").invoke(it) as? Long }.getOrNull() }
+private fun msgId(item: Any?): Long? = item?.let { runCatching { it.javaClass.getMethod("getMsgId").invoke(it) as? Long }.getOrNull() }?.takeIf { it != 0L }
 
 /** 一条 protobuf 字段：编号、在原 buffer 里的起止、值（varint→Long，bytes→ByteArray）。 */
 class Pb(val num: Int, val start: Int, val end: Int, val value: Any)
@@ -189,51 +189,115 @@ fun stripSyncRecall(sync: ByteArray): ByteArray {
     return out.toByteArray()
 }
 
-// ---- 连发合并：同一人 5 分钟内连着发的消息，后面那些不再画头像（占位留着，气泡不会往边上挪）和昵称行。
-// 列表适配器绑定每一行时先看它跟上一行是不是「连发」，头像 / 昵称组件绑定完再按结果折起来。
+// ---- 连发合并：先按消息 ID + 发送者 + 时间 + 类型缓存当前行是否接续上一条，头像/昵称与气泡收紧共用同一结果。
 
-private val grouped: MutableSet<Long> = Collections.newSetFromMap(ConcurrentHashMap())
+private const val GROUP_CACHE_SIZE = 512
+private val runGroups = LinkedHashMap<RunKey, Boolean>(GROUP_CACHE_SIZE)
 private val folded = WeakHashMap<View, Int>()
+private data class BubbleSpacing(val params: ViewGroup.MarginLayoutParams, val top: Int)
+private val bubbleSpacing = WeakHashMap<View, BubbleSpacing>()
+
+internal data class RunKey(val id: Long, val sender: String, val time: Long, val type: Int)
+
+/** 供真机绑定逻辑与纯单元检查共用：只合并同一发送者、5 分钟内的不同普通消息。 */
+internal fun mergeRun(previous: RunKey?, current: RunKey?): Boolean {
+    val a = previous ?: return false
+    val b = current ?: return false
+    if (a.id == b.id || a.sender.isBlank() || a.sender != b.sender ||
+        a.type == 5 || a.type == 29 || b.type == 5 || b.type == 29) return false
+    val delta = if (a.time >= b.time) a.time - b.time else b.time - a.time
+    return delta in 0L..300L
+}
+
+private fun runKey(item: Any?): RunKey? = runCatching {
+    val id = msgId(item) ?: return@runCatching null
+    val record = record(item) ?: return@runCatching null
+    val sender = record.get("senderUid") as? String ?: return@runCatching null
+    val time = (record.get("msgTime") as? Number)?.toLong() ?: return@runCatching null
+    val type = (record.get("msgType") as? Number)?.toInt() ?: return@runCatching null
+    if (sender.isBlank()) return@runCatching null
+    RunKey(id, sender, time, type)
+}.getOrNull()
+
+private fun rememberGroup(key: RunKey?, grouped: Boolean) {
+    if (key == null) return
+    synchronized(runGroups) {
+        runGroups.remove(key)
+        runGroups[key] = grouped
+        while (runGroups.size > GROUP_CACHE_SIZE) runGroups.remove(runGroups.keys.first())
+    }
+}
+
+private fun isGrouped(key: RunKey?): Boolean =
+    key != null && synchronized(runGroups) { runGroups[key] == true }
 
 fun groupRuns() {
     val adapter = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a")
-    // 取数据和取表头数的方法装的时候就解析好：找不到直接 ✗ 报出来，别在每次绑定时静悄悄空转。
+    // 装钩子前解析完全部落点，缺一个就整体报 ✗，避免半装。
     val data = adapter.getMethod("d0")
     val head = adapter.getMethod("i0")
-    hook(adapter.method("n0")) { chain ->
+    val bindAdapter = adapter.method("n0")
+    val avatar = cls("com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent")
+    val avatarRoot = avatar.getMethod("f1")
+    val bindAvatar = avatar.method("d1")
+    val nick = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2")
+    val nickRoot = nick.getMethod("f1")
+    val bindNick = nick.method("d1")
+    val bubble = cls("com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB")
+    val bubbleRoot = bubble.getMethod("s1")
+    val bindBubble = bubble.method("k1")
+
+    hook(bindAdapter) { chain ->
         val self = chain.thisObject
-        val list = runCatching { data.invoke(self)?.let { it.javaClass.getMethod("u").invoke(it) } as? List<*> }.getOrNull()
-        val i = chain.getArg(1) as Int - (runCatching { head.invoke(self) as Int }.getOrNull() ?: 0)
-        val cur = list?.getOrNull(i)
-        msgId(cur)?.let { if (follows(list?.getOrNull(i - 1), cur)) grouped.add(it) else grouped.remove(it) }
+        val list = runCatching { data.invoke(self)?.let { it.javaClass.getMethod("u").invoke(it) as? List<*> } }.getOrNull()
+        val position = runCatching { chain.getArg(1) as? Int }.getOrNull()
+        val headerCount = runCatching { head.invoke(self) as? Int }.getOrNull()
+        if (list != null && position != null && headerCount != null) {
+            val i = position - headerCount
+            val current = runKey(list.getOrNull(i))
+            if (current != null) rememberGroup(current, mergeRun(runKey(list.getOrNull(i - 1)), current))
+        }
         chain.proceed()
     }
-    val avatar = cls("com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent")
-    val nick = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2")
-    for ((c, mode) in listOf(avatar to View.INVISIBLE, nick to View.GONE)) {
-        val root = c.getMethod("f1") // 组件的根视图，声明在 MVVM 基类上
-        hook(c.method("d1")) { chain ->
+
+    for ((bind, root, mode) in listOf(
+        Triple(bindAvatar, avatarRoot, View.INVISIBLE),
+        Triple(bindNick, nickRoot, View.GONE),
+    )) {
+        hook(bind) { chain ->
             // 先还原上一次折的，让 QQ 自己的绑定从干净状态开始；绑完再按需要折。
             val v = runCatching { root.invoke(chain.thisObject) as? View }.getOrNull()
             v?.let { view -> folded.remove(view)?.let { view.visibility = it } }
             chain.proceed().also {
-                val id = runCatching { msgId(chain.getArg(1)) }.getOrNull()
-                if (v != null && id != null && id in grouped) { folded[v] = v.visibility; v.visibility = mode }
+                val key = runCatching { runKey(chain.getArg(1)) }.getOrNull()
+                if (v != null && isGrouped(key)) { folded[v] = v.visibility; v.visibility = mode }
             }
+        }
+    }
+
+    // 同一 ID 判定也用于气泡行：组内只把原有正上边距缩短 4dp，不换 drawable / 九宫格尾巴。
+    hook(bindBubble) { chain ->
+        chain.proceed().also {
+            val view = runCatching { bubbleRoot.invoke(chain.thisObject) as? View }.getOrNull()
+            val key = runCatching { runKey(chain.getArg(1)) }.getOrNull()
+            if (view != null) compactBubble(view, isGrouped(key))
         }
     }
 }
 
-/** 两条都是正经消息（不是灰字 5 / 开场白 29）、同一发送者、相隔不到 5 分钟。 */
-private fun follows(prev: Any?, cur: Any?): Boolean {
-    val a = record(prev) ?: return false
-    val b = record(cur) ?: return false
-    val sender = a.get("senderUid") as? String
-    return !sender.isNullOrEmpty() && sender == b.get("senderUid") &&
-        a.get("msgType") !in setOf(5, 29) && b.get("msgType") !in setOf(5, 29) &&
-        abs((b.get("msgTime") as Long) - (a.get("msgTime") as Long)) <= 300
+private fun compactBubble(view: View, grouped: Boolean) {
+    val params = view.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+    val saved = bubbleSpacing[view]?.takeIf { it.params === params }
+        ?: BubbleSpacing(params, params.topMargin).also { bubbleSpacing[view] = it }
+    val top = if (grouped && saved.top > 0) (saved.top - (4 * view.resources.displayMetrics.density).toInt()).coerceAtLeast(0) else saved.top
+    if (params.topMargin != top) {
+        params.topMargin = top
+        view.layoutParams = params
+    }
+    if (!grouped) bubbleSpacing.remove(view)
 }
 
+/** 两条都是正经消息（不是灰字 5 / 开场白 29）、同一发送者、相隔不超过 5 分钟。 */
 private fun record(item: Any?): Any? = item?.let { runCatching { it.javaClass.getMethod("getMsgRecord").invoke(it) }.getOrNull() }
 
 // ---- 回复不@：QQ 回复消息时会往输入框插一个「@昵称 」，这一步整个跳过。

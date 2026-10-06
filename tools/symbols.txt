@@ -26,16 +26,9 @@ member! com.tencent.mobileqq.activity.qqsettingme.config.QQSettingMeMenuConfigBe
 class  com.tencent.mobileqq.aio.input.reply.i
 member! com.tencent.mobileqq.aio.input.reply.i#k
 
-# ---------- 玻璃底栏 / TG 输入栏 Looks.kt, Input.kt（视图规则按长相认，所以是后缀和资源名）
-class~ PanelIconLinearLayout
+# ---------- 玻璃底栏 Looks.kt（视图规则按长相认，所以是后缀和资源名）
 class  com.google.android.material.tabs.TabLayout
 member! com.google.android.material.tabs.TabLayout#setTabRippleColor
-res    input
-res    send_btn
-text   表情
-text   更多
-text   加号
-text   语音
 
 # ---------- 会员装饰归零 Chat.kt
 class  com.tencent.qqnt.kernel.nativeinterface.VASMsgBubble
@@ -141,6 +134,13 @@ class  com.tencent.smtt.sdk.QbSdk
 member! com.tencent.smtt.sdk.QbSdk#getIsSysWebViewForcedByOuter
 class  com.tencent.beacon.event.UserAction
 member com.tencent.beacon.event.UserAction#on
+member! com.tencent.beacon.event.UserAction#onDTUserAction
+member! com.tencent.beacon.event.UserAction#onDTUserActionToTunnel
+member! com.tencent.beacon.event.UserAction#onUserAction
+member! com.tencent.beacon.event.UserAction#onUserActionToTunnel
+member! com.tencent.beacon.event.UserAction#onPageIn
+member! com.tencent.beacon.event.UserAction#onPageOut
+member! com.tencent.beacon.event.UserAction#doUploadRecords
 member! com.tencent.beacon.event.UserAction#loginEvent
 class  com.tencent.beacon.event.open.BeaconReport
 member! com.tencent.beacon.event.open.BeaconReport#report
@@ -154,6 +154,7 @@ member com.tencent.feedback.eup.CrashReport#initCrashReport
 
 # ---------- 具体未读条数：QQ 封顶 99+ 的两个出口，盖回真数字
 class  com.tencent.mobileqq.quibadge.QUIBadge
+field  com.tencent.mobileqq.quibadge.QUIBadge#mText
 member! com.tencent.mobileqq.quibadge.QUIBadge#updateNum
 class  com.tencent.widget.d
 member! com.tencent.widget.d#d
