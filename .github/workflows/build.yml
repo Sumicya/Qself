@@ -2,7 +2,9 @@
 #
 # 每次 push / PR / 手动运行：dex 作业拿真 QQ 包核每一个落点；apk 作业跑 ProtoTest 再出 debug APK 放进 Artifacts。
 # CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须按仓库规范由主人明确授权并人工完成。
-# 出包成功后自动清：按 Qself- 前缀（不区分大小写）及已核实的历史产物名保留最近 5 个；PR 不跑清理（写权限不进未信任代码）。
+# 出包成功后自动清：按 Qself- 前缀（不区分大小写）及已核实的历史产物名保留最近 5 个。
+# 清理在本仓库 push / workflow_dispatch / 同仓库分支的 PR 上都跑；fork PR 不跑（token 只读，写权限不进未信任代码）。
+# 不跑清理的构建照样上传 artifact，所以只要漏掉一种事件，总数就会一直超过 5；清理必须覆盖所有会上传的事件。
 name: Build
 
 on:
@@ -87,7 +89,11 @@ jobs:
 
   cleanup_artifacts:
     name: 清理 Qself 历史 artifact
-    if: ${{ github.event_name != 'pull_request' }}
+    # 凡是本次 run 会上传 Qself artifact 的事件都要清理，否则 artifact 总数会稳定超过保留上限。
+    # fork 来的 PR 拿到的是只读 token，删除必然 403，因此只在 head 仓库就是本仓库时才跑清理。
+    if: >-
+      ${{ github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository }}
     needs: apk
     runs-on: ubuntu-24.04
     timeout-minutes: 10
