@@ -11,10 +11,16 @@ android {
         applicationId = "sumicya.qself"
         minSdk = 36 // 只对着 Android 16 写：RenderEffect / AGSL 都不用判版本
         targetSdk = 37
-        // CI 先固化完整版本；Gradle 只读取单一版本来源，不自行取时间或序号。
-        val releaseVersion = System.getenv("QSELF_VERSION") ?: "0.0.0.0.0"
+        // CI 先固化完整版本；缺少可追溯序号时停止出包，不生成占位版本。
+        val releaseVersion = System.getenv("QSELF_VERSION")
+            ?: error("QSELF_VERSION must come from a traceable build run")
+        require(Regex("""\d{2}\.\d{1,2}\.\d{1,2}\.[1-9]\d*\.[1-9]\d*""").matches(releaseVersion)) {
+            "QSELF_VERSION must use yy.m.d.daily.total with positive sequences: $releaseVersion"
+        }
+        val totalSequence = releaseVersion.substringAfterLast(".").toIntOrNull()
+            ?: error("QSELF_VERSION total sequence exceeds Android versionCode range: $releaseVersion")
         versionName = releaseVersion
-        versionCode = releaseVersion.substringAfterLast(".").toIntOrNull()?.coerceAtLeast(1) ?: 1
+        versionCode = totalSequence
     }
 
     // 仓库不保存私钥。debug 使用 Android 默认签名；正式发布签名由安全存储提供。
@@ -52,7 +58,7 @@ dependencies {
 androidComponents {
     onVariants(selector().all()) { variant ->
         variant.outputs.forEach { output ->
-            val version = output.versionName.orNull ?: "0.0.0.0.0"
+            val version = output.versionName.orNull ?: error("Qself version missing; refusing to name an unversioned APK")
             output.outputFileName.set("Qself-$version.apk")
         }
     }

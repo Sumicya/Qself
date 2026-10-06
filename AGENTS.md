@@ -71,6 +71,7 @@
 当前仓库不保存签名私钥；debug APK 使用 Android 默认 debug 签名，正式签名需由仓库外的安全签名环境提供。
 
 CI 三个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 跑单元测试再出包，`cleanup_artifacts` 在出包后按全局规范保留最近 5 个本项目 artifact 并清理已核实的历史产物；失败日志以 GitHub Actions 原始日志为准。
+版本序号来自 `Build` 的真实 run 记录：`push`、`pull_request`、`workflow_dispatch` 都计数；总序号用 `run_number`，当日序号是 UTC+8 当日、按 `run_number` 排序截至本次的位次。失败运行计一次，重跑沿用原 run；`ci/check.sh` 不出 APK、不计版本。本地 Gradle 出包必须显式提供符合五段规则的 `QSELF_VERSION`，缺失或无效时停止。2026-10-6 从旧口径切换到 run_number：旧总序号截至 `Qself-26.10.6.2.175`，新总序号因此允许向前跳号，不回退、不复用历史号。
 CI 不自动创建 Release、正式发行 tag 或 Release asset。
 
 ## 全局规范

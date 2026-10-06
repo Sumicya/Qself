@@ -46,22 +46,25 @@ jobs:
       - name: Calculate release version
         env:
           GH_TOKEN: ${{ github.token }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
+          set -euo pipefail
           stamp="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq '.created_at')"
           day="$(TZ=Asia/Shanghai date -d "$stamp" +%y.%-m.%-d)"
           local_day="$(TZ=Asia/Shanghai date -d "$stamp" +%Y-%m-%d)"
           since="$(TZ=Asia/Shanghai date -u -d "$local_day 00:00:00" +%Y-%m-%dT%H:%M:%SZ)"
-          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            push_runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=push&created=>=$since&per_page=1" --jq '.total_count')"
-            dispatch_runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=workflow_dispatch&created=>=$since&per_page=1" --jq '.total_count')"
-            total_push="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=push&per_page=1" --jq '.total_count')"
-            total_dispatch="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=workflow_dispatch&per_page=1" --jq '.total_count')"
-            daily="$((push_runs + dispatch_runs))"
-            total="$((total_push + total_dispatch))"
-          else
-            daily=0
-            total=0
-          fi
+          daily="$(
+            gh api --paginate \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?created=>=$since&per_page=100" \
+              --jq '.workflow_runs[] | [.run_number, .event] | @tsv' |
+            awk -F '\t' -v current="$RUN_NUMBER" '
+              $1 <= current && ($2 == "push" || $2 == "pull_request" || $2 == "workflow_dispatch") { n++ }
+              END { print n+0 }
+            '
+          )"
+          total="$RUN_NUMBER"
+          [[ "$daily" =~ ^[1-9][0-9]*$ ]] || { echo "invalid daily sequence: $daily" >&2; exit 1; }
+          [[ "$total" =~ ^[1-9][0-9]*$ ]] || { echo "invalid total sequence: $total" >&2; exit 1; }
           echo "QSELF_DAILY_SEQUENCE=$daily" >> "$GITHUB_ENV"
           echo "QSELF_VERSION=$day.$daily.$total" >> "$GITHUB_ENV"
 
