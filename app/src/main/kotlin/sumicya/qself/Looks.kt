@@ -201,16 +201,24 @@ private fun settle(bar: ViewGroup) {
 internal fun exactBadgeText(label: String?, count: Long): String? =
     if (label == "99+" && count > 99) count.toString() else null
 
-/** 未读角标不再停在 99+：两个已核出口都走一遍，并修正根视图里的所有溢出标签。 */
+/** QQ 的 QUIBadge 自绘 mText；旧 d() 更新 TextView。只改真超限标签，并主动重新量尺寸、重绘。 */
 fun exactCount() {
     val badge = cls("com.tencent.mobileqq.quibadge.QUIBadge")
+    val badgeText = badge.getDeclaredField("mText").apply { isAccessible = true }
     val update = badge.method("updateNum")
     val legacy = cls("com.tencent.widget.d").method("d")
 
     fun fix(root: View?, count: Long?) {
         if (root == null || count == null || count <= 99) return
         fun go(v: View) {
-            if (v is TextView) {
+            if (badge.isInstance(v)) {
+                val label = runCatching { badgeText.get(v) as? String }.getOrNull()
+                exactBadgeText(label, count)?.let { text ->
+                    if (runCatching { badgeText.set(v, text) }.isSuccess) {
+                        v.post { v.requestLayout(); v.invalidate() }
+                    }
+                }
+            } else if (v is TextView) {
                 exactBadgeText(v.text?.toString(), count)?.let { v.text = it }
             } else if (v is ViewGroup) {
                 for (i in 0 until v.childCount) go(v.getChildAt(i))

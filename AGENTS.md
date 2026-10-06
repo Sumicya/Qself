@@ -75,6 +75,6 @@ CI 不自动创建 Release、正式发行 tag 或 Release asset。
 
 ## 全局规范
 
-本仓库上次同步 = 第二十一版。
+本仓库上次同步 = 第二十二版。
 
 规范指针：按 [Sumicya/selfs 的 GLOBAL.md](https://github.com/Sumicya/selfs/blob/main/GLOBAL.md) 最新版执行；本文件只保留 Qself 项目专属条目，不复制全局规则。

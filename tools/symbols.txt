@@ -154,6 +154,7 @@ member com.tencent.feedback.eup.CrashReport#initCrashReport
 
 # ---------- 具体未读条数：QQ 封顶 99+ 的两个出口，盖回真数字
 class  com.tencent.mobileqq.quibadge.QUIBadge
+field  com.tencent.mobileqq.quibadge.QUIBadge#mText
 member! com.tencent.mobileqq.quibadge.QUIBadge#updateNum
 class  com.tencent.widget.d
 member! com.tencent.widget.d#d
