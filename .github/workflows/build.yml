@@ -1,6 +1,7 @@
 # Qself CI。
 #
-# 每次 push / PR / 手动运行：dex 作业拿真 QQ 包核每一个落点；apk 作业跑 ProtoTest 再出 debug APK 放进 Artifacts。
+# 每次 push / PR / 手动运行：dex 作业核真实落点，apk 作业测试、出 debug APK；成功后清理 Qself artifact，只保留最近 5 个。
+# fork PR 不上传 artifact 也不拿写权限；同仓库 PR、push、手动运行都执行清理。artifact 另设 5 天过期。
 # CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须按仓库规范由主人明确授权并人工完成。
 name: Build
 
@@ -76,8 +77,96 @@ jobs:
           if unzip -l "$APK" | grep -q 'assets/xposed_init'; then echo 'legacy entry packaged' >&2; exit 1; fi
           sha256sum "$APK"
       - uses: actions/upload-artifact@v7
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
         with:
           name: Qself-${{ env.QSELF_VERSION }}
           path: app/build/outputs/apk/debug/Qself-${{ env.QSELF_VERSION }}.apk
           if-no-files-found: error
           retention-days: 5
+
+  cleanup_artifacts:
+    name: 清理 Qself 历史 artifact
+    # 凡是上传 Qself artifact 的事件都清；fork PR 不上传，所以既不超额也不需要给它写权限。
+    needs: apk
+    if: >-
+      ${{ github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: qself-artifact-retention
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: 保留最近 5 个 Qself artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          KEEP: "5"
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          repo = os.environ["REPO"]
+          keep = os.environ["KEEP"]
+          if not keep.isdecimal() or int(keep) < 1:
+              sys.exit("KEEP 必须为正整数")
+          keep = int(keep)
+
+          def api(path, method=None):
+              cmd = ["gh", "api"]
+              if method:
+                  cmd += ["-X", method]
+              cmd.append(path)
+              result = subprocess.run(cmd, capture_output=True, text=True)
+              if result.returncode:
+                  sys.exit(f"gh api {path} 失败: {result.stderr.strip()}")
+              return result.stdout
+
+          def all_artifacts():
+              rows = []
+              page = 1
+              while True:
+                  data = json.loads(api(f"repos/{repo}/actions/artifacts?per_page=100&page={page}"))
+                  batch = data.get("artifacts", [])
+                  if not batch:
+                      return rows
+                  rows.extend(batch)
+                  page += 1
+
+          # Qself- 是本工作流唯一使用的产物前缀；名称以外的项目产物绝不进入删除集。
+          def owned_artifacts():
+              all_rows = all_artifacts()
+              owned = [a for a in all_rows if a.get("name", "").casefold().startswith("qself-")]
+              owned.sort(key=lambda a: (a["created_at"], int(a["id"])), reverse=True)
+              return all_rows, owned
+
+          for attempt in range(1, 11):
+              artifacts, owned = owned_artifacts()
+              keep_rows, delete_rows = owned[:keep], owned[keep:]
+              print(f"第 {attempt} 轮：Qself artifact {len(owned)} 个；保留 {len(keep_rows)} 个；其他 artifact {len(artifacts) - len(owned)} 个不在清理范围。", flush=True)
+              print("完整保留/删除清单（以下清单全部输出后才开始删除）：", flush=True)
+              for artifact in keep_rows:
+                  print(f"KEEP   {artifact['created_at']} {artifact['name']} id={artifact['id']}", flush=True)
+              for artifact in delete_rows:
+                  print(f"DELETE {artifact['created_at']} {artifact['name']} id={artifact['id']}", flush=True)
+              if not delete_rows:
+                  print("无待删除 artifact", flush=True)
+
+              for artifact in delete_rows:
+                  api(f"repos/{repo}/actions/artifacts/{artifact['id']}", method="DELETE")
+                  print(f"DELETED {artifact['created_at']} {artifact['name']} id={artifact['id']}", flush=True)
+
+              remaining = [a for a in all_artifacts() if a.get("name", "").casefold().startswith("qself-")]
+              print(f"本轮清理后 Qself artifact: {len(remaining)} 个；目标上限 {keep} 个。", flush=True)
+              if len(remaining) <= keep:
+                  print("清理完成；未触碰其他 artifact、Release 或 tag。", flush=True)
+                  break
+          else:
+              sys.exit("多轮清理后仍超过上限；检查是否有持续并发上传")
+          PY

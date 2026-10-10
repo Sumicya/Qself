@@ -38,6 +38,29 @@ jobs:
                   raise SystemExit(f"AGENTS.md 缺少全局规范条目：{item}")
 
           workflows = root / ".github" / "workflows"
+          build = workflows / "build.yml"
+          if not build.exists():
+              raise SystemExit("缺少 build.yml")
+          build_text = build.read_text(encoding="utf-8")
+          build_required = [
+              "retention-days: 5",
+              "cleanup_artifacts:",
+              "actions: write",
+              'KEEP: "5"',
+              "per_page=100&page={page}",
+              'casefold().startswith("qself-")',
+              "cancel-in-progress: false",
+          ]
+          for item in build_required:
+              if item not in build_text:
+                  raise SystemExit(f"build.yml 缺少 artifact 保留规则：{item}")
+          same_repo_guard = "github.event.pull_request.head.repo.full_name == github.repository"
+          if build_text.count(same_repo_guard) < 2:
+              raise SystemExit("fork PR 必须跳过 artifact 上传和带写权限的清理作业")
+          top_permissions = build_text.split("jobs:", 1)[0]
+          if "actions: write" in top_permissions or "contents: write" in top_permissions:
+              raise SystemExit("build.yml 顶层不能向 PR / dex / apk 作业授予写权限")
+
           forbidden = re.compile(r"(?i)(softprops/action-gh-release|gh release create|createRelease|create_git_release|actions/create-release)")
           for path in workflows.glob("*.yml"):
               if path.name == "spec-check.yml":
@@ -45,4 +68,4 @@ jobs:
               source = path.read_text(encoding="utf-8")
               if forbidden.search(source):
                   raise SystemExit(f"{path} 包含自动创建 Release 的实现；第十五版规范禁止 CI 自动发版")
-          print("第十五版全局规范检查通过")
+          print("第十五版全局规范与 artifact 保留规则检查通过")
