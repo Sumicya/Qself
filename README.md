@@ -5,13 +5,14 @@
 画出来的 ✓/–/✗ 加一句描述（✗ = 这版 QQ 没装上），存进 QQ 自己的 SharedPreferences。
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
-但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，176 条）——换版本先看那张表红哪条，别猜。
+但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，177 条）——换版本先看那张表红哪条，别猜。
 
 ## 做了什么
 
 外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
-- 首页底栏浮成一颗居中的液态玻璃胶囊（每个页签 76dp，只包住页签）：不模糊，系统 `RenderEffect` + AGSL 做边缘折射、
-  贴边高光、提饱和、淡色罩，没有描边；选中项是一块弹着滑过去的亮胶囊
+- 首页底栏浮成一颗居中的液态玻璃胶囊（每个页签 56dp，只包住页签）：不模糊，系统 `RenderEffect` + AGSL 做边缘折射、
+  贴边高光、提饱和、淡色罩，没有描边；选中项是一块弹着滑过去的亮胶囊，按下时透镜轻微凹陷并浮起柔光
+- 底栏角标显示真实未读数，不停在「99+」
 - **Monet 取色**：玻璃的罩色、选中圆、圆钮的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色
 - 聊天输入栏 Telegram 化：一颗悬浮玻璃胶囊 [表情 · 输入框 · +] 加右侧玻璃圆钮 麦克风⇄发送，
@@ -75,7 +76,7 @@ ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
 
 ```sh
 git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
-python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 176 条全绿才算数
+python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 177 条全绿才算数
 python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
 ```
 

@@ -43,6 +43,10 @@ fun store(): SharedPreferences? = prefs ?: runCatching {
         ?.getSharedPreferences("qself", Context.MODE_PRIVATE)
 }.getOrNull()?.also { prefs = it }
 
+/** 只改 QQ 的溢出占位，不碰本来就准确的角标文字。 */
+internal fun exactCountReplacement(text: String?, count: Int): String? =
+    if (text == "99+" && count > 99) count.toString() else null
+
 /**
  * 名字满足 [pick] 的方法全部改成固定返回 [value]；一个都没匹配到就当找错了类。
  * 本类没有就往父类找（QQ 的门方法大半声明在 Api 基类上，只搜本类一个也搜不着），
