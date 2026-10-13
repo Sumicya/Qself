@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-10-13 — 跟进全局「第0版修订」
+
+- 依据：selfs 分支 `arena/7a7f3552-selfs` 提交 `1984b03`（第0版修订：计数改锚 run_number、分支保留 0、清理默认授权）；尚未合入默认分支，按主人指示先行执行。
+- `build.yml`：当日序号从「run_number − 当日锚点」改成「head 提交在当日（UTC+8）提交序列中的位次」
+  （`git rev-list --count --since="<当日> 00:00:00 +0800" HEAD`，`apk` 作业 checkout 改 `fetch-depth: 0`）；
+  停用旧锚（历史成功数、现存 artifact 最大号），删掉对应的兜底检查。
+- 运行记录清理改成只留最近 5 条：取消「当日锚点」特例（版本取数不再依赖运行记录），也不再为 artifact 载体破例。
+- 分支清理：`arena/63fa89b7-qself`、`arena/614127b9-qself` 按「分支 0 个」删除；`arena/01a109fa-qself` 因 PR #10 仍开着暂留，
+  待合并或关闭后删。
+
 ## 2026-10-13 — 跟进全局第0版
 
 - 第0版把规范压到 55 行；对 Qself 的实际变化：保留项新增「运行记录 5 条」，清理权限明确 `actions: write` 只用于删本项目 artifact 与 run。

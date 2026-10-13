@@ -77,26 +77,24 @@ CI 四个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 按
 
 本地要 gradle 出包同样得显式给版本：`QSELF_VERSION=26.10.13.1.1 ./gradlew :app:assembleDebug`，没给就当场失败。
 
-## 全局规范同步（上次同步 = 第0版 · 2026-10-13）
+## 全局规范同步（上次同步 = 第0版修订 · 2026-10-13）
 
 规范入口：[Sumicya/selfs/GLOBAL.md](https://github.com/Sumicya/selfs/blob/main/GLOBAL.md)；继承其全部规则，用户指示优先。
+本次依据该规范的「第0版修订」（selfs 分支 `arena/7a7f3552-selfs` 提交 `1984b03`，尚未合入默认分支）先行执行，合入后以默认分支为准。
 下面只记本项目的实现、事实与限制：
 
-- 版本取数只锚定本次 run 的 `created_at` 与 `run_number`（不查最新 run），文件名 `Qself-<五段版本>`：
-  当日序号 = 本次 `run_number` − 当日锚点 `run_number` + 1，锚点 = 当日最早一条 `build.yml` 运行；
-  总序号 = 本次 `run_number` − 35（基线 = 26.10.13 第 7 次运行的 run_number 253 − 218）。
-  失败运行与 PR 运行也占号，号只增不减；`run_attempt > 1` 用缓存复用第一次的号。
-  取不到锚点、不是五段、或号不大于现存产物里的最大号 → 当场失败，不出包。
-- 本地序号：本地出包同样五段，号必须可追溯——本地跑没有自己的 run_number，按保留记录里的最大 run_number 预测下一号：
-  当日序号 = 最大 run_number + 1 − 当日锚点 + 1，总序号 = 最大 run_number + 1 − 35（记录从
-  `gh api "repos/Sumicya/Qself/actions/workflows/build.yml/runs?..."` 取）；取不到就停下，不许拿当前时间充数；
-  本地号可能与随后触发的 CI 撞号，本地 APK 只作自测，发行一律用 CI 的 artifact。
-- 衔接：口径切换（第0版）后的第一个运行起按上式取数；历史 artifact 名里的序号只作历史记录，不重算、不回退。
-- 清理：artifact 5 个、Release 1 个、运行记录 5 条；当日跑过 5 次以上时多留 1 条当日锚点（版本取数要用，删了就算不出当日序号），
-  另保住现存 artifact 的载体运行。artifact 与运行记录用最小 `actions: write`（只删本项目 artifact 与 run），
-  任何分支与同仓 PR 都跑，不与 `contents: write` 同授；Release / tag 清理另开作业、只在默认分支、只给 `contents: write`。
-  清理脚本写死「只删归属核验通过的本项目对象」，完整分页、按时间降序，删除前打印完整保留/删除清单，失败只报错不回滚。
-- 删工作流文件时同轮清掉它的运行记录（现在由 `cleanup-artifacts` 每次出包顺带收口，不再单开一次性工具）。
-- 发版与对外动作：CI 不创建 Release、正式 tag 或 Release asset，正式发版必须先获主人对项目、版本、触发条件的明确允许；
-  删除远程分支、删除标签这类对外动作也要主人明确授权，CI 不隐式执行。
+- 版本取数只锚定本次 run，文件名 `Qself-<五段版本>`，禁止查最新 run 或最新 artifact：
+  当日序号 = 本次 run 的 head 提交在当日（UTC+8）提交序列中的位次 = `git rev-list --count --since="<当日> 00:00:00 +0800" HEAD`；
+  总序号 = 本次 `run_number` − 35（基线：run_number 253 ↔ 总序号 218；基线切换时在此写死）。
+  `run_attempt > 1` 用缓存复用第一次的号；位次取不到（head 提交不在当日）或号不合法 → 当场失败，不出包。
+  旧锚（历史成功数、现存 artifact 最大号）已停用。
+- 本地序号：本地出包同样五段，号必须可追溯——当日序号用同一 `git rev-list` 式子在本地 HEAD 上数；
+  总序号 = 最近已知 `run_number` + 1 − 35（从 `gh api "repos/Sumicya/Qself/actions/workflows/build.yml/runs?..."` 取）；
+  取不到就停下，不许拿当前时间充数；本地号可能与随后触发的 CI 撞号，本地 APK 只作自测，发行一律用 CI 的 artifact。
+- 衔接：口径切换（第0版修订）后的第一个运行起按上式取数；历史 artifact 名里的序号只作历史记录，不重算、不回退。
+- 清理（默认授权，删前打印完整清单）：artifact 5 个、Release 1 个、运行记录 5 条；分支 0 个——PR 合并或关闭后删对应会话分支，
+  主人手合并的由下一个会话收尾删；删 ref 需 `contents: write`，分支清理只由会话执行、不进 CI。
+  artifact 与运行记录用最小 `actions: write`（只删本项目 artifact 与 run），任何分支与同仓 PR 都跑，不与 `contents: write` 同授；
+  Release / tag 清理另开作业、只在默认分支、只给 `contents: write`。发布与合并仍须明确授权。
+- 删工作流文件时同轮清掉它的运行记录（由 `cleanup-artifacts` 每次出包顺带收口，不单开一次性工具）。
 - 规范由 agent 在会话中核对，不设规范检查工作流（本仓 `spec-check.yml` 已删）。本仓变更记在 `CHANGELOG.md`。
