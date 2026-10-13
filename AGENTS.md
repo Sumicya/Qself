@@ -78,12 +78,16 @@ CI 不自动创建 Release、正式发行 tag 或 Release asset。
 
 ## 全局规范同步（上次同步 = 第二十五版 · 2026-10-13）
 
-规范入口：[Sumicya/selfs/GLOBAL.md](https://github.com/Sumicya/selfs/blob/main/GLOBAL.md)（第二十五版 · 2026-10-12）。
-与之冲突时以它为准；本仓库已有更严格的项目规则时以更严格者为准。
+本仓库从 [Sumicya/selfs/GLOBAL.md](https://github.com/Sumicya/selfs/blob/main/GLOBAL.md)（第二十五版 · 2026-10-12）继承全部规则：
+项目条目只做补充和收紧，不另立例外，也不把旧版条目当豁免；冲突时以 GLOBAL.md 为准，本仓库更严格的条目优先。
 
 - 版本：产物统一五段 `yy.m.d.当日序号.总序号`，日界线 UTC+8。CI 的当日序号 = 本仓 `build.yml` 在该 UTC+8 日已触发、run_id 小于本次的运行数 +1；
   总序号 = 本仓库历史成功出包的运行数 +1；`run_attempt > 1` 复用第一次 attempt 的版本号，取不回就失败，不重新加号。
-  本地出包必须在环境里显式给 `QSELF_VERSION`，缺失即失败，不拿占位号冒充足包。文件名与 artifact 名都是 `Qself-<五段版本>`。
+  文件名与 artifact 名都是 `Qself-<五段版本>`。
+- 本地序号：本地出包同样五段，号必须可追溯——当日序号 = 本仓 `build.yml` 在该 UTC+8 日已触发的运行数 +1，
+  总序号 = 历史成功出包运行数 +1，都从 `gh api "repos/Sumicya/Qself/actions/workflows/build.yml/runs?..."`
+  的同一批记录里取；查不到记录就停下，不许拿当前时间或随手写的数充数。
+  本地号可能和被随后触发的 CI 撞号，所以本地 APK 只作自测，发行一律用 CI 的 artifact。
 - 衔接：口径切换后的第一个运行起按上式取数；历史 artifact 名里的序号只作历史记录，不重算、不回退。
 - 清理：Release 留最近 1 个、artifact 跨分支跨事件合计留最近 5 个，artifact 另设 `retention-days: 5`（只是时间兜底）。
   清理只在默认分支的可信构建 job 上以最小写权限跑，完整分页、按时间降序，先打印保留/删除清单，归属不明的对象不删；失败只报错，不回滚新产物。
