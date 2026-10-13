@@ -1,7 +1,8 @@
 # Qself CI。
 #
-# 每次 push / PR / 手动运行：dex 作业拿真 QQ 包核每一个落点；apk 作业跑 ProtoTest 再出 debug APK 放进 Artifacts。
-# CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须按仓库规范由主人明确授权并人工完成。
+# push / PR / 手动运行：dex 作业拿真 QQ 包核每一个落点；apk 作业按五段版本出 debug APK 放进 Artifacts。
+# 默认分支上的可信构建在出包后立刻做数量清理（Release 1 个、artifact 5 个）；PR 与分支构建只读。
+# CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须由主人明确授权并人工完成。
 name: Build
 
 on:
@@ -43,27 +44,53 @@ jobs:
           packages: 'platform-tools'
       - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
       - uses: gradle/actions/setup-gradle@v6
-      - name: Calculate release version
+
+      # 同一个 run 重试时不许重新加号：第一次 attempt 把版本号存进缓存，重试取回。
+      - name: 取回第一次 attempt 的版本号
+        if: github.run_attempt > 1
+        uses: actions/cache/restore@v6
+        with:
+          path: version.txt
+          key: qself-version-${{ github.run_id }}
+
+      - name: 算五段版本 yy.m.d.当日序号.总序号
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          stamp="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq '.created_at')"
-          day="$(TZ=Asia/Shanghai date -d "$stamp" +%y.%-m.%-d)"
-          local_day="$(TZ=Asia/Shanghai date -d "$stamp" +%Y-%m-%d)"
-          since="$(TZ=Asia/Shanghai date -u -d "$local_day 00:00:00" +%Y-%m-%dT%H:%M:%SZ)"
-          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            push_runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=push&created=>=$since&per_page=1" --jq '.total_count')"
-            dispatch_runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=workflow_dispatch&created=>=$since&per_page=1" --jq '.total_count')"
-            total_push="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=push&per_page=1" --jq '.total_count')"
-            total_dispatch="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=workflow_dispatch&per_page=1" --jq '.total_count')"
-            daily="$((push_runs + dispatch_runs))"
-            total="$((total_push + total_dispatch))"
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          if [ -f version.txt ]; then
+            version="$(cat version.txt)"
+            echo "复用第一次 attempt 的版本：$version"
           else
-            daily=0
-            total=0
+            if [ "${GITHUB_RUN_ATTEMPT:-1}" -gt 1 ]; then
+              echo "重试却取不到第一次 attempt 的版本号：那次在算出版本前就失败了。按口径不重新加号，请新开一次运行。" >&2
+              exit 1
+            fi
+            # 输入直接取本次 run 对象，不 list 后取最新。
+            created="$(gh api "repos/$repo/actions/runs/$GITHUB_RUN_ID" --jq '.created_at')"
+            day="$(TZ=Asia/Shanghai date -d "$created" +%y.%-m.%-d)"
+            local_day="$(TZ=Asia/Shanghai date -d "$created" +%Y-%m-%d)"
+            # 当日起点 = 上海零点，换算成 UTC（别用 date -u -d 去解析本地零点，那会当成 UTC 零点）。
+            since="$(date -u -d "@$(TZ=Asia/Shanghai date -d "$local_day 00:00:00" +%s)" +%Y-%m-%dT%H:%M:%SZ)"
+            # 当日序号：同一 UTC+8 日本仓库已触发、run_id 小于本次的运行数 +1（含失败；按 run_id 比，并发不抢号）。
+            today="$(gh api --paginate "repos/$repo/actions/workflows/build.yml/runs?created=>=$since&per_page=100" \
+              --jq "[.workflow_runs[] | select(.id < $GITHUB_RUN_ID)] | length" | awk '{s += $1} END {print s + 0}')"
+            # 总序号：本仓库历史成功出包的运行数 +1；失败运行不加号。
+            done_ok="$(gh api "repos/$repo/actions/workflows/build.yml/runs?status=success&per_page=1" --jq '.total_count')"
+            version="$day.$((today + 1)).$((done_ok + 1))"
+            printf '%s' "$version" > version.txt
           fi
-          echo "QSELF_DAILY_SEQUENCE=$daily" >> "$GITHUB_ENV"
-          echo "QSELF_VERSION=$day.$daily.$total" >> "$GITHUB_ENV"
+          printf '%s' "$version" | grep -Eq '^[0-9]{2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]+\.[0-9]+$' \
+            || { echo "版本不是五段格式：$version" >&2; exit 1; }
+          echo "QSELF_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: 存住版本号（供同 run 重试复用）
+        if: github.run_attempt == 1
+        uses: actions/cache/save@v6
+        with:
+          path: version.txt
+          key: qself-version-${{ github.run_id }}
 
       - name: Test and build
         run: |
@@ -80,4 +107,101 @@ jobs:
           name: Qself-${{ env.QSELF_VERSION }}
           path: app/build/outputs/apk/debug/Qself-${{ env.QSELF_VERSION }}.apk
           if-no-files-found: error
+          # 只有同一个 run 的重试会遇到同名（版本号相同）；换个运行就是另一卷，盖不到别的产物。
+          overwrite: true
           retention-days: 5
+
+  # 数量清理：写权限只给默认分支上的可信构建，PR 与分支构建碰不到；本 run 的 artifact 上传成功后立刻跑。
+  cleanup:
+    needs: apk
+    if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: qself-cleanup
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: 项目对象只留 Release 1 个、artifact 5 个
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess
+          from datetime import datetime
+
+          REPO = os.environ["REPO"]
+          WORKFLOW = ".github/workflows/build.yml"  # 本项目的出包工作流
+          PREFIX = "Qself-"                        # 命名前缀只作初筛，归属看 run 记录
+          KEEP_ARTIFACTS = 5
+          KEEP_RELEASES = 1
+
+          def gh(*args, check=True):
+              p = subprocess.run(["gh", *args], capture_output=True, text=True)
+              if check and p.returncode != 0:
+                  raise SystemExit("gh " + " ".join(args) + " 失败：" + p.stderr.strip())
+              return p.stdout
+
+          def list_all(url, key):
+              # 完整分页，逐条 JSON
+              out = gh("api", "--paginate", url, "--jq", key + "[]")
+              return [json.loads(line) for line in out.splitlines() if line.strip()]
+
+          def at(obj):
+              return datetime.fromisoformat(obj["created_at"].replace("Z", "+00:00"))
+
+          # Actions artifact：核验归属后按创建时间降序，留最近 5 个。
+          arts = [a for a in list_all(f"repos/{REPO}/actions/artifacts?per_page=100", ".artifacts") if not a["expired"]]
+          runs = {}
+
+          def mine(a):
+              rid = a["workflow_run"]["id"]
+              if rid not in runs:
+                  runs[rid] = json.loads(gh("api", f"repos/{REPO}/actions/runs/{rid}"))
+              r = runs[rid]
+              return (a["name"].startswith(PREFIX)
+                      and r.get("path") == WORKFLOW
+                      and r.get("repository", {}).get("full_name") == REPO)
+
+          own = sorted([a for a in arts if mine(a)], key=at, reverse=True)
+          keep, drop = own[:KEEP_ARTIFACTS], own[KEEP_ARTIFACTS:]
+          print("artifact 保留清单：")
+          for a in keep:
+              print(f"  {a['created_at']}  {a['name']}  id={a['id']}")
+          print("artifact 删除清单：")
+          for a in drop:
+              print(f"  {a['created_at']}  {a['name']}  id={a['id']}")
+          for a in drop:
+              gh("api", "-X", "DELETE", f"repos/{REPO}/actions/artifacts/{a['id']}")
+              print(f"已删 artifact {a['id']} {a['name']}")
+
+          # Release：同样核验归属，只留最近 1 个；随旧 Release 清它专属的 tag，保留对象引用的 tag 不动。
+          rels = sorted([r for r in list_all(f"repos/{REPO}/releases?per_page=100", ".") if r["tag_name"].startswith(PREFIX)],
+                        key=at, reverse=True)
+          keep_r, drop_r = rels[:KEEP_RELEASES], rels[KEEP_RELEASES:]
+          kept_tags = {r["tag_name"] for r in keep_r}
+          print("Release 保留清单：", [r["tag_name"] for r in keep_r] or "（无）")
+          print("Release 删除清单：", [r["tag_name"] for r in drop_r] or "（无）")
+          for r in drop_r:
+              gh("api", "-X", "DELETE", f"repos/{REPO}/releases/{r['id']}")
+              print(f"已删 Release {r['tag_name']}")
+          for r in drop_r:
+              tag = r["tag_name"]
+              if tag in kept_tags:
+                  continue
+              p = subprocess.run(["gh", "api", f"repos/{REPO}/git/ref/tags/{tag}"], capture_output=True, text=True)
+              if p.returncode != 0:
+                  if "Not Found" in p.stderr:
+                      print(f"tag {tag} 已不存在，跳过")
+                      continue
+                  raise SystemExit(f"查 tag {tag} 失败：{p.stderr.strip()}")
+              gh("api", "-X", "DELETE", f"repos/{REPO}/git/ref/tags/{tag}")
+              print(f"已删 tag {tag}")
+
+          print(f"本项目 artifact 共 {len(own)} 个；不动的（归属不明或非本项目）{len(arts) - len(own)} 个")
+          print(f"清理完成：artifact {len(keep)} 个，Release {len(keep_r)} 个")
+          PY

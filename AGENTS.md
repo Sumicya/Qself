@@ -70,20 +70,23 @@
 本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）出 APK。
 当前仓库不保存签名私钥；debug APK 使用 Android 默认 debug 签名，正式签名需由仓库外的安全签名环境提供。
 
-CI 两个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 跑单元测试再出包；失败日志以 GitHub Actions 原始日志为准。
+CI 三个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 按五段版本跑单元测试再出包，
+`cleanup` 只在默认分支上跑、出包上传成功后立刻清数量。失败日志以 GitHub Actions 原始日志为准。
 CI 不自动创建 Release、正式发行 tag 或 Release asset。
 
-## 全局规范同步（2026-10-05，第十五版）
+本地要 gradle 出包同样得显式给版本：`QSELF_VERSION=26.10.13.1.1 ./gradlew :app:assembleDebug`，没给就当场失败。
 
-以下规则继承自 Sumicya/selfs 的 GLOBAL.md，适用于本仓库：
+## 全局规范同步（上次同步 = 第二十五版 · 2026-10-13）
 
-- 任何本轮本地改动必须最终提交并推送到当前远端分支；任务结束时不得留下未提交或已提交但未推送的改动。
-- CI 必须符合全局规范；应有只读规范检查，且规范检查不得拥有发布写权限。
-- CI 不得自动创建 Release、正式发行 tag 或正式 Release asset。正式发版必须先获得主人对项目、版本和触发条件的明确允许。
-- 发版授权与清理授权分离。获准人工发版完成后，CI 可以自动清理旧 Release、关联 tag 和 Actions artifact。
-- 默认保留：Release 1 个、关联 tag 1 个、Actions artifact 5 个；artifact 另以 retention-days: 5 作为时间兜底。
-- 自动清理必须完整分页、按时间排序并限定在本项目明确的发行对象范围内，不得误删手工或无关对象。
-- 发布/清理 job 只授予所需最小写权限；PR 检查与规范检查保持只读，不把写权限暴露给未信任 PR 代码。
-- 对外动作（正式发版、删除远程分支、删除标签等）不得由普通 CI 触发器隐式执行。
+规范入口：[Sumicya/selfs/GLOBAL.md](https://github.com/Sumicya/selfs/blob/main/GLOBAL.md)（第二十五版 · 2026-10-12）。
+与之冲突时以它为准；本仓库已有更严格的项目规则时以更严格者为准。
 
-本仓库若已有更严格的项目专属规则，以更严格者为准；若与全局规范冲突，以 Sumicya/selfs/GLOBAL.md 为准，并在修改时说明冲突。
+- 版本：产物统一五段 `yy.m.d.当日序号.总序号`，日界线 UTC+8。CI 的当日序号 = 本仓 `build.yml` 在该 UTC+8 日已触发、run_id 小于本次的运行数 +1；
+  总序号 = 本仓库历史成功出包的运行数 +1；`run_attempt > 1` 复用第一次 attempt 的版本号，取不回就失败，不重新加号。
+  本地出包必须在环境里显式给 `QSELF_VERSION`，缺失即失败，不拿占位号冒充足包。文件名与 artifact 名都是 `Qself-<五段版本>`。
+- 衔接：口径切换后的第一个运行起按上式取数；历史 artifact 名里的序号只作历史记录，不重算、不回退。
+- 清理：Release 留最近 1 个、artifact 跨分支跨事件合计留最近 5 个，artifact 另设 `retention-days: 5`（只是时间兜底）。
+  清理只在默认分支的可信构建 job 上以最小写权限跑，完整分页、按时间降序，先打印保留/删除清单，归属不明的对象不删；失败只报错，不回滚新产物。
+- 发版与对外动作：CI 不创建 Release、正式 tag 或 Release asset，正式发版必须先获主人对项目、版本、触发条件的明确允许；
+  删除远程分支、删除标签这类对外动作也要主人明确授权，CI 不隐式执行。
+- 规范由 agent 在会话中核对，不设规范检查工作流（本仓 `spec-check.yml` 已删）。本仓变更记在 `CHANGELOG.md`。
