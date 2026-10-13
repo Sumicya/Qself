@@ -1,14 +1,17 @@
 # 一次性工具，用完即删，不进常规流程。
 #
-# 为什么需要它：旧工作流（test/apk/ci/pr_ci/check_commit_message/qself/qself-next/push_ci/spec-check）
-# 的文件早就从仓库里删了，但它们的运行记录还在 Actions 里堆着。删运行记录要 actions: write，
-# 常规分支构建拿不到也不该拿这个权限，所以单独一个只手动触发的作业来干，触发必须由人点。
+# 用途：test/apk/ci/pr_ci/check_commit_message/qself/qself-next/push_ci/spec-check 这些工作流的文件
+# 早从仓库里删了，运行记录还留在 Actions 里。删运行记录要 actions: write；本作业靠分支 push 触发
+# （push 事件会用被推送那次提交里的工作流文件），所以不必先合默认分支。
 #
-# 删的范围：所有已结束、且不属于 build.yml 的运行。build.yml 的运行一律保留 —— 五段版本的总序号
-# 就是数它的成功运行数，保留的 artifact 也挂在那些运行上。
+# 不碰的：build.yml 的运行 —— 五段版本的总序号就是数它的成功运行数，保留的 artifact 也挂在那些运行上。
+# 清理结束后把本文件从分支上撤掉，别留一个常驻的写权限作业。
 name: clean-old-runs
 
 on:
+  push:
+    paths:
+      - .github/workflows/clean-old-runs.yml
   workflow_dispatch:
 
 permissions:
@@ -18,33 +21,39 @@ permissions:
 jobs:
   clean:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
-      - name: 删掉旧工作流的运行记录（保留 build.yml 与本工作流）
+      - name: 删掉旧工作流的运行记录（保留 build.yml 与本次运行）
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          SELF: ${{ github.run_id }}
         run: |
           set -euo pipefail
+          echo "清理前：$(gh api "repos/$REPO/actions/runs?per_page=1" --jq '.total_count') 条运行记录"
           gh api --paginate "repos/$REPO/actions/runs?per_page=100" \
             --jq '.workflow_runs[]
                   | select(.status == "completed")
                   | select(.path != ".github/workflows/build.yml")
-                  | select(.path != ".github/workflows/clean-old-runs.yml")
+                  | select(.id != '"$SELF"')
                   | "\(.id) \(.path)"' > /tmp/del.txt
           total=$(wc -l < /tmp/del.txt)
-          echo "待删 $total 条"
+          echo "待删 $total 条："
           cut -d' ' -f2 /tmp/del.txt | sort | uniq -c | sort -rn
           n=0; fail=0
           while read -r id path; do
+            [ -n "$id" ] || continue
             if gh api -X DELETE "repos/$REPO/actions/runs/$id" >/dev/null 2>/tmp/err.txt; then
               n=$((n + 1))
             else
               fail=$((fail + 1))
               echo "失败 $id $path：$(head -c 200 /tmp/err.txt)"
             fi
-            if [ $((n % 50)) -eq 0 ] && [ "$n" -gt 0 ]; then echo "进度：已删 $n 条"; fi
-            sleep 0.2
+            if [ $((n % 100)) -eq 0 ] && [ "$n" -gt 0 ]; then echo "进度：已删 $n 条"; fi
+            sleep 0.25
           done < /tmp/del.txt
           echo "删除完成：成功 $n 条，失败 $fail 条"
-          echo "剩余运行记录：$(gh api "repos/$REPO/actions/runs?per_page=1" --jq '.total_count') 条（应只剩 build.yml 与本工作流）"
+          echo "剩余运行记录：$(gh api "repos/$REPO/actions/runs?per_page=1" --jq '.total_count') 条"
+          echo "其中 build.yml：$(gh api "repos/$REPO/actions/workflows/build.yml/runs?per_page=1" --jq '.total_count') 条"
+          echo "删掉本工具自己的运行记录（在跑的那条可能删不掉，删不掉就留着，等下一次清理带走）："
+          gh api -X DELETE "repos/$REPO/actions/runs/$SELF" || echo "本运行删不掉，正常"

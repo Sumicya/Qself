@@ -74,6 +74,10 @@ CI 三个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 按
 `cleanup` 只在默认分支上跑、出包上传成功后立刻清数量。失败日志以 GitHub Actions 原始日志为准。
 CI 不自动创建 Release、正式发行 tag 或 Release asset。
 
+删工作流文件不会带走它的运行记录。旧工作流（test/apk/ci/pr_ci/check_commit_message/qself/qself-next/push_ci/spec-check）
+的运行记录要清就一次性清，由主人点名后执行，范围永远排除 `build.yml`（五段总序号数它的成功出包数，
+保留的 artifact 也挂在它的运行上）；清理用一次性工具，跑完把工具从仓库撤掉，不留常驻写权限作业。
+
 本地要 gradle 出包同样得显式给版本：`QSELF_VERSION=26.10.13.1.1 ./gradlew :app:assembleDebug`，没给就当场失败。
 
 ## 全局规范同步（上次同步 = 第二十五版 · 2026-10-13）
