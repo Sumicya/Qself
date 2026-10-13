@@ -7,8 +7,12 @@
   （`git rev-list --count --since="<当日> 00:00:00 +0800" HEAD`，`apk` 作业 checkout 改 `fetch-depth: 0`）；
   停用旧锚（历史成功数、现存 artifact 最大号），删掉对应的兜底检查。
 - 运行记录清理改成只留最近 5 条：取消「当日锚点」特例（版本取数不再依赖运行记录），也不再为 artifact 载体破例。
-- 分支清理：`arena/63fa89b7-qself`（头 e64c8e6，内容含于 01a109fa）、`arena/614127b9-qself`（头 ae1a5a1）按「分支 0 个」删除；
-  `arena/01a109fa-qself`（头 1e7cd9e）因 PR #10 仍开着暂留，待合并或关闭后删。
+- 分支处理改正：先前按「分支 0 个」删了 `arena/63fa89b7-qself`、`arena/614127b9-qself`，但 `614127b9` 的 2 个提交
+  （`83ac6db` 玻璃按压 + 精确角标、`ae1a5a1` 输入行重挂载）在留存线里没有等价补丁（`git cherry` 两个「+」），属于未继承就删；
+  已把两个分支用原 SHA 恢复（`e64c8e65…`、`ae1a5a1f…`），并把 `614127b9` 的应用侧改动（`README.md`、`Glass.kt`、`Hook.kt`、
+  `Input.kt`、`Looks.kt`、`ProtoTest.kt`、`tools/symbols.txt`）继承进本分支；它的 CI 侧改动早已被本分支的新版取代，不继承。
+  `63fa89b7` 的提交全部含于 `arena/01a109fa-qself`（`git cherry` 无输出），保留到 PR #10 处理完再删。
+- 规则补进 `AGENTS.md`：删会话分支前先用 `git cherry` 确认无未继承提交，未继承的先并入再删；PR 未合并/未关闭的分支不删。
 - 实跑核验：本次推送出包 `Qself-26.10.13.12.222`（当日位次 12 = head 提交在当日提交序列中的位次；总序号 222 = run_number 257 − 35），
   运行记录收口到 5 条、artifact 5 个；位次取不到时（head 提交不在当日）会当场失败，已用本地预演验证。
 

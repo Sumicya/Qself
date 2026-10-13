@@ -92,8 +92,9 @@ CI 四个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 按
   总序号 = 最近已知 `run_number` + 1 − 35（从 `gh api "repos/Sumicya/Qself/actions/workflows/build.yml/runs?..."` 取）；
   取不到就停下，不许拿当前时间充数；本地号可能与随后触发的 CI 撞号，本地 APK 只作自测，发行一律用 CI 的 artifact。
 - 衔接：口径切换（第0版修订）后的第一个运行起按上式取数；历史 artifact 名里的序号只作历史记录，不重算、不回退。
-- 清理（默认授权，删前打印完整清单）：artifact 5 个、Release 1 个、运行记录 5 条；分支 0 个——PR 合并或关闭后删对应会话分支，
-  主人手合并的由下一个会话收尾删；删 ref 需 `contents: write`，分支清理只由会话执行、不进 CI。
+- 清理（默认授权，删前打印完整清单）：artifact 5 个、Release 1 个、运行记录 5 条；分支先继承再删——删任何会话分支前，
+  先用 `git cherry <留存线> <该分支>` 确认它没有「+」项（未继承的提交）；有「+」就先把这些提交并进留存线，并完再删；
+  PR 未合并/未关闭的分支不删。删 ref 需 `contents: write`，分支清理只由会话执行、不进 CI。
   artifact 与运行记录用最小 `actions: write`（只删本项目 artifact 与 run），任何分支与同仓 PR 都跑，不与 `contents: write` 同授；
   Release / tag 清理另开作业、只在默认分支、只给 `contents: write`。发布与合并仍须明确授权。
 - 删工作流文件时同轮清掉它的运行记录（由 `cleanup-artifacts` 每次出包顺带收口，不单开一次性工具）。

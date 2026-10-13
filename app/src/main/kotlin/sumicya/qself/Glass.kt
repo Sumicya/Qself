@@ -199,18 +199,20 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             there[0] < here[0] + host.width + pad && there[0] + v.width > here[0] - pad
     }
 
-    private fun setPress(p: Boolean) {
-        if (p == pressed) return
+    private fun setPress(p: Boolean): Boolean {
+        if (p == pressed) return false
         pressed = p
         pressAnim.cancel()
         pressAnim.setFloatValues(press, if (p) 1f else 0f)
         pressAnim.start()
+        return true
     }
 
-    override fun onStateChange(state: IntArray): Boolean {
+    // View 只会把 pressed state 传给 stateful background；底栏还会由 sync() 检查子页签。
+    override fun isStateful() = true
+
+    override fun onStateChange(state: IntArray): Boolean =
         setPress(state.contains(android.R.attr.state_pressed))
-        return false
-    }
 
     /** 选中页签换了就重画；每帧 pre-draw 时由宿主调一次。底栏自己拿不到 pressed
      * （触摸被页签吃掉），在这里看子/孙视图有没有被按着。 */

@@ -8,8 +8,16 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 防撤回那几十行 protobuf 判断的唯一一份可跑检查。 */
+/** 纯逻辑回归检查：防撤回 protobuf 判断与 99+ 精确数字替换条件。 */
 class ProtoTest {
+    @Test fun badgeReplacementOnlyChangesQQOverflowLabel() {
+        assertEquals("100", exactCountReplacement("99+", 100))
+        assertEquals("12345", exactCountReplacement("99+", 12345))
+        assertEquals(null, exactCountReplacement("99+", 99))
+        assertEquals(null, exactCountReplacement("100", 12345))
+        assertEquals(null, exactCountReplacement(null, 12345))
+    }
+
     private fun varint(v: Long): ByteArray {
         var x = v
         val out = ArrayList<Byte>()

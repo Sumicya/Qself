@@ -32,10 +32,12 @@ private fun watch(decor: View) {
     if (!watched.add(decor)) return
     var queued = false
     val scan = Runnable { queued = false; walk(decor, false) }
-    decor.viewTreeObserver.addOnGlobalLayoutListener {
+    fun queueScan() {
         if (!queued) { queued = true; decor.postDelayed(scan, 150) }
     }
-    scan.run()
+    decor.viewTreeObserver.addOnGlobalLayoutListener { queueScan() }
+    // 首次遍历也走节流队列，不在 Instrumentation.onResume 钩子里同步扫完整棵视图树。
+    queueScan()
 }
 
 private fun walk(v: View, inDrawer: Boolean) {
@@ -198,19 +200,45 @@ private fun settle(bar: ViewGroup) {
     }
 }
 
-/** 未读角标不再停在 99+：QQ 封顶之后把真数字盖回去。两个出口都走一遍（QUIBadge 和老的widget绑定器）。 */
+/** 未读角标不再停在 99+：自绘 QUIBadge 改 mText，旧 TextView 绑定器继续改文字，两条路径都保留。 */
 fun exactCount() {
     fun fix(root: View?, n: Int) {
-        fun go(v: View): TextView? =
-            if (v is TextView && v.text.toString() == "99+") v
-            else if (v is ViewGroup) (0 until v.childCount).firstNotNullOfOrNull { go(v.getChildAt(it)) } else null
-        go(root ?: return)?.text = n.toString()
+        fun go(v: View): Boolean {
+            if (v is TextView) {
+                val replacement = exactCountReplacement(v.text?.toString(), n) ?: return false
+                v.text = replacement
+                v.requestLayout()
+                v.postInvalidateOnAnimation()
+                return true
+            }
+            if (v is ViewGroup) for (i in 0 until v.childCount) if (go(v.getChildAt(i))) return true
+            return false
+        }
+        root?.let(::go)
     }
-    hook(cls("com.tencent.mobileqq.quibadge.QUIBadge").method("updateNum")) { chain ->
-        chain.proceed().also { fix(chain.thisObject as? View, chain.args[0] as Int) }
+
+    val badge = cls("com.tencent.mobileqq.quibadge.QUIBadge")
+    val badgeText = badge.getDeclaredField("mText").apply { isAccessible = true }
+    hook(badge.method("updateNum")) { chain ->
+        chain.proceed().also {
+            val count = runCatching { chain.getArg(0) as? Int }.getOrNull() ?: return@also
+            val target = chain.thisObject
+            val replacement = runCatching {
+                exactCountReplacement(badgeText.get(target) as? String, count)
+            }.getOrNull() ?: return@also
+            badgeText.set(target, replacement)
+            (target as? View)?.let {
+                it.requestLayout()
+                it.postInvalidateOnAnimation()
+            }
+        }
     }
     hook(cls("com.tencent.widget.d").method("d")) { chain ->
-        chain.proceed().also { fix(chain.args[0] as? View, chain.args[1] as Int) }
+        chain.proceed().also {
+            val root = runCatching { chain.getArg(0) as? View }.getOrNull()
+            val count = runCatching { chain.getArg(1) as? Int }.getOrNull()
+            if (root != null && count != null) fix(root, count)
+        }
     }
 }
 

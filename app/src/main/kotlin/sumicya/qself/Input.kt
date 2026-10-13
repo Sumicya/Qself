@@ -32,8 +32,11 @@ fun tgInput(strip: ViewGroup) {
     // 消息列表就成了 host 的兄弟槽位，会被 collapse 压掉、输入行也会被挤。
     val host = generateSequence(box.parent as? ViewGroup) { it.parent as? ViewGroup }
         .firstOrNull { p -> generateSequence(strip as View) { it.parent as? View }.any { it === p } } ?: return
-    if (host.tag == ROW) return // 热重载前的上一代已经排好了这一行
-    rows[strip] = Row(strip, edit, box, host, find(box) { idName(it) == "send_btn" }).also { it.sync() }
+    // box 可能包在 host 的子容器里；移动 host 的直接分支，不能只对 host.removeView(box)（会留下旧 parent）。
+    var content: View = box
+    while (content.parent !== host) content = content.parent as? View ?: return
+    if (host.indexOfChild(content) < 0 || host.tag == ROW) return // 热重载前的上一代已经排好了这一行
+    rows[strip] = Row(strip, edit, box, content, host, find(box) { idName(it) == "send_btn" }).also { it.sync() }
 }
 
 private fun find(v: View, pred: (View) -> Boolean): View? {
@@ -59,7 +62,7 @@ private class Mirror(val from: ImageView, val view: ImageView) {
     }
 }
 
-private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, val host: ViewGroup, val send: View?) {
+private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, val content: View, val host: ViewGroup, val send: View?) {
     private val row = LinearLayout(strip.context)
     private val mirrors = ArrayList<Mirror>(4)
     private val squeezed = HashMap<View, Int>()
@@ -111,17 +114,20 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
             isClickable = true // 空的地方按下去也有按压反馈（玻璃凹+柔光）；按钮在子视图里照旧先接触摸
             setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0)
         }
-        val index = host.indexOfChild(box)
-        val boxLp = box.layoutParams.apply {
-            if (height > 0) height = originalBoxHeight + (12 * dp).toInt()
-        }
-        host.removeView(box)
+        val index = host.indexOfChild(content)
+        val rowLp = content.layoutParams
+        if (rowLp.height > 0) rowLp.height += (12 * dp).toInt()
+        host.removeView(content)
         originalBackgrounds[edit] = edit.background
         originalBackgrounds[box] = box.background
         edit.background = null
         box.background = null
+        if (content !== box) {
+            originalBackgrounds[content] = content.background
+            content.background = null
+        }
         emoji?.view?.let(field::addView)
-        field.addView(box, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        field.addView(content, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         more?.view?.let(field::addView)
         row.addView(field, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
             setMargins((8 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
@@ -133,7 +139,7 @@ private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, 
             (it.layoutParams as LinearLayout.LayoutParams).marginEnd = (8 * dp).toInt()
             row.addView(it)
         }
-        host.addView(row, index.coerceIn(0, host.childCount), boxLp)
+        host.addView(row, index.coerceIn(0, host.childCount), rowLp)
         strip.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) = Unit
             override fun onViewDetachedFromWindow(v: View) {
