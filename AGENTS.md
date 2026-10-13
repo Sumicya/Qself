@@ -70,19 +70,21 @@
 本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）出 APK。
 当前仓库不保存签名私钥；debug APK 使用 Android 默认 debug 签名，正式签名需由仓库外的安全签名环境提供。
 
-CI 三个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 按五段版本跑单元测试再出包，
-`cleanup` 只在默认分支上跑、出包上传成功后立刻清数量。失败日志以 GitHub Actions 原始日志为准。
-CI 不自动创建 Release、正式发行 tag 或 Release asset。
+CI 四个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 按五段版本跑单元测试再出包，
+出包后 `cleanup-artifacts` 立刻把 artifact 收口到 5 个（任何分支与同仓 PR 都跑，最小 `actions: write`），
+`cleanup-releases` 只在默认分支上把 Release 收口到 1 个（`contents: write`，与上面的写权限分开授权、不同授）。
+失败日志以 GitHub Actions 原始日志为准。CI 不自动创建 Release、正式发行 tag 或 Release asset。
 
 删工作流文件不会带走它的运行记录。旧工作流（test/apk/ci/pr_ci/check_commit_message/qself/qself-next/push_ci/spec-check）
 的运行记录要清就一次性清，由主人点名后执行，范围永远排除 `build.yml`（五段总序号数它的成功出包数，
 保留的 artifact 也挂在它的运行上）；清理用一次性工具，跑完把工具从仓库撤掉，不留常驻写权限作业。
+运行记录的清理不并进常驻 CI：规范把可常驻的 `actions: write` 限定在「只用于删本项目 artifact」。
 
 本地要 gradle 出包同样得显式给版本：`QSELF_VERSION=26.10.13.1.1 ./gradlew :app:assembleDebug`，没给就当场失败。
 
-## 全局规范同步（上次同步 = 第二十五版 · 2026-10-13）
+## 全局规范同步（上次同步 = 第二十五版修订 · 2026-10-13）
 
-本仓库从 [Sumicya/selfs/GLOBAL.md](https://github.com/Sumicya/selfs/blob/main/GLOBAL.md)（第二十五版 · 2026-10-12）继承全部规则：
+本仓库从 [Sumicya/selfs/GLOBAL.md](https://github.com/Sumicya/selfs/blob/main/GLOBAL.md)（第二十五版修订 · 2026-10-13）继承全部规则：
 项目条目只做补充和收紧，不另立例外，也不把旧版条目当豁免；冲突时以 GLOBAL.md 为准，本仓库更严格的条目优先。
 
 - 版本：产物统一五段 `yy.m.d.当日序号.总序号`，日界线 UTC+8。CI 的当日序号 = 本仓 `build.yml` 在该 UTC+8 日已触发、run_id 小于本次的运行数 +1；
@@ -94,7 +96,9 @@ CI 不自动创建 Release、正式发行 tag 或 Release asset。
   本地号可能和被随后触发的 CI 撞号，所以本地 APK 只作自测，发行一律用 CI 的 artifact。
 - 衔接：口径切换后的第一个运行起按上式取数；历史 artifact 名里的序号只作历史记录，不重算、不回退。
 - 清理：Release 留最近 1 个、artifact 跨分支跨事件合计留最近 5 个，artifact 另设 `retention-days: 5`（只是时间兜底）。
-  清理只在默认分支的可信构建 job 上以最小写权限跑，完整分页、按时间降序，先打印保留/删除清单，归属不明的对象不删；失败只报错，不回滚新产物。
+  artifact 清理用最小 `actions: write`（只用于删本项目 artifact），可在任意触发事件（含 pull_request）的构建 job 上跑，
+  不与该 job 的 `contents: write` 同授；Release / tag 清理另开作业、只在默认分支、只给 `contents: write`。
+  清理脚本写死「只删归属核验通过的本项目对象」，完整分页、按时间降序，删除前打印完整保留/删除清单，失败只报错不回滚。
 - 发版与对外动作：CI 不创建 Release、正式 tag 或 Release asset，正式发版必须先获主人对项目、版本、触发条件的明确允许；
   删除远程分支、删除标签这类对外动作也要主人明确授权，CI 不隐式执行。
 - 规范由 agent 在会话中核对，不设规范检查工作流（本仓 `spec-check.yml` 已删）。本仓变更记在 `CHANGELOG.md`。

@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-10-13 — 跟进全局第二十五版修订
+
+- 第二十五版修订（2026-10-13）改了清理权限：`actions: write` 允许用在任意触发事件（含 `pull_request`）的构建 job 上，
+  只用于删本项目 artifact，且不得与 `contents: write` 同授。
+- 照此把 `build.yml` 的一个 `cleanup` 拆成两个作业：`cleanup-artifacts`（最小 `actions: write`，任何分支的 push 与同仓 PR 都跑，
+  本 run 上传成功即收口到 5 个）与 `cleanup-releases`（`contents: write`，只在默认分支，Release 留 1 个、随旧 Release 清专属 tag）。
+- `AGENTS.md` 的版本戳更新为「第二十五版修订 · 2026-10-13」，清理条目按新权限改写，并写明运行记录清理不并进常驻 CI。
+
 ## 2026-10-13 — 同步全局第二十五版
 
 - `AGENTS.md` 的规范同步段从第十五版迁到第二十五版，删掉与全局相反的「应有只读规范检查」一类表述。

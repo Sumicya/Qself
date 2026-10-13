@@ -1,7 +1,8 @@
 # Qself CI。
 #
 # push / PR / 手动运行：dex 作业拿真 QQ 包核每一个落点；apk 作业按五段版本出 debug APK 放进 Artifacts。
-# 默认分支上的可信构建在出包后立刻做数量清理（Release 1 个、artifact 5 个）；PR 与分支构建只读。
+# 出包后立刻做数量清理，分两个作业：artifact 收口用最小 actions: write、任何分支与同仓 PR 都跑；
+# Release / tag 收口要 contents: write，只在默认分支跑。两者分开授权，不同授。
 # CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须由主人明确授权并人工完成。
 name: Build
 
@@ -111,20 +112,21 @@ jobs:
           overwrite: true
           retention-days: 5
 
-  # 数量清理：写权限只给默认分支上的可信构建，PR 与分支构建碰不到；本 run 的 artifact 上传成功后立刻跑。
-  cleanup:
+  # artifact 数量清理：本 run 的 artifact 上传成功后立刻跑。artifact 计数跨分支、跨事件，
+  # 所以任何分支的 push、同仓 PR 都要收口。权限只给最小 actions: write（仅用于删本项目 artifact），
+  # 按规范不与 contents: write 同授；动不到 Release、tag、分支。
+  cleanup-artifacts:
     needs: apk
-    if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     concurrency:
-      group: qself-cleanup
+      group: qself-cleanup-artifacts
       cancel-in-progress: false
     permissions:
-      contents: write
       actions: write
     steps:
-      - name: 项目对象只留 Release 1 个、artifact 5 个
+      - name: 项目 artifact 只留最近 5 个
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -137,8 +139,7 @@ jobs:
           REPO = os.environ["REPO"]
           WORKFLOW = ".github/workflows/build.yml"  # 本项目的出包工作流
           PREFIX = "Qself-"                        # 命名前缀只作初筛，归属看 run 记录
-          KEEP_ARTIFACTS = 5
-          KEEP_RELEASES = 1
+          KEEP = 5
 
           def gh(*args, check=True):
               p = subprocess.run(["gh", *args], capture_output=True, text=True)
@@ -154,11 +155,11 @@ jobs:
           def at(obj):
               return datetime.fromisoformat(obj["created_at"].replace("Z", "+00:00"))
 
-          # Actions artifact：核验归属后按创建时间降序，留最近 5 个。
           arts = [a for a in list_all(f"repos/{REPO}/actions/artifacts?per_page=100", ".artifacts") if not a["expired"]]
           runs = {}
 
           def mine(a):
+              # 归属核验：名字前缀初筛 + 出包工作流 + 属于本仓库的 run
               rid = a["workflow_run"]["id"]
               if rid not in runs:
                   runs[rid] = json.loads(gh("api", f"repos/{REPO}/actions/runs/{rid}"))
@@ -168,7 +169,7 @@ jobs:
                       and r.get("repository", {}).get("full_name") == REPO)
 
           own = sorted([a for a in arts if mine(a)], key=at, reverse=True)
-          keep, drop = own[:KEEP_ARTIFACTS], own[KEEP_ARTIFACTS:]
+          keep, drop = own[:KEEP], own[KEEP:]
           print("artifact 保留清单：")
           for a in keep:
               print(f"  {a['created_at']}  {a['name']}  id={a['id']}")
@@ -179,17 +180,56 @@ jobs:
               gh("api", "-X", "DELETE", f"repos/{REPO}/actions/artifacts/{a['id']}")
               print(f"已删 artifact {a['id']} {a['name']}")
 
-          # Release：同样核验归属，只留最近 1 个；随旧 Release 清它专属的 tag，保留对象引用的 tag 不动。
-          rels = sorted([r for r in list_all(f"repos/{REPO}/releases?per_page=100", ".") if r["tag_name"].startswith(PREFIX)],
-                        key=at, reverse=True)
-          keep_r, drop_r = rels[:KEEP_RELEASES], rels[KEEP_RELEASES:]
-          kept_tags = {r["tag_name"] for r in keep_r}
-          print("Release 保留清单：", [r["tag_name"] for r in keep_r] or "（无）")
-          print("Release 删除清单：", [r["tag_name"] for r in drop_r] or "（无）")
-          for r in drop_r:
+          print(f"本项目 artifact 共 {len(own)} 个，保留 {len(keep)} 个；不在范围内（归属不明或非本项目）{len(arts) - len(own)} 个")
+          PY
+
+  # Release / tag 清理：动的是发行对象，要 contents: write，所以单独作业、只在默认分支上跑，
+  # 与上面那个 actions: write 的作业分开授权（规范禁止两者同授）。
+  cleanup-releases:
+    needs: apk
+    if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: qself-cleanup-releases
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - name: 项目 Release 只留最近 1 个
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess
+          from datetime import datetime
+
+          REPO = os.environ["REPO"]
+          PREFIX = "Qself-"
+          KEEP = 1
+
+          def gh(*args, check=True):
+              p = subprocess.run(["gh", *args], capture_output=True, text=True)
+              if check and p.returncode != 0:
+                  raise SystemExit("gh " + " ".join(args) + " 失败：" + p.stderr.strip())
+              return p.stdout
+
+          def at(obj):
+              return datetime.fromisoformat(obj["created_at"].replace("Z", "+00:00"))
+
+          out = gh("api", "--paginate", f"repos/{REPO}/releases?per_page=100", "--jq", ".[]")
+          rels = [json.loads(l) for l in out.splitlines() if l.strip()]
+          rels = sorted([r for r in rels if r["tag_name"].startswith(PREFIX)], key=at, reverse=True)
+          keep, drop = rels[:KEEP], rels[KEEP:]
+          kept_tags = {r["tag_name"] for r in keep}
+          print("Release 保留清单：", [r["tag_name"] for r in keep] or "（无）")
+          print("Release 删除清单：", [r["tag_name"] for r in drop] or "（无）")
+          for r in drop:
               gh("api", "-X", "DELETE", f"repos/{REPO}/releases/{r['id']}")
               print(f"已删 Release {r['tag_name']}")
-          for r in drop_r:
+          for r in drop:
               tag = r["tag_name"]
               if tag in kept_tags:
                   continue
@@ -201,7 +241,5 @@ jobs:
                   raise SystemExit(f"查 tag {tag} 失败：{p.stderr.strip()}")
               gh("api", "-X", "DELETE", f"repos/{REPO}/git/ref/tags/{tag}")
               print(f"已删 tag {tag}")
-
-          print(f"本项目 artifact 共 {len(own)} 个；不动的（归属不明或非本项目）{len(arts) - len(own)} 个")
-          print(f"清理完成：artifact {len(keep)} 个，Release {len(keep_r)} 个")
+          print(f"本项目 Release 共 {len(rels)} 个，保留 {len(keep)} 个")
           PY
