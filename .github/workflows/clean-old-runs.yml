@@ -55,5 +55,49 @@ jobs:
           echo "删除完成：成功 $n 条，失败 $fail 条"
           echo "剩余运行记录：$(gh api "repos/$REPO/actions/runs?per_page=1" --jq '.total_count') 条"
           echo "其中 build.yml：$(gh api "repos/$REPO/actions/workflows/build.yml/runs?per_page=1" --jq '.total_count') 条"
-          echo "删掉本工具自己的运行记录（在跑的那条可能删不掉，删不掉就留着，等下一次清理带走）："
+
+      - name: 把项目 artifact 收到最近 5 个
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess
+
+          REPO = os.environ["REPO"]
+          WORKFLOW = ".github/workflows/build.yml"
+          PREFIX = "Qself-"
+
+          def gh(*a, check=True):
+              p = subprocess.run(["gh", *a], capture_output=True, text=True)
+              if check and p.returncode != 0:
+                  raise SystemExit("gh " + " ".join(a) + " 失败：" + p.stderr.strip())
+              return p.stdout
+
+          arts = [json.loads(l) for l in gh("api", "--paginate",
+                  f"repos/{REPO}/actions/artifacts?per_page=100", "--jq", ".artifacts[]").splitlines() if l.strip()]
+          arts = [a for a in arts if not a["expired"]]
+          runs = {}
+          own = []
+          for a in arts:
+              rid = a["workflow_run"]["id"]
+              if rid not in runs:
+                  runs[rid] = json.loads(gh("api", f"repos/{REPO}/actions/runs/{rid}"))
+              if a["name"].startswith(PREFIX) and runs[rid].get("path") == WORKFLOW:
+                  own.append(a)
+          own.sort(key=lambda a: a["created_at"], reverse=True)
+          print("artifact 保留：", [a["name"] for a in own[:5]] or "（无）")
+          for a in own[5:]:
+              gh("api", "-X", "DELETE", f"repos/{REPO}/actions/artifacts/{a['id']}")
+              print("已删 artifact", a["name"])
+          print(f"本项目 artifact 共 {len(own)} 个，收口后剩 {min(len(own), 5)} 个；不在范围内 {len(arts) - len(own)} 个")
+          PY
+
+      - name: 删掉本工具自己的运行记录（在跑的那条可能删不掉，删不掉就留着，等下一次清理带走）
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SELF: ${{ github.run_id }}
+        run: |
           gh api -X DELETE "repos/$REPO/actions/runs/$SELF" || echo "本运行删不掉，正常"
