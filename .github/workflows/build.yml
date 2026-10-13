@@ -1,8 +1,10 @@
 # Qself CI。
 #
 # push / PR / 手动运行：dex 作业拿真 QQ 包核每一个落点；apk 作业按五段版本出 debug APK 放进 Artifacts。
-# 出包后立刻做数量清理，分两个作业：artifact 收口用最小 actions: write、任何分支与同仓 PR 都跑；
-# Release / tag 收口要 contents: write，只在默认分支跑。两者分开授权，不同授。
+# 出包后立刻做数量清理，分两个作业：artifact（5 个）与运行记录（5 条）用最小 actions: write，
+# 任何分支与同仓 PR 都跑；Release（1 个）/ tag 收口要 contents: write，只在默认分支跑。两者分开授权，不同授。
+# 版本取数只锚定本次 run 的 created_at/run_number：总序号 = run_number − 35（基线见下方注释），
+# 当日序号 = run_number − 当日锚点 run_number + 1；删除历史运行记录不影响这两个数。
 # CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须由主人明确授权并人工完成。
 name: Build
 
@@ -57,6 +59,9 @@ jobs:
       - name: 算五段版本 yy.m.d.当日序号.总序号
         env:
           GH_TOKEN: ${{ github.token }}
+          # 基线 35 = run_number 253（26.10.13 第 7 次运行，出的是 26.10.13.7.218）− 218。
+          # 号只增不减：失败运行与 PR 运行也占号，跳号是正常的。
+          TOTAL_BASE: '35'
         run: |
           set -euo pipefail
           repo="$GITHUB_REPOSITORY"
@@ -68,18 +73,28 @@ jobs:
               echo "重试却取不到第一次 attempt 的版本号：那次在算出版本前就失败了。按口径不重新加号，请新开一次运行。" >&2
               exit 1
             fi
-            # 输入直接取本次 run 对象，不 list 后取最新。
+            # 只锚定本次 run 自身：created_at、run_number，不查最新 run。
             created="$(gh api "repos/$repo/actions/runs/$GITHUB_RUN_ID" --jq '.created_at')"
+            my_num="$(gh api "repos/$repo/actions/runs/$GITHUB_RUN_ID" --jq '.run_number')"
             day="$(TZ=Asia/Shanghai date -d "$created" +%y.%-m.%-d)"
             local_day="$(TZ=Asia/Shanghai date -d "$created" +%Y-%m-%d)"
             # 当日起点 = 上海零点，换算成 UTC（别用 date -u -d 去解析本地零点，那会当成 UTC 零点）。
             since="$(date -u -d "@$(TZ=Asia/Shanghai date -d "$local_day 00:00:00" +%s)" +%Y-%m-%dT%H:%M:%SZ)"
-            # 当日序号：同一 UTC+8 日本仓库已触发、run_id 小于本次的运行数 +1（含失败；按 run_id 比，并发不抢号）。
-            today="$(gh api --paginate "repos/$repo/actions/workflows/build.yml/runs?created=>=$since&per_page=100" \
-              --jq "[.workflow_runs[] | select(.id < $GITHUB_RUN_ID)] | length" | awk '{s += $1} END {print s + 0}')"
-            # 总序号：本仓库历史成功出包的运行数 +1；失败运行不加号。
-            done_ok="$(gh api "repos/$repo/actions/workflows/build.yml/runs?status=success&per_page=1" --jq '.total_count')"
-            version="$day.$((today + 1)).$((done_ok + 1))"
+            # 当日锚点 = 当日最早一条 build.yml 运行的 run_number。清理作业一直留着这条，
+            # 所以中间记录被删掉也不影响算术；锚点丢了就拒绝出号。
+            anchor="$(gh api --paginate "repos/$repo/actions/workflows/build.yml/runs?created=>=$since&per_page=100" \
+              --jq '[.workflow_runs[].run_number] | min' \
+              | awk 'BEGIN {m = 0} {if ($1 != "" && (m == 0 || $1 < m)) m = $1} END {print m}')"
+            if [ -z "$anchor" ] || [ "$anchor" -le 0 ]; then echo "取不到当日锚点，拒绝出号" >&2; exit 1; fi
+            daily="$((my_num - anchor + 1))"
+            total="$((my_num - TOTAL_BASE))"
+            # 号只增不减：必须大于现存产物里的最大号，否则说明取数异常（例如 run_number 被重置）。
+            gh api "repos/$repo/actions/artifacts?per_page=100" --jq '.artifacts[].name' | sed -n 's/^Qself-//p' > /tmp/arts.txt || true
+            max_total="$(awk -F. '{print $5}' /tmp/arts.txt 2>/dev/null | sort -n | tail -1)"
+            max_daily="$(awk -F. -v d="$day" '{p = $1 "." $2 "." $3; if (p == d) print $4}' /tmp/arts.txt 2>/dev/null | sort -n | tail -1)"
+            if [ "${max_total:-0}" -ge "$total" ]; then echo "总序号 $total 不大于现存产物最大号 ${max_total:-0}，拒绝出号" >&2; exit 1; fi
+            if [ "${max_daily:-0}" -ge "$daily" ]; then echo "当日序号 $daily 不大于当日产物最大号 ${max_daily:-0}，拒绝出号" >&2; exit 1; fi
+            version="$day.$daily.$total"
             printf '%s' "$version" > version.txt
           fi
           printf '%s' "$version" | grep -Eq '^[0-9]{2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]+\.[0-9]+$' \
@@ -112,14 +127,14 @@ jobs:
           overwrite: true
           retention-days: 5
 
-  # artifact 数量清理：本 run 的 artifact 上传成功后立刻跑。artifact 计数跨分支、跨事件，
-  # 所以任何分支的 push、同仓 PR 都要收口。权限只给最小 actions: write（仅用于删本项目 artifact），
+  # artifact（5 个）与运行记录（5 条）的数量清理：本 run 上传成功后立刻跑。计数跨分支、跨事件，
+  # 所以任何分支的 push、同仓 PR 都要收口。权限只给最小 actions: write（只删本项目 artifact 与 run），
   # 按规范不与 contents: write 同授；动不到 Release、tag、分支。
   cleanup-artifacts:
     needs: apk
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     concurrency:
       group: qself-cleanup-artifacts
       cancel-in-progress: false
@@ -181,6 +196,72 @@ jobs:
               print(f"已删 artifact {a['id']} {a['name']}")
 
           print(f"本项目 artifact 共 {len(own)} 个，保留 {len(keep)} 个；不在范围内（归属不明或非本项目）{len(arts) - len(own)} 个")
+          PY
+
+      - name: 运行记录只留最近 5 条（另留当日锚点）
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SELF: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess
+          from datetime import datetime, timedelta, timezone
+
+          REPO = os.environ["REPO"]
+          WORKFLOW = ".github/workflows/build.yml"
+          PREFIX = "Qself-"
+          KEEP_RECENT = 5
+          SELF = int(os.environ["SELF"])
+
+          def gh(*args, check=True):
+              p = subprocess.run(["gh", *args], capture_output=True, text=True)
+              if check and p.returncode != 0:
+                  raise SystemExit("gh " + " ".join(args) + " 失败：" + p.stderr.strip())
+              return p.stdout
+
+          def list_all(url, key):
+              out = gh("api", "--paginate", url, "--jq", key + "[]")
+              return [json.loads(line) for line in out.splitlines() if line.strip()]
+
+          def at(obj):
+              return datetime.fromisoformat(obj["created_at"].replace("Z", "+00:00"))
+
+          # 当日起点（UTC+8）：从本次 run 的 created_at 推，不查最新 run。
+          me = json.loads(gh("api", f"repos/{REPO}/actions/runs/{SELF}"))
+          local = at(me) + timedelta(hours=8)
+          day_start = datetime(local.year, local.month, local.day,
+                               tzinfo=timezone(timedelta(hours=8))).astimezone(timezone.utc)
+
+          runs = list_all(f"repos/{REPO}/actions/runs?per_page=100", ".workflow_runs")
+          build = [r for r in runs if r["path"] == WORKFLOW]
+          keep = {r["id"] for r in sorted(build, key=lambda r: r["id"], reverse=True)[:KEEP_RECENT]}
+          # 当日锚点：当日最早一条 build.yml 运行，版本取数要用它，必须留着。
+          today = [r for r in build if at(r) >= day_start]
+          if today:
+              anchor = min(today, key=lambda r: r["run_number"])
+              keep.add(anchor["id"])
+          # 现存 artifact 的载体一条都不能删（删 run 会带走它的 artifact）。
+          arts = list_all(f"repos/{REPO}/actions/artifacts?per_page=100", ".artifacts")
+          keep |= {a["workflow_run"]["id"] for a in arts if a["name"].startswith(PREFIX) and not a["expired"]}
+          keep.add(SELF)
+
+          drop = [r for r in runs if r["id"] not in keep and r["status"] == "completed"]
+          print("运行记录保留清单：")
+          for r in sorted([r for r in runs if r["id"] in keep], key=lambda r: r["id"], reverse=True):
+              print(f"  run_number={r['run_number']} id={r['id']} {r['created_at']} {r['path']} {r['status']}")
+          print(f"运行记录删除清单：{len(drop)} 条")
+          from collections import Counter
+          for path, n in Counter(r["path"] for r in drop).most_common():
+              print(f"  {path}  {n} 条")
+          n = 0
+          for r in drop:
+              gh("api", "-X", "DELETE", f"repos/{REPO}/actions/runs/{r['id']}")
+              n += 1
+              if n % 50 == 0:
+                  print(f"进度：已删 {n}/{len(drop)}")
+          print(f"已删运行记录 {n} 条；剩余 {len(runs) - n} 条")
           PY
 
   # Release / tag 清理：动的是发行对象，要 contents: write，所以单独作业、只在默认分支上跑，
