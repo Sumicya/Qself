@@ -87,8 +87,9 @@ CI 四个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 按
   总序号 = 本次 `run_number` − 35（基线 = 26.10.13 第 7 次运行的 run_number 253 − 218）。
   失败运行与 PR 运行也占号，号只增不减；`run_attempt > 1` 用缓存复用第一次的号。
   取不到锚点、不是五段、或号不大于现存产物里的最大号 → 当场失败，不出包。
-- 本地序号：本地出包同样五段，号必须可追溯——按上式在 `gh api "repos/Sumicya/Qself/actions/workflows/build.yml/runs?..."`
-  的记录里取锚点与本次 run_number（本地运行没有自己的 run_number，用当日已跑条数与锚点推），查不到就停下，不许拿当前时间充数；
+- 本地序号：本地出包同样五段，号必须可追溯——本地跑没有自己的 run_number，按保留记录里的最大 run_number 预测下一号：
+  当日序号 = 最大 run_number + 1 − 当日锚点 + 1，总序号 = 最大 run_number + 1 − 35（记录从
+  `gh api "repos/Sumicya/Qself/actions/workflows/build.yml/runs?..."` 取）；取不到就停下，不许拿当前时间充数；
   本地号可能与随后触发的 CI 撞号，本地 APK 只作自测，发行一律用 CI 的 artifact。
 - 衔接：口径切换（第0版）后的第一个运行起按上式取数；历史 artifact 名里的序号只作历史记录，不重算、不回退。
 - 清理：artifact 5 个、Release 1 个、运行记录 5 条；当日跑过 5 次以上时多留 1 条当日锚点（版本取数要用，删了就算不出当日序号），
