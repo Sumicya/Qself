@@ -4,7 +4,8 @@
 # 出包后立刻做数量清理，分两个作业：artifact（5 个）与运行记录（5 条）用最小 actions: write，
 # 任何分支与同仓 PR 都跑；Release（1 个）/ tag 收口要 contents: write，只在默认分支跑。两者分开授权，不同授。
 # 版本取数只锚定本次 run：总序号 = run_number（workflow 重建才用 AGENTS.md 里记的基线相减；本仓未重建，无基线），
-# 当日序号 = 本次 run 的 head 提交在当日（UTC+8）提交序列中的位次，取不到就退化四段 yy.m.d.总序号；
+# 当日序号 = 本次 run 的 head 提交（PR 取 PR 自己的 head，不数合成的合并提交）在当日（UTC+8）提交序列中的位次，
+# 取不到就退化四段 yy.m.d.总序号；
 # 禁止查最新 run / 最新 artifact 或历史成功数。
 # CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须由主人明确授权并人工完成。
 name: Build
@@ -66,6 +67,9 @@ jobs:
           # 本仓 workflow 未重建，无基线：总序号直接取本次 run 的 run_number。
           # 将来重建 workflow 造成号段跳变时，把重建前最大号写进 AGENTS.md 作基线并填到这里相减；留空按原值，不判失败。
           TOTAL_BASE: ''
+          # 当日序号锚「本次 run 的 head 提交」：PR 运行的检出是合成合并提交（其祖先含默认分支同日提交），
+          # 数它会多算，同一 head 数出两个位次；PR 取它自己的 head sha，push / 手动运行取本次 sha。
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           repo="$GITHUB_REPOSITORY"
@@ -85,16 +89,26 @@ jobs:
             total="$((my_num - ${TOTAL_BASE:-0}))"
             if [ "$total" -lt 1 ]; then echo "总序号 $total 不合法" >&2; exit 1; fi
             # 当日序号 = 本次 run 的 head 提交在当日（UTC+8）提交序列中的位次；取不到就退化四段。
+            head_sha="$HEAD_SHA"
+            if ! git cat-file -e "$head_sha^{commit}" 2>/dev/null; then
+              git fetch -q --no-tags origin "$head_sha" 2>/dev/null || true
+            fi
             daily=''
-            head_day="$(TZ=Asia/Shanghai date -d "$(git log -1 --format=%cI HEAD)" +%Y-%m-%d)"
-            if [ "$head_day" = "$local_day" ]; then
-              daily="$(git rev-list --count --since="$local_day 00:00:00 +0800" HEAD || true)"
+            if git cat-file -e "$head_sha^{commit}" 2>/dev/null; then
+              head_day="$(TZ=Asia/Shanghai date -d "$(git log -1 --format=%cI "$head_sha")" +%Y-%m-%d)"
+              if [ "$head_day" = "$local_day" ]; then
+                daily="$(git rev-list --count --since="$local_day 00:00:00 +0800" "$head_sha" || true)"
+              else
+                echo "退化四段：head 提交（$head_sha）在 $head_day，不在本次 run 的当日 $local_day。" >&2
+              fi
+            else
+              echo "退化四段：本地没有 head 提交 $head_sha 的对象，当日序号取不到。" >&2
             fi
             if [ -n "$daily" ] && [ "$daily" -ge 1 ]; then
               version="$day.$daily.$total"
+              echo "head 提交 $head_sha 在当日提交序列的位次：$daily"
             else
               version="$day.$total"
-              echo "退化四段：head 提交（$head_day）不在本次 run 的当日（$local_day）提交序列里，当日序号取不到。"
             fi
             printf '%s' "$version" > version.txt
           fi

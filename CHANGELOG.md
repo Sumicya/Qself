@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2026-10-14 — 版本步锚 head 提交 + 底栏角标落点
+
+- 版本步修正：当日序号改取「本次 run 的 head 提交」——PR 运行取 `github.event.pull_request.head.sha`，push / 手动运行取 `github.sha`。
+  原先按检出提交数，PR 运行的检出是合成合并提交（祖先含默认分支当日提交），同一个 head 在两个事件下被数成两个位次
+  （`e902407`：push 事件数出 5、PR 事件数出 7），同一份代码因此出两个当日序号不同的产物；改后两边都是 5。
+- 干跑核验（拿真实 run 数据跑该步脚本）：push 事件（run_number 270）与 PR 事件（run_number 271）对同一 head 都得当日序号 5；
+  head 不在当日（`49913cc`）→ 打原因退化四段；head 对象缺失且取不回 → 打原因退化四段；`run_attempt > 1` 无缓存 → 按口径失败。
+- 底栏角标：按真包 smali 补落点——`TabFrameControllerImpl#updateTabInfo` 取底栏 `QUIBadge` 后调 `setRedNum`，
+  `updateNum` 把 `mText` 压成 99+、真值留在 `mNum`；钩子补到 `setRedNum` / `setGrayNum` / `setAIOBarNum` / `onDraw`，
+  `tools/symbols.txt` 同步登记，`dexcheck` 182 条 0 红。
+- 文档去版号：本文件与 `AGENTS.md` 清掉版号残留，`AGENTS.md` 记「head 提交按事件取」的口径。
+- 本地 `.git` 被沙箱回滚到分支点（工作树完好），按规范 `git fetch` + `git reset --soft origin/arena/e207d38d-qself` 接回，diff 与远端一致。
+
 ## 2026-10-14 — 跟进全局临时入口（PR #6，head a9fc529）
 
 - 依据：selfs 分支 `arena/2d001a47-selfs`（PR #6）当轮读入；PR 合并后回到默认分支为准。
@@ -20,13 +33,12 @@
 - 分支处理改正：先前按「分支 0 个」删了 `arena/63fa89b7-qself`、`arena/614127b9-qself`，但 `614127b9` 的 2 个提交
   （`83ac6db` 玻璃按压 + 精确角标、`ae1a5a1` 输入行重挂载）在留存线里没有等价补丁（`git cherry` 两个「+」），属于未继承就删。
   已用原 SHA 恢复（`e64c8e65…`、`ae1a5a1f…`），把 `614127b9` 的应用侧改动（`README.md`、`Glass.kt`、`Hook.kt`、`Input.kt`、
-  `Looks.kt`、`ProtoTest.kt`、`tools/symbols.txt`）继承进本分支（`4b727a7`，CI 全绿：dex + 测试 + 出包 `Qself-26.10.14.1.226`），
+  `Looks.kt`、`ProtoTest.kt`、`tools/symbols.txt`）继承进本分支（`4b727a7`，CI 全绿：dex + 测试 + 出包，run_number 261），
   应用侧逐文件与本分支一致后，才按「继承之后去删」重新删掉这两个分支；它的 CI 侧改动早已被本分支的新版取代，未继承。
   `63fa89b7` 的提交全部含于 `arena/01a109fa-qself`（`git cherry` 无输出），继承成立后同样删除；`arena/01a109fa-qself` 因 PR #10 未合并保留。
 - 教训两条记进 `AGENTS.md`：删会话分支前先 `git cherry` 确认无未继承提交；恢复远端 ref 会触发一次 push 构建，
-  旧分支的旧工作流会在被清理过的记录上算出版本错号（本次出过 `26.10.14.0.7`、`26.10.14.0.8` 两个 daily=0 的无效产物，
-  已在记录里说明，随保留窗口自然淘汰）。
-- 实跑核验：本次推送出包 `Qself-26.10.13.12.222`（当日位次 12 = head 提交在当日提交序列中的位次；总序号 222 = run_number 257 − 35），
+  旧分支的旧工作流会在被清理过的记录上算出版本错号（本次出过两个当日序号为 0 的无效产物，已在记录里说明，随保留窗口自然淘汰）。
+- 实跑核验：本次推送出包（run_number 257，当日位次 12 = head 提交在当日提交序列中的位次；总序号 222 = 257 − 35），
   运行记录收口到 5 条、artifact 5 个；位次取不到时（head 提交不在当日）会当场失败，已用本地预演验证。
 
 ## 2026-10-13 — 跟进全局第0版
@@ -36,7 +48,7 @@
   总序号用固定基线 35（run_number 253 ↔ 218）；删掉历史运行记录后仍然算得准，并加了「号必须大于现存产物最大号」的兜底检查。
 - `cleanup-artifacts` 增加运行记录收口：留最近 5 条 + 当日锚点 + 现存 artifact 的载体，其余（含旧工作流遗留）删除；不再需要一次性工具。
 - `AGENTS.md`：版本戳改「第0版」，条目按「只记事实、限制、指针」删繁。
-- 已核验：删掉 248 条运行记录后，下一次运行 `run_number` 继续递增（254 → 255），出号 `26.10.13.9.220`；
+- 已核验：删掉 248 条运行记录后，下一次运行 `run_number` 继续递增（254 → 255），出号（当日位次 9、总序号 220）；
   「总序号必须大于现存产物最大号」的兜底检查保留。
 
 ## 2026-10-13 — 跟进全局第二十五版修订
