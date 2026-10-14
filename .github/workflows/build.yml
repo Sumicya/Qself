@@ -9,7 +9,7 @@
 # 版本取数只锚定本次 run：总序号 = 本出包工作流的 run_number 原值（workflow 重建才用 AGENTS.md 里记的基线相减），
 # 当日序号 = 当日（UTC+8）本出包工作流的运行序号（按 run_started_at 升序），取不到就退化四段 yy.m.d.总序号；
 # 禁止查最新 run / 最新 artifact 或历史成功数。
-# CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须由主人明确授权并人工完成。
+# CI 不创建 Release、正式发行 tag 与 Release asset；发布只由主人主动发起。
 name: Build
 
 on:
