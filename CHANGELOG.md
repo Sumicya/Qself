@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-14 — 清理作业按规范三条判据重写（数量 / 命名口径 / 来源）
+
+- 依据：selfs 分支提交 `2dec668`（清理判据三条：数量=当日之外每条序列 artifact 5 个、run 5 条；命名口径=段数等于工作流顶部 `SEGMENTS` 声明值；来源=artifact 的 `workflow_run` 事件是 `pull_request` 一律删。
+  数量判据当日豁免（当日序号取自当日运行列表，删当日运行会抽走计数基准），口径与来源不豁免、当轮即删；PR 校验工作流不挂清理作业，它的超量 run 由出包工作流清理 job 一并删；job 跑完打印删了哪几个、各剩几条）。
+- `build.yml`：顶部新增 `env: SEGMENTS: '5'`；`cleanup-artifacts` 重写为单步脚本，仍最小 `actions: write`；承载保留产物的 run 不动（删 run 会连带删产物），正在跑的本次不删。
+- 干跑（DELETE 全拦截至 stderr，用抽出的同一份脚本）：live 数据 → 删 0 个 artifact、0 条 run，剩 build 5 条 / pr-check 4 条，与实况一致；
+  合成混合数据（7 个旧出包产物 / 7 条旧出包 run / 7 条旧 PR 校验 run / 1 个四段错口径 / 1 个 PR 来源）→ 删 4 个 artifact（1 个当日按来源判据、1 个当日按口径判据打「段数 4 ≠ 5」、2 个按数量判据），保留 5 个；删 4 条 run，剩 build 6 条 / pr-check 5 条（各留 5 + 当日豁免与在跑的本次）。
+- 文档：`AGENTS.md` 清理条目改为三条判据。
+
 ## 2026-10-14 — 拆工作流：出包与 PR 校验分开，号段不再被 PR 运行吃
 
 - 依据：selfs 分支 `arena/2d001a47-selfs` 提交 `5e2b978`（版本号只能取出包工作流的 `run_number`；出包与 PR 校验必须是两个工作流文件；
@@ -9,7 +18,7 @@
 - `build.yml`：触发收敛为 `push: branches: [main]` + `workflow_dispatch`；删掉全部 PR 守卫与 PR 专用的占位测试步骤；
   当日序号注释改「本出包工作流的运行序号」；清理作业去掉 PR 条件（清理只挂在出包工作流）。
 - 新增 `pr-check.yml`：`on: pull_request`、`permissions: contents: read`，两个作业（`dex` 落点核对 + 单元测试用占位版本名），不取号、不出包、不上传、不清理。
-- 旧口径产物处置：三笔旧口径产物（id 11861519548、11863836941、11864730478；当日序号序列 7 → 6 → 6 与新口径 3 并存）本会话令牌删除返回 403（响应头 `X-Accepted-Github-Permissions: actions=write`），改由仓库拥有者在本机执行同一条命令删除成功；复核三条 GET 全 404，artifact 清零至 1 个（只剩新口径）。
+- 旧口径产物处置：三笔旧口径产物（id 11861519548、11863836941、11864730478；当日序号序列 7 → 6 → 6 与新口径 3 并存）。会话令牌 `DELETE /repos/Sumicya/Qself/actions/artifacts/<id>` 返回 403，响应头 `X-Accepted-Github-Permissions: actions=write`（缺 actions 写权限类），本会话删除未成；超量产物按职责由出包工作流的 `cleanup-artifacts` 删。复核：三条 `GET /repos/Sumicya/Qself/actions/artifacts/<id>` 全 404，artifact 计数 1 个（只剩新口径 `Qself-26.10.14.3.274`，id 11864292225，114752B）。
 - 文档：`AGENTS.md` 版本条目按两工作流重写；`README.md` 符号数 177 → 182 与实际一致；本条记入本文件。
 
 ## 2026-10-14 — 堵刷号漏洞：PR 运行只校验不取号不出包

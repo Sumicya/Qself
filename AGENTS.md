@@ -85,7 +85,8 @@
 - 本地要 gradle 出包必须显式给 `QSELF_VERSION`（五段或退化四段），缺失即失败；本地包只作自测，发行用 CI 的 artifact。
   PR 校验不取号，给不参与编号的占位版本名，供 Gradle 用。
 - CI 分工：`build.yml` 四个作业 —— `dex` 核落点（真包从 `Sumicya/qqapk` 拼）、`apk` 跑单元测试并出包上传、
-  `cleanup-artifacts`（本 run 上传成功后收 artifact 到 5 个、运行记录到 5 条，最小 `actions: write`）、
+  `cleanup-artifacts`（本 run 上传成功后按三条判据清理：数量=当日之外每条序列 artifact 5 个、run 5 条；命名口径=段数等于 `build.yml` 顶部 `env: SEGMENTS`；来源=artifact 的 `workflow_run` 事件是 `pull_request` 一律删。
+  数量判据当日豁免（当日序号取自当日运行列表，删当日运行会抽走计数基准），口径与来源不豁免、当轮即删；本仓 PR 校验工作流的超量 run 也在这里一并收，清理只此一处；承载保留产物的 run 不动。最小 `actions: write`）、
   `cleanup-releases`（只在默认分支收 Release 到 1 个，`contents: write`，与上者不同授）；
   `pr-check.yml` 两个作业（`dex` + 单元测试），不取号、不出包、不清理。
 - 本项目 CI 只出 debug 包，不创建 Release、正式 tag 或 asset；发版须主人明确授权。

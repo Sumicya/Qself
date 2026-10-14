@@ -21,6 +21,11 @@ permissions:
   contents: read
   actions: read
 
+# 产物命名口径：`Qself-<版本>` 里版本段的段数（五段 = yy.m.d.当日序号.总序号），清理作业按它判口径。
+# 退化四段期改 4，并在 AGENTS.md 写明原因。
+env:
+  SEGMENTS: '5'
+
 jobs:
   # 落点核对：真包在 Sumicya/qqapk（qq.aa..qq.ae 拼起来）。表红了就是这版 QQ 里名字对不上，
   # 出包也是白出 —— 所以这个作业和出包平行跑，谁红都拦得住。
@@ -138,8 +143,11 @@ jobs:
           overwrite: true
           retention-days: 5
 
-  # artifact（5 个）与运行记录（5 条）的数量清理：本 run 上传成功后立刻跑（清理只挂在出包工作流，PR 校验不清理）。
-  # 权限只给最小 actions: write（只删本项目 artifact 与 run），按规范不与 contents: write 同授；动不到 Release、tag、分支。
+  # artifact 与运行记录清理：判据三条 —— 数量（当日之外每条序列 artifact 5、run 5）、
+  # 命名口径（段数 ≠ 工作流顶部 SEGMENTS）、产物来源（workflow_run 事件是 pull_request 的一律删）。
+  # 数量判据当日豁免：当日序号取自当日运行列表，删当日运行会抽走计数基准；口径与来源不豁免，当轮即删。
+  # 清理只留这一处：PR 校验工作流不挂清理作业，它的超量 run 在这里按序列一并收。
+  # 权限最小 actions: write（只删本项目 artifact 与 run），按规范不与 contents: write 同授；动不到 Release、tag、分支。
   cleanup-artifacts:
     needs: apk
     runs-on: ubuntu-24.04
@@ -150,64 +158,7 @@ jobs:
     permissions:
       actions: write
     steps:
-      - name: 项目 artifact 只留最近 5 个
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json, os, subprocess
-          from datetime import datetime
-
-          REPO = os.environ["REPO"]
-          WORKFLOW = ".github/workflows/build.yml"  # 本项目的出包工作流
-          PREFIX = "Qself-"                        # 命名前缀只作初筛，归属看 run 记录
-          KEEP = 5
-
-          def gh(*args, check=True):
-              p = subprocess.run(["gh", *args], capture_output=True, text=True)
-              if check and p.returncode != 0:
-                  raise SystemExit("gh " + " ".join(args) + " 失败：" + p.stderr.strip())
-              return p.stdout
-
-          def list_all(url, key):
-              # 完整分页，逐条 JSON
-              out = gh("api", "--paginate", url, "--jq", key + "[]")
-              return [json.loads(line) for line in out.splitlines() if line.strip()]
-
-          def at(obj):
-              return datetime.fromisoformat(obj["created_at"].replace("Z", "+00:00"))
-
-          arts = [a for a in list_all(f"repos/{REPO}/actions/artifacts?per_page=100", ".artifacts") if not a["expired"]]
-          runs = {}
-
-          def mine(a):
-              # 归属核验：名字前缀初筛 + 出包工作流 + 属于本仓库的 run
-              rid = a["workflow_run"]["id"]
-              if rid not in runs:
-                  runs[rid] = json.loads(gh("api", f"repos/{REPO}/actions/runs/{rid}"))
-              r = runs[rid]
-              return (a["name"].startswith(PREFIX)
-                      and r.get("path") == WORKFLOW
-                      and r.get("repository", {}).get("full_name") == REPO)
-
-          own = sorted([a for a in arts if mine(a)], key=at, reverse=True)
-          keep, drop = own[:KEEP], own[KEEP:]
-          print("artifact 保留清单：")
-          for a in keep:
-              print(f"  {a['created_at']}  {a['name']}  id={a['id']}")
-          print("artifact 删除清单：")
-          for a in drop:
-              print(f"  {a['created_at']}  {a['name']}  id={a['id']}")
-          for a in drop:
-              gh("api", "-X", "DELETE", f"repos/{REPO}/actions/artifacts/{a['id']}")
-              print(f"已删 artifact {a['id']} {a['name']}")
-
-          print(f"本项目 artifact 共 {len(own)} 个，保留 {len(keep)} 个；不在范围内（归属不明或非本项目）{len(arts) - len(own)} 个")
-          PY
-
-      - name: 运行记录只留最近 5 条
+      - name: 按三条判据清理 artifact 与运行记录
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -216,11 +167,16 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import json, os, subprocess
-          from collections import Counter
+          from collections import defaultdict
+          from datetime import datetime, timedelta, timezone
 
           REPO = os.environ["REPO"]
-          KEEP_RECENT = 5
           SELF = int(os.environ["SELF"])
+          SEGMENTS = int(os.environ["SEGMENTS"])       # 工作流顶部声明
+          PREFIX = "Qself-"
+          KEEP = 5                                     # 当日之外每条序列 artifact 5、run 5
+          CST = timezone(timedelta(hours=8))
+          today = datetime.now(CST).strftime("%Y-%m-%d")
 
           def gh(*args, check=True):
               p = subprocess.run(["gh", *args], capture_output=True, text=True)
@@ -232,24 +188,71 @@ jobs:
               out = gh("api", "--paginate", url, "--jq", key + "[]")
               return [json.loads(line) for line in out.splitlines() if line.strip()]
 
-          # 只按创建先后（run id 单调）留最近 5 条；版本取数不依赖任何历史锚点，锚点不再保留。
+          def day_of(obj):
+              return datetime.fromisoformat(obj["created_at"].replace("Z", "+00:00")).astimezone(CST).strftime("%Y-%m-%d")
+
           runs = list_all(f"repos/{REPO}/actions/runs?per_page=100", ".workflow_runs")
-          keep = {r["id"] for r in sorted(runs, key=lambda r: r["id"], reverse=True)[:KEEP_RECENT]}
-          keep.add(SELF)
-          drop = [r for r in runs if r["id"] not in keep and r["status"] == "completed"]
-          print("运行记录保留清单：")
-          for r in sorted([r for r in runs if r["id"] in keep], key=lambda r: r["id"], reverse=True):
-              print(f"  id={r['id']} {r['created_at']} {r['path']} {r['status']}")
-          print(f"运行记录删除清单：{len(drop)} 条")
-          for path, n in Counter(r["path"] for r in drop).most_common():
-              print(f"  {path}  {n} 条")
-          n = 0
-          for r in drop:
+          by_id = {r["id"]: r for r in runs}
+
+          # ---------- artifact：口径 → 来源 → 数量 ----------
+          arts = [a for a in list_all(f"repos/{REPO}/actions/artifacts?per_page=100", ".artifacts") if not a["expired"]]
+          drop_a, keep_a = [], []
+          quota = defaultdict(list)                    # 序列（工作流路径）-> 当日之外待选，按时间新到旧
+          for a in sorted(arts, key=lambda x: x["created_at"], reverse=True):
+              r = by_id.get(a["workflow_run"]["id"])
+              seq = (r or {}).get("path", "(未知来源)")
+              name = a["name"]
+              seg = len(name[len(PREFIX):].split(".")) if name.startswith(PREFIX) else 0
+              if not name.startswith(PREFIX) or seg != SEGMENTS:
+                  drop_a.append((a, seq, f"口径：段数 {seg} ≠ {SEGMENTS}"))
+              elif r and r["event"] == "pull_request":
+                  drop_a.append((a, seq, "来源：workflow_run 事件是 pull_request"))
+              elif day_of(a) == today:
+                  keep_a.append((a, seq, "当日豁免"))
+              else:
+                  quota[seq].append(a)
+
+          for seq, lst in quota.items():
+              for i, a in enumerate(lst):
+                  keep_a.append((a, seq, "数量：当日之外保 5"))
+
+          print(f"artifact：删除 {len(drop_a)} 个，保留 {len(keep_a)} 个（当日豁免 {sum(1 for _, _, why in keep_a if why == '当日豁免')} 个）")
+          for a, seq, why in drop_a:
+              print(f"  删 {a['name']} id={a['id']}（{why}）")
+              gh("api", "-X", "DELETE", f"repos/{REPO}/actions/artifacts/{a['id']}")
+          kept_runs = {a["workflow_run"]["id"] for a, _, _ in keep_a}
+          left = defaultdict(int)
+          for a, seq, _ in keep_a:
+              left[seq] += 1
+          for seq in sorted(left):
+              print(f"  剩 {seq}  {left[seq]} 个")
+
+          # ---------- 运行记录：数量（序列按工作流计），当日豁免；承载保留产物的 run 不动 ----------
+          drop_r, keep_r = [], []
+          seq_runs = defaultdict(list)
+          for r in sorted(runs, key=lambda x: x["id"], reverse=True):
+              if r["id"] == SELF or r["status"] != "completed" or day_of(r) == today:
+                  continue
+              seq_runs[r["path"]].append(r)
+          for seq, lst in seq_runs.items():
+              for i, r in enumerate(lst):
+                  # 当日之外每条序列保 5 条；承载保留产物的 run 一律不动（删 run 会连带删产物）
+                  if i < KEEP or r["id"] in kept_runs:
+                      keep_r.append((r, seq))
+                  else:
+                      drop_r.append((r, seq))
+
+          print(f"运行记录：删除 {len(drop_r)} 条（全部为当日之外、且不承载保留产物）")
+          for r, seq in drop_r:
+              print(f"  删 id={r['id']} rn={r['run_number']} {seq} {r['created_at']}")
               gh("api", "-X", "DELETE", f"repos/{REPO}/actions/runs/{r['id']}")
-              n += 1
-              if n % 50 == 0:
-                  print(f"进度：已删 {n}/{len(drop)}")
-          print(f"已删运行记录 {n} 条；剩余 {len(runs) - n} 条")
+          deleted = {r["id"] for r, _ in drop_r}
+          left_r = defaultdict(int)
+          for r in runs:
+              if r["id"] not in deleted:
+                  left_r[r["path"]] += 1
+          for seq in sorted(left_r):
+              print(f"  剩 {seq}  {left_r[seq]} 条")
           PY
 
   # Release / tag 清理：动的是发行对象，要 contents: write，所以单独作业、只在默认分支上跑，
