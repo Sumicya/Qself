@@ -1,22 +1,24 @@
 # Qself 出包工作流 —— 唯一号源。
 #
-# 触发只允许 push（限定默认分支 main）与 workflow_dispatch；PR 校验在 pr-check.yml，另一条 run_number 序列。
+# 触发只允许 push（不限定分支，会话分支推送同样出包用于验证）与 workflow_dispatch；
+# PR 校验在 pr-check.yml，另一条 run_number 序列。不得接 pull_request，也不得加 branches 限定或 github.ref 守卫
+# —— 那等于砍掉验证手段（规范 a8787a8）。
 # run_number 在运行创建时就分配，步骤级 if 挡不住吃号 —— 所以要拆文件，不能靠 if（规范 5e2b978）。
-# 调试 CI 的推送走会话分支，不触发出包；会话分支要包用 workflow_dispatch。
+# 会话分支与默认分支共用同一命名口径、同一条 run_number 序列；不另立号段。
 # dex 作业拿真 QQ 包核每一个落点；apk 作业按五段版本出 debug APK 放进 Artifacts。
 # 出包后立刻清理：当日之外每条序列 artifact 5 个、run 5 条（承载保留产物的 run 不计入上限），当日对象豁免。
 # 清理逻辑只一份 `.github/scripts/cleanup.py`：本工作流 `CLEANUP_APPLY: 'true'` 真删，权限 actions: write；
 # PR 校验工作流同一份脚本、同值真删（会话推送即触发），两处挂同一个 concurrency group 串行；
 # Release（1 个）/ tag 收口要 contents: write，只在默认分支跑，分开授权不同授。
 # 版本取数只锚定本次 run：总序号 = 本出包工作流的 run_number 原值（workflow 重建才用 AGENTS.md 里记的基线相减），
-# 当日序号 = 当日（UTC+8）本出包工作流的运行序号（按 run_started_at 升序），取不到就退化四段 yy.m.d.总序号；
+# 当日序号 = 当日（UTC+8）本出包工作流的运行序号（按 run_started_at 升序取本次位次，会话分支运行一并计入），取不到就退化四段 yy.m.d.总序号；
 # 禁止查最新 run / 最新 artifact 或历史成功数。
 # CI 不创建 Release、正式发行 tag 与 Release asset；发布只由主人主动发起。
 name: Build
 
 on:
+  # 不限定分支：会话分支推送同样出包用于验证（规范 a8787a8）；不得加 branches 限定或 github.ref 守卫。
   push:
-    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -171,8 +173,9 @@ jobs:
           SELF: ${{ github.run_id }}
         run: python3 .github/scripts/cleanup.py
 
-  # Release / tag 清理：动的是发行对象，要 contents: write，所以单独作业、只在默认分支上跑，
+  # Release / tag 清理：动的是发行对象，要 contents: write，所以单独作业、只在默认分支上动，
   # 与上面那个 actions: write 的作业分开授权（规范禁止两者同授）。
+  # 这条 if 只拦「在会话分支上动发行对象」，不砍出包验证 —— 出包与上传在 apk 作业，与本作业无关。
   cleanup-releases:
     needs: apk
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)

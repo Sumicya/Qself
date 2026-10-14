@@ -6,8 +6,9 @@
 - 出包工作流 `build.yml`：权限 `actions: write`，`CLEANUP_APPLY='true'` —— 真删，出包后收口。
   两处挂同一个 `concurrency` group 串行，避免并发删同一对象。
 
-fork PR 或 DELETE 返回 403 时降级：打 `::warning::` 写明原因并继续跑完，不让 job 红（清理不是校验的一部分），
-也不静默跳过。只读预演（`actions: read` + `CLEANUP_APPLY='false'`）是备用形态，禁止拿「预演已证」当清理已做。
+清理失败按原因分口径（规范 a8787a8）：403 权限类打 `::warning::` 写明对象、端点与返回码后继续，
+不让 job 红，同一对象连续两次运行都失败才升级为阻塞项；403 以外的失败当轮即红 job 并逐条点名附返回码。
+只读预演（`actions: read` + `CLEANUP_APPLY='false'`）是备用形态，禁止拿「预演已证」当清理已做。
 
 判据四条（规范 b0594d3）：
   1. 命名口径：段数 ≠ 工作流顶部 SEGMENTS 声明值。
@@ -20,6 +21,7 @@ fork PR 或 DELETE 返回 403 时降级：打 `::warning::` 写明原因并继�
 """
 import json
 import os
+import re
 import subprocess
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -58,15 +60,30 @@ def stamp(run):
     return run.get("run_started_at") or run["created_at"]
 
 
+FAILED = []                     # 非 403 的删除失败：(端点, 标签, 返回码, stderr)；末尾一律红 job
+
+
+def http_code(stderr):
+    m = re.search(r"\(HTTP (\d+)\)", stderr)
+    return m.group(1) if m else "?"
+
+
 def delete(kind, obj_id, label, why):
-    """真删一个对象。DELETE 失败（fork PR 只读、令牌权限不足）降级为预演：打 warning 并继续。"""
+    """真删一个对象。失败按原因分口径（规范 a8787a8）：
+    403 权限类（fork PR 只读等）打 ::warning:: 写明对象、端点与返回码后继续，不让 job 红，
+    同一对象连续两次运行都失败才升级为阻塞项；403 以外的失败进 FAILED，末尾红 job 并逐条点名。"""
+    endpoint = f"repos/{REPO}/actions/{kind}/{obj_id}"
     print(f"  {'删' if APPLY else '将删'} {label}（{why}）")
     if not APPLY:
         return
-    p = subprocess.run(["gh", "api", "-X", "DELETE", f"repos/{REPO}/actions/{kind}/{obj_id}"],
-                       capture_output=True, text=True)
-    if p.returncode != 0:
-        print(f"  ::warning::{label} 删除失败：{p.stderr.strip()[:180]}（fork PR 或权限不足，本次降级为预演）")
+    p = subprocess.run(["gh", "api", "-X", "DELETE", endpoint], capture_output=True, text=True)
+    if p.returncode == 0:
+        return
+    code = http_code(p.stderr)
+    if code == "403":
+        print(f"  ::warning::{label} 删除失败（HTTP 403，权限缺口）：{endpoint}；本次降级为预演（非 403 的失败不在降级范围）")
+        return
+    FAILED.append((endpoint, label, code, p.stderr.strip()[:200]))
 
 
 runs = list_all(f"repos/{REPO}/actions/runs?per_page=100", ".workflow_runs")
@@ -165,3 +182,9 @@ for r, ws, why in keep_r:
     left_r[ws][0 if why.startswith("数量：当日之外保") else 1] += 1
 for ws in sorted(left_r):
     print(f"  剩 {ws}  计入上限 {left_r[ws][0]} 条 / 当日与承载豁免 {left_r[ws][1]} 条")
+
+if FAILED:
+    for endpoint, label, code, err in FAILED:
+        print(f"  ::error::{label} 删除失败（HTTP {code}，非权限类）：{endpoint} — {err}")
+    raise SystemExit(f"清理失败 {len(FAILED)} 个对象（非 403，按规范 a8787a8 当轮红 job）")
+print("清理完成：DELETE 全部成功或按 403 降级。")
