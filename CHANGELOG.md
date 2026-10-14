@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-10-14 — 拆工作流：出包与 PR 校验分开，号段不再被 PR 运行吃
+
+- 依据：selfs 分支 `arena/2d001a47-selfs` 提交 `5e2b978`（版本号只能取出包工作流的 `run_number`；出包与 PR 校验必须是两个工作流文件；
+  出包触发只写 `push`（限定默认分支）与 `workflow_dispatch`；PR 校验只写 `pull_request`；调试 CI 的推送不许吃号；同仓不得并存两种取数口径）。
+- 根因：`run_number` 在运行创建时就分配、按工作流计数，步骤级 `if: github.event_name != 'pull_request'` 只能挡上传，挡不住吃号。
+  实测 `7920b0a2`、`25d56e64` 两个提交各吃两个号（rn 272+273、274+275），rn=273 还是 PR 运行却出了包 `Qself-26.10.14.6.273`。
+- `build.yml`：触发收敛为 `push: branches: [main]` + `workflow_dispatch`；删掉全部 PR 守卫与 PR 专用的占位测试步骤；
+  当日序号注释改「本出包工作流的运行序号」；清理作业去掉 PR 条件（清理只挂在出包工作流）。
+- 新增 `pr-check.yml`：`on: pull_request`、`permissions: contents: read`，两个作业（`dex` 落点核对 + 单元测试占位版本 `00.0.0.0`），不取号、不出包、不上传、不清理。
+- 旧口径产物清理：删 `Qself-26.10.14.7.271`、`Qself-26.10.14.6.273`、`Qself-26.10.14.6.272` 三个（当日序号序列 7 → 6 → 6 与新口径 3 并存的旧口径部分），留下 `Qself-26.10.14.3.274`。
+- 文档：`AGENTS.md` 版本条目按两工作流重写；`README.md` 符号数 177 → 182 与实际一致；本条记入本文件。
+
 ## 2026-10-14 — 堵刷号漏洞：PR 运行只校验不取号不出包
 
 - 依据：selfs 分支 `arena/2d001a47-selfs` 提交 `7f8adb6`（规范：出包运行只有 push 与 workflow_dispatch；PR 运行只跑校验、不取号、不上传 artifact；

@@ -1,19 +1,20 @@
-# Qself CI。
+# Qself 出包工作流 —— 唯一号源。
 #
-# 出包运行只有 push 与 workflow_dispatch；pull_request 运行只跑校验（dex 落点 + 单元测试），
-# 不取号、不出包、不上传 artifact —— 上传步骤带 if: github.event_name != 'pull_request'。
-# dex 作业拿真 QQ 包核每一个落点；apk 作业在出包运行里按五段版本出 debug APK 放进 Artifacts。
-# 出包后立刻做数量清理，分两个作业：artifact（5 个）与运行记录（5 条）用最小 actions: write，
-# 任何分支与同仓 PR 都跑；Release（1 个）/ tag 收口要 contents: write，只在默认分支跑。两者分开授权，不同授。
-# 版本取数只锚定本次 run：总序号 = run_number 原值（同仓不混用两种号源；workflow 重建才用 AGENTS.md 里记的基线相减），
-# 当日序号 = 当日（UTC+8）该仓出包运行的序号（从 1 起按开始时间递增，PR 运行不计入），取不到就退化四段 yy.m.d.总序号；
+# 触发只允许 push（限定默认分支 main）与 workflow_dispatch；PR 校验在 pr-check.yml，另一条 run_number 序列。
+# run_number 在运行创建时就分配，步骤级 if 挡不住吃号 —— 所以要拆文件，不能靠 if（规范 5e2b978）。
+# 调试 CI 的推送走会话分支，不触发出包；会话分支要包用 workflow_dispatch。
+# dex 作业拿真 QQ 包核每一个落点；apk 作业按五段版本出 debug APK 放进 Artifacts。
+# 出包后立刻做数量清理：artifact（5 个）与运行记录（5 条）用最小 actions: write，
+# Release（1 个）/ tag 收口要 contents: write，只在默认分支跑。两者分开授权，不同授。
+# 版本取数只锚定本次 run：总序号 = 本出包工作流的 run_number 原值（workflow 重建才用 AGENTS.md 里记的基线相减），
+# 当日序号 = 当日（UTC+8）本出包工作流的运行序号（按 run_started_at 升序），取不到就退化四段 yy.m.d.总序号；
 # 禁止查最新 run / 最新 artifact 或历史成功数。
 # CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须由主人明确授权并人工完成。
 name: Build
 
 on:
   push:
-  pull_request:   # 只跑校验：不取号、不出包
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -51,16 +52,15 @@ jobs:
       - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
       - uses: gradle/actions/setup-gradle@v6
 
-      # 同一个 run 重试时不许重新加号：第一次 attempt 把版本号存进缓存，重试取回。PR 运行不取号，不参与。
+      # 同一个 run 重试时不许重新加号：第一次 attempt 把版本号存进缓存，重试取回。
       - name: 取回第一次 attempt 的版本号
-        if: github.run_attempt > 1 && github.event_name != 'pull_request'
+        if: github.run_attempt > 1
         uses: actions/cache/restore@v6
         with:
           path: version.txt
           key: qself-version-${{ github.run_id }}
 
       - name: 算版本 yy.m.d.当日序号.总序号
-        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           # 本仓 workflow 未重建，无基线：总序号直接取本次 run 的 run_number 原值。
@@ -84,8 +84,9 @@ jobs:
             local_day="$(TZ=Asia/Shanghai date -d "$created" +%Y-%m-%d)"
             total="$((my_num - ${TOTAL_BASE:-0}))"
             if [ "$total" -lt 1 ]; then echo "总序号 $total 不合法" >&2; exit 1; fi
-            # 当日序号 = 当日（UTC+8）该仓出包运行的序号：只数本工作流的 push / workflow_dispatch 运行，
-            # 按开始时间升序排，本次排第几就是几；PR 运行不计入。禁用「head 提交位次」这类并发下会竞态的取数。
+            # 当日序号 = 当日（UTC+8）本出包工作流的运行序号：数本文件的 push / workflow_dispatch 运行，
+            # 按 run_started_at 升序排，本次排第几就是几。PR 校验是另一个文件，不在这条序列里。
+            # 禁用「head 提交位次」这类并发下会竞态的取数。
             prog="$(cat <<'JQ'
           .workflow_runs[]
           | select(.path == ".github/workflows/build.yml")
@@ -112,32 +113,23 @@ jobs:
           echo "QSELF_VERSION=$version" >> "$GITHUB_ENV"
 
       - name: 存住版本号（供同 run 重试复用）
-        if: github.run_attempt == 1 && github.event_name != 'pull_request'
+        if: github.run_attempt == 1
         uses: actions/cache/save@v6
         with:
           path: version.txt
           key: qself-version-${{ github.run_id }}
 
-      # PR 运行只跑校验：Gradle 要一个版本名，给不参与编号的占位值，不出包、不上传。
-      - name: 单元测试（PR 校验）
-        if: github.event_name == 'pull_request'
-        env:
-          QSELF_VERSION: 00.0.0.0
-        run: ./gradlew --no-daemon :app:testDebugUnitTest
       - name: 测试与出包
-        if: github.event_name != 'pull_request'
         run: |
           set -o pipefail
           ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug 2>&1 | tee build.log
       - name: Check libxposed packaging
-        if: github.event_name != 'pull_request'
         run: |
           APK=$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name 'Qself-*.apk' -print -quit)
           for f in java_init.list module.prop scope.list; do unzip -l "$APK" | grep -F "META-INF/xposed/$f"; done
           if unzip -l "$APK" | grep -q 'assets/xposed_init'; then echo 'legacy entry packaged' >&2; exit 1; fi
           sha256sum "$APK"
       - uses: actions/upload-artifact@v7
-        if: github.event_name != 'pull_request'
         with:
           name: Qself-${{ env.QSELF_VERSION }}
           path: app/build/outputs/apk/debug/Qself-${{ env.QSELF_VERSION }}.apk
@@ -146,12 +138,10 @@ jobs:
           overwrite: true
           retention-days: 5
 
-  # artifact（5 个）与运行记录（5 条）的数量清理：本 run 上传成功后立刻跑。计数跨分支、跨事件，
-  # 所以任何分支的 push、同仓 PR 都要收口。权限只给最小 actions: write（只删本项目 artifact 与 run），
-  # 按规范不与 contents: write 同授；动不到 Release、tag、分支。
+  # artifact（5 个）与运行记录（5 条）的数量清理：本 run 上传成功后立刻跑（清理只挂在出包工作流，PR 校验不清理）。
+  # 权限只给最小 actions: write（只删本项目 artifact 与 run），按规范不与 contents: write 同授；动不到 Release、tag、分支。
   cleanup-artifacts:
     needs: apk
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     concurrency:
@@ -266,7 +256,7 @@ jobs:
   # 与上面那个 actions: write 的作业分开授权（规范禁止两者同授）。
   cleanup-releases:
     needs: apk
-    if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     concurrency:

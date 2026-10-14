@@ -1,0 +1,46 @@
+# Qself PR 校验工作流 —— 只跑校验：不取号、不出包、不上传 artifact、不清理。
+# 与 build.yml 分开是规范要求：run_number 在运行创建时就分配，且按工作流计数；
+# 同一个文件接 pull_request 会继续吃出包号段的号（实测 rn=273、rn=275 都是 PR 运行）。
+# 触发只允许 pull_request；出包与版本号在 build.yml。
+name: PR check
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # 落点核对：真包在 Sumicya/qqapk（qq.aa..qq.ae 拼起来）。表红了就是这版 QQ 里名字对不上，出包也是白出。
+  dex:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: 拼出真 QQ 包
+        run: |
+          git clone -q --depth 1 https://github.com/Sumicya/qqapk qq
+          cat qq/qq.a* > qq.apk && rm -rf qq
+          ls -l qq.apk
+      - name: 逐个核落点
+        run: python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin --quiet
+
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+      - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
+      - uses: gradle/actions/setup-gradle@v6
+      # 不取号：给 Gradle 一个不参与编号的占位版本名，只跑单元测试。
+      - name: 单元测试（不取号）
+        env:
+          QSELF_VERSION: 00.0.0.0
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
