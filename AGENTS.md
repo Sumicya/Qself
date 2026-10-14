@@ -103,9 +103,14 @@
   同日 `Qself-26.10.14.7.271`（rn=271，事件 `pull_request`，sha e902407b，PR 运行仍出包）当日序号 7 排在 6 之前，序号非单调。
   删除前名单（取值 2026-10-14T03:17Z，`gh api repos/Sumicya/Qself/actions/artifacts`）：`.7.271`、`.6.272`、`.6.273`、`.3.274` 四条，前三条已删（id 与 403 经过记在 `CHANGELOG.md`），只剩 `.3.274`（id 11864292225）。
   rn=275（sha 25d56e64）是 `pull_request` 运行，取号、算版本、测试与出包、上传步骤全 skipped、按 run 反查 artifact 数=0，`.6.275` 从未存在。该日之前的当日序号不可信。
-- 已知风险（号源）：默认分支 `.github/workflows/build.yml` 仍是旧口径（含 `pull_request` 触发 + `branches: [main]` 限定），
-  从旧分支开的 PR 会按旧触发跑一次出包工作流、吃掉一个总序号（载体：开放 PR #10，head `arena/01a109fa-qself`，ahead_by 13）；
-  风险存续到本次交付进入默认分支为止，不报「号源已收口」。本会话不向非本会话的开放 PR 分支推送，也不做关闭 PR 的动作。
+- 版本分界点（2026-10-14 第二次重复，当日序号 3）：`Qself-26.10.14.3.274`（rn=274，事件 `push`，旧算法下算出 3，该日之前的当日序号不可信）
+  与 `Qself-26.10.14.3.276`（rn=276，事件 `push`，会话分支 `arena/e207d38d-qself`，当日 push/dispatch 运行位次 3）同日同序号。
+  清理作业按「重复当日序号保留总序号最大者」在 Build rn=276 的 `cleanup-artifacts` 里删掉 `.3.274`（id 11864292225）；
+  现存 `.3.276`（id 11900660871）。取值 2026-10-14T13:57Z，`gh api repos/Sumicya/Qself/actions/artifacts`。
+- 已知风险（号源）：默认分支 `.github/workflows/build.yml` 仍是旧版本（实查 2026-10-14T14:00Z：`on: push / pull_request / workflow_dispatch`，`push` 不限定分支；
+  默认分支的工作流清单只有这一个文件，无 `pr-check.yml`），从旧分支开的 PR 会按旧触发跑一次出包工作流、吃掉一个总序号
+  （载体：开放 PR #10，head `arena/01a109fa-qself`，ahead_by 13）；风险存续到本次交付进入默认分支为止，不报「号源已收口」。
+  本会话不向非本会话的开放 PR 分支推送，也不做关闭 PR 的动作。
 - 本项目 CI 只出 debug 包，不创建 Release、正式 tag 或 asset；发版须主人明确授权。
 - 会话分支只由会话删（删 ref 需 `contents: write`，不进 CI）：判据是相对默认分支 compare `ahead_by=0`，为 0 属默认授权当轮删；
   `ahead_by>0`（含 PR 关闭未合入）一律保留 —— 要去除先用 `gh api repos/<owner>/<repo>/compare/<默认分支>...<分支>` 取 `ahead_by`、
