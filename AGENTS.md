@@ -97,6 +97,7 @@
   同日 `Qself-26.10.14.7.271`（rn=271，事件 `pull_request`，sha e902407b，PR 运行仍出包）当日序号 7 排在 6 之前，序号非单调。
   删除前名单（取值 2026-10-14T03:17Z，`gh api repos/Sumicya/Qself/actions/artifacts`）：`.7.271`、`.6.272`、`.6.273`、`.3.274` 四条，前三条已删（id 与 403 经过记在 `CHANGELOG.md`），只剩 `.3.274`（id 11864292225）。
   rn=275（sha 25d56e64）是 `pull_request` 运行，取号、算版本、测试与出包、上传步骤全 skipped、按 run 反查 artifact 数=0，`.6.275` 从未存在。该日之前的当日序号不可信。
+- 已知风险（号源）：默认分支 `.github/workflows/build.yml` 仍含 `pull_request` 触发，从旧分支开的 PR 会按旧触发跑一次出包工作流、吃掉一个总序号（载体：开放 PR #10，head `arena/01a109fa-qself`，ahead_by 13）；风险存续到本次交付进入默认分支为止。本会话不向非本会话的开放 PR 分支推送，也不做关闭 PR 的动作。
 - 本项目 CI 只出 debug 包，不创建 Release、正式 tag 或 asset；发版须主人明确授权。
 - 会话分支只由会话删（删 ref 需 `contents: write`，不进 CI）：判据是相对默认分支 compare `ahead_by=0`；
   PR 关闭未合入、或仍挂开放 PR 的分支一律保留并报主人。本仓变更记在 `CHANGELOG.md`。

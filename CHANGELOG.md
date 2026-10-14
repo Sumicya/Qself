@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-10-14 — 清理脚本启动打印读到的参数；AGENTS 记号源已知风险
+
+- 依据：selfs 分支提交 `62df936`（清理脚本启动时打印读到的 `SEGMENTS`、`CLEANUP_APPLY`、产物名前缀、保留数与本次 run 所属序列，让预演日志能独立核对，不靠「job success 所以顶部声明生效」推断）、`4e9effb`（自检第 4 项拆词面 + 机制五场景，第 5 项按四条判据扫描并复查上轮阻塞项；阻塞项收尾只许三种状态）。
+- `.github/scripts/cleanup.py`：`VERB` 行后加启动参数打印（一行，含 SEGMENTS / CLEANUP_APPLY / PREFIX / KEEP / SELF / TODAY / REPO）；拉回 run 列表后加「本次 run 所属序列」打印（取不到写「未出现在本次拉取的运行列表里」，不静默）。
+- 回归干跑（合成数据，与上轮同一份）：启动打印逐项出值；本次 run 210 判为 `.github/workflows/pr-check.yml`；四条判据命中数与上轮一致（口径 1、来源 1、重复当日序号 1、数量 2）；`APPLY=true` 时 DELETE 数 10、`false` 时 0。
+- `AGENTS.md`：分界点条后加「已知风险（号源）」—— 默认分支 `.github/workflows/build.yml` 仍含 `pull_request` 触发（实查 main 现文 `on: push / pull_request / workflow_dispatch`），载体是开放 PR #10（head `arena/01a109fa-qself`）；风险存续到本次交付进入默认分支为止，不报「号源已收口」。
+
 ## 2026-10-14 — 分界点改记可核对象；清理开关与段数提到工作流顶部声明
 
 - 依据：selfs 分支提交 `bc98bd5`（分界点只引可核对象：run 号、事件、head sha、日期，加删除前 API 名单原文与取值时间；已删 artifact 的名字先按 run 记录核）、`215a796`（回收两条：`run_started_at` 缺失才退回 `created_at`、未完成的 run 不删）、`5dc0d28`（检讨条款整条删除）。

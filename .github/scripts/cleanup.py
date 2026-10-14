@@ -29,6 +29,8 @@ KEEP = 5                       # 当日之外每条序列 artifact 5 个、run 5
 CST = timezone(timedelta(hours=8))
 TODAY = datetime.now(CST).strftime("%Y-%m-%d")
 VERB = "删" if APPLY else "将删"
+print(f"cleanup.py 启动参数：SEGMENTS={SEGMENTS} CLEANUP_APPLY={'true' if APPLY else 'false'} "
+      f"PREFIX={PREFIX} KEEP={KEEP} SELF={SELF} TODAY={TODAY} REPO={REPO}")
 
 
 def gh(*args):
@@ -60,6 +62,8 @@ def emit(action, kind, obj_id, label, why):
 
 runs = list_all(f"repos/{REPO}/actions/runs?per_page=100", ".workflow_runs")
 run_by_id = {r["id"]: r for r in runs}
+self_run = run_by_id.get(SELF)
+print(f"本次 run {SELF} 所属序列：{self_run['path'] if self_run else '(未出现在本次拉取的运行列表里)'}")
 arts = [a for a in list_all(f"repos/{REPO}/actions/artifacts?per_page=100", ".artifacts")
         if not a["expired"]]
 
