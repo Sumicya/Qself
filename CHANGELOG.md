@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-10-14 — 跟进全局临时入口（PR #6，head a9fc529）
+
+- 依据：selfs 分支 `arena/2d001a47-selfs`（PR #6）当轮读入；PR 合并后回到默认分支为准。
+- 版本：总序号从「run_number − 35」改成直接取本次 run 的 `run_number`（本仓 workflow 未重建，不写基线；重建才写基线相减，未记录按原值不判失败）；
+  当日序号取不到时不再失败，退化四段 `yy.m.d.总序号` 并写日志说明；`build.gradle.kts` 与 `build.yml` 的版本校验都放宽到四段/五段。
+- 分支：删分支的唯一判据改成相对默认分支 compare `ahead_by=0`；先前按「继承即可删」删掉的 `arena/63fa89b7-qself`、`arena/614127b9-qself`
+  已用原 SHA 恢复（`e64c8e65…`、`ae1a5a1f…`），三支会话分支（含 PR #10 的 `arena/01a109fa-qself`）ahead_by 分别为 13/10/2，一律保留并报主人。
+- 文档：`AGENTS.md` 去掉同步戳与复制的全局条目，改成规范指针 + 项目事实与限制。
+- 跨仓：selfs、qqapk、Selfblox 当前运行记录 0 条、无工作流文件、无待删的已合入会话分支，无需跨仓写操作；selfs PR #6 仍开放。
+
 ## 2026-10-13 — 跟进全局「第0版修订」
 
 - 依据：selfs 分支 `arena/7a7f3552-selfs` 提交 `1984b03`（第0版修订：计数改锚 run_number、分支保留 0、清理默认授权）；尚未合入默认分支，按主人指示先行执行。

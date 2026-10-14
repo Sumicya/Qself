@@ -3,9 +3,9 @@
 # push / PR / 手动运行：dex 作业拿真 QQ 包核每一个落点；apk 作业按五段版本出 debug APK 放进 Artifacts。
 # 出包后立刻做数量清理，分两个作业：artifact（5 个）与运行记录（5 条）用最小 actions: write，
 # 任何分支与同仓 PR 都跑；Release（1 个）/ tag 收口要 contents: write，只在默认分支跑。两者分开授权，不同授。
-# 版本取数只锚定本次 run：总序号 = run_number − 35（基线见下方注释），
-# 当日序号 = 本次 run 的 head 提交在当日（UTC+8）提交序列中的位次；禁止查最新 run / 最新 artifact。
-# 删除历史运行记录不影响这两个数。旧锚（历史成功数、现存 artifact 最大号）已停用。
+# 版本取数只锚定本次 run：总序号 = run_number（workflow 重建才用 AGENTS.md 里记的基线相减；本仓未重建，无基线），
+# 当日序号 = 本次 run 的 head 提交在当日（UTC+8）提交序列中的位次，取不到就退化四段 yy.m.d.总序号；
+# 禁止查最新 run / 最新 artifact 或历史成功数。
 # CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须由主人明确授权并人工完成。
 name: Build
 
@@ -60,12 +60,12 @@ jobs:
           path: version.txt
           key: qself-version-${{ github.run_id }}
 
-      - name: 算五段版本 yy.m.d.当日序号.总序号
+      - name: 算版本 yy.m.d.当日序号.总序号
         env:
           GH_TOKEN: ${{ github.token }}
-          # 基线 35 = run_number 253（26.10.13 第 7 次运行，出的是 26.10.13.7.218）− 218。
-          # 号只增不减：失败运行与 PR 运行也占号，跳号是正常的。
-          TOTAL_BASE: '35'
+          # 本仓 workflow 未重建，无基线：总序号直接取本次 run 的 run_number。
+          # 将来重建 workflow 造成号段跳变时，把重建前最大号写进 AGENTS.md 作基线并填到这里相减；留空按原值，不判失败。
+          TOTAL_BASE: ''
         run: |
           set -euo pipefail
           repo="$GITHUB_REPOSITORY"
@@ -77,27 +77,29 @@ jobs:
               echo "重试却取不到第一次 attempt 的版本号：那次在算出版本前就失败了。按口径不重新加号，请新开一次运行。" >&2
               exit 1
             fi
-            # 只锚定本次 run 自身：created_at、run_number，不查最新 run。
+            # 只锚定本次 run 自身：created_at、run_number，不查历史。
             created="$(gh api "repos/$repo/actions/runs/$GITHUB_RUN_ID" --jq '.created_at')"
             my_num="$(gh api "repos/$repo/actions/runs/$GITHUB_RUN_ID" --jq '.run_number')"
             day="$(TZ=Asia/Shanghai date -d "$created" +%y.%-m.%-d)"
             local_day="$(TZ=Asia/Shanghai date -d "$created" +%Y-%m-%d)"
-            # 当日序号 = head 提交在当日（UTC+8）提交序列中的位次 = 从 HEAD 可达、提交日在当日的提交数。
+            total="$((my_num - ${TOTAL_BASE:-0}))"
+            if [ "$total" -lt 1 ]; then echo "总序号 $total 不合法" >&2; exit 1; fi
+            # 当日序号 = 本次 run 的 head 提交在当日（UTC+8）提交序列中的位次；取不到就退化四段。
+            daily=''
             head_day="$(TZ=Asia/Shanghai date -d "$(git log -1 --format=%cI HEAD)" +%Y-%m-%d)"
-            if [ "$head_day" != "$local_day" ]; then
-              echo "head 提交不在当日（head=$head_day，当日=$local_day），拒绝出号" >&2; exit 1
+            if [ "$head_day" = "$local_day" ]; then
+              daily="$(git rev-list --count --since="$local_day 00:00:00 +0800" HEAD || true)"
             fi
-            daily="$(git rev-list --count --since="$local_day 00:00:00 +0800" HEAD)"
-            if [ -z "$daily" ] || [ "$daily" -lt 1 ]; then
-              echo "当日序号取不到（head 提交不在当日提交序列里），拒绝出号" >&2; exit 1
+            if [ -n "$daily" ] && [ "$daily" -ge 1 ]; then
+              version="$day.$daily.$total"
+            else
+              version="$day.$total"
+              echo "退化四段：head 提交（$head_day）不在本次 run 的当日（$local_day）提交序列里，当日序号取不到。"
             fi
-            total="$((my_num - TOTAL_BASE))"
-            if [ "$total" -lt 1 ]; then echo "总序号 $total 不合法，拒绝出号" >&2; exit 1; fi
-            version="$day.$daily.$total"
             printf '%s' "$version" > version.txt
           fi
-          printf '%s' "$version" | grep -Eq '^[0-9]{2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]+\.[0-9]+$' \
-            || { echo "版本不是五段格式：$version" >&2; exit 1; }
+          printf '%s' "$version" | grep -Eq '^[0-9]{2}\.[0-9]{1,2}\.[0-9]{1,2}(\.[0-9]+){1,2}$' \
+            || { echo "版本不是四段或五段：$version" >&2; exit 1; }
           echo "QSELF_VERSION=$version" >> "$GITHUB_ENV"
 
       - name: 存住版本号（供同 run 重试复用）

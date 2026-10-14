@@ -12,11 +12,11 @@ android {
         minSdk = 36 // 只对着 Android 16 写：RenderEffect / AGSL 都不用判版本
         targetSdk = 37
         // CI 先固化完整版本；Gradle 只读取单一版本来源，不自行取时间或序号。
-        // 本地出包也要显式给：QSELF_VERSION=26.10.13.1.1 ./gradlew :app:assembleDebug，缺了当场失败，不留占位号。
+        // 本地出包也要显式给：QSELF_VERSION=26.10.15.1.262 ./gradlew :app:assembleDebug（退化时四段 yy.m.d.总序号），缺了当场失败。
         val releaseVersion = System.getenv("QSELF_VERSION")
-            ?: error("缺少 QSELF_VERSION：出包请显式给出五段版本（yy.m.d.当日序号.总序号），口径见 AGENTS.md")
-        require(Regex("""^\d{2}\.\d{1,2}\.\d{1,2}\.\d+\.\d+$""").matches(releaseVersion)) {
-            "QSELF_VERSION 不是五段格式：$releaseVersion"
+            ?: error("缺少 QSELF_VERSION：出包请显式给出四段/五段版本（yy.m.d.[当日序号.]总序号），口径见 AGENTS.md")
+        require(Regex("""^\d{2}\.\d{1,2}\.\d{1,2}(\.\d+){1,2}$""").matches(releaseVersion)) {
+            "QSELF_VERSION 不是四段或五段格式：$releaseVersion"
         }
         versionName = releaseVersion
         versionCode = releaseVersion.substringAfterLast(".").toIntOrNull()?.coerceAtLeast(1) ?: 1

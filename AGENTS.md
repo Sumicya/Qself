@@ -69,33 +69,20 @@
 
 本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）出 APK。
 当前仓库不保存签名私钥；debug APK 使用 Android 默认 debug 签名，正式签名需由仓库外的安全签名环境提供。
+失败日志以 GitHub Actions 原始日志为准。
 
-CI 四个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼），`apk` 按五段版本跑单元测试再出包，
-出包后 `cleanup-artifacts` 立刻把 artifact 收到 5 个、运行记录收到 5 条（任何分支与同仓 PR 都跑，最小 `actions: write`），
-`cleanup-releases` 只在默认分支上把 Release 收口到 1 个（`contents: write`，与上面的写权限分开授权、不同授）。
-失败日志以 GitHub Actions 原始日志为准。CI 不自动创建 Release、正式发行 tag 或 Release asset。
+## 规范
 
-本地要 gradle 出包同样得显式给版本：`QSELF_VERSION=26.10.13.1.1 ./gradlew :app:assembleDebug`，没给就当场失败。
+规范入口：[Sumicya/selfs/GLOBAL.md](https://github.com/Sumicya/selfs/blob/main/GLOBAL.md)。本文件只记项目事实、必要限制与这个指针。
 
-## 全局规范同步（上次同步 = 第0版修订 · 2026-10-13）
-
-规范入口：[Sumicya/selfs/GLOBAL.md](https://github.com/Sumicya/selfs/blob/main/GLOBAL.md)；继承其全部规则，用户指示优先。
-本次依据该规范的「第0版修订」（selfs 分支 `arena/7a7f3552-selfs` 提交 `1984b03`，尚未合入默认分支）先行执行，合入后以默认分支为准。
-下面只记本项目的实现、事实与限制：
-
-- 版本取数只锚定本次 run，文件名 `Qself-<五段版本>`，禁止查最新 run 或最新 artifact：
-  当日序号 = 本次 run 的 head 提交在当日（UTC+8）提交序列中的位次 = `git rev-list --count --since="<当日> 00:00:00 +0800" HEAD`；
-  总序号 = 本次 `run_number` − 35（基线：run_number 253 ↔ 总序号 218；基线切换时在此写死）。
-  `run_attempt > 1` 用缓存复用第一次的号；位次取不到（head 提交不在当日）或号不合法 → 当场失败，不出包。
-  旧锚（历史成功数、现存 artifact 最大号）已停用。
-- 本地序号：本地出包同样五段，号必须可追溯——当日序号用同一 `git rev-list` 式子在本地 HEAD 上数；
-  总序号 = 最近已知 `run_number` + 1 − 35（从 `gh api "repos/Sumicya/Qself/actions/workflows/build.yml/runs?..."` 取）；
-  取不到就停下，不许拿当前时间充数；本地号可能与随后触发的 CI 撞号，本地 APK 只作自测，发行一律用 CI 的 artifact。
-- 衔接：口径切换（第0版修订）后的第一个运行起按上式取数；历史 artifact 名里的序号只作历史记录，不重算、不回退。
-- 清理（默认授权，删前打印完整清单）：artifact 5 个、Release 1 个、运行记录 5 条；分支先继承再删——删任何会话分支前，
-  先用 `git cherry <留存线> <该分支>` 确认它没有「+」项（未继承的提交）；有「+」就先把这些提交并进留存线，并完再删；
-  PR 未合并/未关闭的分支不删。删 ref 需 `contents: write`，分支清理只由会话执行、不进 CI。
-  artifact 与运行记录用最小 `actions: write`（只删本项目 artifact 与 run），任何分支与同仓 PR 都跑，不与 `contents: write` 同授；
-  Release / tag 清理另开作业、只在默认分支、只给 `contents: write`。发布与合并仍须明确授权。
-- 删工作流文件时同轮清掉它的运行记录（由 `cleanup-artifacts` 每次出包顺带收口，不单开一次性工具）。
-- 规范由 agent 在会话中核对，不设规范检查工作流（本仓 `spec-check.yml` 已删）。本仓变更记在 `CHANGELOG.md`。
+- 版本：总序号 = 本次 run 的 `run_number`（本仓 workflow 未重建，无基线；将来重建造成号段跳变，才把重建前最大号记到本行作基线）；
+  当日序号 = 本次 run 的 head 提交在当日（UTC+8）提交序列中的位次（`apk` 作业用 `fetch-depth: 0`，
+  式子 `git rev-list --count --since="<当日> 00:00:00 +0800" HEAD`）；取不到就退化四段 `yy.m.d.总序号`，并在日志写明原因。
+  `run_attempt > 1` 用缓存复用第一次 attempt 的号。文件名与 artifact 名都是 `Qself-<版本>`。
+- 本地要 gradle 出包必须显式给 `QSELF_VERSION`（五段或退化四段），缺失即失败；本地包只作自测，发行用 CI 的 artifact。
+- CI（`.github/workflows/build.yml`）四个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼）；`apk` 跑单元测试再出包；
+  `cleanup-artifacts` 在本 run 上传成功后收 artifact 到 5 个、运行记录到 5 条（任何分支与同仓 PR 都跑，最小 `actions: write`）；
+  `cleanup-releases` 只在默认分支收 Release 到 1 个（`contents: write`，与上者不同授）。
+- 本项目 CI 只出 debug 包，不创建 Release、正式 tag 或 asset；发版须主人明确授权。
+- 会话分支只由会话删（删 ref 需 `contents: write`，不进 CI）：判据是相对默认分支 compare `ahead_by=0`；
+  PR 关闭未合入、或仍挂开放 PR 的分支一律保留并报主人。本仓变更记在 `CHANGELOG.md`。
