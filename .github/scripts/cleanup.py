@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""清理本仓超量 artifact 与运行记录。逻辑只写这一份，两个工作流调用同一文件：
+"""清理本仓超量 artifact 与运行记录。逻辑只写这一份，两个工作流调用同一文件、都真删：
 
-- 出包工作流 `build.yml`：权限 `actions: write`，`CLEANUP_APPLY='true'` —— 真删（唯一真删处）。
-- PR 校验工作流 `pr-check.yml`：权限 `actions: read`，`CLEANUP_APPLY='false'` —— 只打印将删名单
-  与判据理由，不删。会话分支上跑得到，预演日志就是会话侧的真机证据。
+- PR 校验工作流 `pr-check.yml`：权限 `actions: write`，`CLEANUP_APPLY='true'` —— 真删。
+  会话推送即触发；真删的调用点必须会话可达，否则清理一次也不会发生（规范 b0594d3）。
+- 出包工作流 `build.yml`：权限 `actions: write`，`CLEANUP_APPLY='true'` —— 真删，出包后收口。
+  两处挂同一个 `concurrency` group 串行，避免并发删同一对象。
 
-判据四条（规范 3d7be5b）：
+fork PR 或 DELETE 返回 403 时降级：打 `::warning::` 写明原因并继续跑完，不让 job 红（清理不是校验的一部分），
+也不静默跳过。只读预演（`actions: read` + `CLEANUP_APPLY='false'`）是备用形态，禁止拿「预演已证」当清理已做。
+
+判据四条（规范 b0594d3）：
   1. 命名口径：段数 ≠ 工作流顶部 SEGMENTS 声明值。
   2. 产物来源：产物的 workflow_run 事件是 pull_request。
   3. 重复当日序号：同一天同一序列出现两个相同当日序号，保留总序号最大的一个。
@@ -54,10 +58,15 @@ def stamp(run):
     return run.get("run_started_at") or run["created_at"]
 
 
-def emit(action, kind, obj_id, label, why):
-    print(f"  {action} {label}（{why}）")
-    if action == "删" and APPLY:
-        gh("api", "-X", "DELETE", f"repos/{REPO}/actions/{kind}/{obj_id}")
+def delete(kind, obj_id, label, why):
+    """真删一个对象。DELETE 失败（fork PR 只读、令牌权限不足）降级为预演：打 warning 并继续。"""
+    print(f"  {'删' if APPLY else '将删'} {label}（{why}）")
+    if not APPLY:
+        return
+    p = subprocess.run(["gh", "api", "-X", "DELETE", f"repos/{REPO}/actions/{kind}/{obj_id}"],
+                       capture_output=True, text=True)
+    if p.returncode != 0:
+        print(f"  ::warning::{label} 删除失败：{p.stderr.strip()[:180]}（fork PR 或权限不足，本次降级为预演）")
 
 
 runs = list_all(f"repos/{REPO}/actions/runs?per_page=100", ".workflow_runs")
@@ -114,7 +123,7 @@ for ws, lst in quota.items():             # lst 已按 created_at 新到旧
 
 print(f"artifact：{VERB} {len(drop_a)} 个，保留 {len(keep_a)} 个")
 for a, ws, why in drop_a:
-    emit(VERB, "artifacts", a["id"], f"{a['name']} id={a['id']}", why)
+    delete("artifacts", a["id"], f"{a['name']} id={a['id']}", why)
 kept_runs = {a["workflow_run"]["id"] for a, _, _ in keep_a}
 for a, ws, why in keep_a:
     print(f"  留 {a['name']} id={a['id']}（{why}）")
@@ -148,7 +157,7 @@ for ws, lst in counted.items():
 
 print(f"运行记录：{VERB} {len(drop_r)} 条，保留 {len(keep_r)} 条")
 for r, ws, why in drop_r:
-    emit(VERB, "runs", r["id"], f"id={r['id']} rn={r['run_number']} {ws} {stamp(r)}", why)
+    delete("runs", r["id"], f"id={r['id']} rn={r['run_number']} {ws} {stamp(r)}", why)
 for r, ws, why in keep_r:
     print(f"  留 id={r['id']} rn={r['run_number']} {ws}（{why}）")
 left_r = defaultdict(lambda: [0, 0])      # 序列 -> [计入上限, 当日与承载豁免]

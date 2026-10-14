@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-10-14 — 真删挂到 PR 校验工作流，清理不再永远跑不到
+
+- 依据：selfs 分支提交 `b0594d3`（规范 22260B）：真删只挂出包工作流时，会话支推不上默认分支、`workflow_dispatch` 要 `actions` 写（实测 403）、PR 校验又只读预演 —— 三仓真删一次没触发过（实证 Gself `.4.145`/`.2.147`、Selffont `116`/`117`/`118` 从 03:35Z 挂到 07:11Z）。新条：真删调用点至少一个必须会话可达＝PR 校验工作流清理作业 `actions: write` + `CLEANUP_APPLY: 'true'`；两处同一 `concurrency` group 串行；DELETE 403 打 `::warning::` 降级为预演并继续；只读预演为备用形态；超量对象状态改记「待下一次 PR 校验运行」。
+- `.github/workflows/pr-check.yml`：顶部 `env` 的 `CLEANUP_APPLY` `'false'`→`'true'`；清理作业 `cleanup-preview`→`cleanup`、权限 `actions: read`→`actions: write`、步骤名改「按四条判据清理（真删）」、加 `concurrency: {group: qself-cleanup-artifacts, cancel-in-progress: false}`（与 `build.yml` 同组）；头注释与作业注释同步。
+- `.github/scripts/cleanup.py`：`emit()` 换成 `delete()` —— `DELETE` 失败不再 `SystemExit`（原实现遇非零退出直接把 job 弄红），改为打 `::warning::` 写明原因并继续；`APPLY=false` 仍只打印、不发请求。
+- `.github/workflows/build.yml`：三处与新条文矛盾的注释改口径（顶部第 8–9 行、「`CLEANUP_APPLY`」行内注释、清理作业注释里的「真删只此一处」）。
+- `AGENTS.md`：CI 分工条与清理条按新条文改写（`pr-check.yml` 第三作业 `cleanup-preview`→`cleanup`；删掉「真删只此一处」与「待出包工作流首次运行」；记两处同组串行与 fork/403 降级行为）。
+
 ## 2026-10-14 — 清理脚本启动打印读到的参数；AGENTS 记号源已知风险
 
 - 依据：selfs 分支提交 `62df936`（清理脚本启动时打印读到的 `SEGMENTS`、`CLEANUP_APPLY`、产物名前缀、保留数与本次 run 所属序列，让预演日志能独立核对，不靠「job success 所以顶部声明生效」推断）、`4e9effb`（自检第 4 项拆词面 + 机制五场景，第 5 项按四条判据扫描并复查上轮阻塞项；阻塞项收尾只许三种状态）。

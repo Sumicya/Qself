@@ -6,7 +6,8 @@
 # dex 作业拿真 QQ 包核每一个落点；apk 作业按五段版本出 debug APK 放进 Artifacts。
 # 出包后立刻清理：当日之外每条序列 artifact 5 个、run 5 条（承载保留产物的 run 不计入上限），当日对象豁免。
 # 清理逻辑只一份 `.github/scripts/cleanup.py`：本工作流 `CLEANUP_APPLY: 'true'` 真删，权限 actions: write；
-# PR 校验工作流用同一脚本、`'false'` 只预演；Release（1 个）/ tag 收口要 contents: write，只在默认分支跑，分开授权不同授。
+# PR 校验工作流同一份脚本、同值真删（会话推送即触发），两处挂同一个 concurrency group 串行；
+# Release（1 个）/ tag 收口要 contents: write，只在默认分支跑，分开授权不同授。
 # 版本取数只锚定本次 run：总序号 = 本出包工作流的 run_number 原值（workflow 重建才用 AGENTS.md 里记的基线相减），
 # 当日序号 = 当日（UTC+8）本出包工作流的运行序号（按 run_started_at 升序），取不到就退化四段 yy.m.d.总序号；
 # 禁止查最新 run / 最新 artifact 或历史成功数。
@@ -26,7 +27,7 @@ permissions:
 # 退化四段期改 4，并在 AGENTS.md 写明原因。
 env:
   SEGMENTS: '5'
-  CLEANUP_APPLY: 'true'          # 清理脚本的真删开关；PR 校验工作流同一份脚本声明为 'false' 只预演
+  CLEANUP_APPLY: 'true'          # 清理脚本的真删开关；PR 校验工作流同一份脚本同值，两处同一 concurrency group 串行
 
 jobs:
   # 落点核对：真包在 Sumicya/qqapk（qq.aa..qq.ae 拼起来）。表红了就是这版 QQ 里名字对不上，
@@ -149,7 +150,7 @@ jobs:
   # 重复当日序号（同日同序列保留总序号最大者）、数量（当日之外每条序列 artifact 5、run 5）。
   # 数量判据当日豁免：当日序号取自当日运行列表，删当日运行会抽走计数基准；其余三条不豁免，当轮即删。
   # 排队按 run_started_at（UTC+8 日界）；承载保留产物的 run 不删、也不计入上限；正在跑的本次不删。
-  # 清理只留这一处真删：PR 校验工作流不挂真删，它的超量 run 在这里按序列一并收（actions: write 可删同仓任意工作流的 run）。
+  # 真删两个调用点都真删（本处 + PR 校验工作流的清理作业，两处同一 concurrency group）；PR 校验序列的超量 run 在这里也按序列一并收（actions: write 可删同仓任意工作流的 run）。
   # 权限最小 actions: write（只删本项目 artifact 与 run），按规范不与 contents: write 同授；动不到 Release、tag、分支。
   cleanup-artifacts:
     needs: apk

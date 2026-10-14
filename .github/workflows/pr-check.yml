@@ -1,4 +1,4 @@
-# Qself PR 校验工作流 —— 只跑校验：不取号、不出包、不上传 artifact、不做真删（只跑清理判据预演）。
+# Qself PR 校验工作流 —— 跑校验与清理真删：不取号、不出包、不上传 artifact。
 # 与 build.yml 分开是规范要求：run_number 在运行创建时就分配，且按工作流计数；
 # 同一个文件接 pull_request 会继续吃出包号段的号（实测 rn=273、rn=275 都是 PR 运行）。
 # 触发只允许 pull_request；出包与版本号在 build.yml。
@@ -10,10 +10,12 @@ on:
 permissions:
   contents: read
 
-# 清理预演开关：与 build.yml 调用同一份脚本，这里只打印将删名单与判据理由，不删。
+# 与 build.yml 同值：同一份 .github/scripts/cleanup.py，这里真删 —— 会话推送即触发，
+# 真删的调用点必须会话可达（规范 b0594d3）；两处清理作业挂同一个 concurrency group 串行。
+# fork PR 或 DELETE 403 时脚本打 ::warning:: 降级为预演，不让 job 红。
 env:
   SEGMENTS: '5'
-  CLEANUP_APPLY: 'false'
+  CLEANUP_APPLY: 'true'
 
 jobs:
   # 落点核对：真包在 Sumicya/qqapk（qq.aa..qq.ae 拼起来）。表红了就是这版 QQ 里名字对不上，出包也是白出。
@@ -50,17 +52,20 @@ jobs:
           QSELF_VERSION: 00.0.0.0
         run: ./gradlew --no-daemon :app:testDebugUnitTest
 
-  # 清理预演：调用与出包工作流同一份脚本（.github/scripts/cleanup.py），CLEANUP_APPLY='false' 只打印
-  # 将删名单与判据理由，不删。会话分支上跑得到，这份日志就是会话侧的真机证据；真删只在 build.yml。
-  cleanup-preview:
+  # 清理真删：与出包工作流同一份脚本（.github/scripts/cleanup.py），会话可达的那个真删调用点 ——
+  # 会话推送即触发；与 build.yml 的 cleanup-artifacts 同一 concurrency group 串行，避免并发删同一对象。
+  cleanup:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    concurrency:
+      group: qself-cleanup-artifacts
+      cancel-in-progress: false
     permissions:
-      actions: read
+      actions: write
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - name: 清理判据预演（只打印，不删）
+      - name: 按四条判据清理（真删）
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
