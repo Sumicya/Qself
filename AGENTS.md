@@ -75,14 +75,16 @@
 
 规范入口：[Sumicya/selfs/GLOBAL.md](https://github.com/Sumicya/selfs/blob/main/GLOBAL.md)。本文件只记项目事实、必要限制与这个指针。
 
-- 版本：总序号 = 本次 run 的 `run_number`（本仓 workflow 未重建，无基线；将来重建造成号段跳变，才把重建前最大号记到本行作基线）；
-  当日序号 = 本次 run 的 head 提交在当日（UTC+8）提交序列中的位次（`apk` 作业用 `fetch-depth: 0`；
-  head 提交按事件取：PR 取 `github.event.pull_request.head.sha`，push / 手动运行取 `github.sha`，
-  式子 `git rev-list --count --since="<当日> 00:00:00 +0800" <head 提交>`，不数 PR 的合成合并提交）；
-  取不到就退化四段 `yy.m.d.总序号`，并在日志写明原因。
+- 版本：出包运行只有 `push` 与 `workflow_dispatch`；`pull_request` 运行只跑校验，不取号、不出包、不上传 artifact。
+  总序号 = 本次 run 的 `run_number` 原值（本仓 workflow 未重建，无基线；同仓不混用两种号源，将来重建才把重建前最大号记到本行作基线并此后全部相减）；
+  当日序号 = 当日（UTC+8）本仓出包运行的序号，从 1 起按运行开始时间递增，`pull_request` 运行不计入
+  （式子：数本工作流的 push / 手动运行，按 `run_started_at` 升序取本次的位次）；
+  取不到就退化四段 `yy.m.d.总序号`，并把原因写进本文件。
   `run_attempt > 1` 用缓存复用第一次 attempt 的号。文件名与 artifact 名都是 `Qself-<版本>`。
 - 本地要 gradle 出包必须显式给 `QSELF_VERSION`（五段或退化四段），缺失即失败；本地包只作自测，发行用 CI 的 artifact。
-- CI（`.github/workflows/build.yml`）四个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼）；`apk` 跑单元测试再出包；
+  PR 校验运行不取号，给不参与编号的占位 `00.0.0.0`，供 Gradle 取版本名用。
+- CI（`.github/workflows/build.yml`）四个作业：`dex` 核落点（真包从 `Sumicya/qqapk` 拼）；`apk` 任何事件都跑单元测试，
+  只有出包运行（push / 手动）再算版本、出包并上传 artifact；
   `cleanup-artifacts` 在本 run 上传成功后收 artifact 到 5 个、运行记录到 5 条（任何分支与同仓 PR 都跑，最小 `actions: write`）；
   `cleanup-releases` 只在默认分支收 Release 到 1 个（`contents: write`，与上者不同授）。
 - 本项目 CI 只出 debug 包，不创建 Release、正式 tag 或 asset；发版须主人明确授权。

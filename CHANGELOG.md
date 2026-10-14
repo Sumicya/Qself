@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-10-14 — 堵刷号漏洞：PR 运行只校验不取号不出包
+
+- 依据：selfs 分支 `arena/2d001a47-selfs` 提交 `7f8adb6`（规范：出包运行只有 push 与 workflow_dispatch；PR 运行只跑校验、不取号、不上传 artifact；
+  当日序号改为当日（UTC+8）该仓出包运行的序号，从 1 起按开始时间递增、PR 不计入；禁止按 head 提交位次取数；禁止空提交刷号与为触发 CI 而推送）。
+- 起因：本仓 `on: push + pull_request` 双触发，同一提交出两个 artifact、吃两个总序号（实测 sha 9afda492 → run 268 + 269，sha e902407b → run 270 + 271），
+  一夜把总序号从 220 刷到 271。
+- `build.yml`：上传步骤加 `if: github.event_name != 'pull_request'`；算版本步骤与缓存存取步骤只在非 PR 事件跑；
+  `apk` 作业任何事件都跑单元测试，PR 事件用占位版本 `00.0.0.0`（不参与编号）并且不出包；`Check libxposed packaging` 同样只在出包运行跑；
+  当日序号改数「当日（UTC+8）本工作流的 push / 手动运行」，按 `run_started_at` 升序取本次位次；`checkout` 不再需要 `fetch-depth: 0`（新的当日序号不查提交历史）。
+- 干跑核验（拿真实运行数据跑该步脚本）：以 run 272（push）为本次 → 当日序号 2、版本 `26.10.14.2.272`；以 run 270（push）为本次 → 序号 1、`…1.270`；
+  以 PR 运行 id 为本次 → 列表里找不到 → 打原因退化四段；`run_attempt > 1` 无缓存 → 按口径失败；有缓存 → 复用不重新加号。
+- 文档对齐：`AGENTS.md` 版本条目按新口径重写；`README.md` 符号数 177 → 182（与 `tools/symbols.txt` 实际条数一致）。
+- 顺带处置：本地沙箱 `.git` 再次被回滚到分支点，按规范 `git fetch` + `git reset --soft origin/arena/e207d38d-qself` 接回，diff 与远端一致。
+
 ## 2026-10-14 — 版本步锚 head 提交 + 底栏角标落点
 
 - 版本步修正：当日序号改取「本次 run 的 head 提交」——PR 运行取 `github.event.pull_request.head.sha`，push / 手动运行取 `github.sha`。

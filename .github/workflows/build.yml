@@ -1,18 +1,19 @@
 # Qself CI。
 #
-# push / PR / 手动运行：dex 作业拿真 QQ 包核每一个落点；apk 作业按五段版本出 debug APK 放进 Artifacts。
+# 出包运行只有 push 与 workflow_dispatch；pull_request 运行只跑校验（dex 落点 + 单元测试），
+# 不取号、不出包、不上传 artifact —— 上传步骤带 if: github.event_name != 'pull_request'。
+# dex 作业拿真 QQ 包核每一个落点；apk 作业在出包运行里按五段版本出 debug APK 放进 Artifacts。
 # 出包后立刻做数量清理，分两个作业：artifact（5 个）与运行记录（5 条）用最小 actions: write，
 # 任何分支与同仓 PR 都跑；Release（1 个）/ tag 收口要 contents: write，只在默认分支跑。两者分开授权，不同授。
-# 版本取数只锚定本次 run：总序号 = run_number（workflow 重建才用 AGENTS.md 里记的基线相减；本仓未重建，无基线），
-# 当日序号 = 本次 run 的 head 提交（PR 取 PR 自己的 head，不数合成的合并提交）在当日（UTC+8）提交序列中的位次，
-# 取不到就退化四段 yy.m.d.总序号；
+# 版本取数只锚定本次 run：总序号 = run_number 原值（同仓不混用两种号源；workflow 重建才用 AGENTS.md 里记的基线相减），
+# 当日序号 = 当日（UTC+8）该仓出包运行的序号（从 1 起按开始时间递增，PR 运行不计入），取不到就退化四段 yy.m.d.总序号；
 # 禁止查最新 run / 最新 artifact 或历史成功数。
 # CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须由主人明确授权并人工完成。
 name: Build
 
 on:
   push:
-  pull_request:
+  pull_request:   # 只跑校验：不取号、不出包
   workflow_dispatch:
 
 permissions:
@@ -40,9 +41,6 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-        with:
-          # 当日序号要数「head 提交在当日提交序列中的位次」，得拿全量历史。
-          fetch-depth: 0
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -53,23 +51,21 @@ jobs:
       - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
       - uses: gradle/actions/setup-gradle@v6
 
-      # 同一个 run 重试时不许重新加号：第一次 attempt 把版本号存进缓存，重试取回。
+      # 同一个 run 重试时不许重新加号：第一次 attempt 把版本号存进缓存，重试取回。PR 运行不取号，不参与。
       - name: 取回第一次 attempt 的版本号
-        if: github.run_attempt > 1
+        if: github.run_attempt > 1 && github.event_name != 'pull_request'
         uses: actions/cache/restore@v6
         with:
           path: version.txt
           key: qself-version-${{ github.run_id }}
 
       - name: 算版本 yy.m.d.当日序号.总序号
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
-          # 本仓 workflow 未重建，无基线：总序号直接取本次 run 的 run_number。
-          # 将来重建 workflow 造成号段跳变时，把重建前最大号写进 AGENTS.md 作基线并填到这里相减；留空按原值，不判失败。
+          # 本仓 workflow 未重建，无基线：总序号直接取本次 run 的 run_number 原值。
+          # 将来重建 workflow 造成号段跳变时，把重建前最大号写进 AGENTS.md 作基线并填到这里相减，此后全部相减，不与原值混用。
           TOTAL_BASE: ''
-          # 当日序号锚「本次 run 的 head 提交」：PR 运行的检出是合成合并提交（其祖先含默认分支同日提交），
-          # 数它会多算，同一 head 数出两个位次；PR 取它自己的 head sha，push / 手动运行取本次 sha。
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           repo="$GITHUB_REPOSITORY"
@@ -88,27 +84,26 @@ jobs:
             local_day="$(TZ=Asia/Shanghai date -d "$created" +%Y-%m-%d)"
             total="$((my_num - ${TOTAL_BASE:-0}))"
             if [ "$total" -lt 1 ]; then echo "总序号 $total 不合法" >&2; exit 1; fi
-            # 当日序号 = 本次 run 的 head 提交在当日（UTC+8）提交序列中的位次；取不到就退化四段。
-            head_sha="$HEAD_SHA"
-            if ! git cat-file -e "$head_sha^{commit}" 2>/dev/null; then
-              git fetch -q --no-tags origin "$head_sha" 2>/dev/null || true
-            fi
-            daily=''
-            if git cat-file -e "$head_sha^{commit}" 2>/dev/null; then
-              head_day="$(TZ=Asia/Shanghai date -d "$(git log -1 --format=%cI "$head_sha")" +%Y-%m-%d)"
-              if [ "$head_day" = "$local_day" ]; then
-                daily="$(git rev-list --count --since="$local_day 00:00:00 +0800" "$head_sha" || true)"
-              else
-                echo "退化四段：head 提交（$head_sha）在 $head_day，不在本次 run 的当日 $local_day。" >&2
-              fi
-            else
-              echo "退化四段：本地没有 head 提交 $head_sha 的对象，当日序号取不到。" >&2
-            fi
-            if [ -n "$daily" ] && [ "$daily" -ge 1 ]; then
-              version="$day.$daily.$total"
-              echo "head 提交 $head_sha 在当日提交序列的位次：$daily"
+            # 当日序号 = 当日（UTC+8）该仓出包运行的序号：只数本工作流的 push / workflow_dispatch 运行，
+            # 按开始时间升序排，本次排第几就是几；PR 运行不计入。禁用「head 提交位次」这类并发下会竞态的取数。
+            prog="$(cat <<'JQ'
+          .workflow_runs[]
+          | select(.path == ".github/workflows/build.yml")
+          | select(.event == "push" or .event == "workflow_dispatch")
+          | [.run_number, (.run_started_at // .created_at), .id] | @tsv
+          JQ
+          )"
+            rank="$(gh api --paginate "repos/$repo/actions/runs?per_page=100" --jq "$prog" \
+              | awk -F'\t' -v day="$local_day" \
+                  '{ cmd = "TZ=Asia/Shanghai date -d \"" $2 "\" +%Y-%m-%d"; cmd | getline d; close(cmd); if (d == day) print }' \
+              | sort -k2,2 -k1,1n \
+              | awk -F'\t' -v me="$GITHUB_RUN_ID" '{ i++; if ($3 == me) r = i } END { print r + 0 }')"
+            if [ "$rank" -ge 1 ]; then
+              version="$day.$rank.$total"
+              echo "当日（$local_day）出包运行序号：$rank"
             else
               version="$day.$total"
+              echo "退化四段：本次运行不在当日（$local_day）出包运行列表里，当日序号取不到；原因要记进本仓 AGENTS.md。" >&2
             fi
             printf '%s' "$version" > version.txt
           fi
@@ -117,23 +112,32 @@ jobs:
           echo "QSELF_VERSION=$version" >> "$GITHUB_ENV"
 
       - name: 存住版本号（供同 run 重试复用）
-        if: github.run_attempt == 1
+        if: github.run_attempt == 1 && github.event_name != 'pull_request'
         uses: actions/cache/save@v6
         with:
           path: version.txt
           key: qself-version-${{ github.run_id }}
 
-      - name: Test and build
+      # PR 运行只跑校验：Gradle 要一个版本名，给不参与编号的占位值，不出包、不上传。
+      - name: 单元测试（PR 校验）
+        if: github.event_name == 'pull_request'
+        env:
+          QSELF_VERSION: 00.0.0.0
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+      - name: 测试与出包
+        if: github.event_name != 'pull_request'
         run: |
           set -o pipefail
           ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug 2>&1 | tee build.log
       - name: Check libxposed packaging
+        if: github.event_name != 'pull_request'
         run: |
           APK=$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name 'Qself-*.apk' -print -quit)
           for f in java_init.list module.prop scope.list; do unzip -l "$APK" | grep -F "META-INF/xposed/$f"; done
           if unzip -l "$APK" | grep -q 'assets/xposed_init'; then echo 'legacy entry packaged' >&2; exit 1; fi
           sha256sum "$APK"
       - uses: actions/upload-artifact@v7
+        if: github.event_name != 'pull_request'
         with:
           name: Qself-${{ env.QSELF_VERSION }}
           path: app/build/outputs/apk/debug/Qself-${{ env.QSELF_VERSION }}.apk
