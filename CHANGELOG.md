@@ -5,8 +5,9 @@
 - 依据：selfs 分支提交 `2dec668`（清理判据三条：数量=当日之外每条序列 artifact 5 个、run 5 条；命名口径=段数等于工作流顶部 `SEGMENTS` 声明值；来源=artifact 的 `workflow_run` 事件是 `pull_request` 一律删。
   数量判据当日豁免（当日序号取自当日运行列表，删当日运行会抽走计数基准），口径与来源不豁免、当轮即删；PR 校验工作流不挂清理作业，它的超量 run 由出包工作流清理 job 一并删；job 跑完打印删了哪几个、各剩几条）。
 - `build.yml`：顶部新增 `env: SEGMENTS: '5'`；`cleanup-artifacts` 重写为单步脚本，仍最小 `actions: write`；承载保留产物的 run 不动（删 run 会连带删产物），正在跑的本次不删。
-- 干跑（DELETE 全拦截至 stderr，用抽出的同一份脚本）：live 数据 → 删 0 个 artifact、0 条 run，剩 build 5 条 / pr-check 4 条，与实况一致；
-  合成混合数据（7 个旧出包产物 / 7 条旧出包 run / 7 条旧 PR 校验 run / 1 个四段错口径 / 1 个 PR 来源）→ 删 4 个 artifact（1 个当日按来源判据、1 个当日按口径判据打「段数 4 ≠ 5」、2 个按数量判据），保留 5 个；删 4 条 run，剩 build 6 条 / pr-check 5 条（各留 5 + 当日豁免与在跑的本次）。
+- 干跑（DELETE 全拦截至 stderr，脚本从工作流原文抽出）：live 数据 → 删 0 个 artifact、0 条 run（唯一 artifact 是当日豁免、run 全为当日），与实况一致；
+  合成混合数据（7 个旧出包产物 / 7 条旧出包 run / 7 条旧 PR 校验 run / 1 个四段错口径 / 1 个 PR 来源）→ 三判据各命中：删 4 个 artifact（口径 1 个打「段数 4 ≠ 5」、来源 1 个打 `pull_request`、数量 2 个），保留 5 个；删 4 条 run（build 与 pr-check 各超 2 条），剩 build 6 条 / pr-check 5 条（各留 5 + 当日豁免与在跑的本次）；
+  `SEGMENTS=4` 边界 → 5 段产物全按口径判据删。干跑抓到一个 bug：清冗余三元时把数量判据的保留/删除分支改坏（超量对象全进保留桶、一个不删），已改成显式分支并重跑三组通过。
 - 文档：`AGENTS.md` 清理条目改为三条判据。
 
 ## 2026-10-14 — 拆工作流：出包与 PR 校验分开，号段不再被 PR 运行吃

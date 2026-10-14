@@ -214,7 +214,10 @@ jobs:
 
           for seq, lst in quota.items():
               for i, a in enumerate(lst):
-                  keep_a.append((a, seq, "数量：当日之外保 5"))
+                  if i < KEEP:
+                      keep_a.append((a, seq, "数量：当日之外保 5"))
+                  else:
+                      drop_a.append((a, seq, "数量：超出当日之外上限"))
 
           print(f"artifact：删除 {len(drop_a)} 个，保留 {len(keep_a)} 个（当日豁免 {sum(1 for _, _, why in keep_a if why == '当日豁免')} 个）")
           for a, seq, why in drop_a:
