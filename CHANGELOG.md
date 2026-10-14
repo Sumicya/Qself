@@ -9,7 +9,7 @@
 - `build.yml`：触发收敛为 `push: branches: [main]` + `workflow_dispatch`；删掉全部 PR 守卫与 PR 专用的占位测试步骤；
   当日序号注释改「本出包工作流的运行序号」；清理作业去掉 PR 条件（清理只挂在出包工作流）。
 - 新增 `pr-check.yml`：`on: pull_request`、`permissions: contents: read`，两个作业（`dex` 落点核对 + 单元测试用占位版本名），不取号、不出包、不上传、不清理。
-- 旧口径产物处置：应删三笔旧口径产物（id 11861519548、11863836941、11864730478；当日序号序列 7 → 6 → 6 与新口径 3 并存）。本会话令牌实测三条 DELETE 全部 403（响应头 `X-Accepted-Github-Permissions: actions=write`），改由 CI 清理作业（持 `actions: write`）随运行记录的保留窗口淘汰，分界点写进 `AGENTS.md`。
+- 旧口径产物处置：三笔旧口径产物（id 11861519548、11863836941、11864730478；当日序号序列 7 → 6 → 6 与新口径 3 并存）本会话令牌删除返回 403（响应头 `X-Accepted-Github-Permissions: actions=write`），改由仓库拥有者在本机执行同一条命令删除成功；复核三条 GET 全 404，artifact 清零至 1 个（只剩新口径）。
 - 文档：`AGENTS.md` 版本条目按两工作流重写；`README.md` 符号数 177 → 182 与实际一致；本条记入本文件。
 
 ## 2026-10-14 — 堵刷号漏洞：PR 运行只校验不取号不出包
