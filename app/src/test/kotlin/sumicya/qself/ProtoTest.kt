@@ -13,6 +13,7 @@ class ProtoTest {
     @Test fun exactUnreadBadgeCountOnlyExpandsOverflowLabel() {
         assertEquals("100", exactBadgeText("99+", 100))
         assertEquals("12345", exactBadgeText("99+", 12345))
+        assertEquals("1234567", exactBadgeText("99+", 1234567))
         assertTrue(exactBadgeText("99+", 99) == null)
         assertTrue(exactBadgeText("100", 12345) == null)
         assertTrue(exactBadgeText(null, 12345) == null)

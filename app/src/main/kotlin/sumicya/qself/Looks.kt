@@ -204,42 +204,51 @@ private fun settle(bar: ViewGroup) {
 internal fun exactBadgeText(label: String?, count: Long): String? =
     if (label == "99+" && count > 99) count.toString() else null
 
-/** QQ 的 QUIBadge 自绘 mText；旧 d() 更新 TextView。只改真超限标签，并主动重新量尺寸、重绘。
- *  两条路径都从根视图扫全树：底栏走的是 d()，那里的徽标是自绘 QUIBadge、不是 TextView，
- *  得按实例取 mText；计数一律按 Number 收，别假设 Int。 */
+/** QQ 底栏那一枚是自绘的 QUIBadge。真包 smali 里的路径：
+ *  TabFrameControllerImpl#updateTabInfo 按 id 找到底栏徽标 → setRedNum(真数字)
+ *  → resetValue(); updateNum(真数字)。updateNum 是唯一把数字写成 99+ 的地方，
+ *  真数字仍留在字段 mNum 里，所以 setter 跑完按 mNum 展开，onDraw 前再兜一次底
+ *  （防哪天 QQ 改道直接写 mText）；旧版 TextView 绑定器 com.tencent.widget.d#d
+ *  照旧从根视图扫全树。计数一律按 Number 收，别假设 Int。 */
 fun exactCount() {
     val badge = cls("com.tencent.mobileqq.quibadge.QUIBadge")
-    val badgeText = badge.getDeclaredField("mText").apply { isAccessible = true }
-    val update = badge.method("updateNum")
+    val text = badge.getDeclaredField("mText").apply { isAccessible = true }
+    val num = badge.getDeclaredField("mNum").apply { isAccessible = true }
     val legacy = cls("com.tencent.widget.d").method("d")
 
+    /** 徽标文字还是 99+ 就换成 mNum 里的真数字；换成了才重排重绘（排到下一帧，绘制途中不排）。 */
+    fun expand(v: Any?) {
+        val view = v as? View ?: return
+        val label = runCatching { text.get(view) as? CharSequence }.getOrNull()?.toString()
+        if (label != "99+") return
+        val fixed = runCatching { (num.get(view) as? Number)?.toLong() }.getOrNull()?.let { exactBadgeText(label, it) } ?: return
+        if (runCatching { text.set(view, fixed) }.isSuccess) {
+            log("精确未读：$label → $fixed")
+            view.post { view.requestLayout(); view.invalidate() }
+        }
+    }
+
+    /** 旧绑定器那条：从根视图扫全树，TextView 里的 99+ 换成真数字。 */
     fun fix(root: View?, count: Long?) {
-        if (root == null || count == null || count <= 99) return
+        if (count == null || count <= 99) return
         fun go(v: View) {
-            if (badge.isInstance(v)) {
-                val label = runCatching { badgeText.get(v) as? CharSequence }.getOrNull()?.toString()
-                exactBadgeText(label, count)?.let { text ->
-                    if (runCatching { badgeText.set(v, text) }.isSuccess) {
-                        v.post { v.requestLayout(); v.invalidate() }
-                    }
-                }
-            } else if (v is TextView) {
-                exactBadgeText(v.text?.toString(), count)?.let {
+            when {
+                badge.isInstance(v) -> expand(v)
+                v is TextView -> exactBadgeText(v.text?.toString(), count)?.let {
                     v.text = it
                     v.requestLayout()
                     v.invalidate()
                 }
-            } else if (v is ViewGroup) {
-                for (i in 0 until v.childCount) go(v.getChildAt(i))
+                v is ViewGroup -> for (i in 0 until v.childCount) go(v.getChildAt(i))
             }
         }
-        go(root)
+        root?.let(::go)
     }
 
-    hook(update) { chain ->
-        val count = runCatching { (chain.getArg(0) as? Number)?.toLong() }.getOrNull()
-        chain.proceed().also { fix(chain.thisObject as? View, count) }
+    for (setter in listOf("updateNum", "setRedNum", "setGrayNum", "setAIOBarNum")) {
+        hook(badge.method(setter)) { chain -> chain.proceed().also { expand(chain.thisObject) } }
     }
+    hook(badge.method("onDraw")) { chain -> expand(chain.thisObject); chain.proceed() }
     hook(legacy) { chain ->
         val root = runCatching { chain.getArg(0) as? View }.getOrNull()
         val count = runCatching { (chain.getArg(1) as? Number)?.toLong() }.getOrNull()
