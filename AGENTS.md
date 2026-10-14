@@ -82,6 +82,9 @@
   取不到就退化四段 `yy.m.d.总序号`，并把原因写进本文件。
   `run_attempt > 1` 用缓存复用第一次 attempt 的号。文件名与 artifact 名都是 `Qself-<版本>`。
 - 会话分支要包用 `workflow_dispatch`（出包工作流不接会话分支 push，调试 CI 的推送不吃号）。
+- artifact 口径分界点：2026-10-14 拆工作流（提交 `4797b67`）之前的产物 `Qself-26.10.14.7.271`、`Qself-26.10.14.6.272`、
+  `Qself-26.10.14.6.273` 是旧口径（PR 运行也吃号那版）遗留；本会话令牌删不动它们（DELETE 返回 403，`X-Accepted-Github-Permissions: actions=write`），
+  由持 `actions: write` 的 CI 清理作业随保留窗口淘汰。分界之后只出五段新口径产物。
 - 本地要 gradle 出包必须显式给 `QSELF_VERSION`（五段或退化四段），缺失即失败；本地包只作自测，发行用 CI 的 artifact。
   PR 校验不取号，给不参与编号的占位 `00.0.0.0`，供 Gradle 取版本名用。
 - CI 分工：`build.yml` 四个作业 —— `dex` 核落点（真包从 `Sumicya/qqapk` 拼）、`apk` 跑单元测试并出包上传、
