@@ -85,10 +85,15 @@
 - 本地要 gradle 出包必须显式给 `QSELF_VERSION`（五段或退化四段），缺失即失败；本地包只作自测，发行用 CI 的 artifact。
   PR 校验不取号，给不参与编号的占位版本名，供 Gradle 用。
 - CI 分工：`build.yml` 四个作业 —— `dex` 核落点（真包从 `Sumicya/qqapk` 拼）、`apk` 跑单元测试并出包上传、
-  `cleanup-artifacts`（本 run 上传成功后按三条判据清理：数量=当日之外每条序列 artifact 5 个、run 5 条；命名口径=段数等于 `build.yml` 顶部 `env: SEGMENTS`；来源=artifact 的 `workflow_run` 事件是 `pull_request` 一律删。
-  数量判据当日豁免（当日序号取自当日运行列表，删当日运行会抽走计数基准），口径与来源不豁免、当轮即删；本仓 PR 校验工作流的超量 run 也在这里一并收，清理只此一处；承载保留产物的 run 不动。最小 `actions: write`）、
+  `cleanup-artifacts`（本 run 上传成功后按四条判据清理：口径=段数等于 `build.yml` 顶部 `env: SEGMENTS`；来源=artifact 的 `workflow_run` 事件是 `pull_request` 一律删；
+  重复当日序号=同日同序列保留总序号最大者、其余删；数量=当日之外每条序列 artifact 5 个、run 5 条，当日豁免（当日序号取自当日运行列表，删当日运行会抽走计数基准）。
+  口径、来源、重复三条不豁免、当轮即删；排队按 `run_started_at`（UTC+8 日界）、`id` 只作同刻 tiebreak；承载保留产物的 run 不删也不计入上限，正在跑的本次不删；
+  本仓 PR 校验工作流的超量 run 也在这里一并收，真删只此一处。最小 `actions: write` + `contents: read`）、
   `cleanup-releases`（只在默认分支收 Release 到 1 个，`contents: write`，与上者不同授）；
-  `pr-check.yml` 两个作业（`dex` + 单元测试），不取号、不出包、不清理。
+  `pr-check.yml` 三个作业（`dex` + 单元测试 + `cleanup-preview`），不取号、不出包、不上传、不做真删。
+- 清理逻辑只有一份 `.github/scripts/cleanup.py`：出包工作流 `CLEANUP_APPLY: 'true'` 真删，PR 校验工作流 `actions: read` + `'false'` 只打印将删名单与判据理由。
+  会话支推不上默认分支、会话令牌 `actions` 写实测 403，所以真删发生在出包工作流首次运行时，会话侧证据取 `cleanup-preview` 的预演日志；超量对象状态记「待出包工作流首次运行」。
+- 版本分界点：2026-10-14 当日序号 6 曾重复（`rn=273`、`rn=275` 都是 `pull_request` 运行仍出包），产物 `Qself-26.10.14.6.273` 与 `.6.275` 已删；该日之前的当日序号不可信。
 - 本项目 CI 只出 debug 包，不创建 Release、正式 tag 或 asset；发版须主人明确授权。
 - 会话分支只由会话删（删 ref 需 `contents: write`，不进 CI）：判据是相对默认分支 compare `ahead_by=0`；
   PR 关闭未合入、或仍挂开放 PR 的分支一律保留并报主人。本仓变更记在 `CHANGELOG.md`。

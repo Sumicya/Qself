@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-14 — 清理判据补齐四条：单一脚本 + PR 校验只读预演，超量对象不再卡在「看不见」
+
+- 依据：selfs 分支提交 `3d7be5b`（清理作业补三条：清理逻辑只写一份脚本，靠 `CLEANUP_APPLY` 开关分出包真删与 PR 只读预演；新增判据「重复当日序号」；run 上限与 artifact 承载解耦——承载保留产物的 run 不删也不计入上限，排序按 `run_started_at`、`id` 只作同刻 tiebreak，日志逐对象打印判据与豁免原因、话术不得与实际分支矛盾）。
+- `build.yml`：头注释旧保留数写法（「artifact（5 个）与运行记录（5 条）」）改成规范话术（当日之外每条序列 5、承载不计数、当日豁免）；清理作业从内联脚本改为 checkout + 调 `.github/scripts/cleanup.py`，`CLEANUP_APPLY: 'true'`，权限 `actions: write` + `contents: read`。
+- `pr-check.yml`：新增 `cleanup-preview` 作业（`actions: read` + `CLEANUP_APPLY: 'false'`），同一份脚本只打印将删名单与判据理由。死锁解开：会话支跑得到预演，真删仍只在出包工作流一处。
+- 预演（live，脚本同一份）：将删 0 个 artifact、0 条 run——artifact 1 个走「当日豁免」，run 12 条里 5 条当日豁免 + 1 条「承载保留产物：不删、不计入上限」+ 7 条 pr-check 当日豁免；逐对象理由与实际分支一致（旧版那句「删除 0 条（全部为当日之外、且不承载保留产物）」的错话术已不存在）。
+- 干跑（合成数据，含重复当日序号与承载 run）：将删 5 个 artifact（口径 1、来源 1、重复当日序号 1、数量 2）、5 条 run；`APPLY=true` 时正好发出这 10 条 DELETE，`APPLY=false` 时 0 条；`SEGMENTS=4` 边界按退化四段口径判。
+- 文档：`AGENTS.md` 清理条目补四条判据、单一脚本与预演，并记 2026-10-14 当日序号 6 重复的分界点。
+
 ## 2026-10-14 — 清理作业按规范三条判据重写（数量 / 命名口径 / 来源）
 
 - 依据：selfs 分支提交 `2dec668`（清理判据三条：数量=当日之外每条序列 artifact 5 个、run 5 条；命名口径=段数等于工作流顶部 `SEGMENTS` 声明值；来源=artifact 的 `workflow_run` 事件是 `pull_request` 一律删。

@@ -1,4 +1,4 @@
-# Qself PR 校验工作流 —— 只跑校验：不取号、不出包、不上传 artifact、不清理。
+# Qself PR 校验工作流 —— 只跑校验：不取号、不出包、不上传 artifact、不做真删（只跑清理判据预演）。
 # 与 build.yml 分开是规范要求：run_number 在运行创建时就分配，且按工作流计数；
 # 同一个文件接 pull_request 会继续吃出包号段的号（实测 rn=273、rn=275 都是 PR 运行）。
 # 触发只允许 pull_request；出包与版本号在 build.yml。
@@ -44,3 +44,22 @@ jobs:
         env:
           QSELF_VERSION: 00.0.0.0
         run: ./gradlew --no-daemon :app:testDebugUnitTest
+
+  # 清理预演：调用与出包工作流同一份脚本（.github/scripts/cleanup.py），CLEANUP_APPLY='false' 只打印
+  # 将删名单与判据理由，不删。会话分支上跑得到，这份日志就是会话侧的真机证据；真删只在 build.yml。
+  cleanup-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: 清理判据预演（只打印，不删）
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SELF: ${{ github.run_id }}
+          SEGMENTS: '5'
+          CLEANUP_APPLY: 'false'
+        run: python3 .github/scripts/cleanup.py

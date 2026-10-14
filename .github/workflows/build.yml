@@ -4,8 +4,9 @@
 # run_number 在运行创建时就分配，步骤级 if 挡不住吃号 —— 所以要拆文件，不能靠 if（规范 5e2b978）。
 # 调试 CI 的推送走会话分支，不触发出包；会话分支要包用 workflow_dispatch。
 # dex 作业拿真 QQ 包核每一个落点；apk 作业按五段版本出 debug APK 放进 Artifacts。
-# 出包后立刻做数量清理：artifact（5 个）与运行记录（5 条）用最小 actions: write，
-# Release（1 个）/ tag 收口要 contents: write，只在默认分支跑。两者分开授权，不同授。
+# 出包后立刻清理：当日之外每条序列 artifact 5 个、run 5 条（承载保留产物的 run 不计入上限），当日对象豁免。
+# 清理逻辑只一份 `.github/scripts/cleanup.py`：本工作流 `CLEANUP_APPLY: 'true'` 真删，权限 actions: write；
+# PR 校验工作流用同一脚本、`'false'` 只预演；Release（1 个）/ tag 收口要 contents: write，只在默认分支跑，分开授权不同授。
 # 版本取数只锚定本次 run：总序号 = 本出包工作流的 run_number 原值（workflow 重建才用 AGENTS.md 里记的基线相减），
 # 当日序号 = 当日（UTC+8）本出包工作流的运行序号（按 run_started_at 升序），取不到就退化四段 yy.m.d.总序号；
 # 禁止查最新 run / 最新 artifact 或历史成功数。
@@ -143,10 +144,11 @@ jobs:
           overwrite: true
           retention-days: 5
 
-  # artifact 与运行记录清理：判据三条 —— 数量（当日之外每条序列 artifact 5、run 5）、
-  # 命名口径（段数 ≠ 工作流顶部 SEGMENTS）、产物来源（workflow_run 事件是 pull_request 的一律删）。
-  # 数量判据当日豁免：当日序号取自当日运行列表，删当日运行会抽走计数基准；口径与来源不豁免，当轮即删。
-  # 清理只留这一处：PR 校验工作流不挂清理作业，它的超量 run 在这里按序列一并收。
+  # artifact 与运行记录清理：判据四条 —— 口径（段数 ≠ 顶部 SEGMENTS）、来源（workflow_run 是 pull_request）、
+  # 重复当日序号（同日同序列保留总序号最大者）、数量（当日之外每条序列 artifact 5、run 5）。
+  # 数量判据当日豁免：当日序号取自当日运行列表，删当日运行会抽走计数基准；其余三条不豁免，当轮即删。
+  # 排队按 run_started_at（UTC+8 日界）；承载保留产物的 run 不删、也不计入上限；正在跑的本次不删。
+  # 清理只留这一处真删：PR 校验工作流不挂真删，它的超量 run 在这里按序列一并收（actions: write 可删同仓任意工作流的 run）。
   # 权限最小 actions: write（只删本项目 artifact 与 run），按规范不与 contents: write 同授；动不到 Release、tag、分支。
   cleanup-artifacts:
     needs: apk
@@ -157,106 +159,17 @@ jobs:
       cancel-in-progress: false
     permissions:
       actions: write
+      contents: read
     steps:
-      - name: 按三条判据清理 artifact 与运行记录
+      - uses: actions/checkout@v7
+      - name: 按四条判据清理 artifact 与运行记录
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SELF: ${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json, os, subprocess
-          from collections import defaultdict
-          from datetime import datetime, timedelta, timezone
-
-          REPO = os.environ["REPO"]
-          SELF = int(os.environ["SELF"])
-          SEGMENTS = int(os.environ["SEGMENTS"])       # 工作流顶部声明
-          PREFIX = "Qself-"
-          KEEP = 5                                     # 当日之外每条序列 artifact 5、run 5
-          CST = timezone(timedelta(hours=8))
-          today = datetime.now(CST).strftime("%Y-%m-%d")
-
-          def gh(*args, check=True):
-              p = subprocess.run(["gh", *args], capture_output=True, text=True)
-              if check and p.returncode != 0:
-                  raise SystemExit("gh " + " ".join(args) + " 失败：" + p.stderr.strip())
-              return p.stdout
-
-          def list_all(url, key):
-              out = gh("api", "--paginate", url, "--jq", key + "[]")
-              return [json.loads(line) for line in out.splitlines() if line.strip()]
-
-          def day_of(obj):
-              return datetime.fromisoformat(obj["created_at"].replace("Z", "+00:00")).astimezone(CST).strftime("%Y-%m-%d")
-
-          runs = list_all(f"repos/{REPO}/actions/runs?per_page=100", ".workflow_runs")
-          by_id = {r["id"]: r for r in runs}
-
-          # ---------- artifact：口径 → 来源 → 数量 ----------
-          arts = [a for a in list_all(f"repos/{REPO}/actions/artifacts?per_page=100", ".artifacts") if not a["expired"]]
-          drop_a, keep_a = [], []
-          quota = defaultdict(list)                    # 序列（工作流路径）-> 当日之外待选，按时间新到旧
-          for a in sorted(arts, key=lambda x: x["created_at"], reverse=True):
-              r = by_id.get(a["workflow_run"]["id"])
-              seq = (r or {}).get("path", "(未知来源)")
-              name = a["name"]
-              seg = len(name[len(PREFIX):].split(".")) if name.startswith(PREFIX) else 0
-              if not name.startswith(PREFIX) or seg != SEGMENTS:
-                  drop_a.append((a, seq, f"口径：段数 {seg} ≠ {SEGMENTS}"))
-              elif r and r["event"] == "pull_request":
-                  drop_a.append((a, seq, "来源：workflow_run 事件是 pull_request"))
-              elif day_of(a) == today:
-                  keep_a.append((a, seq, "当日豁免"))
-              else:
-                  quota[seq].append(a)
-
-          for seq, lst in quota.items():
-              for i, a in enumerate(lst):
-                  if i < KEEP:
-                      keep_a.append((a, seq, "数量：当日之外保 5"))
-                  else:
-                      drop_a.append((a, seq, "数量：超出当日之外上限"))
-
-          print(f"artifact：删除 {len(drop_a)} 个，保留 {len(keep_a)} 个（当日豁免 {sum(1 for _, _, why in keep_a if why == '当日豁免')} 个）")
-          for a, seq, why in drop_a:
-              print(f"  删 {a['name']} id={a['id']}（{why}）")
-              gh("api", "-X", "DELETE", f"repos/{REPO}/actions/artifacts/{a['id']}")
-          kept_runs = {a["workflow_run"]["id"] for a, _, _ in keep_a}
-          left = defaultdict(int)
-          for a, seq, _ in keep_a:
-              left[seq] += 1
-          for seq in sorted(left):
-              print(f"  剩 {seq}  {left[seq]} 个")
-
-          # ---------- 运行记录：数量（序列按工作流计），当日豁免；承载保留产物的 run 不动 ----------
-          drop_r, keep_r = [], []
-          seq_runs = defaultdict(list)
-          for r in sorted(runs, key=lambda x: x["id"], reverse=True):
-              if r["id"] == SELF or r["status"] != "completed" or day_of(r) == today:
-                  continue
-              seq_runs[r["path"]].append(r)
-          for seq, lst in seq_runs.items():
-              for i, r in enumerate(lst):
-                  # 当日之外每条序列保 5 条；承载保留产物的 run 一律不动（删 run 会连带删产物）
-                  if i < KEEP or r["id"] in kept_runs:
-                      keep_r.append((r, seq))
-                  else:
-                      drop_r.append((r, seq))
-
-          print(f"运行记录：删除 {len(drop_r)} 条（全部为当日之外、且不承载保留产物）")
-          for r, seq in drop_r:
-              print(f"  删 id={r['id']} rn={r['run_number']} {seq} {r['created_at']}")
-              gh("api", "-X", "DELETE", f"repos/{REPO}/actions/runs/{r['id']}")
-          deleted = {r["id"] for r, _ in drop_r}
-          left_r = defaultdict(int)
-          for r in runs:
-              if r["id"] not in deleted:
-                  left_r[r["path"]] += 1
-          for seq in sorted(left_r):
-              print(f"  剩 {seq}  {left_r[seq]} 条")
-          PY
+          SEGMENTS: ${{ env.SEGMENTS }}
+          CLEANUP_APPLY: 'true'
+        run: python3 .github/scripts/cleanup.py
 
   # Release / tag 清理：动的是发行对象，要 contents: write，所以单独作业、只在默认分支上跑，
   # 与上面那个 actions: write 的作业分开授权（规范禁止两者同授）。
