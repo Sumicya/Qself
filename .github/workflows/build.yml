@@ -26,6 +26,7 @@ permissions:
 # 退化四段期改 4，并在 AGENTS.md 写明原因。
 env:
   SEGMENTS: '5'
+  CLEANUP_APPLY: 'true'          # 清理脚本的真删开关；PR 校验工作流同一份脚本声明为 'false' 只预演
 
 jobs:
   # 落点核对：真包在 Sumicya/qqapk（qq.aa..qq.ae 拼起来）。表红了就是这版 QQ 里名字对不上，
@@ -167,8 +168,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SELF: ${{ github.run_id }}
-          SEGMENTS: ${{ env.SEGMENTS }}
-          CLEANUP_APPLY: 'true'
         run: python3 .github/scripts/cleanup.py
 
   # Release / tag 清理：动的是发行对象，要 contents: write，所以单独作业、只在默认分支上跑，

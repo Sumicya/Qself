@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+# 清理预演开关：与 build.yml 调用同一份脚本，这里只打印将删名单与判据理由，不删。
+env:
+  SEGMENTS: '5'
+  CLEANUP_APPLY: 'false'
+
 jobs:
   # 落点核对：真包在 Sumicya/qqapk（qq.aa..qq.ae 拼起来）。表红了就是这版 QQ 里名字对不上，出包也是白出。
   dex:
@@ -60,6 +65,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SELF: ${{ github.run_id }}
-          SEGMENTS: '5'
-          CLEANUP_APPLY: 'false'
         run: python3 .github/scripts/cleanup.py

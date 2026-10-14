@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-10-14 — 分界点改记可核对象；清理开关与段数提到工作流顶部声明
+
+- 依据：selfs 分支提交 `bc98bd5`（分界点只引可核对象：run 号、事件、head sha、日期，加删除前 API 名单原文与取值时间；已删 artifact 的名字先按 run 记录核）、`215a796`（回收两条：`run_started_at` 缺失才退回 `created_at`、未完成的 run 不删）、`5dc0d28`（检讨条款整条删除）。
+- `AGENTS.md`：分界点那条按 run 记录逐条重核后重写 —— 重复当日序号 6 的是 `rn=272`（事件 `push`）与 `rn=273`（事件 `pull_request`，同 sha 7920b0a2），不是 rn=273/275；`rn=275`（事件 `pull_request`）取号、算版本、测试与出包、上传步骤全 skipped、按 run 反查 artifact 数=0，`.6.275` 从未存在；删除前名单（取值 2026-10-14T03:17Z）`.7.271`、`.6.272`、`.6.273`、`.3.274` 四条，前三条已删，只剩 `.3.274`。同条补上「排序字段缺失才退回 `created_at`、未完成的 run 不删」两条口径。
+- `build.yml`：`env` 顶部加 `CLEANUP_APPLY: 'true'`（真删开关），与 `SEGMENTS: '5'` 并排；清理步骤 env 只留 `GH_TOKEN`/`REPO`/`SELF`。`pr-check.yml`：顶部 `env` 加 `SEGMENTS: '5'` 与 `CLEANUP_APPLY: 'false'`（只预演）。两处调用的仍是同一份 `.github/scripts/cleanup.py`，脚本未动。
+
 ## 2026-10-14 — 清理判据补齐四条：单一脚本 + PR 校验只读预演，超量对象不再卡在「看不见」
 
 - 依据：selfs 分支提交 `3d7be5b`（清理作业补三条：清理逻辑只写一份脚本，靠 `CLEANUP_APPLY` 开关分出包真删与 PR 只读预演；新增判据「重复当日序号」；run 上限与 artifact 承载解耦——承载保留产物的 run 不删也不计入上限，排序按 `run_started_at`、`id` 只作同刻 tiebreak，日志逐对象打印判据与豁免原因、话术不得与实际分支矛盾）。
