@@ -10,12 +10,12 @@ import org.junit.Test
 
 /** 纯逻辑回归检查：防撤回 protobuf 判断与 99+ 精确数字替换条件。 */
 class ProtoTest {
-    @Test fun badgeReplacementOnlyChangesQQOverflowLabel() {
-        assertEquals("100", exactCountReplacement("99+", 100))
-        assertEquals("12345", exactCountReplacement("99+", 12345))
-        assertEquals(null, exactCountReplacement("99+", 99))
-        assertEquals(null, exactCountReplacement("100", 12345))
-        assertEquals(null, exactCountReplacement(null, 12345))
+    @Test fun exactUnreadBadgeCountOnlyExpandsOverflowLabel() {
+        assertEquals("100", exactBadgeText("99+", 100))
+        assertEquals("12345", exactBadgeText("99+", 12345))
+        assertTrue(exactBadgeText("99+", 99) == null)
+        assertTrue(exactBadgeText("100", 12345) == null)
+        assertTrue(exactBadgeText(null, 12345) == null)
     }
 
     private fun varint(v: Long): ByteArray {
