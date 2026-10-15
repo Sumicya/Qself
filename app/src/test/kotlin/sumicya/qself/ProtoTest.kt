@@ -58,6 +58,12 @@ class ProtoTest {
         assertEquals(RunKey(PendingMessage(123)), RunKey(PendingMessage(123)))
     }
 
+    class PrivateAvatar { private fun C1(): String = "original-avatar" }
+    @Test fun avatarAccessorCanBePrivate() {
+        val method = PrivateAvatar::class.java.method("C1").apply { isAccessible = true }
+        assertEquals("original-avatar", method.invoke(PrivateAvatar()))
+    }
+
     private fun varint(v: Long): ByteArray {
         var x = v
         val out = ArrayList<Byte>()

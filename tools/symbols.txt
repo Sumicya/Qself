@@ -103,21 +103,9 @@ field  com.tencent.mobileqq.activity.ForwardRecentActivity#mForwardTargetMap
 field  com.tencent.mobileqq.activity.ForwardRecentActivity#mSelectedAndSearchBar
 # 「隐藏在线状态」是视图规则，认的是服务器发的文案，dex 里没有对应落点。
 
-# ---------- 昵称行只留名字 Chat.kt
-class  com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock
-member! com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock#l
-member! com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock#h
-class  com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickSlotContainer
-member! com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickSlotContainer#d
+# ---------- 连发组首昵称（不移除等级/头衔/会员装饰）
 class  com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2
-member! com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2#d1
 member! com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2#f1
-class  com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.block.AIONickIconSimpleBlock
-class  com.tencent.qqnt.aio.gradelevel.AIOTroopMemberGradeLevelBlock
-class  com.tencent.qqnt.aio.mutualmark.AIOTroopHonorNickBlock
-class  com.tencent.qqnt.aio.nick.memberlevel.AIOTroopMemberLevelBlock
-class  com.tencent.mobileqq.vas.vipicon.AIOVipIconProcessor
-class  com.tencent.mobileqq.vas.vipicon.AIOVipIconExProcessor
 
 # ---------- 转发页 Chat.kt
 class  com.tencent.mobileqq.activity.ForwardRecentActivity

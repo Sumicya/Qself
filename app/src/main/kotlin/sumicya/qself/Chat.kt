@@ -240,7 +240,8 @@ fun groupRuns() {
         val components = cls("com.tencent.mobileqq.aio.msglist.holder.g").getMethod("get")
         val componentRoot = cls("com.tencent.mobileqq.aio.msglist.holder.component.c").getMethod("f1")
         val avatarType = cls("com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent")
-        val avatarImage = avatarType.getMethod("C1")
+        // 真包 C1 的访问标记为 0x12（private final），getMethod 只查 public 会使整项安装失败。
+        val avatarImage = avatarType.method("C1").apply { isAccessible = true }
         val nickType = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2")
         val contentType = cls("com.tencent.mobileqq.aio.msglist.holder.component.BaseContentComponent")
         var reported = false
@@ -581,33 +582,6 @@ fun plusPanel() {
 private fun title(item: Any): String? =
     runCatching { item.javaClass.getMethod("getTitle").invoke(item) as? String }.getOrNull()
         ?: runCatching { item.javaClass.getMethod("getName").invoke(item) as? String }.getOrNull()
-
-// ---- 昵称行只留名字：群等级、头衔、成员等级、会员图标各是一个 block，问「这条消息要不要我」时一律答否。
-
-private val NICK_DROP = setOf(
-    "com.tencent.qqnt.aio.gradelevel.AIOTroopMemberGradeLevelBlock",
-    "com.tencent.qqnt.aio.mutualmark.AIOTroopHonorNickBlock",
-    "com.tencent.qqnt.aio.nick.memberlevel.AIOTroopMemberLevelBlock",
-    "com.tencent.mobileqq.vas.vipicon.AIOVipIconProcessor",
-    "com.tencent.mobileqq.vas.vipicon.AIOVipIconExProcessor",
-    "com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.block.AIONickIconSimpleBlock",
-)
-
-fun plainNick() {
-    val block = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock")
-    val viewOf = block.method("h") // 该 block 已经建出来的 View（可能还没有）
-    hook(block.method("l")) { chain ->
-        val self = chain.thisObject
-        if (generateSequence<Class<*>>(self.javaClass) { it.superclass }.none { it.name in NICK_DROP }) return@hook chain.proceed()
-        (viewOf.invoke(self) as? View)?.visibility = View.GONE
-        false
-    }
-    // 调用 l() 的两处都是小方法，ART 可能把它们内联，钩子就落空；反优化保证走钩子。
-    cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickSlotContainer").declaredMethods
-        .filter { it.name == "d" }.forEach { xposed.deoptimize(it) }
-    cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2").declaredMethods
-        .filter { it.name == "d1" }.forEach { xposed.deoptimize(it) }
-}
 
 // ---- 轻互动（戳一戳那类全屏特效）与表情雨：配置列表永远为空。
 
