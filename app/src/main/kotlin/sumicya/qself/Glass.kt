@@ -62,12 +62,23 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     private var target: View? = null
     private var fromX = 0f
     private var toX = 0f
+    private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> key = 0L; invalidateSelf() }
+    private val attachListener = object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(v: View) { key = 0L; invalidateSelf() }
+        override fun onViewDetachedFromWindow(v: View) { stopAnimations() }
+    }
     init {
-        host.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> key = 0L; invalidateSelf() }
-        host.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) { key = 0L; invalidateSelf() }
-            override fun onViewDetachedFromWindow(v: View) { busy = false; key = 0L }
-        })
+        host.addOnLayoutChangeListener(layoutListener)
+        host.addOnAttachStateChangeListener(attachListener)
+    }
+    private fun stopAnimations() {
+        pressAnim.cancel(); anim.cancel(); press = 0f; pressed = false; target = null
+        busy = false; key = 0L; node.discardDisplayList()
+    }
+    fun dispose() {
+        stopAnimations()
+        host.removeOnLayoutChangeListener(layoutListener)
+        host.removeOnAttachStateChangeListener(attachListener)
     }
 
     private val anim = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -204,7 +215,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         pressed = p
         pressAnim.cancel()
         pressAnim.setFloatValues(press, if (p) 1f else 0f)
-        pressAnim.start()
+        if (ValueAnimator.areAnimatorsEnabled()) pressAnim.start() else { press = if (p) 1f else 0f; invalidateSelf() }
         return true
     }
 
@@ -240,7 +251,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             fromX = if (first) x else fromX + (toX - fromX) * f
             target = t
             anim.cancel()
-            if (!first) anim.start()
+            if (!first && ValueAnimator.areAnimatorsEnabled()) anim.start()
         }
         toX = x
         val cx = fromX + (toX - fromX) * (if (anim.isRunning) spring(anim.animatedFraction) else 1f)

@@ -3,9 +3,9 @@
 ## 是什么
 
 一个纯钩子的 LSPosed 模块（libxposed API 102），只针对 QQ 9.2.10 / Android 16。模块 APK 没有界面；
-纯 Kotlin，八个文件（约 1500 行），没有第三方依赖、没有 `.so`、不联网。外观照 NagramXF 那套长相做（液态玻璃 + Monet 取色 + TG 式输入栏）。
+纯 Kotlin，八个源码文件，没有第三方依赖、没有 `.so`、不联网。外观照 NagramXF 那套长相做（液态玻璃 + Monet 取色 + 原生输入区玻璃化）。
 
-开关是 QQ 主页底栏右上角一颗圆钮弹出的系统对话框，状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
+开关是 QQ 主页底栏右上角一颗圆钮弹出的紧凑玻璃面板，状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
 
 **改任何落点之前先跑 `tools/dexcheck.py`**（真包在 `Sumicya/qqapk`，`cat qq.a* > qq.apk`）。
 本地没有 Android SDK 时用 `ci/check.sh` 做类型检查 + 跑 ProtoTest（第一次会拉工具链到 `~/.cache/qself-tc`）。
@@ -17,11 +17,13 @@
 - 不加抽象、不加依赖、不加样板；能删就删；一个功能 = 一个顶层函数 + `Qself.kt` 清单里一行（清单顺序就是开关顺序）
 - 钩子体不要 try/catch 兜底整个功能：libxposed 默认异常模式下，钩子抛异常等于这一次没装。
   但**从 `chain` 取参数、反射取视图这类可能落在兄弟子类上的动作要包 `runCatching`** —— 挂点在基类时，钩子会盖住所有子类
-- 钩子经 `hook()` 装就自动受开关管；视图规则自己 `on("功能名")`
+- 每项安装经 `installFeature()`：异常撤掉本项已经安装的钩子；钩子经 `hook()` 自动受开关管，视图规则自己 `on("功能名")`
+- 首帧规则在 pre-draw 同步应用，禁止恢复 150ms 扫描或延迟注册；浮动头像跟手定位，不加追赶补间。连续消息只收紧正 topMargin，复用和关闭须还原；昵称固定组首。
+- 输入保留 QQ 原 EditText 和父层级；不得带回旧输入栏搬移/隐藏/压缩方案，不得重新加入“昵称只留名字”。
 - minSdk 36：只有 Android 16，别写 `SDK_INT` 判断和降级分支
 - 故意省掉的地方写 `ponytail:` 注释，说清上限和往上走的路
 - 非平凡逻辑留一份能跑的检查（目前只有 `ProtoTest.kt`）
-- 外观那三个文件（`Glass.kt` / `Input.kt` / `Looks.kt`）全是视图规则，dex 核不到，只能靠真机；
+- 外观文件（`Glass.kt` / `Input.kt` / `Looks.kt` / `Knob.kt`）的实际视觉与生命周期不能由 dex 核验代替，必须真机检查；
   改完说清楚改了哪块长相，别让人猜
 - 代码先行，解释不超过三行；中文
 

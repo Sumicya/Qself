@@ -1,11 +1,11 @@
 # Qself
 
 给 NT QQ 的一个 LSPosed 模块：**自由、简单、现代、原生**。装上即全部生效，不联网、没有第三方库、没有一个 `.so`。
-开关不在模块里，在 QQ 主页底栏胶囊旁边那颗玻璃圆钮里：点开是一整块玻璃大卡片，一行两张卡、
+开关不在模块里，在 QQ 主页底栏胶囊旁边那颗玻璃圆钮里：点开是宽不超过 360dp、高不超过 440dp / 可用高度 62% 的紧凑玻璃面板，一行两项、
 画出来的 ✓/–/✗ 加一句描述（✗ = 这版 QQ 没装上），存进 QQ 自己的 SharedPreferences。
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
-但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，182 条）——换版本先看那张表红哪条，别猜。
+但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，180 条）——换版本先看那张表红哪条，别猜。
 
 ## 做了什么
 
@@ -25,7 +25,7 @@
 
 聊天
 - 防撤回：私聊、群聊、重连补发的撤回都吞掉，被撤回的那条压成半透明，会话里插一条「xx 尝试撤回一条消息」灰字
-- 连发合并：昵称固定在组首消息上方，不进气泡、不随头像浮动；头像只绘制一份，单条按实际消息内容垂直居中，多条随组末消息内容中心浮动。2026-10-15 撤回上一版浮动验收（自己的头像重复、单条位置偏下）；本次重做定位，待真机重新验收。
+- 连发合并：昵称固定在组首消息上方，不进气泡、不随头像浮动；头像只绘制一份，单条按实际消息内容垂直居中，多条随组末消息内容中心浮动。2026-10-15 撤回上一版浮动验收（自己的头像重复、单条位置偏下）；本次移除延迟注册，昵称/间距布局完成后再绘制该帧，续条正上间距收紧 4dp（不小于零）；浮动位置不加滞后动画，仍待真机重新验收。
 - **回复不@**：回复消息时不再往输入框插「@昵称 」
 - **转发不限人数**：转发选人到 9 个就不再卡住，顶部「已选 N 人」跟着走
 - **左滑回复不设限**：卡片 (Ark) 消息也能左滑回复
@@ -45,7 +45,7 @@
 1. Actions 里下载最新一次构建的 APK（或 `gh run download -R Sumicya/Qself`），安装
 2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开
 3. 主页底栏胶囊旁边那颗圆钮（右边放不下就在胶囊右上方）：点开勾选即时生效（钩子每次被调用都查开关）；
-   输入栏开关可恢复原外观；从旧的搬移布局版本升级时必须强行停止 QQ 再打开。已经浮起来的底栏仍需「重启 QQ」复原
+   输入栏开关可恢复原外观；从旧的搬移布局版本升级时必须强行停止 QQ 再打开。底栏关闭会还原布局、背景与内边距；菜单支持恢复默认，✗ 项可查看安装失败原因
 4. 每个 QQ 进程启动时打一行日志，`logcat -s Qself` 或 LSPosed 管理器的日志页可见，形如
    `Qself <版本> @ com.tencent.mobileqq ✓系统WebView ✓防撤回 … ✗某功能(NoSuchMethodException: …)`
    —— ✗ 就是那个功能在这版 QQ 里找不到落点，其余不受影响。**把这一行贴回来就能修。**
@@ -57,13 +57,13 @@
 app/src/main/kotlin/sumicya/qself/
   Qself.kt   入口：功能清单（也是开关列表）、按进程装、日志
   Hook.kt    libxposed 封装（hook / constant / afterNew / 反射读写字段方法）与开关读取
-  Knob.kt    主页那颗圆钮与开关面板（玻璃大卡片）
+  Knob.kt    主页那颗圆钮与开关面板（紧凑玻璃面板）
   Quiet.kt   自由化
   Chat.kt    聊天，含防撤回用的几十行 protobuf 读取、撤回灰字、连发合并、回复不@
   Looks.kt   外观：盯住每个 Activity 的视图树套规则
   Input.kt   TG 式输入栏
   Glass.kt   液态玻璃 Drawable（RenderNode + AGSL + Monet 取色，底栏用时自带滑动亮胶囊）
-app/src/test/kotlin/sumicya/qself/ProtoTest.kt   防撤回判断的唯一一份可跑检查
+app/src/test/kotlin/sumicya/qself/ProtoTest.kt   协议、分组、间距、菜单尺寸等纯逻辑回归
 app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop、作用域
 tools/symbols.txt    落点表：代码依赖的每一个名字
 tools/dexcheck.py    拿真 dex 逐条核落点，顺带 lint 源码里没登记的名字
@@ -75,7 +75,7 @@ ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
 
 ```sh
 git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
-python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 182 条全绿才算数
+python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 180 条全绿才算数
 python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
 ```
 

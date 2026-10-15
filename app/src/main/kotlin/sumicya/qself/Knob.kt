@@ -1,240 +1,317 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself
 
+import android.animation.ArgbEvaluator
+import android.animation.ValueAnimator
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.ContextWrapper
 import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PathMeasure
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
+import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
+import java.util.Collections
+import java.util.WeakHashMap
 import kotlin.math.min
 
-/**
- * 开关：主页那颗玻璃圆钮 —— 和胶囊同高、顶底对齐，胶囊右边放得下就跟胶囊并排。
- * 底栏藏起来的页面（频道那些）钮也跟着藏，不留一颗钮飘在别的页面上。
- * 点开是一整块玻璃大卡片：一行两张卡、卡自己没底色，钩叉是画出来的（✓ 开着、– 没开、✗ 这版 QQ 没装上），
- * 每张卡带一句描述。状态存在 QQ 自己的 SharedPreferences「qself」里，钩子每次被调用时都查一遍，
- * 所以切换即时生效；已经改过的视图（浮起来的底栏、排好的输入行）要重启 QQ 才复原。
- */
 private const val KNOB = "qself-knob"
 private const val SHEET = "qself-sheet"
+private val knobs: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
+private val sheets: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
+private fun easing() = PathInterpolator(0.2f, 0f, 0f, 1f)
+
+fun motionDuration(milliseconds: Long): Long = if (ValueAnimator.areAnimatorsEnabled()) milliseconds else 0L
+
+/** 只用于模块自己创建的按钮，不替换 QQ 原控件的触摸监听器。 */
+private fun View.pressMotion() {
+    setOnTouchListener { view, event ->
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> view.animate().scaleX(0.96f).scaleY(0.96f)
+                .setDuration(motionDuration(80)).setInterpolator(easing()).start()
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f)
+                .setDuration(motionDuration(150)).setInterpolator(easing()).start()
+        }
+        false
+    }
+    addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(view: View) = Unit
+        override fun onViewDetachedFromWindow(view: View) {
+            view.animate().cancel()
+            (view.background as? Glass)?.dispose()
+        }
+    })
+}
 
 fun knob(bar: View) {
     val decor = bar.rootView as? ViewGroup ?: return
     val old = decor.findViewWithTag<View>(KNOB)
     if (bar.height == 0) return
-    if (!bar.isShown) { // 底栏不在这页上：钮藏起来，别侵入别的页面
-        old?.visibility = View.GONE
-        return
-    }
+    if (!bar.isShown) { old?.visibility = View.GONE; return }
     val dp = bar.dp
-    val size = bar.height // 和胶囊同一个尺寸，顶边底边自然齐平
+    val size = min(bar.height, (40 * dp).toInt())
     val at = IntArray(2).also(bar::getLocationInWindow)
-    val room = decor.width - at[0] - bar.width // 胶囊右边剩多少
+    val room = decor.width - at[0] - bar.width
     val beside = room >= (8 * dp).toInt() + size
-    val lift = decor.height - at[1] - bar.height // 钮和胶囊同高，这一个数同时管顶和底
+    val bottom = if (beside) decor.height - at[1] - (bar.height + size) / 2
+        else decor.height - at[1] + (8 * dp).toInt()
     val end = if (beside) room - (8 * dp).toInt() - size else (8 * dp).toInt()
     if (old != null) {
         old.visibility = View.VISIBLE
         val lp = old.layoutParams as ViewGroup.MarginLayoutParams
-        if (lp.width != size || lp.bottomMargin != lift || lp.marginEnd != end) {
-            lp.width = size
-            lp.height = size
-            lp.bottomMargin = lift
-            lp.marginEnd = end
+        if (lp.width != size || lp.bottomMargin != bottom || lp.marginEnd != end) {
+            lp.width = size; lp.height = size; lp.bottomMargin = bottom; lp.marginEnd = end
             old.layoutParams = lp
         }
         return
     }
-    val knob = ImageView(bar.context).apply {
+    val button = ImageView(bar.context).apply {
         tag = KNOB
-        contentDescription = "Qself"
+        contentDescription = "Qself 设置"
+        isFocusable = true
         setImageResource(android.R.drawable.ic_menu_preferences)
-        imageTintList = ColorStateList.valueOf(
-            monet(night(), 0xFF) ?: if (night()) 0xFFFFFFFF.toInt() else 0xFF1C1C1E.toInt())
+        imageTintList = ColorStateList.valueOf(monet(night(), 0xFF)
+            ?: if (night()) 0xFFFFFFFF.toInt() else 0xFF1C1C1E.toInt())
         scaleType = ImageView.ScaleType.CENTER_INSIDE
-        val p = (12 * dp).toInt()
-        setPadding(p, p, p, p)
-        outlineProvider = capsule()
-        clipToOutline = true
-        elevation = 6 * dp
+        val padding = (9 * dp).toInt()
+        setPadding(padding, padding, padding, padding)
+        outlineProvider = capsule(); clipToOutline = true; elevation = 6 * dp
         background = Glass(this)
-        // 按压反馈：foreground 一层无边界涟漪，background 还是玻璃
         foreground = borderlessRipple(this)
         setOnClickListener { sheet(it) }
-        viewTreeObserver.addOnScrollChangedListener { invalidate() }
-        viewTreeObserver.addOnGlobalLayoutListener { invalidate() }
+        pressMotion()
+        alpha = 0f; scaleX = 0.9f; scaleY = 0.9f
     }
-    decor.addView(knob, FrameLayout.LayoutParams(size, size, Gravity.END or Gravity.BOTTOM).apply {
-        marginEnd = end
-        bottomMargin = lift
+    knobs.add(button)
+    decor.addView(button, FrameLayout.LayoutParams(size, size, Gravity.END or Gravity.BOTTOM).apply {
+        marginEnd = end; bottomMargin = bottom
     })
+    button.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(motionDuration(180)).setInterpolator(easing()).start()
 }
 
-fun borderlessRipple(v: View): Drawable? = TypedValue().let {
-    if (v.context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, it, true))
-        v.context.getDrawable(it.resourceId) else null
+fun borderlessRipple(view: View): Drawable? = TypedValue().let {
+    if (view.context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, it, true))
+        view.context.getDrawable(it.resourceId) else null
 }
 
-/** 画出来的钩 / 杠 / 叉：系统字体里这三个字形各家各样，自己画才稳。 */
-private class Mark(dp: Float) : Drawable() {
+/** 继承 52411e87 的紧凑面板，进一步限制为 360dp 宽、440dp 高和可用高度的 62%。 */
+internal fun menuSize(width: Int, height: Int, density: Float): Pair<Int, Int> =
+    min((width - 32 * density).toInt().coerceAtLeast(0), (360 * density).toInt()) to
+        min((height * 0.62f).toInt().coerceAtLeast(0), (440 * density).toInt())
+
+private class Mark(private val dp: Float) : Drawable() {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = 2.4f * dp
-        strokeCap = Paint.Cap.ROUND
-        strokeJoin = Paint.Join.ROUND
+        style = Paint.Style.STROKE; strokeWidth = 2.2f * dp
+        strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
     }
     private val path = Path()
-    private var on = true
+    private val segment = Path()
+    private val measure = PathMeasure()
+    private var on = false
     private var broken = false
-
+    private var initialized = false
+    private var progress = 1f
+    private var color = 0xFF8E8E93.toInt()
+    private var animator: ValueAnimator? = null
     fun state(on: Boolean, broken: Boolean) {
-        this.on = on
-        this.broken = broken
-        paint.color = when {
-            broken -> 0xFFFF453A.toInt()
-            on -> 0xFF30D158.toInt()
-            else -> 0xFF8E8E93.toInt()
-        }
-        invalidateSelf()
+        if (initialized && this.on == on && this.broken == broken) return
+        animator?.cancel()
+        this.on = on; this.broken = broken
+        val target = when { broken -> 0xFFFF453A.toInt(); on -> 0xFF30D158.toInt(); else -> 0xFF8E8E93.toInt() }
+        val from = color
+        if (initialized && ValueAnimator.areAnimatorsEnabled()) {
+            animator = ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 160; interpolator = easing()
+                addUpdateListener {
+                    progress = it.animatedValue as Float
+                    color = ArgbEvaluator().evaluate(progress, from, target) as Int
+                    invalidateSelf()
+                }
+                start()
+            }
+        } else { color = target; progress = 1f; invalidateSelf() }
+        initialized = true
     }
-
-    override fun draw(c: Canvas) {
-        val b = bounds
-        val cx = b.exactCenterX()
-        val cy = b.exactCenterY()
-        val u = min(b.width(), b.height()) * 0.30f
-        path.reset()
+    override fun draw(canvas: Canvas) {
+        val cx = bounds.exactCenterX(); val cy = bounds.exactCenterY()
+        val unit = min(bounds.width(), bounds.height()) * 0.30f
+        path.reset(); segment.reset()
         when {
-            broken -> { // 叉
-                path.moveTo(cx - u, cy - u)
-                path.lineTo(cx + u, cy + u)
-                path.moveTo(cx + u, cy - u)
-                path.lineTo(cx - u, cy + u)
+            broken -> {
+                path.moveTo(cx - unit, cy - unit); path.lineTo(cx + unit, cy + unit)
+                path.moveTo(cx + unit, cy - unit); path.lineTo(cx - unit, cy + unit)
             }
-            on -> { // 钩
-                path.moveTo(cx - u, cy + u * 0.05f)
-                path.lineTo(cx - u * 0.2f, cy + u * 0.75f)
-                path.lineTo(cx + u, cy - u * 0.65f)
+            on -> {
+                path.moveTo(cx - unit, cy + unit * 0.05f)
+                path.lineTo(cx - unit * 0.2f, cy + unit * 0.75f)
+                path.lineTo(cx + unit, cy - unit * 0.65f)
             }
-            else -> { // 杠
-                path.moveTo(cx - u, cy)
-                path.lineTo(cx + u, cy)
-            }
+            else -> { path.moveTo(cx - unit, cy); path.lineTo(cx + unit, cy) }
         }
-        c.drawPath(path, paint)
+        paint.color = color
+        // 叉有两条 contour，直接画；钩与横杠按进度描出。
+        if (broken || progress >= 1f) canvas.drawPath(path, paint)
+        else {
+            measure.setPath(path, false)
+            measure.getSegment(0f, measure.length * progress, segment, true)
+            canvas.drawPath(segment, paint)
+        }
     }
-
-    override fun setAlpha(alpha: Int) {}
-    override fun setColorFilter(colorFilter: ColorFilter?) {}
-
-    @Deprecated("Deprecated in Java")
-    override fun getOpacity() = PixelFormat.TRANSLUCENT
+    override fun setAlpha(alpha: Int) { paint.alpha = alpha; invalidateSelf() }
+    override fun setColorFilter(filter: ColorFilter?) { paint.colorFilter = filter; invalidateSelf() }
+    @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
-/** 开关面板：挂在 QQ 的 decor 上（不是对话框窗口）—— 玻璃要录身后的画面，得在同一个窗口树里。 */
 private fun sheet(anchor: View) {
     val decor = anchor.rootView as? ViewGroup ?: return
     if (decor.findViewWithTag<View>(SHEET) != null) return
-    val store = store() ?: return
-    val night = night()
-    val dp = anchor.dp
+    val prefs = store() ?: return
     val ctx = anchor.context
-    val ink = if (night) 0xFFF2F2F7.toInt() else 0xFF1C1C1E.toInt()
-    val sub = if (night) 0xFF98989E.toInt() else 0xFF6E6E73.toInt()
-
-    val grid = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-    fun cell(f: Feature): View {
+    val dp = anchor.dp
+    val ink = if (night()) 0xFFF2F2F7.toInt() else 0xFF1C1C1E.toInt()
+    val sub = if (night()) 0xFF98989E.toInt() else 0xFF6E6E73.toInt()
+    val dim = FrameLayout(ctx).apply { tag = SHEET; setBackgroundColor(0x66000000); alpha = 0f }
+    val card = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL; isClickable = true
+        val radius = 22 * dp
+        background = Glass(this, radius); outlineProvider = capsule(radius); clipToOutline = true
+        elevation = 8 * dp
+        setPadding((10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt(), (6 * dp).toInt())
+        scaleX = 0.96f; scaleY = 0.96f; translationY = 16 * dp
+    }
+    var closing = false
+    fun close() {
+        if (closing) return
+        closing = true
+        card.animate().cancel(); dim.animate().cancel()
+        card.animate().scaleX(0.98f).scaleY(0.98f).translationY(12 * dp)
+            .setDuration(motionDuration(140)).setInterpolator(easing()).start()
+        dim.animate().alpha(0f).setDuration(motionDuration(140)).withEndAction {
+            (dim.parent as? ViewGroup)?.removeView(dim)
+            anchor.requestFocus()
+        }.start()
+    }
+    val paints = ArrayList<() -> Unit>()
+    fun cell(feature: Feature): View {
         val mark = Mark(dp)
-        val title = TextView(ctx).apply { text = f.name; textSize = 15f; setTextColor(ink) }
-        val desc = TextView(ctx).apply { text = f.desc; textSize = 11f; setTextColor(sub) }
-        val view = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            val p = (10 * dp).toInt()
-            setPadding(p, p, p, p)
-            addView(View(ctx).apply { background = mark },
-                LinearLayout.LayoutParams((22 * dp).toInt(), (22 * dp).toInt()).apply { marginEnd = (10 * dp).toInt() })
+        val title = TextView(ctx).apply { text = feature.name; textSize = 13f; maxLines = 2 }
+        val desc = TextView(ctx).apply { text = feature.desc; textSize = 10f; setTextColor(sub); maxLines = 2 }
+        val cell = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding((6 * dp).toInt(), (7 * dp).toInt(), (6 * dp).toInt(), (7 * dp).toInt())
+            contentDescription = feature.name + "，" + feature.desc
+            addView(View(ctx).apply { background = mark }, LinearLayout.LayoutParams((18 * dp).toInt(), (18 * dp).toInt()).apply {
+                marginEnd = (6 * dp).toInt()
+            })
             addView(LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(title)
-                addView(desc)
+                orientation = LinearLayout.VERTICAL; addView(title); addView(desc)
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             foreground = borderlessRipple(this)
+            pressMotion()
         }
-        fun paint() {
-            val broken = f.name in failed
-            mark.state(!broken && store.getBoolean(f.name, true), broken)
+        val paint: () -> Unit = {
+            val broken = feature.name in failed
+            mark.state(!broken && prefs.getBoolean(feature.name, feature.default), broken)
             title.setTextColor(if (broken) sub else ink)
+            cell.isSelected = !broken && prefs.getBoolean(feature.name, feature.default)
         }
-        paint()
-        if (f.name !in failed) view.setOnClickListener { // ✗ 是这版 QQ 里没装上，点了也没用
-            store.edit().putBoolean(f.name, !store.getBoolean(f.name, true)).apply()
-            paint()
+        paints.add(paint); paint()
+        cell.setOnClickListener {
+            if (feature.name in failed) {
+                AlertDialog.Builder(ctx).setTitle(feature.name + "：安装失败")
+                    .setMessage(failures[feature.name] ?: "请查看 Qself 日志")
+                    .setPositiveButton("好", null).show()
+            } else {
+                prefs.edit().putBoolean(feature.name, !prefs.getBoolean(feature.name, feature.default)).apply()
+                paint(); refreshLooks()
+            }
         }
-        return view
+        return cell
     }
-    for (i in features.indices step 2) { // 一行两张卡
-        val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-        row.addView(cell(features[i]), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        if (i + 1 < features.size)
-            row.addView(cell(features[i + 1]), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        else row.addView(View(ctx), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        grid.addView(row)
+    val grid = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+    for (i in features.indices step 2) grid.addView(LinearLayout(ctx).apply {
+        orientation = LinearLayout.HORIZONTAL
+        addView(cell(features[i]), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        addView(if (i + 1 < features.size) cell(features[i + 1]) else View(ctx),
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+    })
+    card.addView(TextView(ctx).apply {
+        text = "Qself ${BuildConfig.VERSION_NAME}"; textSize = 15f; gravity = Gravity.CENTER; setTextColor(ink)
+        setPadding(0, 0, 0, (8 * dp).toInt())
+    })
+    card.addView(ScrollView(ctx).apply { isFillViewport = false; addView(grid) },
+        LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+    fun button(label: String, body: () -> Unit) = TextView(ctx).apply {
+        text = label; textSize = 12f; gravity = Gravity.CENTER; setTextColor(ink)
+        setPadding((10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt())
+        foreground = borderlessRipple(this); setOnClickListener { body() }; pressMotion()
     }
-
-    fun button(label: String, body: () -> Unit): TextView = TextView(ctx).apply {
-        text = label
-        textSize = 15f
-        setTextColor(ink)
-        gravity = Gravity.CENTER
-        val p = (12 * dp).toInt()
-        setPadding(p * 2, p, p * 2, p)
-        foreground = borderlessRipple(this)
-        setOnClickListener { body() }
+    card.addView(LinearLayout(ctx).apply {
+        gravity = Gravity.END
+        addView(button("恢复默认") {
+            val edit = prefs.edit()
+            features.forEach { edit.putBoolean(it.name, it.default) }
+            edit.apply(); paints.forEach { it() }; refreshLooks()
+        })
+        addView(button("重启 QQ") { android.os.Process.killProcess(android.os.Process.myPid()) })
+        addView(button("好", ::close))
+    })
+    val insets = decor.rootWindowInsets?.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
+    val size = menuSize(decor.width - (insets?.left ?: 0) - (insets?.right ?: 0),
+        decor.height - (insets?.top ?: 0) - (insets?.bottom ?: 0), dp)
+    dim.addView(card, FrameLayout.LayoutParams(size.first, size.second, Gravity.CENTER).apply {
+        leftMargin = insets?.left ?: 0; rightMargin = insets?.right ?: 0
+        topMargin = insets?.top ?: 0; bottomMargin = insets?.bottom ?: 0
+    })
+    dim.setOnClickListener { close() }
+    dim.isFocusableInTouchMode = true
+    dim.setOnKeyListener { _, key, event ->
+        if (key == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) { close(); true } else false
     }
-    val card = LinearLayout(ctx).apply {
-        orientation = LinearLayout.VERTICAL
-        val r = 28 * dp
-        background = Glass(this, r)
-        outlineProvider = capsule(r)
-        clipToOutline = true
-        elevation = 8 * dp
-        setPadding((14 * dp).toInt(), (18 * dp).toInt(), (14 * dp).toInt(), (10 * dp).toInt())
-        addView(TextView(ctx).apply {
-            text = "Qself ${BuildConfig.VERSION_NAME}"
-            textSize = 18f
-            gravity = Gravity.CENTER
-            setTextColor(ink)
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            .apply { bottomMargin = (6 * dp).toInt() })
-        addView(ScrollView(ctx).apply { addView(grid) },
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        addView(LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.END
-            addView(button("重启 QQ") { android.os.Process.killProcess(android.os.Process.myPid()) })
-            addView(button("好") { decor.findViewWithTag<View>(SHEET)?.let { decor.removeView(it) } })
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-    }
-
-    val dim = FrameLayout(ctx).apply {
-        tag = SHEET
-        setBackgroundColor(0x66000000)
-        setOnClickListener { decor.removeView(this) } // 点卡片外面关掉
-        addView(card, FrameLayout.LayoutParams(
-            min(decor.width - (32 * dp).toInt(), (520 * dp).toInt()),
-            (decor.height - (72 * dp).toInt()), Gravity.CENTER))
-    }
+    val activity = generateSequence(ctx) { (it as? ContextWrapper)?.baseContext?.takeIf { base -> base !== it } }
+        .filterIsInstance<Activity>().firstOrNull()
+    val back = OnBackInvokedCallback { close() }
+    dim.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(view: View) {
+            activity?.onBackInvokedDispatcher?.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_OVERLAY, back)
+        }
+        override fun onViewDetachedFromWindow(view: View) {
+            activity?.onBackInvokedDispatcher?.unregisterOnBackInvokedCallback(back)
+            card.animate().cancel(); dim.animate().cancel()
+            (card.background as? Glass)?.dispose()
+            sheets.remove(dim)
+        }
+    })
+    sheets.add(dim)
     decor.addView(dim, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    dim.requestFocus()
+    dim.animate().alpha(1f).setDuration(motionDuration(180)).setInterpolator(easing()).start()
+    card.animate().scaleX(1f).scaleY(1f).translationY(0f)
+        .setDuration(motionDuration(200)).setInterpolator(easing()).start()
+}
+
+fun resetMenus() {
+    (sheets.toList() + knobs.toList()).forEach { view ->
+        view.animate().cancel()
+        (view.parent as? ViewGroup)?.removeView(view)
+    }
+    sheets.clear(); knobs.clear()
 }

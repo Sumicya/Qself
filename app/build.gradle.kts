@@ -12,14 +12,16 @@ android {
         minSdk = 36 // 只对着 Android 16 写：RenderEffect / AGSL 都不用判版本
         targetSdk = 37
         // CI 先固化完整版本；Gradle 只读取单一版本来源，不自行取时间或序号。
-        // 本地出包也要显式给：QSELF_VERSION=26.10.15.1.262 ./gradlew :app:assembleDebug（退化时四段 yy.m.d.总序号），缺了当场失败。
+        // 本地出包也必须显式给五段号，缺失即失败；不允许四段或常数回退。
         val releaseVersion = System.getenv("QSELF_VERSION")
-            ?: error("缺少 QSELF_VERSION：出包请显式给出四段/五段版本（yy.m.d.[当日序号.]总序号），口径见 AGENTS.md")
-        require(Regex("""^\d{2}\.\d{1,2}\.\d{1,2}(\.\d+){1,2}$""").matches(releaseVersion)) {
-            "QSELF_VERSION 不是四段或五段格式：$releaseVersion"
+            ?: error("缺少 QSELF_VERSION：出包请显式给出五段版本 yy.m.d.当日序号.总序号")
+        require(Regex("""^\d{2}\.\d{1,2}\.\d{1,2}(\.\d+){2}$""").matches(releaseVersion)) {
+            "QSELF_VERSION 不是五段格式：$releaseVersion"
         }
         versionName = releaseVersion
-        versionCode = releaseVersion.substringAfterLast(".").toIntOrNull()?.coerceAtLeast(1) ?: 1
+        val total = releaseVersion.substringAfterLast(".").toIntOrNull()
+        require(total != null && total > 0) { "总提交数必须为正整数且不超过 Android versionCode 上限" }
+        versionCode = total
     }
 
     // 仓库不保存私钥。debug 使用 Android 默认签名；正式发布签名由安全存储提供。
@@ -57,7 +59,7 @@ dependencies {
 androidComponents {
     onVariants(selector().all()) { variant ->
         variant.outputs.forEach { output ->
-            val version = output.versionName.orNull ?: "0.0.0.0.0"
+            val version = output.versionName.orNull ?: error("缺少变体版本号，禁止常数回退")
             output.outputFileName.set("Qself-$version.apk")
         }
     }

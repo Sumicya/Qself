@@ -3,6 +3,9 @@ package sumicya.qself
 
 import android.app.Activity
 import android.app.Instrumentation
+import android.content.SharedPreferences
+import android.view.ViewTreeObserver
+import java.lang.ref.WeakReference
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -14,7 +17,7 @@ import java.util.Collections
 import java.util.WeakHashMap
 
 /**
- * 外观：每个 Activity 一到前台就盯住它的 decor，布局一变（节流 150ms）就走一遍视图树套规则。
+ * 外观：每个 Activity 一到前台就盯住它的 decor，布局一变在同一帧 pre-draw 套规则，不排 150ms 延时队列。
  * 规则全按视图长相认 —— 类名、文字、contentDescription、位置 —— 不碰 QQ 的业务类，
  * 所以 QQ 换个小版本它们多半还活着；认错了最多是少藏一个按钮。
  */
@@ -26,18 +29,65 @@ fun looks() {
 
 val View.dp: Float get() = resources.displayMetrics.density
 
-private val watched: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
+private val watched = WeakHashMap<View, WeakReference<AppearanceObserver>>()
+private var preferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+
+fun refreshLooks() {
+    watched.values.mapNotNull { it.get() }.forEach { it.refresh() }
+}
 
 private fun watch(decor: View) {
-    if (!watched.add(decor)) return
-    var queued = false
-    val scan = Runnable { queued = false; walk(decor, false) }
-    fun queueScan() {
-        if (!queued) { queued = true; decor.postDelayed(scan, 150) }
+    if (preferenceListener == null) store()?.let { prefs ->
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> refreshLooks() }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        preferenceListener = listener
     }
-    decor.viewTreeObserver.addOnGlobalLayoutListener { queueScan() }
-    // 首次遍历也走节流队列，不在 Instrumentation.onResume 钩子里同步扫完整棵视图树。
-    queueScan()
+    if (watched[decor]?.get() != null) { watched[decor]?.get()?.refresh(); return }
+    watched[decor] = WeakReference(AppearanceObserver(decor))
+}
+
+private class AppearanceObserver(decor: View) : ViewTreeObserver.OnGlobalLayoutListener,
+    ViewTreeObserver.OnPreDrawListener, View.OnAttachStateChangeListener {
+    private val root = WeakReference(decor)
+    private var dirty = true
+    init {
+        decor.viewTreeObserver.addOnGlobalLayoutListener(this)
+        decor.viewTreeObserver.addOnPreDrawListener(this)
+        decor.addOnAttachStateChangeListener(this)
+        decor.invalidate()
+    }
+    fun refresh() { dirty = true; root.get()?.invalidate() }
+    override fun onGlobalLayout() { dirty = true }
+    override fun onPreDraw(): Boolean {
+        val decor = root.get() ?: return true
+        if (!dirty) return true
+        dirty = false
+        walk(decor, false)
+        return !decor.isLayoutRequested
+    }
+    fun dispose() {
+        root.get()?.let { decor ->
+            if (decor.viewTreeObserver.isAlive) {
+                decor.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                decor.viewTreeObserver.removeOnPreDrawListener(this)
+            }
+            decor.removeOnAttachStateChangeListener(this)
+            watched.remove(decor)
+        }
+    }
+    override fun onViewAttachedToWindow(view: View) = refresh()
+    override fun onViewDetachedFromWindow(view: View) = dispose()
+}
+
+fun resetLooks() {
+    watched.values.mapNotNull { it.get() }.forEach { it.dispose() }
+    watched.clear()
+    preferenceListener?.let { store()?.unregisterOnSharedPreferenceChangeListener(it) }
+    preferenceListener = null
+    floatStates.keys.toList().forEach(::restoreBar)
+    hidden.entries.toList().forEach { (view, visibility) -> view.visibility = visibility }
+    hidden.clear()
+    restoreClearedDecorations()
 }
 
 private fun walk(v: View, inDrawer: Boolean) {
@@ -47,6 +97,8 @@ private fun walk(v: View, inDrawer: Boolean) {
         name.endsWith(".PanelIconLinearLayout") -> { tgInput(v as ViewGroup); return }
         else -> trim(v, inDrawer)
     }
+    if (!inDrawer && generateSequence<Class<*>>(v.javaClass) { it.superclass }
+            .any { it.name == "androidx.recyclerview.widget.RecyclerView" }) return
     if (v is ViewGroup) {
         val drawer = inDrawer || name.contains("QQSettingMe") // 侧栏根是 QQSettingMeRelativeLayout
         for (i in 0 until v.childCount) walk(v.getChildAt(i), drawer)
@@ -109,11 +161,53 @@ private val floated: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 private val originalFloatBottomMargin = WeakHashMap<View, Int>()
 private val clearedDecorations = WeakHashMap<View, Int>()
 
+private fun copyLayoutParams(lp: ViewGroup.LayoutParams): ViewGroup.LayoutParams = when (lp) {
+    is FrameLayout.LayoutParams -> FrameLayout.LayoutParams(lp)
+    is LinearLayout.LayoutParams -> LinearLayout.LayoutParams(lp)
+    is RelativeLayout.LayoutParams -> RelativeLayout.LayoutParams(lp)
+    is ViewGroup.MarginLayoutParams -> ViewGroup.MarginLayoutParams(lp)
+    else -> ViewGroup.LayoutParams(lp)
+}
+private class BarState(bar: ViewGroup) {
+    val params = copyLayoutParams(bar.layoutParams)
+    val background = bar.background
+    val outline = bar.outlineProvider
+    val clip = bar.clipToOutline
+    val elevation = bar.elevation
+    val padding = intArrayOf(bar.paddingLeft, bar.paddingTop, bar.paddingRight, bar.paddingBottom)
+    val stripPadding = bar.getChildAt(0)?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
+    val tabs = WeakHashMap<View, Pair<ViewGroup.LayoutParams, IntArray>>()
+    var scrollListener: ViewTreeObserver.OnScrollChangedListener? = null
+    var layoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+    var drawListener: ViewTreeObserver.OnPreDrawListener? = null
+}
+private val floatStates = WeakHashMap<ViewGroup, BarState>()
+private fun restoreBar(bar: ViewGroup) {
+    val state = floatStates.remove(bar) ?: return
+    if (bar.viewTreeObserver.isAlive) {
+        state.scrollListener?.let(bar.viewTreeObserver::removeOnScrollChangedListener)
+        state.layoutListener?.let(bar.viewTreeObserver::removeOnGlobalLayoutListener)
+        state.drawListener?.let(bar.viewTreeObserver::removeOnPreDrawListener)
+    }
+    (bar.background as? Glass)?.dispose()
+    bar.layoutParams = copyLayoutParams(state.params)
+    bar.background = state.background; bar.outlineProvider = state.outline; bar.clipToOutline = state.clip
+    bar.elevation = state.elevation
+    state.padding.let { bar.setPadding(it[0], it[1], it[2], it[3]) }
+    state.stripPadding?.let { bar.getChildAt(0)?.setPadding(it[0], it[1], it[2], it[3]) }
+    state.tabs.forEach { (tab, old) ->
+        tab.layoutParams = copyLayoutParams(old.first)
+        old.second.let { tab.setPadding(it[0], it[1], it[2], it[3]) }
+    }
+    floated.remove(bar); absorbed.remove(bar); originalFloatBottomMargin.remove(bar)
+}
+
 private fun homeBar(bar: ViewGroup) {
-    // 热重载后是新一代代码、新的 floated 集合：靠背景认出上一代已经浮过的底栏，别再加一次边距。
-    // ponytail: 浮起来之后关掉开关不会沉回去，重启 QQ 才复原；复原要存一堆原值，不值。
-    if (bar.background?.javaClass?.name == Glass::class.java.name) floated.add(bar)
-    else if (on("玻璃底栏") && floated.add(bar)) float(bar)
+    if (!on("玻璃底栏")) restoreBar(bar)
+    else if (floated.add(bar)) {
+        floatStates[bar] = BarState(bar)
+        float(bar)
+    }
     val glass = bar in floated
     if (glass) settle(bar)
     // material TabLayout：bar → SlidingTabIndicator → TabView × N
@@ -121,7 +215,11 @@ private fun homeBar(bar: ViewGroup) {
         for (i in 0 until strip.childCount) {
             val tab = strip.getChildAt(i)
             hide(tab, on("藏频道动态") && texts(tab).any { "频道" in it || "动态" in it || "小世界" in it })
-            if (glass) fit(tab)
+            if (glass) {
+                floatStates[bar]?.tabs?.getOrPut(tab) { copyLayoutParams(tab.layoutParams) to
+                    intArrayOf(tab.paddingLeft, tab.paddingTop, tab.paddingRight, tab.paddingBottom) }
+                fit(tab)
+            }
         }
     }
     if (bar.height == 0) return
@@ -161,9 +259,15 @@ private fun float(bar: ViewGroup) {
     val glass = Glass(bar) { selectedTab(bar) }
     bar.background = glass
     // 内容一滚、布局一变就重画一次玻璃（底栏自己不会因为身后的东西动而重画）；选中页签换了也要重画。
-    bar.viewTreeObserver.addOnScrollChangedListener { bar.invalidate() }
-    bar.viewTreeObserver.addOnGlobalLayoutListener { bar.invalidate() }
-    bar.viewTreeObserver.addOnPreDrawListener { glass.sync(); true }
+    val weak = WeakReference(bar)
+    floatStates[bar]?.let { state ->
+        state.scrollListener = ViewTreeObserver.OnScrollChangedListener { weak.get()?.invalidate() }
+            .also(bar.viewTreeObserver::addOnScrollChangedListener)
+        state.layoutListener = ViewTreeObserver.OnGlobalLayoutListener { weak.get()?.invalidate() }
+            .also(bar.viewTreeObserver::addOnGlobalLayoutListener)
+        state.drawListener = ViewTreeObserver.OnPreDrawListener { (weak.get()?.background as? Glass)?.sync(); true }
+            .also(bar.viewTreeObserver::addOnPreDrawListener)
+    }
 }
 
 /** 页签定宽 56dp：material 给的是平分整条的 weight，QQ 的页签视图又是 match_parent，胶囊就只能跟屏幕一样长。 */

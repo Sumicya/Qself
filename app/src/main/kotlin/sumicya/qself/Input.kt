@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself
 
+import android.animation.ValueAnimator
 import android.graphics.drawable.Drawable
 import android.view.View
 import android.view.ViewGroup
@@ -48,6 +49,9 @@ private class NativeInput(strip: ViewGroup, edit: EditText, box: ViewGroup) :
     private val glass = Glass(box, 22 * box.dp)
     private val shape = capsule(22 * box.dp)
     private var applied = false
+    private var focusAnimator: ValueAnimator? = null
+    private var focused = edit.hasFocus()
+    private val originalTranslationZ = box.translationZ
 
     init {
         strip.viewTreeObserver.addOnPreDrawListener(this)
@@ -65,11 +69,25 @@ private class NativeInput(strip: ViewGroup, edit: EditText, box: ViewGroup) :
         val editHeight = maxOf(editMinimum, (40 * edit.dp).toInt())
         if (box.minimumHeight != boxHeight) box.minimumHeight = boxHeight
         if (edit.minimumHeight != editHeight) edit.minimumHeight = editHeight
+        glass.sync()
+        val focus = edit.hasFocus()
+        if (!applied || focused != focus) {
+            focused = focus
+            focusAnimator?.cancel()
+            val target = originalTranslationZ + if (focus) 2 * box.dp else 0f
+            if (!ValueAnimator.areAnimatorsEnabled()) box.translationZ = target
+            else focusAnimator = ValueAnimator.ofFloat(box.translationZ, target).apply {
+                duration = 140
+                addUpdateListener { this@NativeInput.box.get()?.translationZ = it.animatedValue as Float }
+                start()
+            }
+        }
         applied = true
     }
     private fun restore() {
         if (!applied) return
         box.get()?.let {
+            focusAnimator?.cancel(); focusAnimator = null; it.translationZ = originalTranslationZ
             it.background = boxBackground
             it.outlineProvider = outline
             it.clipToOutline = clip
@@ -80,10 +98,18 @@ private class NativeInput(strip: ViewGroup, edit: EditText, box: ViewGroup) :
     }
     override fun onPreDraw(): Boolean { sync(); return true }
     override fun onViewAttachedToWindow(view: View) = Unit
-    override fun onViewDetachedFromWindow(view: View) {
+    override fun onViewDetachedFromWindow(view: View) = dispose()
+    fun dispose() {
         restore()
+        glass.dispose()
+        val view = strip.get() ?: return
         if (view.viewTreeObserver.isAlive) view.viewTreeObserver.removeOnPreDrawListener(this)
         view.removeOnAttachStateChangeListener(this)
         strip.get()?.let { inputs.remove(it) }
     }
+}
+
+fun resetInputLayout() {
+    inputs.values.mapNotNull { it.get() }.forEach { it.dispose() }
+    inputs.clear()
 }

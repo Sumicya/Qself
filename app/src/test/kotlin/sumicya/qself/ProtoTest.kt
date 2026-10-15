@@ -64,6 +64,44 @@ class ProtoTest {
         assertEquals("original-avatar", method.invoke(PrivateAvatar()))
     }
 
+    @Test fun runStartsSharesLongGroupAndRespectsBreaks() {
+        val cache = RunStarts(1000)
+        var calls = 0
+        val joins: (Int) -> Boolean = { calls++; it != 400 }
+        assertEquals(400, cache.start(999, joins))
+        assertEquals(400, cache.start(900, joins))
+        assertEquals(600, calls) // 已缓存的组不再向前重复反射。
+        assertEquals(0, cache.start(399, joins))
+        assertEquals(0, cache.start(0, joins))
+        assertEquals(999, calls)
+    }
+
+    @Test fun runStartsOutOfOrderAndNewSnapshotDoNotReuseOldGroup() {
+        val cache = RunStarts(8)
+        assertEquals(2, cache.start(3) { it != 2 })
+        assertEquals(5, cache.start(7) { it != 2 && it != 5 })
+        assertEquals(2, cache.start(4) { it != 2 && it != 5 })
+        assertEquals(0, RunStarts(8).start(7) { true })
+        assertEquals(7, RunStarts(8).start(7) { false })
+    }
+
+    @Test fun compactSpacingIsBoundedAndRestoresOriginal() {
+        assertEquals(16, compactMessageTop(20, true, 1f))
+        assertEquals(0, compactMessageTop(2, true, 1f))
+        assertEquals(0, compactMessageTop(0, true, 3f))
+        assertEquals(-3, compactMessageTop(-3, true, 1f))
+        assertEquals(20, compactMessageTop(20, false, 3f))
+        assertEquals(12, compactMessageTop(20, true, 2f))
+    }
+
+    @Test fun compactMenuFitsAvailableWindowAndImeSpace() {
+        assertEquals(360 to 440, menuSize(1080, 1920, 1f))
+        assertEquals(328 to 372, menuSize(360, 600, 1f))
+        assertEquals(328 to 124, menuSize(360, 200, 1f))
+        assertEquals(0 to 0, menuSize(0, 0, 1f))
+        assertEquals(984 to 1320, menuSize(1080, 2400, 3f))
+    }
+
     private fun varint(v: Long): ByteArray {
         var x = v
         val out = ArrayList<Byte>()
