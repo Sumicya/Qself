@@ -37,6 +37,24 @@ TODAY = datetime.now(CST).strftime("%Y-%m-%d")
 VERB = "删" if APPLY else "将删"
 print(f"cleanup.py 启动参数：SEGMENTS={SEGMENTS} CLEANUP_APPLY={'true' if APPLY else 'false'} "
       f"PREFIX={PREFIX} KEEP={KEEP} SELF={SELF} TODAY={TODAY} REPO={REPO}")
+print("删除失败分级口径：DELETE 403 → ::warning:: 降级不红；403 以外 → ::error:: 累积，脚本末尾红 job")
+
+
+def git_out(*args):
+    """跑一条 git 命令，拿不到就返回 None（不静默）。"""
+    p = subprocess.run(["git", *args], capture_output=True, text=True)
+    return p.stdout.strip() if p.returncode == 0 else None
+
+
+# 取号核对：号源只有 git 提交数一处（规范 c5ac12d:55），这里把两条命令的输出打出来，让日志能独立核对。
+_since = datetime.now(CST).strftime("%Y-%m-%dT00:00:00+08:00")
+_head = git_out("rev-parse", "HEAD")
+_total = git_out("rev-list", "--count", "HEAD")
+_daily = git_out("rev-list", "--count", f"--since={_since}", "HEAD")
+_shallow = git_out("rev-parse", "--is-shallow-repository")
+print(f"取号核对：head={_head} 总序号={_total} 当日序号={_daily} 浅克隆={_shallow}"
+      f"（浅克隆为 true 时这两个数不可信）")
+print(f"取号命令原文：git rev-list --count HEAD ／ git rev-list --count --since={_since} HEAD")
 
 
 def gh(*args):
@@ -93,6 +111,30 @@ print(f"本次 run {SELF} 所属序列：{self_run['path'] if self_run else '(�
 arts = [a for a in list_all(f"repos/{REPO}/actions/artifacts?per_page=100", ".artifacts")
         if not a["expired"]]
 
+
+def art_stamp(a):
+    """artifact 归属运行的开始时间（run_started_at 缺失才退回 created_at），run 记录不在时退回产物 created_at。"""
+    r = run_by_id.get(a["workflow_run"]["id"])
+    return stamp(r) if r else a["created_at"]
+
+
+def parts_of(name):
+    return name[len(PREFIX):].split(".") if name.startswith(PREFIX) else []
+
+
+# 过渡清理（规范 c5ac12d:60）：换号源当轮先出新口径的包，新包出成之后再清旧口径产物 ——
+# 旧口径总序号 = run_number 原值（本仓历史最大 277），新口径总序号 = git 提交数（本仓 ≥ 3100）。
+# 只在已存在新口径产物时才动旧口径对象；这段是换号源这一轮的一次性动作，清完即从本文件删掉。
+MIGRATE_OLD = ("Qself-26.10.14.4.277", "Qself-26.10.14.3.276")
+NEW_SCHEME_MIN_TOTAL = 3000
+new_scheme = [a["name"] for a in arts
+              if len(parts_of(a["name"])) == SEGMENTS and parts_of(a["name"])[-1].isdigit()
+              and int(parts_of(a["name"])[-1]) >= NEW_SCHEME_MIN_TOTAL]
+print(f"过渡清理：现存新口径产物 {new_scheme or '（无）'}；旧口径清单 {list(MIGRATE_OLD)}"
+      f"（旧口径总序号=run_number 原值，本仓最大 277）")
+if not new_scheme:
+    print("过渡清理：新口径包还没出成，本轮不动旧口径产物（不许出现一个可装的包都没有的状态）")
+
 # ---------- artifact：口径 → 来源 → 重复当日序号 → 数量 ----------
 drop_a, survivors = [], []                # survivors 是过了前两条关的候选
 for a in sorted(arts, key=lambda x: (x["created_at"], x["id"]), reverse=True):
@@ -100,7 +142,9 @@ for a in sorted(arts, key=lambda x: (x["created_at"], x["id"]), reverse=True):
     seg = name[len(PREFIX):].split(".") if name.startswith(PREFIX) else []
     r = run_by_id.get(a["workflow_run"]["id"])
     ws = (r or {}).get("path", "(未知来源)")
-    if not name.startswith(PREFIX):
+    if name in MIGRATE_OLD and new_scheme:
+        drop_a.append((a, ws, f"过渡清理：新口径包已出成（{new_scheme[-1]}），清旧口径产物（规范 c5ac12d:60）"))
+    elif not name.startswith(PREFIX):
         drop_a.append((a, ws, "口径：名不是 Qself- 前缀"))
     elif len(seg) != SEGMENTS:
         drop_a.append((a, ws, f"口径：段数 {len(seg)} ≠ {SEGMENTS}"))
@@ -109,19 +153,26 @@ for a in sorted(arts, key=lambda x: (x["created_at"], x["id"]), reverse=True):
     else:
         survivors.append((a, ws, seg))
 
-# 判据三：同日同序列重复当日序号 —— 保留总序号最大的一个（产物名不可变，只能删旧的）
+# 判据三：同日同当日序号重复 —— 按 run_started_at 删旧留新（规范 c5ac12d:73）。
+# 不按总序号大小判：改文件名、换号源后总序号会回头，按大小判会误删新产物。
+# 删前把两个 artifact 的名与 id、两次运行的 rn 打进日志（该仓 AGENTS.md 的那行由会话记）。
 if SEGMENTS >= 5:
     groups = defaultdict(list)
     for a, ws, seg in survivors:
-        groups[(".".join(seg[:3]), int(seg[3]))].append((int(seg[4]), a, ws))
+        groups[(".".join(seg[:3]), int(seg[3]))].append((a, ws))
     dup_ids = set()
     for (day, daily), g in sorted(groups.items()):
         if len(g) < 2:
             continue
-        g.sort(key=lambda t: (t[0], t[1]["id"]), reverse=True)
-        for total, a, ws in g[1:]:
+        g.sort(key=lambda t: (art_stamp(t[0]), t[0]["id"]), reverse=True)
+        newest = g[0][0]
+        keep_rn = run_by_id.get(newest["workflow_run"]["id"], {}).get("run_number", "?")
+        for a, ws in g[1:]:
             dup_ids.add(a["id"])
-            drop_a.append((a, ws, f"重复当日序号 {day}.{daily}：保留总序号最大者 {g[0][0]}"))
+            rn = run_by_id.get(a["workflow_run"]["id"], {}).get("run_number", "?")
+            drop_a.append((a, ws, f"重复当日序号 {day}.{daily}：按 run_started_at 删旧留新，"
+                                  f"留 {newest['name']}（id={newest['id']} rn={keep_rn}），"
+                                  f"删 {a['name']}（id={a['id']} rn={rn}）"))
     survivors = [(a, ws, seg) for a, ws, seg in survivors if a["id"] not in dup_ids]
 
 quota = defaultdict(list)

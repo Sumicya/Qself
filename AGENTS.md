@@ -73,22 +73,26 @@
 
 ## 规范
 
-规范入口：[Sumicya/selfs/GLOBAL.md](https://github.com/Sumicya/selfs/blob/main/GLOBAL.md)。本文件只记项目事实、必要限制与这个指针。
+规范入口：`Sumicya/selfs` 的 `GLOBAL.md`（依据 selfs 提交 `c5ac12d351842b4668a29685a64a9718b6409bad`，30728B／120 行）：
+https://github.com/Sumicya/selfs/blob/arena/2d001a47-selfs/GLOBAL.md 。本文件只记项目事实、必要限制与这个指针。
+默认分支 `main` 上那份是 3488B 的第 0 版（2026-10-13），已被取代，不得再引它作依据。
 
-- 版本：本仓固定两个工作流 —— 出包 `build.yml`（唯一号源）与 PR 校验 `pr-check.yml`，各一条 `run_number` 序列。
-  版本号只取出包工作流的 `run_number` 原值（本仓 workflow 未重建，无基线；同仓不混用两种号源，将来重建才把重建前最大号记到本行作基线并此后全部相减）；
-  出包触发只有 `push`（不限定分支，会话分支推送同样出包用于验证）与 `workflow_dispatch`；不得接 `pull_request`，
+- 版本：本仓固定两个工作流 —— 出包 `build.yml`（`name: Build`）与 PR 校验 `pr-check.yml`（`name: PR check`）。
+  号源只有 git 提交数一处（规范 `c5ac12d`:55）：总序号 = `git rev-list --count HEAD`，
+  当日序号 = `git rev-list --count --since=<当日0点 UTC+8> HEAD`；`run_number`、事件类型、工作流文件名、PR 与否一律不进版本号。
+  `actions/checkout` 必须 `fetch-depth: 0`（浅克隆下提交数恒为 1、所有产物都会叫 `.1.1`）；取号脚本启动行打印 head sha、两个数与命令原文，
+  取不到数就失败退出，不留降级、不退化四段。head 提交不在当日（UTC+8）时当日序号取 0（重出旧提交的包），不写 1 冒充当日首包。
+  同一提交重跑（重试、再 dispatch、改文件名）得到同一个号，天然幂等；撞号只可能来自同一提交重出包（覆盖，删旧留新）或历史被重写，判新旧按 artifact `created_at`。
+  提交数就是号源：禁止空提交与无内容提交（禁 `--allow-empty`），禁止 force push 与 rebase 重写已出包的历史。
+  文件名与 artifact 名都是 `Qself-<版本>`。
+- 出包触发只有 `push`（不限定分支，会话分支推送同样出包用于验证）与 `workflow_dispatch`；不得接 `pull_request`，
   也不得为「只在默认分支出包」加 `branches` 限定或 `github.ref` 守卫 —— 那等于砍掉验证手段（依据 selfs 提交 `a8787a8`）。
-  会话分支出包与默认分支出包共用同一命名口径、同一条 `run_number` 序列：不另立号段、不给会话分支产物开豁免、不回溯删既存产物。
-  当日序号 = 当日（UTC+8）出包工作流的运行序号（数本文件的 push / 手动运行，按 `run_started_at` 升序取本次位次，会话分支运行一并计入）；
-  取不到就退化四段 `yy.m.d.总序号`，并把原因写进本文件。
-  `run_attempt > 1` 用缓存复用第一次 attempt 的号。文件名与 artifact 名都是 `Qself-<版本>`。
-- 会话分支要包可推送（push 不限定分支）或 `workflow_dispatch`；禁止空提交刷号，为触发 CI 的推送必须带实际改动。
-- 本地要 gradle 出包必须显式给 `QSELF_VERSION`（五段或退化四段），缺失即失败；本地包只作自测，发行用 CI 的 artifact。
+- 本地要 gradle 出包必须显式给 `QSELF_VERSION`（五段），缺失即失败；本地包只作自测，发行用 CI 的 artifact。
   PR 校验不取号，给不参与编号的占位版本名，供 Gradle 用。
 - CI 分工：`build.yml` 四个作业 —— `dex` 核落点（真包从 `Sumicya/qqapk` 拼）、`apk` 跑单元测试并出包上传、
   `cleanup-artifacts`（本 run 上传成功后按四条判据清理：口径=段数等于 `build.yml` 顶部 `env: SEGMENTS`；来源=artifact 的 `workflow_run` 事件是 `pull_request` 一律删；
-  重复当日序号=同日同序列保留总序号最大者、其余删；数量=当日之外每条序列 artifact 5 个、run 5 条，当日豁免（当日序号取自当日运行列表，删当日运行会抽走计数基准）。
+  重复当日序号=同日同当日序号按 `run_started_at` 删旧留新（不按总序号大小判：换号源后总序号会回头，按大小判会误删新产物），删前把两个 artifact 的名与 id、两次运行的 rn 打进日志；
+  数量=当日之外每条序列 artifact 5 个、run 5 条，当日豁免。
   口径、来源、重复三条不豁免、当轮即删；排队按 `run_started_at`（UTC+8 日界）、`id` 只作同刻 tiebreak，该字段缺失才退回 `created_at`；承载保留产物的 run 不删也不计入上限，正在跑的本次与未完成（`status != completed`）的 run 都不删；
   本仓 PR 校验工作流的超量 run 也在这里一并收。最小 `actions: write` + `contents: read`，与 PR 校验的清理作业同一 `concurrency` group（`qself-cleanup-artifacts`）串行）、
   `cleanup-releases`（只在默认分支收 Release 到 1 个，`contents: write`，与上者不同授）；
@@ -99,18 +103,20 @@
   不让 job 红，同一对象连续两次运行都失败才升级为阻塞项；403 以外的失败（脚本异常、其它错误码）当轮即红 job，
   红了的 run 在汇报里列为阻塞项并附失败对象与返回码，不许吞掉、不许改成 warning 蒙过去。
   只读预演（`actions: read` + `'false'`）是备用形态，禁止拿「预演已证」当清理已做。超量对象状态记「待下一次 PR 校验运行」；不许把清理交给主人，也不许等合并。
-- 版本分界点：2026-10-14 当日序号 6 曾重复 —— `Qself-26.10.14.6.272`（rn=272，事件 `push`，sha 7920b0a2）与 `Qself-26.10.14.6.273`（rn=273，事件 `pull_request`，同 sha，PR 运行仍出包）；
-  同日 `Qself-26.10.14.7.271`（rn=271，事件 `pull_request`，sha e902407b，PR 运行仍出包）当日序号 7 排在 6 之前，序号非单调。
-  删除前名单（取值 2026-10-14T03:17Z，`gh api repos/Sumicya/Qself/actions/artifacts`）：`.7.271`、`.6.272`、`.6.273`、`.3.274` 四条，前三条已删（id 与 403 经过记在 `CHANGELOG.md`），只剩 `.3.274`（id 11864292225）。
-  rn=275（sha 25d56e64）是 `pull_request` 运行，取号、算版本、测试与出包、上传步骤全 skipped、按 run 反查 artifact 数=0，`.6.275` 从未存在。该日之前的当日序号不可信。
-- 版本分界点（2026-10-14 第二次重复，当日序号 3）：`Qself-26.10.14.3.274`（rn=274，事件 `push`，旧算法下算出 3，该日之前的当日序号不可信）
-  与 `Qself-26.10.14.3.276`（rn=276，事件 `push`，会话分支 `arena/e207d38d-qself`，当日 push/dispatch 运行位次 3）同日同序号。
-  清理作业按「重复当日序号保留总序号最大者」在 Build rn=276 的 `cleanup-artifacts` 里删掉 `.3.274`（id 11864292225）；
-  现存 `.3.276`（id 11900660871）。取值 2026-10-14T13:57Z，`gh api repos/Sumicya/Qself/actions/artifacts`。
-- 已知风险（号源）：默认分支 `.github/workflows/build.yml` 仍是旧版本（实查 2026-10-14T14:00Z：`on: push / pull_request / workflow_dispatch`，`push` 不限定分支；
-  默认分支的工作流清单只有这一个文件，无 `pr-check.yml`），从旧分支开的 PR 会按旧触发跑一次出包工作流、吃掉一个总序号
-  （载体：开放 PR #10，head `arena/01a109fa-qself`，ahead_by 13）；风险存续到本次交付进入默认分支为止，不报「号源已收口」。
-  本会话不向非本会话的开放 PR 分支推送，也不做关闭 PR 的动作。
+- 2026-10-14 旧号源（`run_number`）留下的记录，换号源后不再产生：
+  ① 当日序号 6 重复：`Qself-26.10.14.6.272`（rn=272，事件 `push`，sha 7920b0a2）与 `Qself-26.10.14.6.273`（rn=273，事件 `pull_request`，同 sha）；
+     同日 `Qself-26.10.14.7.271`（rn=271，事件 `pull_request`，sha e902407b）当日序号 7 排在 6 之前。
+     `rn=275`（sha 25d56e64）是 `pull_request` 运行，取号、算版本、测试与出包、上传步骤全 skipped、按 run 反查 artifact 数=0，`.6.275` 从未存在。
+     删除前名单（取值 2026-10-14T03:17Z，`gh api repos/Sumicya/Qself/actions/artifacts`）：`.7.271`、`.6.272`、`.6.273`、`.3.274` 四条。
+  ② 当日序号 3 重复：`Qself-26.10.14.3.274`（rn=274，事件 `push`，id 11864292225）与 `Qself-26.10.14.3.276`（rn=276，事件 `push`，分支 `arena/e207d38d-qself`，id 11900660871）；
+     前者由 rn=276 的 `cleanup-artifacts` 按判据三删掉（当时口径为「保留总序号最大者」，现口径已改为按 `run_started_at` 删旧留新）。
+  ③ 换号源过渡：旧口径末号 `Qself-26.10.14.4.277`（id 11900691515，rn=277，事件 `push`，取值 2026-10-14T14:01:49Z）与 `Qself-26.10.14.3.276`（id 11900660871，rn=276，取值 2026-10-14T13:57:41Z）
+     在新口径首包出成后由清理 job 按规范 `c5ac12d`:60 清掉；两件都在删除前记进本文件（上面两行的名、id、rn 与取值时间）。
+- 新口径首包：见下一条（出包后补记名与 id、head sha、两条取号命令输出、取值时间）。
+- 已知风险（默认分支触发）：默认分支 `.github/workflows/build.yml` 仍是旧版本（实查 2026-10-14T14:00Z：`on: push / pull_request / workflow_dispatch`，`push` 不限定分支；
+  默认分支的工作流清单只有这一个文件，无 `pr-check.yml`）—— 号源改成提交数后 PR 运行不再吃号，但同一提交被 `push` 与 `pull_request` 各出一次包会产出两个同名 artifact（互相覆盖、清理还会判成重复当日序号）。
+  触发条件：从旧分支开的 PR（载体：开放 PR #10，head `arena/01a109fa-qself`，ahead_by 13）按旧触发跑一次出包工作流；风险存续到本次交付进入默认分支为止，不报「号源已收口」。
+  本会话不向非本会话的开放 PR 分支推送，也不做关闭 PR 的动作（关闭只由主人发起）。
 - 本项目 CI 只出 debug 包，不创建 Release、正式 tag 或 asset；发版须主人明确授权。
 - 会话分支只由会话删（删 ref 需 `contents: write`，不进 CI）：判据是相对默认分支 compare `ahead_by=0`，为 0 属默认授权当轮删；
   `ahead_by>0`（含 PR 关闭未合入）一律保留 —— 要去除先用 `gh api repos/<owner>/<repo>/compare/<默认分支>...<分支>` 取 `ahead_by`、

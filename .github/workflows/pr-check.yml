@@ -64,7 +64,10 @@ jobs:
       actions: write
       contents: read
     steps:
+      # 清理脚本启动要打印两条取号命令的输出：浅克隆下会打出 1，所以这里也要完整历史。
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - name: 按四条判据清理（真删）
         env:
           GH_TOKEN: ${{ github.token }}

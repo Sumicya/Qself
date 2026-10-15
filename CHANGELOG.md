@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-15 — 号源换成 git 提交数；清理判据三改按 run_started_at 删旧留新；换号源过渡清理
+
+- 依据：selfs 分支提交 `c5ac12d`（号源只有 git 提交数一处：总序号 = `git rev-list --count HEAD`，当日序号 = `git rev-list --count --since=<当日0点 UTC+8> HEAD`，`run_number`／事件／文件名／PR 一律不进版本号；硬前提 `actions/checkout` 写 `fetch-depth: 0`、取号脚本启动行打印 head sha 与两个数与命令原文、取不到数失败退出不留降级不退化四段；head 提交不在当日时当日序号取 0；提交数就是号源所以禁空提交与 force push／rebase；同一仓不得并存两种取数口径，新包出成之后再清旧口径产物并记一行真数字）、`240a214`（先出新口径包再清旧口径，不许出现一个可装的包都没有的状态）。
+- `.github/workflows/build.yml`：`apk` 作业 `actions/checkout` 补 `fetch-depth: 0`（缺了提交数恒为 1）；取号段整体重写 —— 删掉 `run_number` 取数、当日运行位次、退化四段与「重试复用第一次的号」缓存三步，换成 git 提交数 + 浅克隆硬失败 + 启动行打印 head sha／两数与命令原文，取不到数即 `exit 1`；头注释与 `SEGMENTS` 注释同步改口径；`cleanup-artifacts` 作业 checkout 也补 `fetch-depth: 0`（清理脚本要打两条取号命令的输出）。
+- `.github/workflows/pr-check.yml`：`cleanup` 作业 checkout 补 `fetch-depth: 0`。
+- `.github/scripts/cleanup.py`：启动打印补「删除失败分级口径」与取号核对（head sha、总序号、当日序号、浅克隆标志、两条命令原文）；判据三由「保留总序号最大者」改为「按 `run_started_at` 删旧留新」，并把两个 artifact 的名与 id、两次运行的 rn 打进日志；新增换号源过渡清理（旧口径两只，守卫＝已存在总序号 ≥ 3000 的新口径产物，清完即从脚本删掉本段）。
+- 实测真数字（取值 2026-10-15T00:13Z）：本仓 `arena/e207d38d-qself` head `8d90c39` 两条命令输出 —— 总序号 3101、当日序号 0（该提交日期 2026-10-14 22:00 CST，不在当日）；`origin/main` 总提交数 3069。旧口径产物 `Qself-26.10.14.4.277`（id 11900691515，rn=277，事件 `push`）与 `Qself-26.10.14.3.276`（id 11900660871，rn=276，事件 `push`）。
+- 会话令牌 DELETE artifact 实测 403（`Resource not accessible by integration`，用不存在的 id 探测端点 `repos/Sumicya/Qself/actions/artifacts/1`），旧口径产物只能由 CI 清理 job 清，故过渡清理写进同一份脚本。
+
 ## 2026-10-14 — 会话分支出包首次实测；清理按重复当日序号删旧产物；修正已知风险条
 
 - 实测（提交 `dd136e0` 推送后）：Build rn=276（事件 `push`，head `dd136e0`，分支 `arena/e207d38d-qself`）四作业 `dex`/`apk`/`cleanup-artifacts` success、`cleanup-releases` skipped（非默认分支，按其守卫只拦发行对象）；产出 `Qself-26.10.14.3.276`（id 11900660871）—— 会话分支推送出包这条验证路径首次跑通。PR 校验 run 38576144413（同 head）`dex`/`test`/`cleanup` 全 success。
