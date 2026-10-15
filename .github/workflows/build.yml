@@ -111,7 +111,7 @@ jobs:
           retention-days: 5
 
   # artifact 与运行记录清理：命名、来源、重复当日序号、号源口径、数量五条，全部无日期豁免。
-  # 排队按 run_started_at（UTC+8 日界）；承载保留产物的 run 不删、也不计入上限；正在跑的本次不删。
+  # artifact 全仓按 created_at 留 5 个；每工作流运行按 run_started_at 留 5 条，超限未完成运行先取消。
   # 真删两个调用点都真删（本处 + PR 校验工作流的清理作业，两处同一 concurrency group）；PR 校验序列的超量 run 在这里也按序列一并收（actions: write 可删同仓任意工作流的 run）。
   # 权限最小 actions: write（只删本项目 artifact 与 run），按规范不与 contents: write 同授；动不到 Release、tag、分支。
   cleanup-artifacts:

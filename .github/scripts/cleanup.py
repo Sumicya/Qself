@@ -10,15 +10,16 @@
 不让 job 红；403 以外的失败当轮即红 job 并逐条点名附返回码。
 只读预演（`actions: read` + `CLEANUP_APPLY='false'`）是备用形态，禁止拿「预演已证」当清理已做。
 
-判据五条：命名、来源、重复当日序号、号源口径、数量；全部不豁免。
-每条序列 artifact 与运行记录各保留 5 个，最新对象、未完成运行与承载运行受保护。
+判据五条：命名、来源、重复当日序号、号源口径、数量。
+artifact 全仓按 created_at 保留最新 5 个；运行记录每工作流按开始时间保留最新 5 条。
+先列完整计划，再删产物，超限未完成运行先取消。保留产物的承载运行不可误删，冲突明确失败。
 
-删 run 会连带删它的 artifact，所以承载保留产物的 run 不删、也不计入 run 上限。
 """
 import json
 import os
 import re
 import subprocess
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
@@ -27,7 +28,7 @@ SELF = int(os.environ["SELF"])
 SEGMENTS = int(os.environ["SEGMENTS"])
 APPLY = os.environ.get("CLEANUP_APPLY", "false").strip().lower() == "true"
 PREFIX = "Qself-"
-KEEP = 5                       # 每条序列 artifact 5 个、run 5 条
+KEEP = 5                       # 全仓 artifact 5 个、每工作流 run 5 条
 CST = timezone(timedelta(hours=8))
 TODAY = datetime.now(CST).strftime("%Y-%m-%d")
 VERB = "删" if APPLY else "将删"
@@ -68,15 +69,12 @@ def list_all(url, key):
     return [json.loads(line) for line in out.splitlines() if line.strip()]
 
 
-def cst_day(iso):
-    return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(CST).strftime("%Y-%m-%d")
-
-
 def stamp(run):
     """排序用的开始时间：run_started_at 缺失才退回 created_at。"""
     return run.get("run_started_at") or run["created_at"]
 
 
+DENIED = []
 FAILED = []                     # 非 403 的删除失败：(端点, 标签, 返回码, stderr)；末尾一律红 job
 
 
@@ -85,22 +83,23 @@ def http_code(stderr):
     return m.group(1) if m else "?"
 
 
-def delete(kind, obj_id, label, why):
-    """真删一个对象。失败按原因分口径（规范 a8787a8）：
-    403 权限类（fork PR 只读等）打 ::warning:: 写明对象、端点与返回码后继续，不让 job 红，
-    403 以外的失败进 FAILED，末尾红 job 并逐条点名。"""
-    endpoint = f"repos/{REPO}/actions/{kind}/{obj_id}"
-    print(f"  {'删' if APPLY else '将删'} {label}（{why}）")
-    if not APPLY:
-        return
-    p = subprocess.run(["gh", "api", "-X", "DELETE", endpoint], capture_output=True, text=True)
+def mutate(method, endpoint, label):
+    """403 仅记录权限缺口，其它错误累积后使任务失败；返回真实执行结果。"""
+    p = subprocess.run(["gh", "api", "-X", method, endpoint], capture_output=True, text=True)
     if p.returncode == 0:
-        return
+        return True
     code = http_code(p.stderr)
     if code == "403":
-        print(f"  ::warning::{label} 删除失败（HTTP 403，权限缺口）：{endpoint}；本次降级为预演（非 403 的失败不在降级范围）")
-        return
-    FAILED.append((endpoint, label, code, p.stderr.strip()[:200]))
+        DENIED.append((endpoint, label))
+        print(f"::warning::{label} 未完成：{endpoint} HTTP 403，缺 actions: write 权限")
+    else:
+        FAILED.append((endpoint, label, code, p.stderr.strip()[:200]))
+    return False
+
+
+def delete(kind, obj_id, label, why):
+    print(f"  {'删' if APPLY else '将删'} {label}（{why}）")
+    return not APPLY or mutate("DELETE", f"repos/{REPO}/actions/{kind}/{obj_id}", label)
 
 
 runs = list_all(f"repos/{REPO}/actions/runs?per_page=100", ".workflow_runs")
@@ -110,11 +109,6 @@ print(f"本次 run {SELF} 所属序列：{self_run['path'] if self_run else '(�
 arts = [a for a in list_all(f"repos/{REPO}/actions/artifacts?per_page=100", ".artifacts")
         if not a["expired"]]
 
-
-def art_stamp(a):
-    """artifact 归属运行的开始时间（run_started_at 缺失才退回 created_at），run 记录不在时退回产物 created_at。"""
-    r = run_by_id.get(a["workflow_run"]["id"])
-    return stamp(r) if r else a["created_at"]
 
 
 # ---------- artifact：口径 → 来源 → 重复当日序号 → 数量 ----------
@@ -126,8 +120,8 @@ for a in sorted(arts, key=lambda x: (x["created_at"], x["id"]), reverse=True):
     ws = (r or {}).get("path", "(未知来源)")
     if not name.startswith(PREFIX):
         drop_a.append((a, ws, "口径：名不是 Qself- 前缀"))
-    elif len(seg) != SEGMENTS:
-        drop_a.append((a, ws, f"口径：段数 {len(seg)} ≠ {SEGMENTS}"))
+    elif len(seg) != SEGMENTS or not all(part.isdigit() for part in seg):
+        drop_a.append((a, ws, f"口径：段数={len(seg)} 要求={SEGMENTS}，各段须为数字"))
     elif r and r["event"] == "pull_request":
         drop_a.append((a, ws, "来源：workflow_run 事件是 pull_request"))
     else:
@@ -157,7 +151,7 @@ if SEGMENTS >= 5:
 
 # 判据四：逐 head 核对总提交数；失败硬退出，不用现存最大号猜测。
 counts = {}
-quota = defaultdict(list)
+quota = []
 keep_a = []
 for a, ws, seg in survivors:
     sha = a["workflow_run"]["head_sha"]
@@ -176,60 +170,80 @@ for a, ws, seg in survivors:
     if not seg[-1].isdigit() or int(seg[-1]) != expected:
         drop_a.append((a, ws, f"号源口径：总序号 {seg[-1]} ≠ head {sha} 提交数 {expected}"))
     else:
-        quota[ws].append(a)
-for ws, lst in quota.items():
-    lst.sort(key=lambda a: (art_stamp(a), a["id"]), reverse=True)
-    for i, a in enumerate(lst):
-        if i < KEEP:
-            keep_a.append((a, ws, "数量：每条序列保 5，无日期豁免"))
-        else:
-            drop_a.append((a, ws, "数量：超出每条序列上限 5"))
+        quota.append((a, ws))
+for i, (a, ws) in enumerate(sorted(quota, key=lambda t: (t[0]["created_at"], t[0]["id"]), reverse=True)):
+    if i < KEEP:
+        keep_a.append((a, ws, "数量：全仓最新 5 个"))
+    else:
+        drop_a.append((a, ws, "数量：超出全仓上限 5"))
 
-print(f"artifact：{VERB} {len(drop_a)} 个，保留 {len(keep_a)} 个")
-for a, ws, why in drop_a:
-    delete("artifacts", a["id"], f"{a['name']} id={a['id']}", why)
 kept_runs = {a["workflow_run"]["id"] for a, _, _ in keep_a}
-for a, ws, why in keep_a:
-    print(f"  留 {a['name']} id={a['id']}（{why}）")
-left_a = defaultdict(int)
-for _, ws, _ in keep_a:
-    left_a[ws] += 1
-for ws in sorted(left_a):
-    print(f"  剩 {ws}  {left_a[ws]} 个")
-
-# ---------- 运行记录：承载 → 数量（无日期豁免） ----------
+# 运行先按完整序列排队：承载、本次、未完成运行均占名额，不再扩容。
 drop_r, keep_r = [], []
 counted = defaultdict(list)
 for r in sorted(runs, key=lambda x: (stamp(x), x["id"]), reverse=True):
-    ws = r["path"]
-    if r["id"] == SELF:
-        keep_r.append((r, ws, "正在运行的本次：不删"))
-    elif r["status"] != "completed":
-        keep_r.append((r, ws, "未完成：不删"))
-    elif r["id"] in kept_runs:
-        keep_r.append((r, ws, "承载保留产物：不删、不计入上限"))
-    else:
-        counted[ws].append(r)
+    counted[r["path"]].append(r)
 for ws, lst in counted.items():
     for i, r in enumerate(lst):
-        if i < KEEP:
-            keep_r.append((r, ws, "数量：每条序列保 5"))
-        else:
-            drop_r.append((r, ws, "数量：超出每条序列上限"))
+        (keep_r if i < KEEP else drop_r).append((r, ws, "数量：每工作流最新 5 条" if i < KEEP else "数量：超出每工作流上限 5"))
 
+print(f"artifact：{VERB} {len(drop_a)} 个，保留 {len(keep_a)} 个")
+for a, ws, why in drop_a:
+    print(f"  待删 {a['name']} id={a['id']} run={a['workflow_run']['id']}（{why}）")
+for a, ws, why in keep_a:
+    print(f"  留 {a['name']} id={a['id']}（{why}）")
 print(f"运行记录：{VERB} {len(drop_r)} 条，保留 {len(keep_r)} 条")
 for r, ws, why in drop_r:
-    delete("runs", r["id"], f"id={r['id']} rn={r['run_number']} {ws} {stamp(r)}", why)
+    carried = [(a["name"], a["id"]) for a in arts if a["workflow_run"]["id"] == r["id"]]
+    print(f"  待删 run={r['id']} rn={r['run_number']} {ws} status={r['status']} 产物={carried}（{why}）")
 for r, ws, why in keep_r:
-    print(f"  留 id={r['id']} rn={r['run_number']} {ws}（{why}）")
-left_r = defaultdict(lambda: [0, 0])      # 序列 -> [计入上限, 受保护运行]
-for r, ws, why in keep_r:
-    left_r[ws][0 if why.startswith("数量：每条序列保") else 1] += 1
-for ws in sorted(left_r):
-    print(f"  剩 {ws}  计入上限 {left_r[ws][0]} 条 / 受保护运行 {left_r[ws][1]} 条")
+    print(f"  留 run={r['id']} {ws}（{why}）")
+for ws, lst in counted.items():
+    print(f"扫描：{ws} 总数={len(lst)} 保留={min(KEEP, len(lst))} 超限={max(0, len(lst)-KEEP)}")
+
+# 两个保留要求若冲突，不静默扩容，也不牺牲保留产物；停止破坏性动作并报明冲突。
+for r, ws, why in drop_r:
+    if r["id"] in kept_runs or r["id"] == SELF:
+        raise SystemExit(f"::error::保留冲突：超限 run={r['id']} 承载保留产物或为本次运行，未删除，需裁决")
+
+# 先删产物；403 或其它失败后不得借删除承载运行绕过失败。
+blocked_runs = set()
+for a, ws, why in drop_a:
+    if not delete("artifacts", a["id"], f"{a['name']} id={a['id']}", why):
+        blocked_runs.add(a["workflow_run"]["id"])
+for r, ws, why in drop_r:
+    if r["id"] in blocked_runs:
+        print(f"run={r['id']} 未删：其产物删除失败，禁止级联删除")
+        continue
+    if r["status"] != "completed":
+        endpoint = f"repos/{REPO}/actions/runs/{r['id']}"
+        print(f"  {'取消' if APPLY else '将取消'} 超限运行 {r['id']}，完成后再删")
+        if APPLY:
+            if not mutate("POST", endpoint + "/cancel", f"取消 run={r['id']}"):
+                continue
+            for attempt in range(15):
+                r = json.loads(gh("api", endpoint))
+                if r["status"] == "completed":
+                    break
+                time.sleep(2)
+            else:
+                FAILED.append((endpoint, f"取消 run={r['id']}", "等待超时", "取消后尚未完成，未删除"))
+                continue
+            # 运行在扫描与取消之间可能上传产物，重读后再删，避免无清单级联删除。
+            for a in list_all(endpoint + "/artifacts?per_page=100", ".artifacts"):
+                if not delete("artifacts", a["id"], f"{a['name']} id={a['id']}", "超限运行取消后的产物复查"):
+                    blocked_runs.add(r["id"])
+            if r["id"] in blocked_runs:
+                continue
+    delete("runs", r["id"], f"run={r['id']} {ws}", why)
 
 if FAILED:
     for endpoint, label, code, err in FAILED:
         print(f"  ::error::{label} 删除失败（HTTP {code}，非权限类）：{endpoint} — {err}")
     raise SystemExit(f"清理失败 {len(FAILED)} 个对象（非 403，按规范 a8787a8 当轮红 job）")
-print("清理完成：DELETE 全部成功或按 403 降级。")
+if DENIED:
+    print(f"清理未完成：{len(DENIED)} 个对象存在 HTTP 403 权限缺口")
+elif APPLY:
+    print("清理完成：计划内删除全部成功")
+else:
+    print("只读扫描完成：未执行删除")
