@@ -89,10 +89,13 @@ class CleanupTest(unittest.TestCase):
             else:
                 self.assertIsNotNone(error)
 
-    def test_retained_artifact_conflict_stops_deletion(self):
-        calls, _, error = self.execute([run(i) for i in range(1, 7)], [artifact(1)], True)
-        self.assertIn('保留冲突', error)
-        self.assertFalse(any('-X' in c for c in calls))
+    def test_run_limit_overrides_artifact_candidate(self):
+        calls, output, error = self.execute([run(i) for i in range(1, 7)], [artifact(1)], True)
+        self.assertIsNone(error)
+        mutations = [c[-1] for c in calls if '-X' in c]
+        self.assertEqual(mutations, ['repos/Sumicya/Qself/actions/artifacts/1',
+                                     'repos/Sumicya/Qself/actions/runs/1'])
+        self.assertIn('保留 0 个', output)
 
     def test_cancel_before_delete(self):
         runs = [run(i) for i in range(1, 7)]

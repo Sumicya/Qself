@@ -12,7 +12,7 @@
 
 判据五条：命名、来源、重复当日序号、号源口径、数量。
 artifact 全仓按 created_at 保留最新 5 个；运行记录每工作流按开始时间保留最新 5 条。
-先列完整计划，再删产物，超限未完成运行先取消。保留产物的承载运行不可误删，冲突明确失败。
+先列完整计划，再删产物，超限未完成运行先取消。运行上限优先，超限运行承载的候选保留产物也删除。
 
 """
 import json
@@ -177,7 +177,6 @@ for i, (a, ws) in enumerate(sorted(quota, key=lambda t: (t[0]["created_at"], t[0
     else:
         drop_a.append((a, ws, "数量：超出全仓上限 5"))
 
-kept_runs = {a["workflow_run"]["id"] for a, _, _ in keep_a}
 # 运行先按完整序列排队：承载、本次、未完成运行均占名额，不再扩容。
 drop_r, keep_r = [], []
 counted = defaultdict(list)
@@ -186,6 +185,14 @@ for r in sorted(runs, key=lambda x: (stamp(x), x["id"]), reverse=True):
 for ws, lst in counted.items():
     for i, r in enumerate(lst):
         (keep_r if i < KEEP else drop_r).append((r, ws, "数量：每工作流最新 5 条" if i < KEEP else "数量：超出每工作流上限 5"))
+
+# 运行上限优先：校正 artifact 候选保留清单，不因承载关系扩容。
+excess_runs = {r["id"] for r, _, _ in drop_r}
+for a, ws, why in keep_a:
+    if a["workflow_run"]["id"] in excess_runs:
+        drop_a.append((a, ws, "运行上限优先：承载运行已超过最新 5 条"))
+keep_a = [(a, ws, why) for a, ws, why in keep_a
+          if a["workflow_run"]["id"] not in excess_runs]
 
 print(f"artifact：{VERB} {len(drop_a)} 个，保留 {len(keep_a)} 个")
 for a, ws, why in drop_a:
@@ -201,10 +208,9 @@ for r, ws, why in keep_r:
 for ws, lst in counted.items():
     print(f"扫描：{ws} 总数={len(lst)} 保留={min(KEEP, len(lst))} 超限={max(0, len(lst)-KEEP)}")
 
-# 两个保留要求若冲突，不静默扩容，也不牺牲保留产物；停止破坏性动作并报明冲突。
-for r, ws, why in drop_r:
-    if r["id"] in kept_runs or r["id"] == SELF:
-        raise SystemExit(f"::error::保留冲突：超限 run={r['id']} 承载保留产物或为本次运行，未删除，需裁决")
+# 本清理若自身已超限，取消自己会中断清理；明确失败，由更新的清理运行收口。
+if SELF in excess_runs:
+    raise SystemExit(f"::error::本次 run={SELF} 已超限，由更新的清理运行取消并删除")
 
 # 先删产物；403 或其它失败后不得借删除承载运行绕过失败。
 blocked_runs = set()
