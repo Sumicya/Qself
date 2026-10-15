@@ -45,10 +45,10 @@ jobs:
           packages: 'platform-tools'
       - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
       - uses: gradle/actions/setup-gradle@v6
-      # 不取号：给 Gradle 一个不参与编号的占位版本名，只跑单元测试。
+      # 不取号：仅给单测一个五段格式夹具（versionCode > 0），不组装/上传 APK，不作为产物号源。
       - name: 单元测试（不取号）
         env:
-          QSELF_VERSION: 00.0.0.0
+          QSELF_VERSION: 00.0.0.0.1
         run: ./gradlew --no-daemon :app:testDebugUnitTest
 
   # 清理真删：与出包工作流同一份脚本（.github/scripts/cleanup.py），会话可达的那个真删调用点 ——
