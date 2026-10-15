@@ -228,3 +228,14 @@ text   等级
 
 # TG 连发头像浮层：祖先列表类型来自真包
 class  androidx.recyclerview.widget.RecyclerView
+
+# 消息内容几何与一次性组件采集（QQ 9.2.10 真包 class_data 核过）
+member! com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB#o1
+class  com.tencent.mobileqq.aio.msglist.holder.g
+member! com.tencent.mobileqq.aio.msglist.holder.g#get
+class  com.tencent.mobileqq.aio.msglist.holder.component.c
+member! com.tencent.mobileqq.aio.msglist.holder.component.c#f1
+class  com.tencent.mobileqq.aio.msglist.holder.component.BaseContentComponent
+member! com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent#C1
+member! com.tencent.mobileqq.aio.msg.AIOMsgItem#isSelf
+field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#senderUin

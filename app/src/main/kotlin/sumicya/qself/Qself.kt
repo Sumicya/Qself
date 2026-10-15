@@ -27,7 +27,7 @@ val features = listOf(
     Feature("去头像挂件", true, "消息头像不画挂件", ::noPendant),
     Feature("昵称只留名字", true, "昵称行去掉等级/头衔/会员", ::plainNick),
     Feature("防撤回", true, "撤回的消息留下，插灰字", ::antiRecall),
-    Feature("连发合并", true, "同一人连发成组，昵称只留组首，头像随组底浮动", ::groupRuns),
+    Feature("连发合并", true, "昵称固定组首，单条头像与消息居中，连发头像随组浮动", ::groupRuns),
     Feature("回复不@", true, "回复不往输入框插 @昵称", ::replyNoAt),
     Feature("转发多选", true, "转发页常显多选入口", ::multiForward),
     Feature("转发不限人数", true, "转发选人不再卡 9 个", ::noForwardLimit),

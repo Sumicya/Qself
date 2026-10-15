@@ -76,19 +76,21 @@ def methods_of(d, cls_name):
         for _ in range(nsf + nif):
             _, p = uleb(d.b, p)
             _, p = uleb(d.b, p)
-        idx, out = 0, []
-        for _ in range(ndm + nvm):
-            di, p = uleb(d.b, p)
-            idx += di
-            _, p = uleb(d.b, p)
-            co, p = uleb(d.b, p)
-            # QQ 的 dex 有畸形 class_data（越界的 method_idx），撞上就把手上这些交出去，别崩
-            if idx >= d.nmth:
-                break
-            c, pr, n = struct.unpack_from("<HHI", d.b, d.omth + 8 * idx)
-            if n >= len(s) or pr >= d.npro:
-                continue
-            out.append((s[n], d.proto(pr), co))
+        out = []
+        # DEX 的 direct_methods 与 virtual_methods 是独立的差分索引流，必须分别从 0 开始。
+        for count in (ndm, nvm):
+            idx = 0
+            for _ in range(count):
+                di, p = uleb(d.b, p)
+                idx += di
+                _, p = uleb(d.b, p)
+                co, p = uleb(d.b, p)
+                if idx >= d.nmth:
+                    raise ValueError(f"method_idx {idx} >= {d.nmth}")
+                c, pr, n = struct.unpack_from("<HHI", d.b, d.omth + 8 * idx)
+                if c != cidx:
+                    raise ValueError("class_data 方法所属类不匹配")
+                out.append((s[n], d.proto(pr), co))
         return out
     return None
 

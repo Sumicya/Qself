@@ -30,13 +30,32 @@ class ProtoTest {
         assertFalse(continuesMessageRun("a", "a", 57601, 57599, 2, 2))
     }
 
-    @Test fun floatingAvatarStaysInsideGroupAndViewport() {
-        assertEquals(146f, floatingAvatarTop(0f, 200f, 0f, 500f, 50f, 4f))
+    @Test fun floatingAvatarUsesContentCentersNotRowBottom() {
+        // 一行短文本即使比头像矮，也严格同中心；高图片同理。
+        assertEquals(10f, floatingAvatarTop(30f, 30f, 0f, 500f, 40f, 4f))
+        assertEquals(180f, floatingAvatarTop(200f, 200f, 0f, 500f, 40f, 4f))
+        // 连发最后一条中心对齐，长组受可见窗口底部约束。
+        assertEquals(100f, floatingAvatarTop(30f, 120f, 0f, 500f, 40f, 4f))
+        assertEquals(56f, floatingAvatarTop(30f, 120f, 0f, 100f, 40f, 4f))
         assertEquals(446f, floatingAvatarTop(-300f, 900f, 0f, 500f, 50f, 4f))
-        assertEquals(420f, floatingAvatarTop(420f, 480f, 0f, 460f, 50f, 4f))
-        assertTrue(floatingAvatarTop(-100f, -1f, 0f, 500f, 50f, 4f) == null)
-        assertTrue(floatingAvatarTop(501f, 600f, 0f, 500f, 50f, 4f) == null)
-        assertTrue(floatingAvatarTop(0f, 20f, 0f, 500f, 50f, 4f) == null)
+        assertTrue(floatingAvatarTop(-100f, -30f, 0f, 500f, 50f, 4f) == null)
+        assertTrue(floatingAvatarTop(530f, 600f, 0f, 500f, 50f, 4f) == null)
+        assertTrue(floatingAvatarTop(Float.POSITIVE_INFINITY, 20f, 0f, 500f, 40f, 4f) == null)
+    }
+
+    @Test fun ownMessagesKeepOneSenderWhenUidIsEmpty() {
+        assertEquals(messageRunSender("u_old", 1, true), messageRunSender("", null, true))
+        assertEquals(messageRunSender("", 123, false), messageRunSender("uid", 123, false))
+        assertFalse(messageRunSender("u_a", null, false) == messageRunSender("u_b", null, false))
+        assertTrue(messageRunSender("", 0, false) == null)
+    }
+
+    class PendingMessage(private val id: Long) { fun getMsgId(): Long = id }
+    @Test fun zeroIdPendingMessageStillHasAStableGroupKey() {
+        val first = PendingMessage(0)
+        assertEquals(RunKey(first), RunKey(first))
+        assertFalse(RunKey(first) == RunKey(PendingMessage(0)))
+        assertEquals(RunKey(PendingMessage(123)), RunKey(PendingMessage(123)))
     }
 
     private fun varint(v: Long): ByteArray {

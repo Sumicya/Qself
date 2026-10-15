@@ -35,9 +35,8 @@
 
 - `Class<*>.method(name)` 和 `constant()` 都往父类找（QQ 的挂点大半声明在 MVVM 基类 / Api 基类上），
   `declaredMethods` 只翻本类会静悄悄空转；反射**调用**用 `getMethod`（public + 父类），装钩子用 `method()`
-- **「这方法声明在本类还是父类」离线判不准**：QQ 的 class_data 有畸形项，`dexq.py` 解到一半 method_idx
-  会跳出界（撞上就 break，所以它打印的「声明方法」可能不全）。别拿它下结论，一律按沿父类找写，装上看日志。
-  也正因如此 `constant()` 的 pick **必须带名字过滤** —— 写宽了会连父类、Object 的 notify/wait 一起改掉
+- `dexq.py` 按 DEX 格式分别重置 direct/virtual 方法差分索引；声明关系可用 class_data 核对，
+  运行时解析仍沿父类查找。`constant()` 的 pick 必须带名字过滤，避免改到父类的无关方法。
 - 解析方法要在**装的时候**做完（`val m = c.getMethod("x")`），别写在钩子体里 —— 找不到就当场 ✗ 报出来，
   而不是每次绑定时被 `runCatching` 吞掉，看起来装着其实什么都没干
 
