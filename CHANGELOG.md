@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-10-15
+
+- 依据 selfs `eb676eb5e03debe035331f267312908ffbc535c1`：取消 artifact 与运行记录的当日豁免，每条序列保留 5 个；保留承载产物和未完成运行保护。
+- 清理补逐 artifact head sha 的 git 提交数核验，取不到即失败；同序列重复号按 artifact created_at 删旧留新。
+- 删除失效的连续两次 403 升级说明，403 warning，其他错误红；同步工作流注释，移除 AGENTS.md 的全局规则副本。
+- 本地全历史干跑：两件 artifact 的总序号 3103、3102 均与对应 head 提交数一致；预计删除两条超量 PR check 运行，尚未算作真删。
+
 ## 2026-10-15 — 号源换成 git 提交数；清理判据三改按 run_started_at 删旧留新；换号源过渡清理
 
 - 依据：selfs 分支提交 `c5ac12d`（号源只有 git 提交数一处：总序号 = `git rev-list --count HEAD`，当日序号 = `git rev-list --count --since=<当日0点 UTC+8> HEAD`，`run_number`／事件／文件名／PR 一律不进版本号；硬前提 `actions/checkout` 写 `fetch-depth: 0`、取号脚本启动行打印 head sha 与两个数与命令原文、取不到数失败退出不留降级不退化四段；head 提交不在当日时当日序号取 0；提交数就是号源所以禁空提交与 force push／rebase；同一仓不得并存两种取数口径，新包出成之后再清旧口径产物并记一行真数字）、`240a214`（先出新口径包再清旧口径，不许出现一个可装的包都没有的状态）。

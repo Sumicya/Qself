@@ -7,15 +7,11 @@
   两处挂同一个 `concurrency` group 串行，避免并发删同一对象。
 
 清理失败按原因分口径（规范 a8787a8）：403 权限类打 `::warning::` 写明对象、端点与返回码后继续，
-不让 job 红，同一对象连续两次运行都失败才升级为阻塞项；403 以外的失败当轮即红 job 并逐条点名附返回码。
+不让 job 红；403 以外的失败当轮即红 job 并逐条点名附返回码。
 只读预演（`actions: read` + `CLEANUP_APPLY='false'`）是备用形态，禁止拿「预演已证」当清理已做。
 
-判据四条（规范 b0594d3）：
-  1. 命名口径：段数 ≠ 工作流顶部 SEGMENTS 声明值。
-  2. 产物来源：产物的 workflow_run 事件是 pull_request。
-  3. 重复当日序号：同一天同一序列出现两个相同当日序号，保留总序号最大的一个。
-  4. 数量：当日之外每条序列 artifact 5 个、run 5 条；当日对象豁免（当日序号取自当日运行列表，
-     删当日运行会抽走计数基准）。排队按 run_started_at（UTC+8 日界），id 只作同刻 tiebreak。
+判据五条：命名、来源、重复当日序号、号源口径、数量；全部不豁免。
+每条序列 artifact 与运行记录各保留 5 个，最新对象、未完成运行与承载运行受保护。
 
 删 run 会连带删它的 artifact，所以承载保留产物的 run 不删、也不计入 run 上限。
 """
@@ -31,7 +27,7 @@ SELF = int(os.environ["SELF"])
 SEGMENTS = int(os.environ["SEGMENTS"])
 APPLY = os.environ.get("CLEANUP_APPLY", "false").strip().lower() == "true"
 PREFIX = "Qself-"
-KEEP = 5                       # 当日之外每条序列 artifact 5 个、run 5 条
+KEEP = 5                       # 每条序列 artifact 5 个、run 5 条
 CST = timezone(timedelta(hours=8))
 TODAY = datetime.now(CST).strftime("%Y-%m-%d")
 VERB = "删" if APPLY else "将删"
@@ -55,6 +51,9 @@ _shallow = git_out("rev-parse", "--is-shallow-repository")
 print(f"取号核对：head={_head} 总序号={_total} 当日序号={_daily} 浅克隆={_shallow}"
       f"（浅克隆为 true 时这两个数不可信）")
 print(f"取号命令原文：git rev-list --count HEAD ／ git rev-list --count --since={_since} HEAD")
+
+if _shallow != "false" or not all((_head, _total, _daily)):
+    raise SystemExit("完整历史或取号失败，停止清理")
 
 
 def gh(*args):
@@ -89,7 +88,7 @@ def http_code(stderr):
 def delete(kind, obj_id, label, why):
     """真删一个对象。失败按原因分口径（规范 a8787a8）：
     403 权限类（fork PR 只读等）打 ::warning:: 写明对象、端点与返回码后继续，不让 job 红，
-    同一对象连续两次运行都失败才升级为阻塞项；403 以外的失败进 FAILED，末尾红 job 并逐条点名。"""
+    403 以外的失败进 FAILED，末尾红 job 并逐条点名。"""
     endpoint = f"repos/{REPO}/actions/{kind}/{obj_id}"
     print(f"  {'删' if APPLY else '将删'} {label}（{why}）")
     if not APPLY:
@@ -134,41 +133,57 @@ for a in sorted(arts, key=lambda x: (x["created_at"], x["id"]), reverse=True):
     else:
         survivors.append((a, ws, seg))
 
-# 判据三：同日同当日序号重复 —— 按 run_started_at 删旧留新（规范 c5ac12d:73）。
+# 判据三：同日同当日序号重复 —— 按 artifact created_at 删旧留新（规范 c5ac12d:73）。
 # 不按总序号大小判：改文件名、换号源后总序号会回头，按大小判会误删新产物。
-# 删前把两个 artifact 的名与 id、两次运行的 rn 打进日志（该仓 AGENTS.md 的那行由会话记）。
+# 删前把两个 artifact 的名与 id、两次运行的 rn 打进日志（删除清单由日志保存）。
 if SEGMENTS >= 5:
     groups = defaultdict(list)
     for a, ws, seg in survivors:
-        groups[(".".join(seg[:3]), int(seg[3]))].append((a, ws))
+        groups[(ws, ".".join(seg[:3]), int(seg[3]))].append((a, ws))
     dup_ids = set()
-    for (day, daily), g in sorted(groups.items()):
+    for (ws, day, daily), g in sorted(groups.items()):
         if len(g) < 2:
             continue
-        g.sort(key=lambda t: (art_stamp(t[0]), t[0]["id"]), reverse=True)
+        g.sort(key=lambda t: (t[0]["created_at"], t[0]["id"]), reverse=True)
         newest = g[0][0]
         keep_rn = run_by_id.get(newest["workflow_run"]["id"], {}).get("run_number", "?")
         for a, ws in g[1:]:
             dup_ids.add(a["id"])
             rn = run_by_id.get(a["workflow_run"]["id"], {}).get("run_number", "?")
-            drop_a.append((a, ws, f"重复当日序号 {day}.{daily}：按 run_started_at 删旧留新，"
+            drop_a.append((a, ws, f"重复当日序号 {day}.{daily}：按 artifact created_at 删旧留新，"
                                   f"留 {newest['name']}（id={newest['id']} rn={keep_rn}），"
                                   f"删 {a['name']}（id={a['id']} rn={rn}）"))
     survivors = [(a, ws, seg) for a, ws, seg in survivors if a["id"] not in dup_ids]
 
+# 判据四：逐 head 核对总提交数；失败硬退出，不用现存最大号猜测。
+counts = {}
 quota = defaultdict(list)
 keep_a = []
 for a, ws, seg in survivors:
-    if cst_day(a["created_at"]) == TODAY:
-        keep_a.append((a, ws, "当日豁免：数量判据当日不删"))
+    sha = a["workflow_run"]["head_sha"]
+    if sha not in counts:
+        value = git_out("rev-list", "--count", sha)
+        if value is None:
+            gh("api", f"repos/{REPO}/commits/{sha}")  # 明确核实该提交可达
+            subprocess.run(["git", "fetch", "origin", sha], check=True)
+            value = git_out("rev-list", "--count", sha)
+        if not value or not value.isdigit():
+            raise SystemExit(f"取不到 head {sha} 的提交数")
+        counts[sha] = int(value)
+    expected = counts[sha]
+    print(f"五条判据扫描：{a['name']} id={a['id']} 段数={len(seg)} 来源=非PR "
+          f"重复=通过 head={sha} 总提交数={expected} 名字总序号={seg[-1]}")
+    if not seg[-1].isdigit() or int(seg[-1]) != expected:
+        drop_a.append((a, ws, f"号源口径：总序号 {seg[-1]} ≠ head {sha} 提交数 {expected}"))
     else:
         quota[ws].append(a)
-for ws, lst in quota.items():             # lst 已按 created_at 新到旧
+for ws, lst in quota.items():
+    lst.sort(key=lambda a: (art_stamp(a), a["id"]), reverse=True)
     for i, a in enumerate(lst):
         if i < KEEP:
-            keep_a.append((a, ws, "数量：当日之外保 5"))
+            keep_a.append((a, ws, "数量：每条序列保 5，无日期豁免"))
         else:
-            drop_a.append((a, ws, "数量：超出当日之外上限"))
+            drop_a.append((a, ws, "数量：超出每条序列上限 5"))
 
 print(f"artifact：{VERB} {len(drop_a)} 个，保留 {len(keep_a)} 个")
 for a, ws, why in drop_a:
@@ -182,7 +197,7 @@ for _, ws, _ in keep_a:
 for ws in sorted(left_a):
     print(f"  剩 {ws}  {left_a[ws]} 个")
 
-# ---------- 运行记录：承载 → 数量（当日豁免不计入上限） ----------
+# ---------- 运行记录：承载 → 数量（无日期豁免） ----------
 drop_r, keep_r = [], []
 counted = defaultdict(list)
 for r in sorted(runs, key=lambda x: (stamp(x), x["id"]), reverse=True):
@@ -193,27 +208,25 @@ for r in sorted(runs, key=lambda x: (stamp(x), x["id"]), reverse=True):
         keep_r.append((r, ws, "未完成：不删"))
     elif r["id"] in kept_runs:
         keep_r.append((r, ws, "承载保留产物：不删、不计入上限"))
-    elif cst_day(stamp(r)) == TODAY:
-        keep_r.append((r, ws, "当日豁免：数量判据当日不删、不计入上限"))
     else:
         counted[ws].append(r)
 for ws, lst in counted.items():
     for i, r in enumerate(lst):
         if i < KEEP:
-            keep_r.append((r, ws, "数量：当日之外保 5"))
+            keep_r.append((r, ws, "数量：每条序列保 5"))
         else:
-            drop_r.append((r, ws, "数量：超出当日之外上限"))
+            drop_r.append((r, ws, "数量：超出每条序列上限"))
 
 print(f"运行记录：{VERB} {len(drop_r)} 条，保留 {len(keep_r)} 条")
 for r, ws, why in drop_r:
     delete("runs", r["id"], f"id={r['id']} rn={r['run_number']} {ws} {stamp(r)}", why)
 for r, ws, why in keep_r:
     print(f"  留 id={r['id']} rn={r['run_number']} {ws}（{why}）")
-left_r = defaultdict(lambda: [0, 0])      # 序列 -> [计入上限, 当日与承载豁免]
+left_r = defaultdict(lambda: [0, 0])      # 序列 -> [计入上限, 受保护运行]
 for r, ws, why in keep_r:
-    left_r[ws][0 if why.startswith("数量：当日之外保") else 1] += 1
+    left_r[ws][0 if why.startswith("数量：每条序列保") else 1] += 1
 for ws in sorted(left_r):
-    print(f"  剩 {ws}  计入上限 {left_r[ws][0]} 条 / 当日与承载豁免 {left_r[ws][1]} 条")
+    print(f"  剩 {ws}  计入上限 {left_r[ws][0]} 条 / 受保护运行 {left_r[ws][1]} 条")
 
 if FAILED:
     for endpoint, label, code, err in FAILED:

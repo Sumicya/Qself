@@ -1,6 +1,5 @@
 # Qself PR 校验工作流 —— 跑校验与清理真删：不取号、不出包、不上传 artifact。
 # 与 build.yml 分开是规范要求：run_number 在运行创建时就分配，且按工作流计数；
-# 同一个文件接 pull_request 会继续吃出包号段的号（实测 rn=273、rn=275 都是 PR 运行）。
 # 触发只允许 pull_request；出包与版本号在 build.yml。
 name: PR check
 
@@ -68,7 +67,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: 按四条判据清理（真删）
+      - name: 按五条判据清理（真删）
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
