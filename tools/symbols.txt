@@ -256,3 +256,19 @@ field com.tencent.mobileqq.tab.TabFrameLayout#e
 field com.tencent.mobileqq.tab.TabFrameLayout#d
 member! com.tencent.mobileqq.tab.TabFrameLayout#a
 member! com.tencent.mobileqq.tab.TabFrameLayout#onFinishInflate
+
+# TG 分组的真实组件槽位、活跃附加组件、列表提交与原生测量
+member! com.tencent.mobileqq.aio.msglist.holder.component.c#i1
+field com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB#G
+member! com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB#j1
+class com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.AutoCancelAsyncListDiffer
+member! com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.AutoCancelAsyncListDiffer#u
+member! com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.AutoCancelAsyncListDiffer#j
+class com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.e
+class androidx.constraintlayout.widget.ConstraintLayout
+member! androidx.constraintlayout.widget.ConstraintLayout#onMeasure
+class androidx.constraintlayout.widget.ConstraintLayout$LayoutParams
+member! androidx.constraintlayout.widget.ConstraintLayout$LayoutParams#getConstraintWidget
+class androidx.constraintlayout.solver.widgets.ConstraintWidget
+member! androidx.constraintlayout.solver.widgets.ConstraintWidget#getY
+member! androidx.constraintlayout.solver.widgets.ConstraintWidget#getHeight

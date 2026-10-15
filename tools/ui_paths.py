@@ -15,6 +15,14 @@ BADGE = 'com.tencent.mobileqq.quibadge.QUIBadge'
 INJECT = 'com.tencent.mobileqq.activity.framebusiness.controllerinject.FrameControllerInjectImpl'
 CONTROLLER = 'com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl'
 
+VB = 'com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB'
+COMPONENT = 'com.tencent.mobileqq.aio.msglist.holder.component.c'
+NICK = 'com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2'
+DIFFER = 'com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.AutoCancelAsyncListDiffer'
+CALLBACK = 'com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.e'
+CONSTRAINT = 'androidx.constraintlayout.widget.ConstraintLayout'
+WIDGET = 'androidx.constraintlayout.solver.widgets.ConstraintWidget'
+
 # 完整签名 -> 必须出现的字段/调用。与运行时代码使用的角色一致，不只核方法名存在。
 RULES = {
     (FRAME, 'a', 'android.view.View '): ({f'{FRAME}#d:androidx.viewpager2.widget.ViewPager2'}, set()),
@@ -29,6 +37,19 @@ RULES = {
         set(), {f'{BADGE}#setRedNum', f'{BADGE}#setRedText'}),
     (BADGE, 'setRedText', 'V java.lang.String'): (set(), {f'{BADGE}#resetValue'}),
     (BADGE, 'resetValue', 'V '): ({f'{BADGE}#mNum:I'}, set()),
+    (VB, 'H1', 'V com.tencent.mobileqq.aio.msg.AIOMsgItem'): (
+        {'android.view.ViewGroup$MarginLayoutParams#topMargin:I'}, {f'{COMPONENT}#i1'}),
+    (VB, 'j1', 'V I'): ({f'{VB}#G:android.util.SparseArray'},
+        {'com.tencent.mobileqq.aio.msglist.holder.g#a', f'{COMPONENT}#i1', f'{COMPONENT}#f1'}),
+    (NICK, 'd1', 'V I,com.tencent.aio.data.msglist.a,java.util.List'): (
+        set(), {f'{COMPONENT}#i1', 'android.view.View#setVisibility'}),
+    (NICK, 'f1', 'android.view.View '): (set(), {f'{NICK}#v1'}),
+    (COMPONENT, 'i1', 'android.view.View '): ({f'{COMPONENT}#d:android.view.View'}, set()),
+    (DIFFER, 'j', f'V java.util.List,{CALLBACK}'): (set(), {f'{CALLBACK}#a'}),
+    (DIFFER, 'h', f'V java.util.List,androidx.recyclerview.widget.DiffUtil$DiffResult,{CALLBACK}'): (
+        {f'{DIFFER}#e:java.util.List'}, {'androidx.recyclerview.widget.DiffUtil$DiffResult#dispatchUpdatesTo', f'{DIFFER}#j'}),
+    (CONSTRAINT, 'onLayout', 'V Z,I,I,I,I'): (
+        set(), {f'{WIDGET}#getY', f'{WIDGET}#getHeight', 'android.view.View#layout'}),
 }
 
 
@@ -74,7 +95,7 @@ def verify(apk):
                     if owner == FRAME:
                         mode = 'read' if method == 'a' else 'write'
                         assert all((mode, field) in access for field in wanted_fields), (key, access)
-                    elif owner == DELEGATE or method == 'resetValue':
+                    elif owner == DELEGATE or method == 'resetValue' or (owner == DIFFER and method == 'h'):
                         assert all(('write', field) in access for field in wanted_fields), (key, access)
                     proof.append({'dex': name, 'method': f'{owner}#{method} {signature}',
                                   'fields': sorted(wanted_fields), 'calls': sorted(wanted_calls),

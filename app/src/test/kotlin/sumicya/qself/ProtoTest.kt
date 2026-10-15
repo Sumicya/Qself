@@ -127,10 +127,58 @@ class ProtoTest {
     }
 
     @Test fun ownMessagesKeepOneSenderWhenUidIsEmpty() {
-        assertEquals(messageRunSender("u_old", 1, true), messageRunSender("", null, true))
-        assertEquals(messageRunSender("", 123, false), messageRunSender("uid", 123, false))
-        assertFalse(messageRunSender("u_a", null, false) == messageRunSender("u_b", null, false))
-        assertTrue(messageRunSender("", 0, false) == null)
+        val pair = runSenderPair("u_old", 1, true, "", null, true)
+        assertEquals(pair.first, pair.second)
+        val byUin = runSenderPair("", 123, false, "uid", 123, false)
+        assertEquals(byUin.first, byUin.second)
+        val different = runSenderPair("u_a", null, false, "u_b", null, false)
+        assertFalse(different.first == different.second)
+        assertEquals(null to null, runSenderPair("", 0, false, "", 0, false))
+    }
+
+    @Test fun senderMetadataArrivalDoesNotBreakTheRun() {
+        val pair = runSenderPair("uid", 123, false, "uid", 0, false)
+        assertEquals("uid:uid" to "uid:uid", pair)
+        val conflict = runSenderPair("a", 123, false, "b", 123, false)
+        assertFalse(conflict.first == conflict.second)
+    }
+
+    @Test fun continuationHeightUsesContentNotTheInvisibleAvatarSlot() {
+        assertEquals(22, compactRunHeight(44, 22, 0, 0))
+        assertEquals(26, compactRunHeight(44, 22, 4, 0))
+        assertEquals(32, compactRunHeight(44, 22, 0, 32))
+        assertEquals(80, compactRunHeight(80, 80, 0, 0))
+        assertEquals(44, compactRunHeight(44, 0, 0, 0))
+    }
+
+    @Test fun nativeVisibilityUpdatesCannotReshowFoldedNickOrDuplicateAvatar() {
+        assertEquals(8, runVisibility(0, 8))
+        assertEquals(4, runVisibility(0, 4))
+        assertEquals(8, runVisibility(8, 4))
+        assertEquals(0, runVisibility(0, null))
+        assertEquals(8, runVisibility(8, null))
+    }
+
+    @Test fun onlyAttachedMiddleRowIsNotASingleMessageGroup() {
+        assertEquals(456f, floatingRunAvatarTop(200f, 200f, 0f, 500f, 40f, 4f, false, false))
+        assertEquals(180f, floatingRunAvatarTop(200f, 200f, 0f, 500f, 40f, 4f, true, true))
+        assertEquals(180f, floatingRunAvatarTop(200f, 200f, 0f, 500f, 40f, 4f, false, true))
+        assertEquals(456f, floatingRunAvatarTop(200f, 200f, 0f, 500f, 40f, 4f, true, false))
+    }
+
+    @Test fun detachingIntermediateRowsDoesNotMoveTheFloatingAvatar() {
+        for (i in 0..300) {
+            assertEquals(456f, floatingRunAvatarTop(i.toFloat(), 400f + i, 0f, 500f, 40f, 4f, false, false))
+        }
+    }
+
+    @Test fun prependingHistoryAndReplacementUpdateBoundMessageIndex() {
+        val item = PendingMessage(7)
+        assertEquals(2, runItemIndex(listOf(PendingMessage(3), PendingMessage(4), item), item, 0))
+        assertEquals(1, runItemIndex(listOf(PendingMessage(3), PendingMessage(7)), item, 2))
+        assertEquals(-1, runItemIndex(emptyList<Any>(), item, 0))
+        val pending = PendingMessage(0)
+        assertEquals(-1, runItemIndex(listOf(PendingMessage(0)), pending, 0))
     }
 
     class PendingMessage(private val id: Long) { fun getMsgId(): Long = id }
@@ -177,12 +225,12 @@ class ProtoTest {
     }
 
     @Test fun compactSpacingIsBoundedAndRestoresOriginal() {
-        assertEquals(16, compactMessageTop(20, true, 1f))
-        assertEquals(0, compactMessageTop(2, true, 1f))
+        assertEquals(2, compactMessageTop(20, true, 1f))
+        assertEquals(2, compactMessageTop(2, true, 1f))
         assertEquals(0, compactMessageTop(0, true, 3f))
         assertEquals(-3, compactMessageTop(-3, true, 1f))
         assertEquals(20, compactMessageTop(20, false, 3f))
-        assertEquals(12, compactMessageTop(20, true, 2f))
+        assertEquals(4, compactMessageTop(20, true, 2f))
     }
 
     @Test fun compactMenuFitsAvailableWindowAndImeSpace() {

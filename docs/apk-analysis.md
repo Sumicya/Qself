@@ -25,7 +25,17 @@
 
 6. **新版 NT 输入行 `r/i/dxg.xml` 为 ConstraintLayout + AIOEditText + AIOInputSendBtn**，没有旧图标带；`InputEditTextVBDelegate.U(adorn.e)` 在父级准备阶段设置真实 EditText 到字段 e。已实读 DEX/DAD/AXML，改用这个入口发现并管理输入样式。
 7. `TabFrameLayout.onFinishInflate` 写入 d（ViewPager2）和 e（QQTabLayout），`a(): View` 读取 d；运行时以 e 的实例身份核对底栏，通过 a() 获取内容页。删除原先按尺寸/可滚动性挑选列表的代码，不再替 QQ 选择内容树内的手势目标。
-8. 可复现检查：`python3 tools/ui_paths.py qq.apk`，输出 APK 完整 SHA-256、八个方法的完整签名、字段读写方向和要求的调用边。两条 CI 都运行。该检查仅证明 APK 内的静态关系，不证明设备界面采用哪条分支、钩子是否命中或最终绘制效果。
+8. 可复现检查：`python3 tools/ui_paths.py qq.apk`，输出 APK 完整 SHA-256、16 个方法的完整签名、字段读写方向和要求的调用边。两条 CI 都运行。该检查仅证明 APK 内的静态关系，不证明设备界面采用哪条分支、钩子是否命中或最终绘制效果。
+
+## 聊天分组层级证据
+
+9. `AIOBubbleMsgItemVB.H1(AIOMsgItem)` 取组件表 key 2，调用 `component.c.i1()` 并写 `MarginLayoutParams.topMargin`；不是 VB 根视图的间距。
+10. `AIONickComponentV2.d1(int, msglist.a, List)` 调用 `component.c.i1().setVisibility`；`f1(): View` 只返回内部 `v1()`。`component.c.i1()` 读取字段 d（containerView）。折叠内部根不能等同折叠原生容器。
+11. `AIOBubbleMsgItemVB.j1(int)` 从 provider.a() 取附加组件，写入 G 并初始化槽位、加入 child VB；已有 G 条目直接返回。快照必须包括主表与 G，不能读取尚未初始化的整个 provider.a()。外层 k1 内的嵌套创建不提前拍快照，重复注册也不能把模块隐藏后的状态误记成原生隐藏。
+12. `AutoCancelAsyncListDiffer.h(List, DiffResult, e)` 替换字段 e，分发原生更新后调用 j；j 通知回调完成。用该提交点重算所有绑定行，避免仅靠新绑定行更新导致旧组键或组首标记残留。
+13. `r/i/dxm.xml`、`dxn.xml`、`dye.xml`、`dys.xml`、`dyy.xml`、`dz0.xml` 根为 TemplateLayout，头像 FrameLayout 为 wrap_content；TemplateLayout → ChatItemAnimLayout → ConstraintLayout，前两者未声明 onMeasure/onLayout。`ConstraintLayout.onLayout` 从原生 ConstraintWidget 读取 Y/height 后布局子视图。续条排除真实头像槽参与行高上限，其他直接子控件仍按原生求解结果计入；不通过 GONE、压缩头像或猜尺寸实现。
+
+以上八个聊天方法与既有八个底栏/输入/角标方法均由 `tools/ui_paths.py` 检查完整签名和字段/调用边（共 16 处），两条既有工作流直接运行。AXML 和继承链是本地 APK 解析证据，不是设备测量记录；短消息最终行高、浮动和昵称效果仍需运行验收。
 
 ## 仍未验证
 

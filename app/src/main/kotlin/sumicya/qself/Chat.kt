@@ -224,7 +224,7 @@ internal class RunStarts(val size: Int) {
 }
 
 internal fun compactMessageTop(original: Int, continued: Boolean, density: Float): Int =
-    if (continued && original > 0) (original - (4 * density).toInt()).coerceAtLeast(0) else original
+    if (continued && original > 0) minOf(original, (2 * density).toInt()) else original
 
 private class RunSpacing(view: View) {
     private val view = WeakReference(view)
@@ -242,28 +242,69 @@ private class RunSpacing(view: View) {
     }
 }
 
+/** 模块覆盖与 QQ 原生可见性分开，原生异步刷新不能把续条昵称/重复头像重新亮出来。 */
+internal fun runVisibility(native: Int, override: Int?): Int =
+    if (override == View.INVISIBLE && native != View.VISIBLE) native else override ?: native
+
+private val runMeasurements = WeakHashMap<View, WeakReference<RunBinding>>()
+private val runVisibilities = WeakHashMap<View, RunVisibility>()
+private class RunVisibility(view: View) {
+    private val view = WeakReference(view)
+    var native = view.visibility
+    private var override: Int? = null
+    var writing = false
+    init { runVisibilities[view] = this }
+    fun receive(value: Int): Int { native = value; return runVisibility(native, override) }
+    fun apply(value: Int?) {
+        override = value
+        view.get()?.let {
+            val target = runVisibility(native, override)
+            if (it.visibility != target) {
+                writing = true
+                try { it.visibility = target } finally { writing = false }
+            }
+        }
+    }
+    fun dispose() {
+        apply(null)
+        view.get()?.let { if (runVisibilities[it] === this) runVisibilities.remove(it) }
+    }
+}
 private class RunAvatar(container: View, image: View) {
     val container = WeakReference(container)
     val image = WeakReference(image)
-    val visibility = container.visibility
-    fun restore() { container.get()?.visibility = visibility }
+    val visibility = RunVisibility(container)
+    fun hide() = visibility.apply(View.INVISIBLE)
+    fun restore() = visibility.apply(null)
 }
-private class RunLayout(val avatars: List<RunAvatar>, nicks: List<View>, contents: List<View>, root: View) {
-    val spacing = RunSpacing(root)
-    val nicks = nicks.map { WeakReference(it) to it.visibility }
+private class RunLayout(val avatars: List<RunAvatar>, nicks: List<View>, contents: List<View>, slots: List<View>,
+    root: View, avatarSlots: List<View>) {
+    private val root = WeakReference(root)
+    val avatarSlots = avatarSlots.map { WeakReference(it) }
+    private var compact = false
+    val spacing = slots.map(::RunSpacing)
+    val nicks = nicks.map(::RunVisibility)
     val contents = contents.map { WeakReference(it) }
-    fun apply(continued: Boolean, enabled: Boolean): Boolean {
-        var changed = spacing.apply(enabled && continued)
+    fun apply(continued: Boolean, enabled: Boolean) {
+        val next = enabled && continued
+        if (compact != next) { compact = next; root.get()?.requestLayout() }
+        spacing.forEach { it.apply(enabled && continued) }
         if (!enabled) avatars.forEach { it.restore() }
-        nicks.forEach { (ref, visibility) -> ref.get()?.let { view ->
-            val target = if (enabled && continued) View.GONE else visibility
-            if (view.visibility != target) { view.visibility = target; changed = true }
-        } }
-        return changed
+        nicks.forEach { it.apply(if (enabled && continued) View.GONE else null) }
     }
     fun restore() = apply(false, false)
+    fun dispose() {
+        restore()
+        avatars.forEach { it.visibility.dispose() }
+        nicks.forEach { it.dispose() }
+        root.get()?.let { if (runMeasurements[it]?.get()?.layout === this) runMeasurements.remove(it) }
+    }
 }
-private class RunBinding(val group: RunKey, val continued: Boolean, var layout: RunLayout? = null)
+private class RunBinding(val item: Any, adapter: Any, var index: Int, var group: RunKey,
+    var continued: Boolean, var continues: Boolean, var layout: RunLayout? = null) {
+    val adapter = WeakReference(adapter)
+    var valid = true
+}
 private val bindingRun = ThreadLocal<Pair<View, RunBinding>>()
 private val runIndexes = WeakHashMap<Any, Pair<WeakReference<List<*>>, RunStarts>>()
 private val pendingAttachments = WeakHashMap<View, View.OnAttachStateChangeListener>()
@@ -278,16 +319,33 @@ fun groupRuns() {
         val adapter = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a")
         val data = adapter.getMethod("d0")
         val head = adapter.getMethod("i0")
+        val differ = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.AutoCancelAsyncListDiffer")
+        val current = differ.getDeclaredMethod("u")
+        val committed = differ.getDeclaredMethod("j", List::class.java,
+            cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.e"))
+        val differAdapters = WeakHashMap<Any, WeakReference<Any>>()
         val vb = cls("com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB")
         val vbRoot = vb.getMethod("s1")
         val registry = vb.getMethod("o1")
         val components = cls("com.tencent.mobileqq.aio.msglist.holder.g").getMethod("get")
-        val componentRoot = cls("com.tencent.mobileqq.aio.msglist.holder.component.c").getMethod("f1")
+        val component = cls("com.tencent.mobileqq.aio.msglist.holder.component.c")
+        val componentRoot = component.getMethod("f1")
+        val componentSlot = component.getMethod("i1")
+        val extras = vb.getDeclaredField("G").apply { isAccessible = true }
+        val constraints = cls("androidx.constraintlayout.widget.ConstraintLayout")
+        val params = cls("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+        val widget = params.getDeclaredMethod("getConstraintWidget")
+        val widgetType = cls("androidx.constraintlayout.solver.widgets.ConstraintWidget")
+        val widgetY = widgetType.getDeclaredMethod("getY")
+        val widgetHeight = widgetType.getDeclaredMethod("getHeight")
+        val measured = View::class.java.getDeclaredMethod("setMeasuredDimension", Integer.TYPE, Integer.TYPE)
+            .apply { isAccessible = true }
         val avatarType = cls("com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent")
         // 真包 C1 的访问标记为 0x12（private final），getMethod 只查 public 会使整项安装失败。
         val avatarImage = avatarType.method("C1").apply { isAccessible = true }
         val nickType = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2")
         val contentType = cls("com.tencent.mobileqq.aio.msglist.holder.component.BaseContentComponent")
+        val bindingVB = ThreadLocal<Boolean>()
         var reported = false
         var warned = false
         fun unbind(row: View) = runAvatars.values.mapNotNull { it.get() }.forEach { it.unbind(row) }
@@ -306,54 +364,131 @@ fun groupRuns() {
                 log("TG连发定位：原头像容器=${layout.avatars.size}，实际内容=${layout.contents.size}，昵称=${layout.nicks.size}；按内容中心定位")
             }
         }
-        // 从已绑定 VB 的组件表一次取全，不依赖哪个头像组件先/最后触发 d1。
+        fun capture(binder: Any, row: View, run: RunBinding) {
+            run.layout = runCatching {
+                val table = components.invoke(registry.invoke(binder)) as SparseArray<*>
+                val active = extras.get(binder) as SparseArray<*>
+                val all = (0 until table.size()).map { table.valueAt(it) } +
+                    (0 until active.size()).map { active.valueAt(it) }
+                val avatars = ArrayList<RunAvatar>()
+                val avatarSlots = ArrayList<View>()
+                val nicks = ArrayList<View>()
+                val contents = ArrayList<View>()
+                val slots = ArrayList<View>()
+                // 主表 + 已激活附加表 G；不是把未创建容器的 f.a 全部拿来猜。
+                for (c in all.filterNotNull().distinct()) {
+                    when {
+                        avatarType.isInstance(c) -> {
+                            val view = componentRoot.invoke(c) as? View ?: continue
+                            val image = avatarImage.invoke(c) as? View ?: continue
+                            (componentSlot.invoke(c) as? View)?.let { avatarSlots.add(it) }
+                            if (avatars.none { it.container.get() === view }) avatars.add(RunAvatar(view, image))
+                        }
+                        nickType.isInstance(c) -> (componentSlot.invoke(c) as? View)?.let { nicks.add(it) }
+                        contentType.isInstance(c) -> {
+                            (componentRoot.invoke(c) as? View)?.let { contents.add(it) }
+                            // VB.H1 改的是 component.i1().layoutParams.topMargin，不是 VB 根视图。
+                            (componentSlot.invoke(c) as? View)?.let { slots.add(it) }
+                        }
+                    }
+                }
+                RunLayout(avatars, nicks.distinct(), contents.distinct(), slots.distinct(),
+                    vbRoot.invoke(binder) as View, avatarSlots.distinct())
+            }.onFailure { if (!warned) { warned = true; log("TG连发定位：组件读取失败，未改该消息布局", it) } }.getOrNull()
+            run.layout?.let { runMeasurements[vbRoot.invoke(binder) as View] = WeakReference(run) }
+            run.layout?.apply(run.continued, on("连发合并"))
+            register(row, run)
+        }
+        fun context(binder: Any): Pair<View, RunBinding>? {
+            bindingRun.get()?.let { return it }
+            val root = runCatching { vbRoot.invoke(binder) as? View }.getOrNull() ?: return null
+            val row = generateSequence(root) { it.parent as? View }.firstOrNull { pendingRun.containsKey(it) } ?: return null
+            return pendingRun[row]?.let { row to it }
+        }
         hook(vb.method("k1")) { chain ->
             if (!vb.isInstance(chain.thisObject)) return@hook chain.proceed()
-            val root = runCatching { vbRoot.invoke(chain.thisObject) as? View }.getOrNull()
-            val knownRow = root?.let { generateSequence(it) { v -> v.parent as? View }
-                .firstOrNull { v -> pendingRun.containsKey(v) } }
-            val context = bindingRun.get() ?: knownRow?.let { row -> pendingRun[row]?.let { row to it } }
+            val context = context(chain.thisObject)
             context?.first?.let(::unbind)
+            val previous = bindingVB.get()
+            bindingVB.set(true)
+            try { chain.proceed().also {
+                context?.let { (row, run) -> capture(chain.thisObject, row, run) }
+            } } finally { if (previous == null) bindingVB.remove() else bindingVB.set(previous) }
+        }
+        // 延后激活昵称等附加组件也要登记，不能只拍第一次 k1 的组件快照。
+        hook(vb.getDeclaredMethod("j1", Integer.TYPE)) { chain ->
+            if (bindingVB.get() == true ||
+                (extras.get(chain.thisObject) as SparseArray<*>).get(chain.getArg(0) as Int) != null) return@hook chain.proceed()
+            val context = context(chain.thisObject)
+            context?.first?.let(::unbind)
+            chain.proceed().also { context?.let { (row, run) -> capture(chain.thisObject, row, run) } }
+        }
+        hook(View::class.java.getDeclaredMethod("setVisibility", Integer.TYPE)) { chain ->
+            val state = runVisibilities[chain.thisObject]
+            if (state == null || state.writing) chain.proceed()
+            else chain.proceed(arrayOf<Any?>(state.receive(chain.getArg(0) as Int)))
+        }
+        // 原生头像保持已测量以供浮绘，但续条行高不再被头像槽撑大。
+        // 直接采用 ConstraintLayout.onLayout 使用的 widget Y/height，不猜子视图坐标。
+        hook(constraints.getDeclaredMethod("onMeasure", Integer.TYPE, Integer.TYPE)) { chain ->
             chain.proceed().also {
-                if (context != null) {
-                    val (row, run) = context
-                    run.layout = runCatching {
-                        val table = components.invoke(registry.invoke(chain.thisObject)) as SparseArray<*>
-                        val avatars = ArrayList<RunAvatar>()
-                        val nicks = ArrayList<View>()
-                        val contents = ArrayList<View>()
-                        for (i in 0 until table.size()) {
-                            val c = table.valueAt(i) ?: continue
-                            if (!avatarType.isInstance(c) && !nickType.isInstance(c) && !contentType.isInstance(c)) continue
-                            val view = componentRoot.invoke(c) as? View ?: continue
-                            when {
-                                avatarType.isInstance(c) -> {
-                                    val image = avatarImage.invoke(c) as? View ?: continue
-                                    if (avatars.none { it.container.get() === view }) avatars.add(RunAvatar(view, image))
-                                }
-                                nickType.isInstance(c) -> nicks.add(view)
-                                contentType.isInstance(c) -> contents.add(view)
-                            }
-                        }
-                        RunLayout(avatars, nicks.distinct(), contents.distinct(), vbRoot.invoke(chain.thisObject) as View)
-                    }.onFailure { if (!warned) { warned = true; log("TG连发定位：组件读取失败，未改该消息布局", it) } }.getOrNull()
-                    // 必须在消息绑定结束、RecyclerView 测量前折叠昵称/间距；不能放到滚动 pre-draw。
-                    run.layout?.apply(run.continued, on("连发合并"))
-                    register(row, run)
+                val row = chain.thisObject as ViewGroup
+                val run = runMeasurements[row]?.get() ?: return@also
+                val layout = run.layout ?: return@also
+                if (!run.valid || !run.continued || !on("连发合并") ||
+                    View.MeasureSpec.getMode(chain.getArg(1) as Int) == View.MeasureSpec.EXACTLY) return@also
+                val excluded = layout.avatarSlots.mapNotNull { it.get() }
+                var bottom = 0
+                for (i in 0 until row.childCount) {
+                    val child = row.getChildAt(i)
+                    val lp = child.layoutParams
+                    if (child in excluded || child.visibility == View.GONE ||
+                        lp.height == ViewGroup.LayoutParams.MATCH_PARENT || !params.isInstance(lp)) continue
+                    val native = widget.invoke(lp) ?: continue
+                    bottom = maxOf(bottom, (widgetY.invoke(native) as Int) + (widgetHeight.invoke(native) as Int))
                 }
+                val target = compactRunHeight(row.measuredHeight, bottom, row.paddingBottom, row.minimumHeight)
+                if (target < row.measuredHeight) measured.invoke(row, row.measuredWidthAndState,
+                    View.resolveSizeAndState(target, chain.getArg(1) as Int,
+                        row.measuredHeightAndState and View.MEASURED_STATE_MASK))
             }
         }
+        fun regroup(owner: Any, list: List<*>, starts: RunStarts) {
+            for ((_, run) in pendingRun) if (run.adapter.get() === owner) {
+                val index = runItemIndex(list, run.item, run.index)
+                run.valid = index >= 0
+                if (index < 0) { run.layout?.restore(); continue }
+                run.index = index
+                val start = starts.start(index) { i -> follows(list[i - 1], list[i]) }
+                run.group = RunKey(list[start]!!)
+                run.continued = start < index
+                run.continues = index < list.lastIndex && follows(list[index], list[index + 1])
+                run.layout?.apply(run.continued, on("连发合并"))
+            }
+            runAvatars.values.mapNotNull { it.get() }.forEach { it.refresh() }
+        }
+        hook(committed) { chain -> chain.proceed().also {
+            val owner = differAdapters[chain.thisObject]?.get() ?: return@also
+            val list = current.invoke(chain.thisObject) as? List<*> ?: return@also
+            runIndexes.remove(owner)
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) regroup(owner, list, RunStarts(list.size))
+        } }
         hook(adapter.method("n0")) { chain ->
             val row = runCatching { chain.getArg(0)?.get("itemView") as? View }.getOrNull()
             row?.let { pendingRun.remove(it); unbind(it) }
-            val list = runCatching { data.invoke(chain.thisObject)?.let { it.javaClass.getMethod("u").invoke(it) } as? List<*> }.getOrNull()
+            val source = data.invoke(chain.thisObject)
+            if (source != null) differAdapters[source] = WeakReference(chain.thisObject)
+            val list = source?.let { current.invoke(it) as? List<*> }
             val index = chain.getArg(1) as Int - (head.invoke(chain.thisObject) as Int)
             val run = if (list != null && index in list.indices) {
                 val cache = runIndexes[chain.thisObject]?.takeIf { it.first.get() === list && it.second.size == list.size }
                     ?: (WeakReference(list) to RunStarts(list.size)).also { runIndexes[chain.thisObject] = it }
+                regroup(chain.thisObject, list, cache.second)
                 val start = cache.second.start(index) { i -> follows(list[i - 1], list[i]) }
-                list[start]?.let { RunBinding(RunKey(it), start < index) }
+                list[index]?.let { RunBinding(it, chain.thisObject, index, RunKey(list[start]!!), start < index,
+                    index < list.lastIndex && follows(list[index], list[index + 1])) }
             } else null
+            if (row != null && run != null) pendingRun[row] = run
             val previous = bindingRun.get()
             bindingRun.set(if (row != null && run != null) row to run else null)
             try {
@@ -384,10 +519,10 @@ fun groupRuns() {
     } finally { feature = owner }
 }
 
-private class RunRow(run: RunBinding, val layout: RunLayout) {
-    val group = run.group
-    val continued = run.continued
-    fun restore() = layout.restore()
+private class RunRow(val run: RunBinding, val layout: RunLayout) {
+    val group get() = run.group
+    val continued get() = run.continued
+    fun restore() = layout.dispose()
 }
 
 /** 布局在绑定/设置变化时完成；滚动帧只采样几何并提交到同一帧的 overlay。 */
@@ -419,6 +554,7 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
         state.restore()
     }
     fun bind(row: View, run: RunBinding) {
+        if (rows[row]?.run === run && rows[row]?.layout === run.layout) return
         unbind(row)
         run.layout?.let { layout ->
             layout.apply(run.continued, on("连发合并"))
@@ -428,7 +564,7 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
     }
     fun refresh() {
         val enabled = on("连发合并")
-        rows.values.forEach { it.layout.apply(it.continued, enabled) }
+        rows.values.forEach { if (it.run.valid) it.layout.apply(it.continued, enabled) else it.layout.restore() }
         if (!enabled) { cancelPressed(); commitFrame(emptyList(), viewport) }
         host.invalidate()
     }
@@ -475,12 +611,14 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
         setBounds(0, 0, host.width, host.height)
         val groups = LinkedHashMap<RunKey, MutableList<RunRow>>()
         // 不在这里恢复昵称或间距，不 requestLayout，也不取消正在滚动的一帧。
-        for ((row, state) in rows) if (row.isAttachedToWindow && row.parent === host)
+        for ((row, state) in rows) if (state.run.valid && row.isAttachedToWindow && row.parent === host)
             groups.getOrPut(state.group) { ArrayList() }.add(state)
         val next = ArrayList<Face>()
         for ((key, group) in groups) {
             var firstCenter = Float.POSITIVE_INFINITY
             var lastCenter = Float.NEGATIVE_INFINITY
+            var hasStart = false
+            var hasEnd = false
             for (state in group) {
                 var top = Float.POSITIVE_INFINITY
                 var bottom = Float.NEGATIVE_INFINITY
@@ -493,6 +631,8 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
                 if (top.isFinite() && bottom.isFinite()) {
                     val center = (top + bottom) / 2
                     firstCenter = minOf(firstCenter, center); lastCenter = maxOf(lastCenter, center)
+                    hasStart = hasStart || !state.run.continued
+                    hasEnd = hasEnd || !state.run.continues
                 }
             }
             val avatars = group.flatMap { it.layout.avatars }
@@ -502,13 +642,14 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
             val candidates = avatars.sortedBy { if (it.container.get() === preferred) 0 else 1 }
             var face: Face? = null
             for (avatar in candidates) {
-                if (avatar.visibility != View.VISIBLE) continue
+                if (avatar.visibility.native != View.VISIBLE) continue
                 val image = avatar.image.get() ?: continue
+                if (image.visibility != View.VISIBLE) continue
                 val container = avatar.container.get() ?: continue
                 val matrix = inHost(image)
                 val rect = rectangle(image, matrix) ?: continue
-                val y = floatingAvatarTop(firstCenter, lastCenter, clip.top.toFloat(), clip.bottom.toFloat(),
-                    rect.height(), 4 * host.dp) ?: continue
+                val y = floatingRunAvatarTop(firstCenter, lastCenter, clip.top.toFloat(), clip.bottom.toFloat(),
+                    rect.height(), 4 * host.dp, hasStart, hasEnd) ?: continue
                 val delta = y - rect.top
                 matrix.postTranslate(0f, delta)
                 val targetMatrix = inHost(container).apply { postTranslate(0f, delta) }
@@ -520,11 +661,11 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
             }
             if (face == null) {
                 // 几何未就绪时不提前藏掉所有原图；完全离屏的组照常交给列表裁剪。
-                avatars.forEach { it.restore() }
+                // 暂无几何时也只保留一个原生头像，不能一退化就把整组头像全亮出来。
+                val fallback = candidates.firstOrNull { it.visibility.native == View.VISIBLE }
+                avatars.forEach { if (it === fallback) it.restore() else it.hide() }
             } else {
-                avatars.forEach { it.container.get()?.let { view ->
-                    if (view.visibility == View.VISIBLE) view.visibility = View.INVISIBLE
-                } }
+                avatars.forEach { it.hide() }
                 next.add(face)
             }
         }
@@ -610,7 +751,8 @@ fun refreshChatLayout() {
 fun resetChatLayout() {
     runAvatars.values.mapNotNull { it.get() }.forEach { it.dispose() }
     pendingAttachments.entries.toList().forEach { (view, listener) -> view.removeOnAttachStateChangeListener(listener) }
-    runAvatars.clear(); pendingRun.clear(); runIndexes.clear(); pendingAttachments.clear(); bindingRun.remove()
+    pendingRun.values.forEach { it.layout?.dispose() }
+    runAvatars.clear(); pendingRun.clear(); runIndexes.clear(); pendingAttachments.clear(); runVisibilities.clear(); runMeasurements.clear(); bindingRun.remove()
 }
 
 /** 单条严格按内容中心；长组跟随最后一条内容中心，并约束在组首与可见底部之间。 */
@@ -623,11 +765,31 @@ internal fun floatingAvatarTop(firstCenter: Float, lastCenter: Float, viewportTo
     return maxOf(firstCenter, minOf(lastCenter, viewportBottom - height / 2 - gap)) - height / 2
 }
 
-internal fun messageRunSender(uid: String?, uin: Long?, self: Boolean): String? = when {
-    self -> "self"
-    uin != null && uin > 0 -> "uin:$uin"
-    !uid.isNullOrBlank() -> "uid:$uid"
-    else -> null
+/** 只有双方共有的标识才能比较；不能一条用 UID、另一条用后来才补齐的 UIN。 */
+internal fun runSenderPair(uid: String?, uin: Long?, self: Boolean, previousUid: String?, previousUin: Long?,
+    previousSelf: Boolean): Pair<String?, String?> = when {
+    self && previousSelf -> "self" to "self"
+    !uid.isNullOrBlank() && !previousUid.isNullOrBlank() -> "uid:$uid" to "uid:$previousUid"
+    uin != null && uin > 0 && previousUin != null && previousUin > 0 -> "uin:$uin" to "uin:$previousUin"
+    else -> null to null
+}
+
+internal fun runItemIndex(list: List<*>, item: Any, previous: Int): Int {
+    if (list.getOrNull(previous) === item) return previous
+    list.indexOfFirst { it === item }.takeIf { it >= 0 }?.let { return it }
+    val id = msgId(item)?.takeIf { it != 0L } ?: return -1
+    return list.indexOfFirst { msgId(it) == id }
+}
+
+internal fun compactRunHeight(nativeHeight: Int, contentBottom: Int, paddingBottom: Int, minimum: Int): Int =
+    if (contentBottom <= 0) nativeHeight else minOf(nativeHeight, maxOf(minimum, contentBottom + paddingBottom))
+
+/** 可见的只有组中间一条时，不能误当成整个组只有一条；起止约束来自消息数据。 */
+internal fun floatingRunAvatarTop(first: Float, last: Float, top: Float, bottom: Float, height: Float, gap: Float,
+    hasStart: Boolean, hasEnd: Boolean): Float? {
+    if (!first.isFinite() || !last.isFinite() || first > last) return null
+    return floatingAvatarTop(if (hasStart) first else minOf(first, top - height),
+        if (hasEnd) last else maxOf(last, bottom + height), top, bottom, height, gap)
 }
 
 /** 跨日、倒序、不同发送者和系统消息均断组；连续消息只合并五分钟内的。 */
@@ -645,12 +807,11 @@ private fun follows(prev: Any?, cur: Any?): Boolean {
     val b = record(cur) ?: return false
     val t0 = a.get("msgTime") as? Long ?: return false
     val t1 = b.get("msgTime") as? Long ?: return false
-    fun sender(item: Any?, record: Any): String? {
-        val self = runCatching { item?.javaClass?.getMethod("isSelf")?.invoke(item) as? Boolean }.getOrNull() == true
-        return messageRunSender(record.get("senderUid") as? String, record.get("senderUin") as? Long, self)
-    }
-    return continuesMessageRun(sender(cur, b), sender(prev, a),
-        t1, t0, b.get("msgType") as? Int, a.get("msgType") as? Int)
+    fun self(item: Any?): Boolean =
+        runCatching { item?.javaClass?.getMethod("isSelf")?.invoke(item) as? Boolean }.getOrNull() == true
+    val sender = runSenderPair(b.get("senderUid") as? String, b.get("senderUin") as? Long, self(cur),
+        a.get("senderUid") as? String, a.get("senderUin") as? Long, self(prev))
+    return continuesMessageRun(sender.first, sender.second, t1, t0, b.get("msgType") as? Int, a.get("msgType") as? Int)
 }
 
 private fun record(item: Any?): Any? = item?.let { runCatching { it.javaClass.getMethod("getMsgRecord").invoke(it) }.getOrNull() }

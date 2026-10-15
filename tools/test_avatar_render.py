@@ -31,9 +31,41 @@ class AvatarRenderContractTest(unittest.TestCase):
 
     def test_layout_changes_happen_at_bind_and_settings_refresh(self):
         binding = CHAT.split('hook(vb.method("k1"))', 1)[1].split('hook(adapter.method("n0"))', 1)[0]
-        self.assertLess(binding.index('run.layout?.apply('), binding.rindex('register(row, run)'))
+        self.assertIn('capture(chain.thisObject, row, run)', binding)
+        capture = CHAT.split('fun capture(', 1)[1].split('fun context(', 1)[0]
+        self.assertLess(capture.index('run.layout?.apply('), capture.index('register(row, run)'))
         refresh = LOOKS.split('fun refreshLooks()', 1)[1].split('private fun watch(', 1)[0]
         self.assertIn('refreshChatLayout()', refresh)
+
+    def test_fold_and_spacing_use_native_slots_and_active_auxiliary_components(self):
+        self.assertIn('vb.getDeclaredField("G")', CHAT)
+        self.assertIn('val active = extras.get(binder) as SparseArray<*>', CHAT)
+        self.assertIn('nickType.isInstance(c) -> (componentSlot.invoke(c)', CHAT)
+        self.assertIn('component.getMethod("i1")', CHAT)
+        self.assertIn('slots.map(::RunSpacing)', CHAT)
+        self.assertIn('getDeclaredMethod("setVisibility", Integer.TYPE)', CHAT)
+        self.assertIn('state.receive(chain.getArg(0) as Int)', CHAT)
+
+    def test_compaction_uses_native_solver_only_on_registered_continuations(self):
+        measure = CHAT.split('hook(constraints.getDeclaredMethod("onMeasure"', 1)[1].split('fun regroup(', 1)[0]
+        self.assertIn('runMeasurements[row]?.get()', measure)
+        self.assertIn('!run.continued', measure)
+        self.assertIn('View.MeasureSpec.EXACTLY', measure)
+        self.assertIn('child in excluded', measure)
+        self.assertIn('widgetY.invoke(native)', measure)
+        self.assertIn('widgetHeight.invoke(native)', measure)
+        self.assertNotIn('requestLayout(', measure)
+        self.assertIn('if (bindingVB.get() == true ||', CHAT)
+        self.assertIn('if (rows[row]?.run === run && rows[row]?.layout === run.layout) return', CHAT)
+
+    def test_group_edges_and_bindings_follow_data_not_attached_row_count(self):
+        self.assertIn('hook(committed)', CHAT)
+        self.assertIn('run.group = RunKey(list[start]!!)', CHAT)
+        self.assertIn('val group get() = run.group', CHAT)
+        self.assertIn('hasStart = hasStart || !state.run.continued', RENDER)
+        self.assertIn('hasEnd = hasEnd || !state.run.continues', RENDER)
+        fallback = RENDER.split('if (face == null)', 1)[1].split('commitFrame(next, clip)', 1)[0]
+        self.assertNotIn('avatars.forEach { it.restore() }', fallback)
 
     def test_native_interception_does_not_clear_velocity_before_up(self):
         body = RENDER.split('fun touch(', 1)[1].split('override fun onViewDetachedFromWindow', 1)[0]
