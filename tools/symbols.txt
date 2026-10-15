@@ -227,3 +227,10 @@ class  com.tencent.mobileqq.aio.msglist.holder.component.BaseContentComponent
 member! com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent#C1
 member! com.tencent.mobileqq.aio.msg.AIOMsgItem#isSelf
 field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#senderUin
+
+# 精确未读的实际测量路径与原生输入布局（Androguard + 真包 DEX/AXML 交叉核验）
+field  com.tencent.mobileqq.quibadge.QUIBadge#mTextPaint
+member! com.tencent.mobileqq.quibadge.QUIBadge#getMinWidth
+member! com.tencent.mobileqq.quibadge.QUIBadge#getMinHeight
+class  com.tencent.mobileqq.activity.aio.InputLinearLayout
+class  com.tencent.qui.quiblurview.QQBlurView

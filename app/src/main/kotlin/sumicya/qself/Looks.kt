@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself
 
+import android.graphics.Paint
+import android.view.Gravity
 import android.app.Activity
 import android.app.Instrumentation
 import android.content.SharedPreferences
 import android.view.ViewTreeObserver
 import java.lang.ref.WeakReference
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -33,6 +34,7 @@ private val watched = WeakHashMap<View, WeakReference<AppearanceObserver>>()
 private var preferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
 fun refreshLooks() {
+    if (!on("显示具体未读条数")) restoreBadgeLayouts()
     refreshChatLayout()
     watched.values.mapNotNull { it.get() }.forEach { it.refresh() }
 }
@@ -89,6 +91,7 @@ fun resetLooks() {
     hidden.entries.toList().forEach { (view, visibility) -> view.visibility = visibility }
     hidden.clear()
     restoreClearedDecorations()
+    restoreBadgeLayouts()
 }
 
 private fun walk(v: View, inDrawer: Boolean) {
@@ -309,55 +312,88 @@ private fun settle(bar: ViewGroup) {
 internal fun exactBadgeText(label: String?, count: Long): String? =
     if (label == "99+" && count > 99) count.toString() else null
 
-/** QQ 底栏那一枚是自绘的 QUIBadge。真包 smali 里的路径：
- *  TabFrameControllerImpl#updateTabInfo 按 id 找到底栏徽标 → setRedNum(真数字)
- *  → resetValue(); updateNum(真数字)。updateNum 是唯一把数字写成 99+ 的地方，
- *  真数字仍留在字段 mNum 里，所以 setter 跑完按 mNum 展开，onDraw 前再兜一次底
- *  （防哪天 QQ 改道直接写 mText）；旧版 TextView 绑定器 com.tencent.widget.d#d
- *  照旧从根视图扫全树。计数一律按 Number 收，别假设 Int。 */
+/** 真包 d(TextView, style, count, background, limit, label, flag)：计数不是 style。 */
+internal fun legacyBadgeCount(args: Array<out Any?>): Long? =
+    (args.getOrNull(2) as? Number)?.toLong()?.takeIf { it > 99 && (args.getOrNull(1) as? Number)?.toInt() in setOf(3, 4, 7, 9) }
+
+internal fun numericBadgeWidth(textWidth: Float, height: Int, horizontalPadding: Int): Int =
+    maxOf(height, kotlin.math.ceil(textWidth.toDouble()).toInt() + horizontalPadding * 2)
+
+private class BadgeLayout(view: View) {
+    private val params = view.layoutParams?.let(::copyLayoutParams)
+    private val minWidth = view.minimumWidth
+    private val padding = intArrayOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
+    private val text = (view as? TextView)?.text
+    private val gravity = (view as? TextView)?.gravity
+    fun restore(view: View) {
+        params?.let { view.layoutParams = copyLayoutParams(it) }
+        view.minimumWidth = minWidth
+        view.setPadding(padding[0], padding[1], padding[2], padding[3])
+        if (view is TextView) { view.text = text; gravity?.let { view.gravity = it } }
+    }
+}
+private val badgeLayouts = WeakHashMap<View, BadgeLayout>()
+private var restoreNativeBadge: ((View) -> Unit)? = null
+private fun restoreBadgeLayouts() {
+    badgeLayouts.entries.toList().forEach { (view, state) ->
+        state.restore(view)
+        if (view !is TextView) restoreNativeBadge?.invoke(view)
+    }
+    badgeLayouts.clear()
+}
+
+/** 旧 TextView 与 QUIBadge 分别在真实数据入口处理；文字、测量宽度和内边距同时更新。 */
 fun exactCount() {
     val badge = cls("com.tencent.mobileqq.quibadge.QUIBadge")
     val text = badge.getDeclaredField("mText").apply { isAccessible = true }
     val num = badge.getDeclaredField("mNum").apply { isAccessible = true }
-    val legacy = cls("com.tencent.widget.d").method("d")
-
-    /** 徽标文字还是 99+ 就换成 mNum 里的真数字；换成了才重排重绘（排到下一帧，绘制途中不排）。 */
-    fun expand(v: Any?) {
-        val view = v as? View ?: return
-        val label = runCatching { text.get(view) as? CharSequence }.getOrNull()?.toString()
-        if (label != "99+") return
-        val fixed = runCatching { (num.get(view) as? Number)?.toLong() }.getOrNull()?.let { exactBadgeText(label, it) } ?: return
-        if (runCatching { text.set(view, fixed) }.isSuccess) {
-            log("精确未读：$label → $fixed")
-            view.post { view.requestLayout(); view.invalidate() }
+    val paint = badge.getDeclaredField("mTextPaint").apply { isAccessible = true }
+    val minHeight = badge.method("getMinHeight").apply { isAccessible = true }
+    restoreNativeBadge = { view ->
+        if (badge.isInstance(view)) {
+            val count = (num.get(view) as Number).toLong()
+            text.set(view, if (count > 99) "99+" else count.toString())
         }
     }
-
-    /** 旧绑定器那条：从根视图扫全树，TextView 里的 99+ 换成真数字。 */
-    fun fix(root: View?, count: Long?) {
-        if (count == null || count <= 99) return
-        fun go(v: View) {
-            when {
-                badge.isInstance(v) -> expand(v)
-                v is TextView -> exactBadgeText(v.text?.toString(), count)?.let {
-                    v.text = it
-                    v.requestLayout()
-                    v.invalidate()
-                }
-                v is ViewGroup -> for (i in 0 until v.childCount) go(v.getChildAt(i))
+    val legacy = cls("com.tencent.widget.d").getDeclaredMethod("d", TextView::class.java,
+        Integer.TYPE, Integer.TYPE, Integer.TYPE, Integer.TYPE, String::class.java, Boolean::class.javaPrimitiveType)
+    fun wrap(view: View) {
+        badgeLayouts.getOrPut(view) { BadgeLayout(view) }
+        view.layoutParams?.let { lp -> if (lp.width != ViewGroup.LayoutParams.WRAP_CONTENT) {
+            lp.width = ViewGroup.LayoutParams.WRAP_CONTENT; view.layoutParams = lp
+        } }
+    }
+    fun expand(value: Any?) {
+        val view = value as? View ?: return
+        val label = text.get(view) as? String ?: return
+        val count = (num.get(view) as? Number)?.toLong() ?: return
+        val fixed = exactBadgeText(label, count) ?: return
+        wrap(view); text.set(view, fixed)
+        view.requestLayout(); view.invalidate()
+    }
+    hook(badge.method("updateNum")) { chain -> chain.proceed().also { expand(chain.thisObject) } }
+    hook(badge.method("getMinWidth")) { chain ->
+        val native = chain.proceed()
+        val view = chain.thisObject as? View ?: return@hook native
+        val label = text.get(view) as? String ?: return@hook native
+        val count = (num.get(view) as? Number)?.toLong() ?: return@hook native
+        if (count <= 99 || label != count.toString()) return@hook native
+        numericBadgeWidth((paint.get(view) as Paint).measureText(label), minHeight.invoke(view) as Int, (4 * view.dp).toInt())
+    }
+    hook(legacy) { chain ->
+        val view = chain.getArg(0) as? TextView
+        view?.let { badgeLayouts.remove(it)?.restore(it) }
+        val count = legacyBadgeCount(Array<Any?>(7) { chain.getArg(it) })
+        chain.proceed().also {
+            if (view != null && count != null) exactBadgeText(view.text?.toString(), count)?.let { fixed ->
+                wrap(view)
+                view.text = fixed; view.gravity = Gravity.CENTER
+                val gap = (4 * view.dp).toInt()
+                view.setPadding(gap, view.paddingTop, gap, view.paddingBottom)
+                view.minimumWidth = maxOf(view.minimumHeight, (18 * view.dp).toInt())
+                view.requestLayout(); view.invalidate()
             }
         }
-        root?.let(::go)
-    }
-
-    for (setter in listOf("updateNum", "setRedNum", "setGrayNum", "setAIOBarNum")) {
-        hook(badge.method(setter)) { chain -> chain.proceed().also { expand(chain.thisObject) } }
-    }
-    hook(badge.method("onDraw")) { chain -> expand(chain.thisObject); chain.proceed() }
-    hook(legacy) { chain ->
-        val root = runCatching { chain.getArg(0) as? View }.getOrNull()
-        val count = runCatching { (chain.getArg(1) as? Number)?.toLong() }.getOrNull()
-        chain.proceed().also { fix(root, count) }
     }
 }
 

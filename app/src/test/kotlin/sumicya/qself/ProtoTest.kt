@@ -19,6 +19,20 @@ class ProtoTest {
         assertTrue(exactBadgeText(null, 12345) == null)
     }
 
+    @Test fun unreadCountIsThirdArgumentNotStyle() {
+        assertEquals(1234L, legacyBadgeCount(arrayOf<Any?>(null, 4, 1234, 0, 99, null, false)))
+        assertTrue(legacyBadgeCount(arrayOf<Any?>(null, 1234, 4, 0, 99, null, false)) == null)
+        assertTrue(legacyBadgeCount(arrayOf<Any?>(null, 2, 1234, 0, 99, null, false)) == null)
+        assertTrue(legacyBadgeCount(arrayOf<Any?>(null, 4, 99, 0, 99, null, false)) == null)
+        assertEquals(10000L, legacyBadgeCount(arrayOf<Any?>(null, 3, 10000L, 0, 99, null, false)))
+    }
+
+    @Test fun badgeWidthFollowsMeasuredDigitsWithSymmetricPadding() {
+        assertEquals(28, numericBadgeWidth(20f, 18, 4))
+        assertEquals(59, numericBadgeWidth(50.25f, 18, 4))
+        assertEquals(18, numericBadgeWidth(3f, 18, 4))
+    }
+
     @Test fun messageRunsBreakOnSenderTimeSystemAndMidnight() {
         assertTrue(continuesMessageRun("a", "a", 1300, 1000, 2, 2))
         assertFalse(continuesMessageRun("a", "b", 1001, 1000, 2, 2))
@@ -128,6 +142,14 @@ class ProtoTest {
         assertEquals(7, RunStarts(8).start(7) { false })
     }
 
+    @Test fun inputSpacingNeverConsumesButtonTouchWidth() {
+        assertEquals(8, inputButtonGap(320, 240, 5, 8))
+        assertEquals(5, inputButtonGap(260, 240, 5, 8))
+        assertEquals(0, inputButtonGap(200, 240, 5, 8))
+        assertEquals(0, inputButtonGap(320, 48, 1, 8))
+        assertEquals(0, inputButtonGap(320, 0, 0, 8))
+    }
+
     @Test fun compactSpacingIsBoundedAndRestoresOriginal() {
         assertEquals(16, compactMessageTop(20, true, 1f))
         assertEquals(0, compactMessageTop(2, true, 1f))
@@ -138,11 +160,11 @@ class ProtoTest {
     }
 
     @Test fun compactMenuFitsAvailableWindowAndImeSpace() {
-        assertEquals(360 to 440, menuSize(1080, 1920, 1f))
-        assertEquals(328 to 372, menuSize(360, 600, 1f))
-        assertEquals(328 to 124, menuSize(360, 200, 1f))
+        assertEquals(360 to 520, menuSize(1080, 1920, 1f))
+        assertEquals(328 to 452, menuSize(360, 600, 1f))
+        assertEquals(328 to 168, menuSize(360, 200, 1f))
         assertEquals(0 to 0, menuSize(0, 0, 1f))
-        assertEquals(984 to 1320, menuSize(1080, 2400, 3f))
+        assertEquals(984 to 1560, menuSize(1080, 2400, 3f))
     }
 
     private fun varint(v: Long): ByteArray {

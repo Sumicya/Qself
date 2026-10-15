@@ -67,7 +67,7 @@ fun knob(bar: View) {
     if (bar.height == 0) return
     if (!bar.isShown) { old?.visibility = View.GONE; return }
     val dp = bar.dp
-    val size = min(bar.height, (40 * dp).toInt())
+    val size = (52 * dp).toInt()
     val at = IntArray(2).also(bar::getLocationInWindow)
     val room = decor.width - at[0] - bar.width
     val beside = room >= (8 * dp).toInt() + size
@@ -87,11 +87,11 @@ fun knob(bar: View) {
         tag = KNOB
         contentDescription = "Qself 设置"
         isFocusable = true
-        setImageResource(android.R.drawable.ic_menu_preferences)
+        setImageDrawable(MenuGlyph())
         imageTintList = ColorStateList.valueOf(monet(night(), 0xFF)
             ?: if (night()) 0xFFFFFFFF.toInt() else 0xFF1C1C1E.toInt())
         scaleType = ImageView.ScaleType.CENTER_INSIDE
-        val padding = (9 * dp).toInt()
+        val padding = (12 * dp).toInt()
         setPadding(padding, padding, padding, padding)
         outlineProvider = capsule(); clipToOutline = true; elevation = 6 * dp
         background = Glass(this)
@@ -112,10 +112,29 @@ fun borderlessRipple(view: View): Drawable? = TypedValue().let {
         view.context.getDrawable(it.resourceId) else null
 }
 
-/** 继承 52411e87 的紧凑面板，进一步限制为 360dp 宽、440dp 高和可用高度的 62%。 */
-internal fun menuSize(width: Int, height: Int, density: Float): Pair<Int, Int> =
-    min((width - 32 * density).toInt().coerceAtLeast(0), (360 * density).toInt()) to
-        min((height * 0.62f).toInt().coerceAtLeast(0), (440 * density).toInt())
+/** 宽度不变，只向上下各扩约 40dp；屏幕/键盘边缘仍留出 16dp。 */
+internal fun menuSize(width: Int, height: Int, density: Float): Pair<Int, Int> {
+    val old = min((height * 0.62f).toInt().coerceAtLeast(0), (440 * density).toInt())
+    return min((width - 32 * density).toInt().coerceAtLeast(0), (360 * density).toInt()) to
+        min(old + (80 * density).toInt(), (height - 32 * density).toInt().coerceAtLeast(0))
+}
+
+/** 明确的三线菜单，替换 Android 自带的小扳手图标。 */
+private class MenuGlyph : Drawable() {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = -1; strokeWidth = 2f; strokeCap = Paint.Cap.ROUND
+    }
+    override fun draw(canvas: Canvas) {
+        val save = canvas.save()
+        canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
+        canvas.scale(bounds.width() / 24f, bounds.height() / 24f)
+        for (y in listOf(6f, 12f, 18f)) canvas.drawLine(4f, y, 20f, y, paint)
+        canvas.restoreToCount(save)
+    }
+    override fun setAlpha(alpha: Int) { paint.alpha = alpha; invalidateSelf() }
+    override fun setColorFilter(filter: ColorFilter?) { paint.colorFilter = filter; invalidateSelf() }
+    @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
+}
 
 private class Mark(private val dp: Float) : Drawable() {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -202,7 +221,7 @@ private fun sheet(anchor: View) {
         if (closing) return
         closing = true
         card.animate().cancel(); dim.animate().cancel()
-        card.animate().scaleX(0.98f).scaleY(0.98f).translationY(12 * dp)
+        card.animate().scaleX(0.98f).scaleY(0.98f).translationY(card.translationY + 12 * dp)
             .setDuration(motionDuration(140)).setInterpolator(easing()).start()
         dim.animate().alpha(0f).setDuration(motionDuration(140)).withEndAction {
             (dim.parent as? ViewGroup)?.removeView(dim)
@@ -212,10 +231,11 @@ private fun sheet(anchor: View) {
     val paints = ArrayList<() -> Unit>()
     fun cell(feature: Feature): View {
         val mark = Mark(dp)
-        val title = TextView(ctx).apply { text = feature.name; textSize = 13f; maxLines = 2 }
-        val desc = TextView(ctx).apply { text = feature.desc; textSize = 10f; setTextColor(sub); maxLines = 2 }
+        val title = TextView(ctx).apply { text = feature.name; textSize = 14f; maxLines = 2 }
+        val desc = TextView(ctx).apply { text = feature.desc; textSize = 11f; setTextColor(sub); maxLines = 2 }
         val cell = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = (64 * dp).toInt()
             setPadding((6 * dp).toInt(), (7 * dp).toInt(), (6 * dp).toInt(), (7 * dp).toInt())
             contentDescription = feature.name + "，" + feature.desc
             addView(View(ctx).apply { background = mark }, LinearLayout.LayoutParams((18 * dp).toInt(), (18 * dp).toInt()).apply {
@@ -253,14 +273,17 @@ private fun sheet(anchor: View) {
         addView(if (i + 1 < features.size) cell(features[i + 1]) else View(ctx),
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
     })
-    card.addView(TextView(ctx).apply {
+    val heading = TextView(ctx).apply {
         text = "Qself ${BuildConfig.VERSION_NAME}"; textSize = 15f; gravity = Gravity.CENTER; setTextColor(ink)
+        minimumHeight = (40 * dp).toInt()
         setPadding(0, 0, 0, (8 * dp).toInt())
-    })
+    }
+    card.addView(heading)
     card.addView(ScrollView(ctx).apply { isFillViewport = false; addView(grid) },
         LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     fun button(label: String, body: () -> Unit) = TextView(ctx).apply {
-        text = label; textSize = 12f; gravity = Gravity.CENTER; setTextColor(ink)
+        text = label; textSize = 13f; gravity = Gravity.CENTER; setTextColor(ink)
+        minimumHeight = (48 * dp).toInt()
         setPadding((10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt())
         foreground = borderlessRipple(this); setOnClickListener { body() }; pressMotion()
     }
@@ -281,6 +304,36 @@ private fun sheet(anchor: View) {
         leftMargin = insets?.left ?: 0; rightMargin = insets?.right ?: 0
         topMargin = insets?.top ?: 0; bottomMargin = insets?.bottom ?: 0
     })
+    // 只有背景/标题接管拖动，开关和 ScrollView 保留自己的点击及滚动。
+    var startX = 0f; var startY = 0f; var baseX = 0f; var baseY = 0f; var moved = false
+    val slop = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
+    val drag = View.OnTouchListener { view, event ->
+        if (closing) return@OnTouchListener true
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                startX = event.rawX; startY = event.rawY
+                baseX = card.translationX; baseY = card.translationY; moved = false
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = event.rawX - startX; val dy = event.rawY - startY
+                if (kotlin.math.abs(dx) > slop || kotlin.math.abs(dy) > slop) moved = true
+                if (moved) {
+                    card.animate().cancel(); card.scaleX = 1f; card.scaleY = 1f
+                    val edge = 16 * dp
+                    val lowX = (insets?.left ?: 0) + edge - card.left
+                    val highX = decor.width - (insets?.right ?: 0) - edge - card.right
+                    val lowY = (insets?.top ?: 0) + edge - card.top
+                    val highY = decor.height - (insets?.bottom ?: 0) - edge - card.bottom
+                    card.translationX = (baseX + dx).coerceIn(lowX, maxOf(lowX, highX))
+                    card.translationY = (baseY + dy).coerceIn(lowY, maxOf(lowY, highY))
+                }
+            }
+            MotionEvent.ACTION_UP -> if (!moved && view === dim) view.performClick()
+            MotionEvent.ACTION_CANCEL -> moved = true
+        }
+        true
+    }
+    dim.setOnTouchListener(drag); card.setOnTouchListener(drag); heading.setOnTouchListener(drag)
     dim.setOnClickListener { close() }
     dim.isFocusableInTouchMode = true
     dim.setOnKeyListener { _, key, event ->
