@@ -7,7 +7,7 @@ import sys
 import zipfile
 
 from dexcheck import Dex
-from dexq import W, disasm, methods_of
+from dexq import W, disasm, methods_of, payload_end
 
 FRAME = 'com.tencent.mobileqq.tab.TabFrameLayout'
 DELEGATE = 'com.tencent.mobileqq.aio.input.edit.delegate.InputEditTextVBDelegate'
@@ -50,6 +50,11 @@ RULES = {
         {f'{DIFFER}#e:java.util.List'}, {'androidx.recyclerview.widget.DiffUtil$DiffResult#dispatchUpdatesTo', f'{DIFFER}#j'}),
     (CONSTRAINT, 'onLayout', 'V Z,I,I,I,I'): (
         set(), {f'{WIDGET}#getY', f'{WIDGET}#getHeight', 'android.view.View#layout'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickComponentV4', 'd1',
+     'V I,com.tencent.aio.data.msglist.a,java.util.List'): (
+        set(), {f'{COMPONENT}#i1', 'android.view.View#setVisibility'}),
+    (BADGE, 'drawText', 'V android.graphics.Canvas'): (
+        {f'{BADGE}#mTextPaint:android.graphics.Paint'}, {f'{BADGE}#drawBackground', f'{BADGE}#drawBorder', 'android.graphics.Canvas#drawText'}),
 }
 
 
@@ -63,7 +68,11 @@ def field_accesses(dex, offset):
         word = struct.unpack_from('<H', dex.b, p)[0]
         op = word & 255
         if op == 0 and word >> 8:
-            break
+            after = payload_end(dex.b, p, end)
+            if after is None:
+                break
+            p = after
+            continue
         if 0x52 <= op <= 0x6D:
             index = struct.unpack_from('<H', dex.b, p + 2)[0]
             owner, typ, name = struct.unpack_from('<HHI', dex.b, dex.ofl + 8 * index)

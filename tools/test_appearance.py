@@ -36,11 +36,22 @@ class AppearanceContractTest(unittest.TestCase):
         self.assertIn('edit.viewTreeObserver.addOnPreDrawListener(this)', INPUT)
         self.assertNotIn('setMinimumHeight', INPUT)
 
+    def test_round_bar_has_no_blur_or_border_and_badges_are_text_only(self):
+        glass = (ROOT / 'app/src/main/kotlin/sumicya/qself/Glass.kt').read_text()
+        branch = glass.split('if (roundBar)', 1)[1].split('lens.setFloatUniform', 1)[0]
+        for forbidden in ('backdrop(', 'drawBorder', 'STROKE', 'RenderEffect'):
+            self.assertNotIn(forbidden, branch)
+        self.assertIn('drawRoundRect', branch)
+        self.assertIn('pill(canvas, night)', branch)
+        self.assertIn('roundBar = true', LOOKS)
+        self.assertIn('badge.getDeclaredMethod("onDraw"', LOOKS)
+        self.assertIn('countTabWidths', LOOKS)
+
     def test_background_drag_replays_down_after_native_cancel(self):
         body = LOOKS.split('private class BarTouch(', 1)[1].split('private val barTouchHosts', 1)[0]
         self.assertLess(body.index('try { native(cancel) }'), body.index('send(source, dest, first)'))
         self.assertLess(body.index('send(source, dest, first)'), body.index('if (forwarding) send(source, dest, event)'))
-        self.assertIn('copy.transform(matrix); dest.dispatchTouchEvent(copy)', body)
+        self.assertIn('copy.transform(matrix); copy.offsetLocation(offsetX, offsetY); dest.dispatchTouchEvent(copy)', body)
         self.assertIn('onViewDetachedFromWindow(view: View) = cancel()', body)
         self.assertNotIn('onInterceptTouchEvent(', body)
         self.assertNotIn('onTouchEvent(', body)

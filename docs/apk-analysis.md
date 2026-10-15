@@ -37,6 +37,13 @@
 
 以上八个聊天方法与既有八个底栏/输入/角标方法均由 `tools/ui_paths.py` 检查完整签名和字段/调用边（共 16 处），两条既有工作流直接运行。AXML 和继承链是本地 APK 解析证据，不是设备测量记录；短消息最终行高、浮动和昵称效果仍需运行验收。
 
+## 本轮反馈补查
+
+- `com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickComponentV4.d1(int,a,List)` 也直接对 `component.c.i1()` 调用 setVisibility。旧版类型过滤只识别 pit V2，确实漏掉 V4；此为代码覆盖缺口，不等于证明设备上所有昵称问题均来自这一处。
+- `QUIBadge.drawText(Canvas)` 使用 mTextPaint，调用 drawBackground、drawBorder 和 Canvas.drawText；底栏纯数字替换这一绘制分支，不全局抹掉红点。新增两处检查，当前共 18 处静态路径。
+- KernelSU 参考固定提交：https://github.com/tiann/KernelSU/blob/200818cabf8ff8ba857dee068c5fae5ae63ae6aa/manager/app/src/main/java/me/weishu/kernelsu/ui/component/FloatingBottomBar.kt 。只借鉴圆角/圆形选中项、内在宽度及无模糊分支的布局思路；未复制上游 Compose 实现，不增加依赖。按用户最后修正保留高光但不描边。
+- 本地 DAD 与最小反汇编输出交叉核对发现，原工具遗漏 0x90–0xaf 双码元指令宽度，且在方法中部的数据载荷处提前停止；已修复并测试，不再以截断输出判断调用不存在。
+
 ## 仍未验证
 
 无设备连接，未验证实际 QQ 角标、输入键盘、拖动及点击效果。用户报告的头像/消息/昵称合并仍列为未解决；纯逻辑、源码契约和出包成功不能替代这些验收。

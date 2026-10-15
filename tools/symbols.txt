@@ -272,3 +272,11 @@ member! androidx.constraintlayout.widget.ConstraintLayout$LayoutParams#getConstr
 class androidx.constraintlayout.solver.widgets.ConstraintWidget
 member! androidx.constraintlayout.solver.widgets.ConstraintWidget#getY
 member! androidx.constraintlayout.solver.widgets.ConstraintWidget#getHeight
+
+# 实际存在的 slot 昵称分支，不能只处理 pit V2
+class com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickComponentV4
+member! com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickComponentV4#d1
+member! com.tencent.mobileqq.quibadge.QUIBadge#drawText
+member! com.tencent.mobileqq.quibadge.QUIBadge#onLayout
+member! com.tencent.mobileqq.quibadge.QUIBadge#onDraw
+field com.tencent.mobileqq.quibadge.QUIBadge#mViewType

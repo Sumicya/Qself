@@ -40,7 +40,7 @@ class AvatarRenderContractTest(unittest.TestCase):
     def test_fold_and_spacing_use_native_slots_and_active_auxiliary_components(self):
         self.assertIn('vb.getDeclaredField("G")', CHAT)
         self.assertIn('val active = extras.get(binder) as SparseArray<*>', CHAT)
-        self.assertIn('nickType.isInstance(c) -> (componentSlot.invoke(c)', CHAT)
+        self.assertIn('slotNickType.isInstance(c)) -> (componentSlot.invoke(c)', CHAT)
         self.assertIn('component.getMethod("i1")', CHAT)
         self.assertIn('slots.map(::RunSpacing)', CHAT)
         self.assertIn('getDeclaredMethod("setVisibility", Integer.TYPE)', CHAT)
@@ -57,6 +57,12 @@ class AvatarRenderContractTest(unittest.TestCase):
         self.assertNotIn('requestLayout(', measure)
         self.assertIn('if (bindingVB.get() == true ||', CHAT)
         self.assertIn('if (rows[row]?.run === run && rows[row]?.layout === run.layout) return', CHAT)
+
+    def test_slot_nickname_and_stable_body_geometry_are_not_omitted(self):
+        self.assertIn('component.nick.slot.AIONickComponentV4', CHAT)
+        self.assertIn('state.layout.contentSlots', RENDER)
+        self.assertIn('it.isAttachedToWindow && it.visibility != View.GONE', RENDER)
+        self.assertNotIn('if (!content.isShown)', RENDER)
 
     def test_group_edges_and_bindings_follow_data_not_attached_row_count(self):
         self.assertIn('hook(committed)', CHAT)

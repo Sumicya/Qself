@@ -94,7 +94,7 @@ fun knob(bar: View) {
         val padding = (12 * dp).toInt()
         setPadding(padding, padding, padding, padding)
         outlineProvider = capsule(); clipToOutline = true; elevation = 6 * dp
-        background = Glass(this)
+        background = Glass(this, roundBar = true)
         foreground = borderlessRipple(this)
         setOnClickListener { sheet(it) }
         pressMotion()

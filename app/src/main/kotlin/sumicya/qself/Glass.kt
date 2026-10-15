@@ -35,7 +35,7 @@ import kotlin.math.min
  * [radius] 圆角上限（默认全圆 = 胶囊 / 圆钮），[selected] 给底栏用：返回当前选中的页签，
  * 玻璃里就多一块会弹着滑过去的亮胶囊。
  */
-class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, private val selected: (() -> View?)? = null) : Drawable() {
+class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, private val roundBar: Boolean = false, private val selected: (() -> View?)? = null) : Drawable() {
     private val dp = host.dp
     private val node = RenderNode("qself-glass")
     private val pad = (12 * dp).toInt() // 边缘折射往里采样，留一点余量就够
@@ -91,6 +91,21 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         val b = bounds
         if (b.isEmpty) return
         val night = night()
+        if (roundBar) {
+            // KernelSU 无模糊分支的全圆角底色 + 独立圆形选中项；只填充，不描边、不录制背景。
+            rect.set(b)
+            paint.alpha = drawableAlpha
+            paint.colorFilter = drawableColorFilter
+            val accent = monet(night, 0xFF)
+            paint.shader = LinearGradient(0f, b.top.toFloat(), 0f, b.bottom.toFloat(),
+                wash(if (night) 0xE83C3C40.toInt() else 0xF0FFFFFF.toInt(), accent),
+                wash(if (night) 0xE8242428.toInt() else 0xE8EDEDF2.toInt(), accent), Shader.TileMode.CLAMP)
+            val r = min(b.width(), b.height()) / 2f
+            canvas.drawRoundRect(rect, r, r, paint)
+            paint.shader = null
+            pill(canvas, night)
+            return
+        }
         lens.setFloatUniform("press", press)
         val layerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             alpha = drawableAlpha

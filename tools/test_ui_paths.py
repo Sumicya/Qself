@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import unittest
 
 from ui_paths import field_accesses
+from dexq import disasm, payload_end
 
 
 def sample(words):
@@ -18,6 +19,23 @@ class UIPathsTest(unittest.TestCase):
         dex = sample([0x1054, 0, 0x105b, 0, 0x0e])
         self.assertEqual([('read', 'Owner#content:Target'), ('write', 'Owner#content:Target')],
                          field_accesses(dex, 0))
+
+    def test_switch_payload_in_the_middle_does_not_hide_following_instructions(self):
+        dex = sample([0x0100, 1, 0, 0, 0, 0, 0x1054, 0, 0x0e])
+        self.assertEqual([('read', 'Owner#content:Target')], field_accesses(dex, 0))
+        self.assertEqual({'Owner#content:Target'}, disasm(dex, 0)[1])
+
+    def test_arithmetic_operand_is_not_a_payload_header(self):
+        dex = sample([0x0090, 0x0300, 0x1054, 0, 0x0e])
+        self.assertEqual([('read', 'Owner#content:Target')], field_accesses(dex, 0))
+        self.assertEqual({'Owner#content:Target'}, disasm(dex, 0)[1])
+
+    def test_sparse_and_array_payload_lengths(self):
+        sparse = struct.pack('<HHII', 0x0200, 1, 0, 0)
+        self.assertEqual(12, payload_end(sparse, 0, len(sparse)))
+        array = struct.pack('<HHI', 0x0300, 1, 3) + b'abc\x00'
+        self.assertEqual(12, payload_end(array, 0, len(array)))
+        self.assertIsNone(payload_end(array, 0, 10))
 
     def test_switch_payload_is_not_field_access(self):
         dex = sample([0x0100, 0x105b, 0])

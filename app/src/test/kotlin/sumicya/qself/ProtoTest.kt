@@ -143,6 +143,22 @@ class ProtoTest {
         assertFalse(conflict.first == conflict.second)
     }
 
+    @Test fun plainBottomCountDoesNotReplaceDotsNewOrIconBadges() {
+        assertTrue(bottomNumericBadge("1200", 2))
+        assertTrue(bottomNumericBadge("9", 9))
+        assertFalse(bottomNumericBadge("NEW", 4))
+        assertFalse(bottomNumericBadge("9", 7))
+        assertFalse(bottomNumericBadge("9", 0))
+    }
+
+    @Test fun barGestureStartsInsideNativePageAndPreservesMovement() {
+        val shift = barTouchOffset(900f, 800)
+        assertEquals(799f, 900f + shift)
+        assertEquals(-60f, (840f + shift) - (900f + shift))
+        assertEquals(0f, barTouchOffset(400f, 800))
+        assertEquals(1f, -30f + barTouchOffset(-30f, 800))
+    }
+
     @Test fun continuationHeightUsesContentNotTheInvisibleAvatarSlot() {
         assertEquals(22, compactRunHeight(44, 22, 0, 0))
         assertEquals(26, compactRunHeight(44, 22, 4, 0))

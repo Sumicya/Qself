@@ -285,6 +285,7 @@ private class RunLayout(val avatars: List<RunAvatar>, nicks: List<View>, content
     val spacing = slots.map(::RunSpacing)
     val nicks = nicks.map(::RunVisibility)
     val contents = contents.map { WeakReference(it) }
+    val contentSlots = slots.map { WeakReference(it) }
     fun apply(continued: Boolean, enabled: Boolean) {
         val next = enabled && continued
         if (compact != next) { compact = next; root.get()?.requestLayout() }
@@ -344,6 +345,7 @@ fun groupRuns() {
         // 真包 C1 的访问标记为 0x12（private final），getMethod 只查 public 会使整项安装失败。
         val avatarImage = avatarType.method("C1").apply { isAccessible = true }
         val nickType = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2")
+        val slotNickType = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickComponentV4")
         val contentType = cls("com.tencent.mobileqq.aio.msglist.holder.component.BaseContentComponent")
         val bindingVB = ThreadLocal<Boolean>()
         var reported = false
@@ -384,7 +386,7 @@ fun groupRuns() {
                             (componentSlot.invoke(c) as? View)?.let { avatarSlots.add(it) }
                             if (avatars.none { it.container.get() === view }) avatars.add(RunAvatar(view, image))
                         }
-                        nickType.isInstance(c) -> (componentSlot.invoke(c) as? View)?.let { nicks.add(it) }
+                        (nickType.isInstance(c) || slotNickType.isInstance(c)) -> (componentSlot.invoke(c) as? View)?.let { nicks.add(it) }
                         contentType.isInstance(c) -> {
                             (componentRoot.invoke(c) as? View)?.let { contents.add(it) }
                             // VB.H1 改的是 component.i1().layoutParams.topMargin，不是 VB 根视图。
@@ -622,9 +624,13 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
             for (state in group) {
                 var top = Float.POSITIVE_INFINITY
                 var bottom = Float.NEGATIVE_INFINITY
-                for (ref in state.layout.contents) {
-                    val content = ref.get() ?: continue
-                    if (!content.isShown) continue
+                // 异步正文根被替换/暂时隐藏时仍取稳定的原生正文槽，不能退回行顶头像。
+                val roots = state.layout.contents.mapNotNull { it.get() }.filter {
+                    it.isAttachedToWindow && it.visibility != View.GONE && it.width > 0 && it.height > 0
+                }
+                val geometry = roots.ifEmpty { state.layout.contentSlots.mapNotNull { it.get() } }
+                for (content in geometry) {
+                    if (!content.isAttachedToWindow || content.visibility == View.GONE) continue
                     val rect = rectangle(content, inHost(content)) ?: continue
                     top = minOf(top, rect.top); bottom = maxOf(bottom, rect.bottom)
                 }
@@ -660,14 +666,28 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
                 break
             }
             if (face == null) {
-                // 几何未就绪时不提前藏掉所有原图；完全离屏的组照常交给列表裁剪。
-                // 暂无几何时也只保留一个原生头像，不能一退化就把整组头像全亮出来。
-                val fallback = candidates.firstOrNull { it.visibility.native == View.VISIBLE }
-                avatars.forEach { if (it === fallback) it.restore() else it.hide() }
-            } else {
-                avatars.forEach { it.hide() }
-                next.add(face)
+                // 正文异步切换的一帧沿用本组上次有效位置，不能恢复到 QQ 的行顶位置。
+                val old = faces.firstOrNull { previous -> previous.group == key && avatars.any {
+                    it.image.get() === previous.view && it.visibility.native == View.VISIBLE
+                } }
+                if (old != null && old.view.isAttachedToWindow) {
+                    val matrix = inHost(old.view)
+                    val source = rectangle(old.view, matrix)
+                    if (source != null) {
+                        val top = minOf(old.rect.top, clip.bottom - source.height() - 4 * host.dp)
+                        val delta = top - source.top
+                        matrix.postTranslate(0f, delta)
+                        val targetMatrix = inHost(old.target).apply { postTranslate(0f, delta) }
+                        val inverse = Matrix()
+                        if (targetMatrix.invert(inverse)) {
+                            source.offset(0f, delta)
+                            face = Face(key, old.view, old.target, matrix, inverse, source)
+                        }
+                    }
+                }
             }
+            avatars.forEach { it.hide() }
+            face?.let { next.add(it) }
         }
         commitFrame(next, clip)
         return true
