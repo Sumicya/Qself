@@ -118,23 +118,6 @@ def art_stamp(a):
     return stamp(r) if r else a["created_at"]
 
 
-def parts_of(name):
-    return name[len(PREFIX):].split(".") if name.startswith(PREFIX) else []
-
-
-# 过渡清理（规范 c5ac12d:60）：换号源当轮先出新口径的包，新包出成之后再清旧口径产物 ——
-# 旧口径总序号 = run_number 原值（本仓历史最大 277），新口径总序号 = git 提交数（本仓 ≥ 3100）。
-# 只在已存在新口径产物时才动旧口径对象；这段是换号源这一轮的一次性动作，清完即从本文件删掉。
-MIGRATE_OLD = ("Qself-26.10.14.4.277", "Qself-26.10.14.3.276")
-NEW_SCHEME_MIN_TOTAL = 3000
-new_scheme = [a["name"] for a in arts
-              if len(parts_of(a["name"])) == SEGMENTS and parts_of(a["name"])[-1].isdigit()
-              and int(parts_of(a["name"])[-1]) >= NEW_SCHEME_MIN_TOTAL]
-print(f"过渡清理：现存新口径产物 {new_scheme or '（无）'}；旧口径清单 {list(MIGRATE_OLD)}"
-      f"（旧口径总序号=run_number 原值，本仓最大 277）")
-if not new_scheme:
-    print("过渡清理：新口径包还没出成，本轮不动旧口径产物（不许出现一个可装的包都没有的状态）")
-
 # ---------- artifact：口径 → 来源 → 重复当日序号 → 数量 ----------
 drop_a, survivors = [], []                # survivors 是过了前两条关的候选
 for a in sorted(arts, key=lambda x: (x["created_at"], x["id"]), reverse=True):
@@ -142,9 +125,7 @@ for a in sorted(arts, key=lambda x: (x["created_at"], x["id"]), reverse=True):
     seg = name[len(PREFIX):].split(".") if name.startswith(PREFIX) else []
     r = run_by_id.get(a["workflow_run"]["id"])
     ws = (r or {}).get("path", "(未知来源)")
-    if name in MIGRATE_OLD and new_scheme:
-        drop_a.append((a, ws, f"过渡清理：新口径包已出成（{new_scheme[-1]}），清旧口径产物（规范 c5ac12d:60）"))
-    elif not name.startswith(PREFIX):
+    if not name.startswith(PREFIX):
         drop_a.append((a, ws, "口径：名不是 Qself- 前缀"))
     elif len(seg) != SEGMENTS:
         drop_a.append((a, ws, f"口径：段数 {len(seg)} ≠ {SEGMENTS}"))

@@ -115,7 +115,6 @@ jobs:
   # 重复当日序号（同日同当日序号按 run_started_at 删旧留新，不按总序号大小判：换号源后总序号会回头）、数量（当日之外每条序列 artifact 5、run 5）。
   # 数量判据当日豁免：当日对象当天不删；其余三条不豁免、当轮即删。
   # 排队按 run_started_at（UTC+8 日界）；承载保留产物的 run 不删、也不计入上限；正在跑的本次不删。
-  # 换号源过渡清理也在这份脚本里（旧口径两只 `Qself-26.10.14.4.277`／`Qself-26.10.14.3.276`，守卫＝已存在新口径产物），清完即从脚本删该段。
   # 真删两个调用点都真删（本处 + PR 校验工作流的清理作业，两处同一 concurrency group）；PR 校验序列的超量 run 在这里也按序列一并收（actions: write 可删同仓任意工作流的 run）。
   # 权限最小 actions: write（只删本项目 artifact 与 run），按规范不与 contents: write 同授；动不到 Release、tag、分支。
   cleanup-artifacts:

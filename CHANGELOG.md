@@ -8,6 +8,8 @@
 - `.github/scripts/cleanup.py`：启动打印补「删除失败分级口径」与取号核对（head sha、总序号、当日序号、浅克隆标志、两条命令原文）；判据三由「保留总序号最大者」改为「按 `run_started_at` 删旧留新」，并把两个 artifact 的名与 id、两次运行的 rn 打进日志；新增换号源过渡清理（旧口径两只，守卫＝已存在总序号 ≥ 3000 的新口径产物，清完即从脚本删掉本段）。
 - 实测真数字（取值 2026-10-15T00:13Z）：本仓 `arena/e207d38d-qself` head `8d90c39` 两条命令输出 —— 总序号 3101、当日序号 0（该提交日期 2026-10-14 22:00 CST，不在当日）；`origin/main` 总提交数 3069。旧口径产物 `Qself-26.10.14.4.277`（id 11900691515，rn=277，事件 `push`）与 `Qself-26.10.14.3.276`（id 11900660871，rn=276，事件 `push`）。
 - 会话令牌 DELETE artifact 实测 403（`Resource not accessible by integration`，用不存在的 id 探测端点 `repos/Sumicya/Qself/actions/artifacts/1`），旧口径产物只能由 CI 清理 job 清，故过渡清理写进同一份脚本。
+- 出包实测：Build rn=278（head `c5a7877c`，事件 `push`）四作业 `dex`／`apk`／`cleanup-artifacts` success、`cleanup-releases` skipped；产出新口径首包 `Qself-26.10.15.1.3102`（id 11937962375，114728B，run 38659018059）；同一次运行的 `cleanup-artifacts` 按过渡清理把旧口径两只清掉（`.4.277` id 11900691515、`.3.276` id 11900660871，按 id 复核均 404，取值 2026-10-15T00:19:13Z）；删后 artifact 名单只剩 `Qself-26.10.15.1.3102`。PR check（同 head，run 38659024806）`dex`／`test`／`cleanup` 全 success。
+- 过渡清理段清完即从 `cleanup.py` 删除（连同只服务它的 `parts_of()`），产物名与守卫条件留在本文件与 `AGENTS.md` 里可核。
 
 ## 2026-10-14 — 会话分支出包首次实测；清理按重复当日序号删旧产物；修正已知风险条
 
