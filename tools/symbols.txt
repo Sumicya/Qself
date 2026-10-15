@@ -249,3 +249,10 @@ member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayDot
 member! com.tencent.mobileqq.quibadge.QUIBadge#setIcon
 member! com.tencent.mobileqq.quibadge.QUIBadge#setRedNumWithIcon
 member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayNumWIthIcon
+
+# 原生底栏内容绑定：不按宽高/滚动能力挑容器
+class com.tencent.mobileqq.tab.TabFrameLayout
+field com.tencent.mobileqq.tab.TabFrameLayout#e
+field com.tencent.mobileqq.tab.TabFrameLayout#d
+member! com.tencent.mobileqq.tab.TabFrameLayout#a
+member! com.tencent.mobileqq.tab.TabFrameLayout#onFinishInflate

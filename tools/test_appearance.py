@@ -45,6 +45,16 @@ class AppearanceContractTest(unittest.TestCase):
         self.assertNotIn('onInterceptTouchEvent(', body)
         self.assertNotIn('onTouchEvent(', body)
 
+    def test_background_target_is_qq_registered_pager_not_a_size_guess(self):
+        self.assertIn('cls("com.tencent.mobileqq.tab.TabFrameLayout")', LOOKS)
+        self.assertIn('frame.getDeclaredField("e")', LOOKS)
+        self.assertIn('frame.getDeclaredMethod("a")', LOOKS)
+        self.assertIn('if (tab.get(owner) !== bar) null', LOOKS)
+        self.assertIn('?.takeIf { it.parent === bar.parent }', LOOKS)
+        self.assertIn('target = WeakReference(pager)', LOOKS)
+        for forbidden in ('scrollTarget(', 'canScrollVertically(', 'pager.width / 2', 'contains("ViewPager")'):
+            self.assertNotIn(forbidden, LOOKS)
+
     def test_menus_do_not_implement_the_background_drag_request(self):
         menu = (SRC / 'Knob.kt').read_text()
         self.assertNotIn('dim.setOnTouchListener', menu)

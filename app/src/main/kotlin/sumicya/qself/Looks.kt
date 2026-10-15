@@ -20,10 +20,23 @@ import java.util.WeakHashMap
 
 /**
  * 外观：每个 Activity 一到前台就盯住它的 decor，布局一变在同一帧 pre-draw 套规则，不排 150ms 延时队列。
- * 规则全按视图长相认 —— 类名、文字、contentDescription、位置 —— 不碰 QQ 的业务类，
- * 所以 QQ 换个小版本它们多半还活着；认错了最多是少藏一个按钮。
+ * 精简规则按视图识别；底栏内容由 QQ 自己的 TabFrameLayout 绑定关系确定，不挑尺寸相近的列表。
  */
+private var nativeBarContent: ((ViewGroup) -> ViewGroup?)? = null
+
 fun looks() {
+    // 真包 onFinishInflate 将 QQTabLayout 存入 e、ViewPager2 存入 d；a() 直接返回 d。
+    val frame = cls("com.tencent.mobileqq.tab.TabFrameLayout")
+    val tab = frame.getDeclaredField("e").apply { isAccessible = true }
+    val content = frame.getDeclaredMethod("a")
+    nativeBarContent = { bar ->
+        val owner = generateSequence(bar.parent as? ViewGroup) { it.parent as? ViewGroup }
+            .firstOrNull { frame.isInstance(it) }
+        if (owner == null) null else runCatching {
+            if (tab.get(owner) !== bar) null else (content.invoke(owner) as? ViewGroup)
+                ?.takeIf { it.parent === bar.parent }
+        }.onFailure { log("底栏原生绑定读取失败，不猜测手势目标", it) }.getOrNull()
+    }
     hook(Instrumentation::class.java.getMethod("callActivityOnResume", Activity::class.java)) { chain ->
         chain.proceed().also { watch((chain.getArg(0) as Activity).window.decorView) }
     }
@@ -191,7 +204,8 @@ private class BarState(bar: ViewGroup) {
     val padding = intArrayOf(bar.paddingLeft, bar.paddingTop, bar.paddingRight, bar.paddingBottom)
     val stripPadding = bar.getChildAt(0)?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
     val tabs = WeakHashMap<View, Pair<ViewGroup.LayoutParams, IntArray>>()
-    val touch = BarTouch(bar)
+    val touch = nativeBarContent?.invoke(bar)?.let { BarTouch(bar, it) }
+    init { if (touch == null) log("底栏原生绑定未匹配，不接管手势") }
     var scrollListener: ViewTreeObserver.OnScrollChangedListener? = null
     var layoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
     var drawListener: ViewTreeObserver.OnPreDrawListener? = null
@@ -200,7 +214,7 @@ private val floatStates = WeakHashMap<ViewGroup, BarState>()
 private fun restoreBar(bar: ViewGroup) {
     val state = floatStates.remove(bar) ?: return
     (bar.parent as? ViewGroup)?.let { barTouchHosts.remove(it) }
-    state.touch.dispose()
+    state.touch?.dispose()
     if (bar.viewTreeObserver.isAlive) {
         state.scrollListener?.let(bar.viewTreeObserver::removeOnScrollChangedListener)
         state.layoutListener?.let(bar.viewTreeObserver::removeOnGlobalLayoutListener)
@@ -292,7 +306,8 @@ private fun float(bar: ViewGroup) {
 internal fun verticalBarDrag(dx: Float, dy: Float, slop: Int): Boolean =
     kotlin.math.abs(dy) > slop && kotlin.math.abs(dy) > kotlin.math.abs(dx)
 
-private class BarTouch(bar: ViewGroup) {
+private class BarTouch(bar: ViewGroup, pager: ViewGroup) {
+    private val pager = WeakReference(pager)
     private val bar = WeakReference(bar)
     private var owner: WeakReference<ViewGroup>? = null
     private var target: WeakReference<View>? = null
@@ -321,17 +336,6 @@ private class BarTouch(bar: ViewGroup) {
         val copy = MotionEvent.obtain(event)
         return try { copy.transform(matrix); dest.dispatchTouchEvent(copy) } finally { copy.recycle() }
     }
-    private fun scrollTarget(pager: View): View {
-        fun find(view: View): View? {
-            val rect = android.graphics.Rect()
-            if (!view.isShown || !view.getGlobalVisibleRect(rect)) return null
-            if (rect.width() >= pager.width / 2 && view.height >= pager.height / 2 &&
-                (view.canScrollVertically(-1) || view.canScrollVertically(1))) return view
-            if (view is ViewGroup) for (i in 0 until view.childCount) find(view.getChildAt(i))?.let { return it }
-            return null
-        }
-        return find(pager) ?: pager
-    }
     fun dispatch(source: ViewGroup, event: MotionEvent, native: (MotionEvent) -> Boolean): Boolean {
         val bar = bar.get() ?: return native(event)
         val host = bar.parent as? ViewGroup ?: return native(event)
@@ -348,8 +352,7 @@ private class BarTouch(bar: ViewGroup) {
                 }
                 if (badgeHit(bar)) return native(event)
             }
-            val pager = (0 until host.childCount).map(host::getChildAt)
-                .firstOrNull { it.isShown && it.javaClass.name.contains("ViewPager") } ?: return native(event)
+            val pager = pager.get()?.takeIf { it.isShown && it.parent === host } ?: return native(event)
             if (source === host) {
                 if (point(host, bar, event.x, event.y)[1] < 0) return native(event)
                 for (i in host.indexOfChild(pager) + 1 until host.childCount) {
@@ -359,7 +362,7 @@ private class BarTouch(bar: ViewGroup) {
                 }
             }
             cancel()
-            owner = WeakReference(source); target = WeakReference(scrollTarget(pager))
+            owner = WeakReference(source); target = WeakReference(pager)
             down = MotionEvent.obtain(event)
         }
         if (owner?.get() !== source || down == null) return native(event)
@@ -587,10 +590,11 @@ private fun strings(o: Any): List<String> = generateSequence<Class<*>>(o.javaCla
     .toList()
 
 /** 底栏父容器里除内容页（ViewPager）与底栏自身之外、盖在底栏那一带的装饰：模糊层、细线、纯 View 垫底。 */
-private fun clear(root: ViewGroup, bar: View) {
+private fun clear(root: ViewGroup, bar: ViewGroup) {
     val top = windowY(bar) - (24 * bar.dp).toInt()
+    val content = nativeBarContent?.invoke(bar)
     fun go(v: View) {
-        if (v === bar || v.javaClass.name.contains("ViewPager")) return
+        if (v === bar || v === content) return
         val name = v.javaClass.simpleName
         val strip = v.height <= bar.height * 2 && v.width > bar.width / 2
         val decorative = name.contains("Blur") || (strip && (v.javaClass == View::class.java || v.height <= 2))

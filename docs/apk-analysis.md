@@ -17,14 +17,15 @@
 
 ## 已核验的 QQ 路径
 
-1. **底栏实际调用是 `TabFrameControllerImpl.updateFrames → FrameControllerInjectImpl.b → com.tencent.widget.d#a(QUIBadge,int,int,int,String)`**：style 3/7/9 且 count > limit 时会调用 setRedText(limit + "+") 而非 setRedNum，mNum 被清零；因此只钩 updateNum / TextView 绑定器不能覆盖底栏。该事实已实际 DAD 反编译并用 DEX 调用关系核对。
+1. **DEX 内这条底栏静态调用链是 `TabFrameControllerImpl.updateFrames → FrameControllerInjectImpl.b → com.tencent.widget.d#a(QUIBadge,int,int,int,String)`**：style 3/7/9 且 count > limit 时会调用 setRedText(limit + "+") 而非 setRedNum，mNum 被清零；因此只钩 updateNum / TextView 绑定器不能覆盖底栏。该事实已实际 DAD 反编译并用 DEX 调用关系核对。
 2. `com.tencent.widget.d#d(TextView,int,int,int,int,String,boolean)`：参数依次为视图、样式、真实计数、背景、上限、文字、标记。旧实现将样式当成计数；样式 3/4/7/9 才是本次处理的数字徽标，不更改 NEW 等其他类型。
 3. `QUIBadge.updateNum(int)` 将真实数存入 `mNum`，大于 99 时 `mText` 写为 `99+`；`getMinWidth()` 对普通数字使用固定档位，`onMeasure` 与 `drawText` 均依赖它。因此必须同时处理文字、原生 Paint 测量宽度与布局，而不只是替换文字。
 4. `r/i/ez.xml`、`r/i/k_.xml` 等布局：输入行与图标带分别有背景；QQBlurView 以 RelativeLayout 规则对齐输入行顶部并延伸至父底部。只能清理这个明确属于输入区的背景，不能清理它们共同的全屏父容器。
 5. 原生输入 EditText 与发送等控件可同处一个 FrameLayout；给整个 FrameLayout 加玻璃会把按钮区域也包进胶囊。玻璃现在只作用于真实 EditText。
 
 6. **新版 NT 输入行 `r/i/dxg.xml` 为 ConstraintLayout + AIOEditText + AIOInputSendBtn**，没有旧图标带；`InputEditTextVBDelegate.U(adorn.e)` 在父级准备阶段设置真实 EditText 到字段 e。已实读 DEX/DAD/AXML，改用这个入口发现并管理输入样式。
-7. `r/i/ffe.xml` 的 DragFrameLayout 里 ViewPager2 与 QQTabLayout 同级，原生视口是整页；玻璃底栏背景手势须交给这棵原生内容树，而非移动菜单或用自定义滚动取代列表。
+7. `TabFrameLayout.onFinishInflate` 写入 d（ViewPager2）和 e（QQTabLayout），`a(): View` 读取 d；运行时以 e 的实例身份核对底栏，通过 a() 获取内容页。删除原先按尺寸/可滚动性挑选列表的代码，不再替 QQ 选择内容树内的手势目标。
+8. 可复现检查：`python3 tools/ui_paths.py qq.apk`，输出 APK 完整 SHA-256、八个方法的完整签名、字段读写方向和要求的调用边。两条 CI 都运行。该检查仅证明 APK 内的静态关系，不证明设备界面采用哪条分支、钩子是否命中或最终绘制效果。
 
 ## 仍未验证
 

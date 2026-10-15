@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-10-15 — 删除底栏手势目标猜测，改用 QQ 注册关系
+
+- 用户指出查过 DEX 仍在猜，继续承认而没有落实。删除 scrollTarget 的半屏尺寸 / canScrollVertically 递归挑选，以及按 ViewPager 类名寻找兄弟的回退。
+- 按真包 TabFrameLayout.onFinishInflate 的字段赋值核对：e 为 QQTabLayout，d 为 ViewPager2，a() 读取并返回 d。运行时必须确认 e 与当前底栏同一实例、内容页与底栏同父，才将事件交给 QQ 原生内容页分发；不匹配时记录原因，不另选目标。
+- tools/ui_paths.py 验证完整签名、字段读写方向及八处静态关系，覆盖底栏初始化/内容 getter、输入绑定器 e 赋值、角标 updateFrames → 注入器 → d.a → setRedText/resetValue。原有两个工作流均运行检查，并明确输出 device_execution_verified=false，不能拿静态证据冒充设备命中。
+- 本地 25 项 Kotlin、16 项工具/源码契约、5 项清理测试通过；203 条真包符号及八处静态绑定检查通过。本次未宣称输入/角标症状完成；无设备连接，最终滚动、开关与角标效果仍未验收。
+
 ## 2026-10-15 — 修正底栏背景滚动对象，接入 NT 输入与底栏数量绑定器
 
 - 用户明确底部背景拖不动、TG 输入开关无区别、99+ 仍未修，前一包效果不成立。确认所需是从底栏背景滑动也能滚动后面的列表，不是移动底栏或菜单；删除误加的菜单拖动。

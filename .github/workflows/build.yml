@@ -47,6 +47,7 @@ jobs:
       - name: 逐个核落点
         run: |
           python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin --quiet
+          python3 tools/ui_paths.py qq.apk
           python3 -m unittest discover -s tools -p 'test_*.py'
 
   apk:
