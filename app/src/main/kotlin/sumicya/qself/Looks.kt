@@ -466,7 +466,7 @@ internal fun unclampedBadgeArgs(args: Array<Any?>): Array<Any?> =
         args.copyOf().also { it[3] = Int.MAX_VALUE } else args
 
 internal fun bottomNumericBadge(label: String?, type: Int): Boolean =
-    type in setOf(2, 3, 4, 5, 9) && !label.isNullOrEmpty() && label.all { it.isDigit() }
+    type in setOf(2, 3, 4, 5, 9) && !label.isNullOrEmpty() && label.all { it.isDigit() } && label.any { it != '0' }
 
 internal fun numericBadgeWidth(textWidth: Float, height: Int, horizontalPadding: Int): Int =
     maxOf(height, kotlin.math.ceil(textWidth.toDouble()).toInt() + horizontalPadding * 2)

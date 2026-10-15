@@ -149,6 +149,8 @@ class ProtoTest {
         assertFalse(bottomNumericBadge("NEW", 4))
         assertFalse(bottomNumericBadge("9", 7))
         assertFalse(bottomNumericBadge("9", 0))
+        assertFalse(bottomNumericBadge("0", 2))
+        assertFalse(bottomNumericBadge("000", 3))
     }
 
     @Test fun barGestureStartsInsideNativePageAndPreservesMovement() {
