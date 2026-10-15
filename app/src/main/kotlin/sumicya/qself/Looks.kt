@@ -33,6 +33,7 @@ private val watched = WeakHashMap<View, WeakReference<AppearanceObserver>>()
 private var preferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
 fun refreshLooks() {
+    refreshChatLayout()
     watched.values.mapNotNull { it.get() }.forEach { it.refresh() }
 }
 

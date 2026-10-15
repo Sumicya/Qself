@@ -3,6 +3,8 @@ package sumicya.qself
 
 import android.graphics.Canvas
 import android.graphics.ColorFilter
+import android.graphics.Matrix
+import android.graphics.RectF
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.drawable.Drawable
@@ -250,14 +252,16 @@ private class RunLayout(val avatars: List<RunAvatar>, nicks: List<View>, content
     val spacing = RunSpacing(root)
     val nicks = nicks.map { WeakReference(it) to it.visibility }
     val contents = contents.map { WeakReference(it) }
-    fun restore(): Boolean {
-        var changed = spacing.apply(false)
-        avatars.forEach { it.restore() }
+    fun apply(continued: Boolean, enabled: Boolean): Boolean {
+        var changed = spacing.apply(enabled && continued)
+        if (!enabled) avatars.forEach { it.restore() }
         nicks.forEach { (ref, visibility) -> ref.get()?.let { view ->
-            if (view.visibility != visibility) { view.visibility = visibility; changed = true }
+            val target = if (enabled && continued) View.GONE else visibility
+            if (view.visibility != target) { view.visibility = target; changed = true }
         } }
         return changed
     }
+    fun restore() = apply(false, false)
 }
 private class RunBinding(val group: RunKey, val continued: Boolean, var layout: RunLayout? = null)
 private val bindingRun = ThreadLocal<Pair<View, RunBinding>>()
@@ -267,7 +271,7 @@ private val pendingRun = WeakHashMap<View, RunBinding>()
 private val runAvatars = WeakHashMap<ViewGroup, WeakReference<RunAvatars>>()
 
 fun groupRuns() {
-    // 关开关时仍跟踪复用和还原；是否改变视图由绘制器判断。
+    // 始终跟踪复用；昵称/间距在绑定和开关变化时处理，绘制器只跟随滚动。
     val owner = feature
     feature = null
     try {
@@ -333,6 +337,8 @@ fun groupRuns() {
                         }
                         RunLayout(avatars, nicks.distinct(), contents.distinct(), vbRoot.invoke(chain.thisObject) as View)
                     }.onFailure { if (!warned) { warned = true; log("TG连发定位：组件读取失败，未改该消息布局", it) } }.getOrNull()
+                    // 必须在消息绑定结束、RecyclerView 测量前折叠昵称/间距；不能放到滚动 pre-draw。
+                    run.layout?.apply(run.continued, on("连发合并"))
                     register(row, run)
                 }
             }
@@ -384,22 +390,21 @@ private class RunRow(run: RunBinding, val layout: RunLayout) {
     fun restore() = layout.restore()
 }
 
-/** 一个列表一层浮动绘制；直接画 QQ 原头像，不缓存图片、不改头像层级、不关父容器裁剪。 */
+/** 布局在绑定/设置变化时完成；滚动帧只采样几何并提交到同一帧的 overlay。 */
 private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObserver.OnPreDrawListener,
     View.OnAttachStateChangeListener {
     private val rows = WeakHashMap<View, RunRow>()
-    private data class Face(val view: View, val target: View, val x: Float, val y: Float,
-        val touchX: Float, val touchY: Float)
-    private val faces = ArrayList<Face>()
+    private class Face(val group: RunKey, val view: View, val target: View,
+        val matrix: Matrix, val toTarget: Matrix, val rect: RectF)
+    private var faces = emptyList<Face>()
+    private var viewport = Rect()
+    private val toHost = Matrix()
     private var pressed: Face? = null
+    private var tracking = false
     private var downX = 0f
     private var downY = 0f
     private var dragging = false
-    private var reportedGeometry = false
     private val slop = ViewConfiguration.get(host.context).scaledTouchSlop
-    private val origin = IntArray(2)
-    private val position = IntArray(2)
-    private val visible = Rect()
     init {
         host.overlay.add(this)
         host.viewTreeObserver.addOnPreDrawListener(this)
@@ -408,121 +413,177 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
     fun unbind(row: View) {
         val state = rows.remove(row) ?: return
         val containers = state.layout.avatars.mapNotNull { it.container.get() }
-        if (pressed?.target in containers) { pressed?.target?.cancelPendingInputEvents(); pressed = null }
-        faces.removeAll { it.target in containers }
+        if (pressed?.target in containers) cancelPressed()
+        val next = faces.filterNot { it.target in containers }
+        commitFrame(next, viewport)
         state.restore()
     }
     fun bind(row: View, run: RunBinding) {
         unbind(row)
-        run.layout?.let { rows[row] = RunRow(run, it); host.invalidate() }
+        run.layout?.let { layout ->
+            layout.apply(run.continued, on("连发合并"))
+            rows[row] = RunRow(run, layout)
+            host.invalidate()
+        }
+    }
+    fun refresh() {
+        val enabled = on("连发合并")
+        rows.values.forEach { it.layout.apply(it.continued, enabled) }
+        if (!enabled) { cancelPressed(); commitFrame(emptyList(), viewport) }
+        host.invalidate()
+    }
+    private fun inHost(view: View) = Matrix().also {
+        view.transformMatrixToGlobal(it)
+        it.postConcat(toHost)
+    }
+    private fun rectangle(view: View, matrix: Matrix): RectF? {
+        if (view.width <= 0 || view.height <= 0) return null
+        return RectF(0f, 0f, view.width.toFloat(), view.height.toFloat()).also(matrix::mapRect)
+            .takeIf { it.left.isFinite() && it.top.isFinite() && it.right.isFinite() && it.bottom.isFinite() && !it.isEmpty }
+    }
+    private fun commitFrame(next: List<Face>, clip: Rect) {
+        // 改 Kotlin 坐标不会让硬件 overlay 的 display list 自动失效，必须显式提交重绘。
+        // 只在几何/内容变化时失效，静止时不制造无穷刷新循环。
+        val changed = viewport != clip || next.size != faces.size || next.indices.any { i ->
+            val old = faces[i]; val new = next[i]
+            old.view !== new.view || old.target !== new.target || old.matrix != new.matrix || new.view.isDirty
+        }
+        faces = next
+        viewport = Rect(clip)
+        pressed?.let { old ->
+            val current = next.firstOrNull { it.target === old.target }
+            if (current == null) cancelPressed() else pressed = current
+        }
+        if (changed) invalidateSelf()
     }
     override fun onPreDraw(): Boolean {
         runIndexes.clear()
-        faces.clear()
-        if (!on("连发合并")) {
-            var changed = false
-            rows.values.forEach { if (it.restore()) changed = true }
-            pressed?.target?.cancelPendingInputEvents(); pressed = null
-            if (changed) host.requestLayout()
-            return !changed
+        val clip = Rect()
+        if (!on("连发合并") || !host.getLocalVisibleRect(clip)) {
+            commitFrame(emptyList(), clip)
+            return true
         }
-        host.getLocationInWindow(origin)
-        if (!host.getLocalVisibleRect(visible)) return true
+        if (host.clipToPadding) {
+            clip.left = maxOf(clip.left, host.paddingLeft)
+            clip.top = maxOf(clip.top, host.paddingTop)
+            clip.right = minOf(clip.right, host.width - host.paddingRight)
+            clip.bottom = minOf(clip.bottom, host.height - host.paddingBottom)
+        }
+        val global = Matrix()
+        host.transformMatrixToGlobal(global)
+        if (clip.isEmpty || !global.invert(toHost)) { commitFrame(emptyList(), clip); return true }
         setBounds(0, 0, host.width, host.height)
-        var layoutChanged = false
-        val groups = LinkedHashMap<RunKey, MutableList<Pair<View, RunRow>>>()
-        val iterator = rows.entries.iterator()
-        while (iterator.hasNext()) {
-            val (row, state) = iterator.next()
-            if (!row.isAttachedToWindow || row.parent !== host) {
-                state.restore(); iterator.remove(); continue
-            }
-            state.layout.nicks.forEach { (ref, original) -> ref.get()?.let { nick ->
-                val target = if (state.continued) View.GONE else original
-                if (nick.visibility != target) { nick.visibility = target; layoutChanged = true }
-            } }
-            if (state.layout.spacing.apply(state.continued)) layoutChanged = true
-            groups.getOrPut(state.group) { ArrayList() }.add(row to state)
-        }
-        // 昵称折叠和间距必须先完成测量，禁止画出“原布局一帧→浮动布局”的跳变。
-        if (layoutChanged) { host.requestLayout(); return false }
-        for (group in groups.values) {
+        val groups = LinkedHashMap<RunKey, MutableList<RunRow>>()
+        // 不在这里恢复昵称或间距，不 requestLayout，也不取消正在滚动的一帧。
+        for ((row, state) in rows) if (row.isAttachedToWindow && row.parent === host)
+            groups.getOrPut(state.group) { ArrayList() }.add(state)
+        val next = ArrayList<Face>()
+        for ((key, group) in groups) {
             var firstCenter = Float.POSITIVE_INFINITY
             var lastCenter = Float.NEGATIVE_INFINITY
-            var source: RunAvatar? = null
-            var sourceCenter = Float.NEGATIVE_INFINITY
-            for ((_, state) in group) {
-                var contentTop = Float.POSITIVE_INFINITY
-                var contentBottom = Float.NEGATIVE_INFINITY
+            for (state in group) {
+                var top = Float.POSITIVE_INFINITY
+                var bottom = Float.NEGATIVE_INFINITY
                 for (ref in state.layout.contents) {
                     val content = ref.get() ?: continue
-                    if (!content.isShown || content.height == 0 || content.width == 0) continue
-                    content.getLocationInWindow(position)
-                    val y = (position[1] - origin[1]).toFloat()
-                    contentTop = minOf(contentTop, y)
-                    contentBottom = maxOf(contentBottom, y + content.height)
+                    if (!content.isShown) continue
+                    val rect = rectangle(content, inHost(content)) ?: continue
+                    top = minOf(top, rect.top); bottom = maxOf(bottom, rect.bottom)
                 }
-                // 找不到真实内容时保留原布局，不再拿整行/昵称/时间做猜测定位。
-                if (!contentTop.isFinite() || !contentBottom.isFinite()) {
-                    state.layout.avatars.forEach { it.restore() }; continue
-                }
-                val center = (contentTop + contentBottom) / 2
-                firstCenter = minOf(firstCenter, center); lastCenter = maxOf(lastCenter, center)
-                for (avatar in state.layout.avatars) {
-                    val container = avatar.container.get() ?: continue
-                    val image = avatar.image.get() ?: continue
-                    // 所有原容器都处理；绘制只取有尺寸且 QQ 原本显示的实际头像图。
-                    if (container.visibility == View.VISIBLE) container.visibility = View.INVISIBLE
-                    if (avatar.visibility != View.VISIBLE || image.width == 0 || image.height == 0) continue
-                    if (center >= sourceCenter) { source = avatar; sourceCenter = center }
+                if (top.isFinite() && bottom.isFinite()) {
+                    val center = (top + bottom) / 2
+                    firstCenter = minOf(firstCenter, center); lastCenter = maxOf(lastCenter, center)
                 }
             }
-            val image = source?.image?.get() ?: continue
-            val container = source.container.get() ?: continue
-            val y = floatingAvatarTop(firstCenter, lastCenter, visible.top.toFloat(), visible.bottom.toFloat(),
-                image.height.toFloat(), 4 * host.dp) ?: continue
-            image.getLocationInWindow(position)
-            val imageX = position[0]; val imageY = position[1]
-            container.getLocationInWindow(position)
-            faces.add(Face(image, container, (imageX - origin[0]).toFloat(), y,
-                (imageX - position[0]).toFloat(), (imageY - position[1]).toFloat()))
-            if (!reportedGeometry) {
-                reportedGeometry = true
-                log("TG连发定位：首内容中心=$firstCenter 末内容中心=$lastCenter 头像y=$y 图高=${image.height}，组内可见行=${group.size}")
+            val avatars = group.flatMap { it.layout.avatars }
+            // 尽量保留上帧同一个原图源，不能每滚入一行就切到新的头像组件。
+            val preferred = pressed?.takeIf { it.group == key }?.target
+                ?: faces.firstOrNull { it.group == key }?.target
+            val candidates = avatars.sortedBy { if (it.container.get() === preferred) 0 else 1 }
+            var face: Face? = null
+            for (avatar in candidates) {
+                if (avatar.visibility != View.VISIBLE) continue
+                val image = avatar.image.get() ?: continue
+                val container = avatar.container.get() ?: continue
+                val matrix = inHost(image)
+                val rect = rectangle(image, matrix) ?: continue
+                val y = floatingAvatarTop(firstCenter, lastCenter, clip.top.toFloat(), clip.bottom.toFloat(),
+                    rect.height(), 4 * host.dp) ?: continue
+                val delta = y - rect.top
+                matrix.postTranslate(0f, delta)
+                val targetMatrix = inHost(container).apply { postTranslate(0f, delta) }
+                val inverse = Matrix()
+                if (!targetMatrix.invert(inverse)) continue
+                rect.offset(0f, delta)
+                face = Face(key, image, container, matrix, inverse, rect)
+                break
+            }
+            if (face == null) {
+                // 几何未就绪时不提前藏掉所有原图；完全离屏的组照常交给列表裁剪。
+                avatars.forEach { it.restore() }
+            } else {
+                avatars.forEach { it.container.get()?.let { view ->
+                    if (view.visibility == View.VISIBLE) view.visibility = View.INVISIBLE
+                } }
+                next.add(face)
             }
         }
+        commitFrame(next, clip)
         return true
     }
     override fun draw(canvas: Canvas) {
         for (face in faces) {
             val save = canvas.save()
-            canvas.clipRect(visible)
-            canvas.translate(face.x, face.y)
+            canvas.clipRect(viewport)
+            canvas.concat(face.matrix)
             face.view.draw(canvas)
             canvas.restoreToCount(save)
         }
     }
+    private fun cancelPressed() {
+        val face = pressed ?: return
+        val now = android.os.SystemClock.uptimeMillis()
+        val cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, downX, downY, 0)
+        cancel.transform(face.toTarget)
+        try { face.target.dispatchTouchEvent(cancel) } finally { cancel.recycle(); pressed = null }
+    }
     fun touch(event: MotionEvent): Boolean {
-        if (!on("连发合并")) { pressed?.target?.cancelPendingInputEvents(); pressed = null; return false }
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-            pressed = faces.lastOrNull { event.x >= it.x && event.x < it.x + it.view.width &&
-                event.y >= maxOf(visible.top.toFloat(), it.y) && event.y < minOf(visible.bottom.toFloat(), it.y + it.view.height) }
+            if (!on("连发合并")) return false
+            pressed = faces.lastOrNull { viewport.contains(event.x.toInt(), event.y.toInt()) && it.rect.contains(event.x, event.y) }
+            tracking = pressed != null
             downX = event.x; downY = event.y; dragging = false
         }
-        val face = pressed ?: return false
-        // 点头像仍可起手滚动：原列表接收完整手势，超过系统触摸阈值就取消头像点击。
+        if (!tracking) return false
+        // DOWN 先让列表停止旧惯性；之后列表就是触摸目标，只走 onTouchEvent。
+        // 不能在 UP 再调 onInterceptTouchEvent：RecyclerView 会先清速度，导致惯性失效。
+        if (event.actionMasked == MotionEvent.ACTION_DOWN && host.onInterceptTouchEvent(event)) {
+            cancelPressed(); dragging = true
+        }
         host.onTouchEvent(event)
-        val move = !dragging && (kotlin.math.abs(event.x - downX) > slop ||
-            kotlin.math.abs(event.y - downY) > slop || event.actionMasked == MotionEvent.ACTION_POINTER_DOWN)
-        val copy = MotionEvent.obtain(event)
-        copy.offsetLocation(-face.x + face.touchX, -face.y + face.touchY)
-        if (move) { copy.action = MotionEvent.ACTION_CANCEL; dragging = true }
-        try { if (!dragging || move) face.target.dispatchTouchEvent(copy) } finally { copy.recycle() }
-        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) pressed = null
+        if (!on("连发合并")) cancelPressed()
+        val move = kotlin.math.abs(event.x - downX) > slop || kotlin.math.abs(event.y - downY) > slop ||
+            event.actionMasked == MotionEvent.ACTION_POINTER_DOWN
+        if (!dragging && move) { cancelPressed(); dragging = true }
+        pressed?.let { face ->
+            val copy = MotionEvent.obtain(event)
+            copy.transform(face.toTarget)
+            try { face.target.dispatchTouchEvent(copy) } finally { copy.recycle() }
+        }
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            pressed = null; tracking = false
+        }
         return true
     }
     override fun onViewDetachedFromWindow(view: View) {
-        rows.values.forEach { it.restore() }; faces.clear(); pressed?.target?.cancelPendingInputEvents(); pressed = null
+        cancelPressed()
+        if (tracking) {
+            val now = android.os.SystemClock.uptimeMillis()
+            val cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, downX, downY, 0)
+            try { host.onTouchEvent(cancel) } finally { cancel.recycle(); tracking = false }
+        }
+        rows.values.forEach { it.restore() }
+        commitFrame(emptyList(), Rect())
         if (host.viewTreeObserver.isAlive) host.viewTreeObserver.removeOnPreDrawListener(this)
         host.overlay.remove(this)
     }
@@ -532,12 +593,18 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
         host.removeOnAttachStateChangeListener(this)
     }
     override fun onViewAttachedToWindow(view: View) {
+        refresh()
         host.overlay.add(this)
         host.viewTreeObserver.addOnPreDrawListener(this)
     }
     override fun setAlpha(alpha: Int) = Unit
     override fun setColorFilter(filter: ColorFilter?) = Unit
     @Deprecated("Drawable opacity") override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+fun refreshChatLayout() {
+    runAvatars.values.mapNotNull { it.get() }.forEach { it.refresh() }
+    pendingRun.values.forEach { run -> run.layout?.apply(run.continued, on("连发合并")) }
 }
 
 fun resetChatLayout() {
@@ -549,7 +616,9 @@ fun resetChatLayout() {
 /** 单条严格按内容中心；长组跟随最后一条内容中心，并约束在组首与可见底部之间。 */
 internal fun floatingAvatarTop(firstCenter: Float, lastCenter: Float, viewportTop: Float, viewportBottom: Float,
     height: Float, gap: Float): Float? {
-    if (!firstCenter.isFinite() || !lastCenter.isFinite() || height <= 0 || firstCenter > lastCenter ||
+    if (!firstCenter.isFinite() || !lastCenter.isFinite() || !height.isFinite() || height <= 0 ||
+        !viewportTop.isFinite() || !viewportBottom.isFinite() || viewportBottom <= viewportTop ||
+        !gap.isFinite() || gap < 0 || firstCenter > lastCenter ||
         lastCenter + height / 2 <= viewportTop || firstCenter - height / 2 >= viewportBottom) return null
     return maxOf(firstCenter, minOf(lastCenter, viewportBottom - height / 2 - gap)) - height / 2
 }

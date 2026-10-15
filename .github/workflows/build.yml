@@ -45,7 +45,9 @@ jobs:
           cat qq/qq.a* > qq.apk && rm -rf qq
           ls -l qq.apk
       - name: 逐个核落点
-        run: python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin --quiet
+        run: |
+          python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin --quiet
+          python3 -m unittest discover -s tools -p 'test_*.py'
 
   apk:
     runs-on: ubuntu-24.04
