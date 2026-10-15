@@ -19,6 +19,26 @@ class ProtoTest {
         assertTrue(exactBadgeText(null, 12345) == null)
     }
 
+    @Test fun messageRunsBreakOnSenderTimeSystemAndMidnight() {
+        assertTrue(continuesMessageRun("a", "a", 1300, 1000, 2, 2))
+        assertFalse(continuesMessageRun("a", "b", 1001, 1000, 2, 2))
+        assertFalse(continuesMessageRun("a", "a", 1301, 1000, 2, 2))
+        assertFalse(continuesMessageRun("a", "a", 999, 1000, 2, 2))
+        assertFalse(continuesMessageRun("a", "a", 1001, 1000, 5, 2))
+        assertFalse(continuesMessageRun("a", "a", 1001, 1000, 2, 29))
+        assertFalse(continuesMessageRun(null, null, 1001, 1000, 2, 2))
+        assertFalse(continuesMessageRun("a", "a", 57601, 57599, 2, 2))
+    }
+
+    @Test fun floatingAvatarStaysInsideGroupAndViewport() {
+        assertEquals(146f, floatingAvatarTop(0f, 200f, 0f, 500f, 50f, 4f))
+        assertEquals(446f, floatingAvatarTop(-300f, 900f, 0f, 500f, 50f, 4f))
+        assertEquals(420f, floatingAvatarTop(420f, 480f, 0f, 460f, 50f, 4f))
+        assertTrue(floatingAvatarTop(-100f, -1f, 0f, 500f, 50f, 4f) == null)
+        assertTrue(floatingAvatarTop(501f, 600f, 0f, 500f, 50f, 4f) == null)
+        assertTrue(floatingAvatarTop(0f, 20f, 0f, 500f, 50f, 4f) == null)
+    }
+
     private fun varint(v: Long): ByteArray {
         var x = v
         val out = ArrayList<Byte>()

@@ -1,14 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself
 
+import android.graphics.Canvas
+import android.graphics.ColorFilter
+import android.graphics.PixelFormat
+import android.graphics.Rect
+import android.graphics.drawable.Drawable
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.view.ViewConfiguration
+import android.view.ViewTreeObserver
+import java.lang.ref.WeakReference
 import org.json.JSONArray
 import org.json.JSONObject
 import java.lang.reflect.Proxy
 import java.util.Collections
 import java.util.WeakHashMap
-import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.abs
 
 /** 聊天：会员装饰归零、防撤回、连发合并、转发、「+」面板、昵称行、轻互动、表情雨。 */
 
@@ -189,49 +197,242 @@ fun stripSyncRecall(sync: ByteArray): ByteArray {
     return out.toByteArray()
 }
 
-// ---- 连发合并：同一人 5 分钟内连着发的消息，后面那些不再画头像（占位留着，气泡不会往边上挪）和昵称行。
-// 列表适配器绑定每一行时先看它跟上一行是不是「连发」，头像 / 昵称组件绑定完再按结果折起来。
+// ---- TG 连发：昵称留在组首，头像贴着消息组可见底部；不搬动 QQ 的视图或改列表布局。
 
-private val grouped: MutableSet<Long> = Collections.newSetFromMap(ConcurrentHashMap())
-private val folded = WeakHashMap<View, Int>()
+private data class RunBinding(val group: Long, val continued: Boolean, var avatar: WeakReference<View>? = null, var nick: WeakReference<View>? = null)
+private val bindingRun = ThreadLocal<RunBinding>()
+private val pendingRun = WeakHashMap<View, RunBinding>()
+private val runAvatars = WeakHashMap<ViewGroup, WeakReference<RunAvatars>>()
 
 fun groupRuns() {
-    val adapter = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a")
-    // 取数据和取表头数的方法装的时候就解析好：找不到直接 ✗ 报出来，别在每次绑定时静悄悄空转。
-    val data = adapter.getMethod("d0")
-    val head = adapter.getMethod("i0")
-    hook(adapter.method("n0")) { chain ->
-        val self = chain.thisObject
-        val list = runCatching { data.invoke(self)?.let { it.javaClass.getMethod("u").invoke(it) } as? List<*> }.getOrNull()
-        val i = chain.getArg(1) as Int - (runCatching { head.invoke(self) as Int }.getOrNull() ?: 0)
-        val cur = list?.getOrNull(i)
-        msgId(cur)?.let { if (follows(list?.getOrNull(i - 1), cur)) grouped.add(it) else grouped.remove(it) }
-        chain.proceed()
-    }
-    val avatar = cls("com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent")
-    val nick = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2")
-    for ((c, mode) in listOf(avatar to View.INVISIBLE, nick to View.GONE)) {
-        val root = c.getMethod("f1") // 组件的根视图，声明在 MVVM 基类上
-        hook(c.method("d1")) { chain ->
-            // 先还原上一次折的，让 QQ 自己的绑定从干净状态开始；绑完再按需要折。
-            val v = runCatching { root.invoke(chain.thisObject) as? View }.getOrNull()
-            v?.let { view -> folded.remove(view)?.let { view.visibility = it } }
-            chain.proceed().also {
-                val id = runCatching { msgId(chain.getArg(1)) }.getOrNull()
-                if (v != null && id != null && id in grouped) { folded[v] = v.visibility; v.visibility = mode }
+    // 生命周期钩子必须在关开关时仍恢复和跟踪复用；是否改变视图由绘制器按开关判断。
+    val owner = feature
+    feature = null
+    try {
+        val adapter = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a")
+        val data = adapter.getMethod("d0")
+        val head = adapter.getMethod("i0")
+        var reported = false
+        fun register(row: View, run: RunBinding) {
+            if (!row.isAttachedToWindow || pendingRun[row] !== run) return
+            val host = generateSequence(row.parent) { it.parent }.filterIsInstance<ViewGroup>()
+                .firstOrNull { parent -> generateSequence<Class<*>>(parent.javaClass) { it.superclass }
+                    .any { it.name == "androidx.recyclerview.widget.RecyclerView" } } ?: return
+            val renderer = runAvatars[host]?.get() ?: RunAvatars(host).also {
+                runAvatars[host] = WeakReference(it)
+            }
+            renderer.bind(row, run)
+            if (!reported && run.avatar?.get() != null && run.nick?.get() != null) {
+                reported = true; log("TG连发：已绑定原头像与昵称，浮动绘制器已接入")
             }
         }
+        // d1/f1 声明可能在共用基类，先筛运行时组件，避免兄弟组件被重复处理。
+        for ((type, avatar) in listOf(
+            cls("com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent") to true,
+            cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2") to false,
+        )) {
+            val root = type.getMethod("f1")
+            hook(type.method("d1")) { chain ->
+                if (!type.isInstance(chain.thisObject)) return@hook chain.proceed()
+                val inFlight = bindingRun.get()
+                val oldView = runCatching { root.invoke(chain.thisObject) as? View }.getOrNull()
+                val row = if (inFlight == null) oldView?.let { view ->
+                    generateSequence(view) { it.parent as? View }.firstOrNull { pendingRun.containsKey(it) }
+                } else null
+                // 图片/昵称的局部更新也先还原，不能把自己的 INVISIBLE/GONE 当成 QQ 新状态。
+                row?.let { v -> runAvatars.values.mapNotNull { it.get() }.forEach { it.unbind(v) } }
+                chain.proceed().also {
+                    val run = inFlight ?: row?.let { pendingRun[it] }
+                    val view = runCatching { root.invoke(chain.thisObject) as? View }.getOrNull()
+                    if (run != null) {
+                        if (avatar) run.avatar = WeakReference(view) else run.nick = WeakReference(view)
+                        if (row != null) register(row, run)
+                    }
+                }
+            }
+        }
+        hook(adapter.method("n0")) { chain ->
+            val self = chain.thisObject
+            val row = runCatching { chain.getArg(0)?.get("itemView") as? View }.getOrNull()
+            // 复用前恢复，QQ 本轮绑定的 visibility 才能成为新的原值。
+            row?.let { v -> pendingRun.remove(v); runAvatars.values.mapNotNull { it.get() }.forEach { it.unbind(v) } }
+            val list = runCatching { data.invoke(self)?.let { it.javaClass.getMethod("u").invoke(it) } as? List<*> }.getOrNull()
+            val index = chain.getArg(1) as Int - (head.invoke(self) as Int)
+            var start = index
+            if (list != null && index in list.indices) {
+                while (start > 0 && follows(list[start - 1], list[start])) start--
+            }
+            val group = list?.getOrNull(start)?.let(::msgId)?.takeIf { it != 0L }
+            val run = group?.let { RunBinding(it, start < index) }
+            val previous = bindingRun.get()
+            bindingRun.set(run)
+            try {
+                chain.proceed().also {
+                    if (row != null && run != null) {
+                        pendingRun[row] = run
+                        if (row.isAttachedToWindow) register(row, run) else row.post { register(row, run) }
+                    }
+                }
+            } finally {
+                bindingRun.set(previous)
+            }
+        }
+        // 绘制位置改变后，点击仍交给 QQ 原头像；不覆盖列表原有的触摸监听器。
+        hook(ViewGroup::class.java.getDeclaredMethod("dispatchTouchEvent", MotionEvent::class.java)) { chain ->
+            val renderer = runAvatars[chain.thisObject]?.get()
+            if (renderer?.touch(chain.getArg(0) as MotionEvent) == true) true else chain.proceed()
+        }
+    } finally { feature = owner }
+}
+
+private class RunRow(run: RunBinding) {
+    val group = run.group
+    val continued = run.continued
+    val avatar = run.avatar ?: WeakReference<View>(null)
+    val nick = run.nick ?: WeakReference<View>(null)
+    val avatarVisibility = avatar.get()?.visibility
+    val nickVisibility = nick.get()?.visibility
+    fun restore() {
+        avatar.get()?.let { if (avatarVisibility != null) it.visibility = avatarVisibility }
+        nick.get()?.let { if (nickVisibility != null) it.visibility = nickVisibility }
     }
 }
 
-/** 两条都是正经消息（不是灰字 5 / 开场白 29）、同一发送者、相隔不到 5 分钟。 */
+/** 一个列表一层浮动绘制；直接画 QQ 原头像，不缓存图片、不改头像层级、不关父容器裁剪。 */
+private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObserver.OnPreDrawListener,
+    View.OnAttachStateChangeListener {
+    private val rows = WeakHashMap<View, RunRow>()
+    private data class Face(val view: View, val x: Float, val y: Float)
+    private val faces = ArrayList<Face>()
+    private var pressed: Face? = null
+    private var downX = 0f
+    private var downY = 0f
+    private var dragging = false
+    private val slop = ViewConfiguration.get(host.context).scaledTouchSlop
+    private val origin = IntArray(2)
+    private val position = IntArray(2)
+    private val visible = Rect()
+    init {
+        host.overlay.add(this)
+        host.viewTreeObserver.addOnPreDrawListener(this)
+        host.addOnAttachStateChangeListener(this)
+    }
+    fun unbind(row: View) {
+        val state = rows.remove(row) ?: return
+        val avatar = state.avatar.get()
+        if (pressed?.view === avatar) { avatar?.cancelPendingInputEvents(); pressed = null }
+        faces.removeAll { it.view === avatar }
+        state.restore()
+    }
+    fun bind(row: View, run: RunBinding) { unbind(row); rows[row] = RunRow(run); host.invalidate() }
+    override fun onPreDraw(): Boolean {
+        faces.clear()
+        if (!on("连发合并")) {
+            rows.values.forEach { it.restore() }
+            pressed?.view?.cancelPendingInputEvents(); pressed = null
+            return true
+        }
+        host.getLocationInWindow(origin)
+        if (!host.getLocalVisibleRect(visible)) return true
+        setBounds(0, 0, host.width, host.height)
+        val groups = LinkedHashMap<Long, MutableList<Pair<View, RunRow>>>()
+        val iterator = rows.entries.iterator()
+        while (iterator.hasNext()) {
+            val (row, state) = iterator.next()
+            if (!row.isAttachedToWindow || row.parent !== host) {
+                state.restore(); iterator.remove(); continue
+            }
+            state.nick.get()?.let { nick ->
+                val target = if (state.continued) View.GONE else state.nickVisibility
+                if (target != null && nick.visibility != target) nick.visibility = target
+            }
+            groups.getOrPut(state.group) { ArrayList() }.add(row to state)
+        }
+        for (group in groups.values) {
+            var top = Float.POSITIVE_INFINITY
+            var bottom = Float.NEGATIVE_INFINITY
+            var source: View? = null
+            var sourceBottom = Float.NEGATIVE_INFINITY
+            for ((row, state) in group) {
+                row.getLocationInWindow(position)
+                val y = (position[1] - origin[1]).toFloat()
+                top = minOf(top, y); bottom = maxOf(bottom, y + row.height)
+                val avatar = state.avatar.get() ?: continue
+                if (state.avatarVisibility != View.VISIBLE || avatar.width == 0 || avatar.height == 0) continue
+                if (avatar.visibility != View.INVISIBLE) avatar.visibility = View.INVISIBLE
+                if (y + row.height > sourceBottom) { source = avatar; sourceBottom = y + row.height }
+            }
+            val avatar = source ?: continue
+            val y = floatingAvatarTop(top, bottom, visible.top.toFloat(), visible.bottom.toFloat(),
+                avatar.height.toFloat(), 4 * host.dp) ?: continue
+            avatar.getLocationInWindow(position)
+            faces.add(Face(avatar, (position[0] - origin[0]).toFloat(), y))
+        }
+        return true
+    }
+    override fun draw(canvas: Canvas) {
+        for (face in faces) {
+            val save = canvas.save()
+            canvas.clipRect(visible)
+            canvas.translate(face.x, face.y)
+            face.view.draw(canvas)
+            canvas.restoreToCount(save)
+        }
+    }
+    fun touch(event: MotionEvent): Boolean {
+        if (!on("连发合并")) { pressed?.view?.cancelPendingInputEvents(); pressed = null; return false }
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            pressed = faces.lastOrNull { event.x >= it.x && event.x < it.x + it.view.width &&
+                event.y >= maxOf(visible.top.toFloat(), it.y) && event.y < minOf(visible.bottom.toFloat(), it.y + it.view.height) }
+            downX = event.x; downY = event.y; dragging = false
+        }
+        val face = pressed ?: return false
+        // 点头像仍可起手滚动：原列表接收完整手势，超过系统触摸阈值就取消头像点击。
+        host.onTouchEvent(event)
+        val move = !dragging && (kotlin.math.abs(event.x - downX) > slop ||
+            kotlin.math.abs(event.y - downY) > slop || event.actionMasked == MotionEvent.ACTION_POINTER_DOWN)
+        val copy = MotionEvent.obtain(event)
+        copy.offsetLocation(-face.x, -face.y)
+        if (move) { copy.action = MotionEvent.ACTION_CANCEL; dragging = true }
+        try { if (!dragging || move) face.view.dispatchTouchEvent(copy) } finally { copy.recycle() }
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) pressed = null
+        return true
+    }
+    override fun onViewDetachedFromWindow(view: View) {
+        rows.values.forEach { it.restore() }; faces.clear(); pressed?.view?.cancelPendingInputEvents(); pressed = null
+        if (host.viewTreeObserver.isAlive) host.viewTreeObserver.removeOnPreDrawListener(this)
+        host.overlay.remove(this)
+    }
+    override fun onViewAttachedToWindow(view: View) {
+        host.overlay.add(this)
+        host.viewTreeObserver.addOnPreDrawListener(this)
+    }
+    override fun setAlpha(alpha: Int) = Unit
+    override fun setColorFilter(filter: ColorFilter?) = Unit
+    @Deprecated("Drawable opacity") override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+/** 头像贴组底，但不能越过组首或可见窗口底部；组已完全离屏就不画。 */
+internal fun floatingAvatarTop(top: Float, bottom: Float, viewportTop: Float, viewportBottom: Float,
+    height: Float, gap: Float): Float? {
+    if (height <= 0 || bottom <= viewportTop || top >= viewportBottom || bottom - top < height) return null
+    return maxOf(top, minOf(bottom - height - gap, viewportBottom - height - gap))
+}
+
+/** 跨日、倒序、不同发送者和系统消息均断组；连续消息只合并五分钟内的。 */
+internal fun continuesMessageRun(sender: String?, previousSender: String?, time: Long, previousTime: Long,
+    type: Int?, previousType: Int?): Boolean = !sender.isNullOrEmpty() && sender == previousSender &&
+    type != null && previousType != null && type !in setOf(5, 29) && previousType !in setOf(5, 29) &&
+    time >= previousTime && time - previousTime <= 300 &&
+    (time + 8 * 3600) / 86400 == (previousTime + 8 * 3600) / 86400
+
 private fun follows(prev: Any?, cur: Any?): Boolean {
     val a = record(prev) ?: return false
     val b = record(cur) ?: return false
-    val sender = a.get("senderUid") as? String
-    return !sender.isNullOrEmpty() && sender == b.get("senderUid") &&
-        a.get("msgType") !in setOf(5, 29) && b.get("msgType") !in setOf(5, 29) &&
-        abs((b.get("msgTime") as Long) - (a.get("msgTime") as Long)) <= 300
+    val t0 = a.get("msgTime") as? Long ?: return false
+    val t1 = b.get("msgTime") as? Long ?: return false
+    return continuesMessageRun(b.get("senderUid") as? String, a.get("senderUid") as? String,
+        t1, t0, b.get("msgType") as? Int, a.get("msgType") as? Int)
 }
 
 private fun record(item: Any?): Any? = item?.let { runCatching { it.javaClass.getMethod("getMsgRecord").invoke(it) }.getOrNull() }

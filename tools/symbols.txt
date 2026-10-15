@@ -225,3 +225,6 @@ text   腾讯文档
 text   打卡
 text   天气
 text   等级
+
+# TG 连发头像浮层：祖先列表类型来自真包
+class  androidx.recyclerview.widget.RecyclerView
