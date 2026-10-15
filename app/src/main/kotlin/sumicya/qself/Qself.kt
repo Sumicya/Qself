@@ -21,7 +21,7 @@ val features = listOf(
     Feature("玻璃底栏", true, "底栏浮成一颗玻璃胶囊", {}),
     Feature("Monet取色", true, "玻璃的颜色跟壁纸走", {}),
     Feature("藏频道动态", true, "底栏藏掉频道/动态/小世界", {}),
-    Feature("TG输入栏", true, "原生输入区玻璃胶囊，保留输入框与全部按钮", {}),
+    Feature("TG输入栏", true, "原生输入区玻璃胶囊，保留输入框与全部按钮", ::inputLayout),
     Feature("标题栏侧栏精简", true, "藏一起听/一起看和侧栏会员那排", ::drawerMenu),
     Feature("统一气泡", true, "充值气泡归零，按默认画", ::plainBubble),
     Feature("统一字体", true, "魔法字体归零", ::plainFont),

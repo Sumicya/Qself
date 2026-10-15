@@ -304,36 +304,6 @@ private fun sheet(anchor: View) {
         leftMargin = insets?.left ?: 0; rightMargin = insets?.right ?: 0
         topMargin = insets?.top ?: 0; bottomMargin = insets?.bottom ?: 0
     })
-    // 只有背景/标题接管拖动，开关和 ScrollView 保留自己的点击及滚动。
-    var startX = 0f; var startY = 0f; var baseX = 0f; var baseY = 0f; var moved = false
-    val slop = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
-    val drag = View.OnTouchListener { view, event ->
-        if (closing) return@OnTouchListener true
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                startX = event.rawX; startY = event.rawY
-                baseX = card.translationX; baseY = card.translationY; moved = false
-            }
-            MotionEvent.ACTION_MOVE -> {
-                val dx = event.rawX - startX; val dy = event.rawY - startY
-                if (kotlin.math.abs(dx) > slop || kotlin.math.abs(dy) > slop) moved = true
-                if (moved) {
-                    card.animate().cancel(); card.scaleX = 1f; card.scaleY = 1f
-                    val edge = 16 * dp
-                    val lowX = (insets?.left ?: 0) + edge - card.left
-                    val highX = decor.width - (insets?.right ?: 0) - edge - card.right
-                    val lowY = (insets?.top ?: 0) + edge - card.top
-                    val highY = decor.height - (insets?.bottom ?: 0) - edge - card.bottom
-                    card.translationX = (baseX + dx).coerceIn(lowX, maxOf(lowX, highX))
-                    card.translationY = (baseY + dy).coerceIn(lowY, maxOf(lowY, highY))
-                }
-            }
-            MotionEvent.ACTION_UP -> if (!moved && view === dim) view.performClick()
-            MotionEvent.ACTION_CANCEL -> moved = true
-        }
-        true
-    }
-    dim.setOnTouchListener(drag); card.setOnTouchListener(drag); heading.setOnTouchListener(drag)
     dim.setOnClickListener { close() }
     dim.isFocusableInTouchMode = true
     dim.setOnKeyListener { _, key, event ->

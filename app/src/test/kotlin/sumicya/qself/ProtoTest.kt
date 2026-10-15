@@ -10,6 +10,32 @@ import org.junit.Test
 
 /** 纯逻辑回归检查：防撤回 protobuf 判断与 99+ 精确数字替换条件。 */
 class ProtoTest {
+    @Test fun badgeBindingRetainsRealCountBeforeSetRedTextResetsIt() {
+        val original = arrayOf<Any?>(null, 3, 12345, 99, "")
+        val fixed = unclampedBadgeArgs(original)
+        assertEquals(12345, fixed[2])
+        assertEquals(Int.MAX_VALUE, fixed[3])
+        assertEquals(99, original[3])
+        // 原生 d.a：count > limit 会转文字且丢失 mNum；修正后走 setRedNum 真数量。
+        assertTrue((original[2] as Int) > (original[3] as Int))
+        assertFalse((fixed[2] as Int) > (fixed[3] as Int))
+        for (style in listOf(1, 2, 5, 6, 11)) {
+            val wording = arrayOf<Any?>(null, style, 12345, 99, "NEW")
+            assertSame(wording, unclampedBadgeArgs(wording))
+        }
+        val small = arrayOf<Any?>(null, 3, 99, 99, "")
+        assertSame(small, unclampedBadgeArgs(small))
+    }
+
+    @Test fun bottomBackgroundForwardsOnlyVerticalDragsAfterSlop() {
+        assertFalse(verticalBarDrag(0f, 8f, 8))
+        assertTrue(verticalBarDrag(2f, 9f, 8))
+        assertTrue(verticalBarDrag(0f, -9f, 8))
+        assertFalse(verticalBarDrag(9f, 2f, 8))
+        assertFalse(verticalBarDrag(9f, 9f, 8))
+        assertFalse(verticalBarDrag(0f, 0f, 8))
+    }
+
     @Test fun exactUnreadBadgeCountOnlyExpandsOverflowLabel() {
         assertEquals("100", exactBadgeText("99+", 100))
         assertEquals("12345", exactBadgeText("99+", 12345))

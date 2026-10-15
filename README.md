@@ -5,17 +5,17 @@
 画出来的 ✓/–/✗ 加一句描述（✗ = 这版 QQ 没装上），存进 QQ 自己的 SharedPreferences。
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
-但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，185 条）——换版本先看那张表红哪条，别猜。
+但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，198 条）——换版本先看那张表红哪条，别猜。
 
 ## 做了什么
 
 外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
 - 首页底栏浮成一颗居中的液态玻璃胶囊（每个页签 56dp，只包住页签）：不模糊，系统 `RenderEffect` + AGSL 做边缘折射、
   贴边高光、提饱和、淡色罩，没有描边；选中项是一块弹着滑过去的亮胶囊，按下时透镜轻微凹陷并浮起柔光
-- 底栏角标按真实计数入口展开「99+」；TextView 绑定器取第 3 个参数，数字宽度与左右内边距一同调整（仍待设备验收）
+- 底栏角标按真实计数入口展开「99+」；底栏 QUIBadge 在 widget.d.a 转文字之前保留第 3 个参数的真实数量，数字宽度与左右内边距一同调整（仍待设备验收）
 - **Monet 取色**：玻璃的罩色、选中圆、圆钮的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色
-- TG 输入栏修复版：只在 QQ 原生 EditText 上绘制玻璃胶囊，保留原输入框、发送、语音、表情和附件按钮；撤掉搬移输入区、镜像按钮、隐藏图标带和压缩兄弟布局的实现。本次升级重新启用一次，之后可自行关闭；清理已核实的 InputLinearLayout / 图标带背景及与输入行对齐的背景模糊层；图标只调整剩余间隙，不改按钮宽度与权重。输入与键盘效果待真机验收。
+- TG 输入栏：接入 NT 的 InputEditTextVBDelegate.U，按真实 EditText 唯一管理玻璃胶囊，不再只等旧版图标带出现，保留原输入框、发送、语音、表情和附件按钮；撤掉搬移输入区、镜像按钮、隐藏图标带和压缩兄弟布局的实现。本次升级重新启用一次，之后可自行关闭；开关立即还原/应用且不再强制重开；清理已核实的 NT 输入行及旧版 InputLinearLayout / 图标带背景及与输入行对齐的背景模糊层；图标只调整剩余间隙，不改按钮宽度与权重。输入与键盘效果待真机验收。
 - 藏掉「频道」「动态」「小世界」页签
 - 聊天标题栏去掉一起听 / 一起看 / 群游戏那排；侧栏去掉打卡、天气、等级、会员、装扮、钱包一类的入口（数据源和视图两头都拦）
 - 隐藏好友聊天标题栏那行在线状态（在线 / 手机在线 / WiFi在线 / 忙碌 / 隐身…）
@@ -45,7 +45,7 @@
 1. Actions 里下载最新一次构建的 APK（或 `gh run download -R Sumicya/Qself`），安装
 2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开
 3. 主页底栏胶囊旁边那颗圆钮（右边放不下就在胶囊右上方）：点开勾选即时生效（钩子每次被调用都查开关）；
-   输入栏开关可恢复原外观；从旧的搬移布局版本升级时必须强行停止 QQ 再打开。底栏关闭会还原布局、背景与内边距；菜单标题/空白背景支持在屏幕边缘以内拖动，宽度不变、只有限增高；菜单支持恢复默认，✗ 项可查看安装失败原因
+   输入栏开关可恢复原外观；从旧的搬移布局版本升级时必须强行停止 QQ 再打开。底栏关闭会还原布局、背景与内边距；菜单不拖动、宽度不变、只有限增高；底栏背景的纵向拖动在超过触摸阈值后转交原生列表，保留页签点击与徽标拖动；菜单支持恢复默认，✗ 项可查看安装失败原因
 4. 每个 QQ 进程启动时打一行日志，`logcat -s Qself` 或 LSPosed 管理器的日志页可见，形如
    `Qself <版本> @ com.tencent.mobileqq ✓系统WebView ✓防撤回 … ✗某功能(NoSuchMethodException: …)`
    —— ✗ 就是那个功能在这版 QQ 里找不到落点，其余不受影响。**把这一行贴回来就能修。**
@@ -75,7 +75,7 @@ ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
 
 ```sh
 git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
-python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 185 条全绿才算数
+python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 198 条全绿才算数
 python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
 ```
 

@@ -2,6 +2,7 @@
 package sumicya.qself
 
 import android.graphics.Paint
+import android.view.MotionEvent
 import android.view.Gravity
 import android.app.Activity
 import android.app.Instrumentation
@@ -26,6 +27,13 @@ fun looks() {
     hook(Instrumentation::class.java.getMethod("callActivityOnResume", Activity::class.java)) { chain ->
         chain.proceed().also { watch((chain.getArg(0) as Activity).window.decorView) }
     }
+    hook(ViewGroup::class.java.getDeclaredMethod("dispatchTouchEvent", MotionEvent::class.java)) { chain ->
+        val source = chain.thisObject as? ViewGroup
+        val bar = source?.let { barTouchHosts[it]?.get() ?: it }
+        val state = floatStates[bar]?.touch
+        if (state == null || source == null) chain.proceed()
+        else state.dispatch(source, chain.getArg(0) as MotionEvent) { event -> chain.proceed(arrayOf<Any?>(event)) as Boolean }
+    }
 }
 
 val View.dp: Float get() = resources.displayMetrics.density
@@ -34,7 +42,8 @@ private val watched = WeakHashMap<View, WeakReference<AppearanceObserver>>()
 private var preferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
 fun refreshLooks() {
-    if (!on("显示具体未读条数")) restoreBadgeLayouts()
+    if (!on("显示具体未读条数")) restoreBadgeLayouts() else refreshNativeBadges?.invoke()
+    refreshInputLayout()
     refreshChatLayout()
     watched.values.mapNotNull { it.get() }.forEach { it.refresh() }
 }
@@ -99,6 +108,7 @@ private fun walk(v: View, inDrawer: Boolean) {
     when {
         name.endsWith(".QQTabLayout") -> { homeBar(v as ViewGroup); return }
         name.endsWith(".PanelIconLinearLayout") -> { tgInput(v as ViewGroup); return }
+        name == "com.tencent.mobileqq.aio.input.edit.AIOEditText" && v is android.widget.EditText -> { tgInput(v); return }
         else -> trim(v, inDrawer)
     }
     if (!inDrawer && generateSequence<Class<*>>(v.javaClass) { it.superclass }
@@ -181,6 +191,7 @@ private class BarState(bar: ViewGroup) {
     val padding = intArrayOf(bar.paddingLeft, bar.paddingTop, bar.paddingRight, bar.paddingBottom)
     val stripPadding = bar.getChildAt(0)?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
     val tabs = WeakHashMap<View, Pair<ViewGroup.LayoutParams, IntArray>>()
+    val touch = BarTouch(bar)
     var scrollListener: ViewTreeObserver.OnScrollChangedListener? = null
     var layoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
     var drawListener: ViewTreeObserver.OnPreDrawListener? = null
@@ -188,6 +199,8 @@ private class BarState(bar: ViewGroup) {
 private val floatStates = WeakHashMap<ViewGroup, BarState>()
 private fun restoreBar(bar: ViewGroup) {
     val state = floatStates.remove(bar) ?: return
+    (bar.parent as? ViewGroup)?.let { barTouchHosts.remove(it) }
+    state.touch.dispose()
     if (bar.viewTreeObserver.isAlive) {
         state.scrollListener?.let(bar.viewTreeObserver::removeOnScrollChangedListener)
         state.layoutListener?.let(bar.viewTreeObserver::removeOnGlobalLayoutListener)
@@ -242,6 +255,7 @@ private fun float(bar: ViewGroup) {
     bar.outlineProvider = capsule()
     bar.clipToOutline = true
     val dp = bar.dp
+    (bar.parent as? ViewGroup)?.let { barTouchHosts[it] = WeakReference(bar) }
     bar.elevation = 4 * dp
     // 胶囊只包住页签、居中：iOS 那样不是通栏。
     bar.layoutParams?.let {
@@ -273,6 +287,119 @@ private fun float(bar: ViewGroup) {
             .also(bar.viewTreeObserver::addOnPreDrawListener)
     }
 }
+
+/** DOWN 仍走原生点击；只把越过阈值的纵向拖动交还背后的原生滚动容器。 */
+internal fun verticalBarDrag(dx: Float, dy: Float, slop: Int): Boolean =
+    kotlin.math.abs(dy) > slop && kotlin.math.abs(dy) > kotlin.math.abs(dx)
+
+private class BarTouch(bar: ViewGroup) {
+    private val bar = WeakReference(bar)
+    private var owner: WeakReference<ViewGroup>? = null
+    private var target: WeakReference<View>? = null
+    private var down: MotionEvent? = null
+    private var forwarding = false
+    private val slop = android.view.ViewConfiguration.get(bar.context).scaledTouchSlop
+    private val attach = object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(view: View) = Unit
+        override fun onViewDetachedFromWindow(view: View) = cancel()
+    }
+    init { bar.addOnAttachStateChangeListener(attach) }
+    fun dispose() { cancel(); bar.get()?.removeOnAttachStateChangeListener(attach) }
+
+    private fun point(source: View, dest: View, x: Float, y: Float): FloatArray {
+        val matrix = android.graphics.Matrix()
+        source.transformMatrixToGlobal(matrix); dest.transformMatrixToLocal(matrix)
+        return floatArrayOf(x, y).also(matrix::mapPoints)
+    }
+    private fun contains(source: View, dest: View, event: MotionEvent): Boolean {
+        val p = point(source, dest, event.x, event.y)
+        return p[0] >= 0 && p[0] < dest.width && p[1] >= 0 && p[1] < dest.height
+    }
+    private fun send(source: View, dest: View, event: MotionEvent): Boolean {
+        val matrix = android.graphics.Matrix()
+        source.transformMatrixToGlobal(matrix); dest.transformMatrixToLocal(matrix)
+        val copy = MotionEvent.obtain(event)
+        return try { copy.transform(matrix); dest.dispatchTouchEvent(copy) } finally { copy.recycle() }
+    }
+    private fun scrollTarget(pager: View): View {
+        fun find(view: View): View? {
+            val rect = android.graphics.Rect()
+            if (!view.isShown || !view.getGlobalVisibleRect(rect)) return null
+            if (rect.width() >= pager.width / 2 && view.height >= pager.height / 2 &&
+                (view.canScrollVertically(-1) || view.canScrollVertically(1))) return view
+            if (view is ViewGroup) for (i in 0 until view.childCount) find(view.getChildAt(i))?.let { return it }
+            return null
+        }
+        return find(pager) ?: pager
+    }
+    fun dispatch(source: ViewGroup, event: MotionEvent, native: (MotionEvent) -> Boolean): Boolean {
+        val bar = bar.get() ?: return native(event)
+        val host = bar.parent as? ViewGroup ?: return native(event)
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            // 宿主先正常向胶囊分发；胶囊内部由自己的钩子跟踪，不拦设置按钮/浮层。
+            if (source === host && contains(host, bar, event)) return native(event)
+            // 未读徽标的原生拖动消除/长按不交给列表。
+            if (source === bar) {
+                fun badgeHit(view: View): Boolean {
+                    if (!view.isShown || !contains(bar, view, event)) return false
+                    if (generateSequence<Class<*>>(view.javaClass) { it.superclass }
+                        .any { it.name == "com.tencent.mobileqq.quibadge.QUIBadge" }) return true
+                    return view is ViewGroup && (0 until view.childCount).any { badgeHit(view.getChildAt(it)) }
+                }
+                if (badgeHit(bar)) return native(event)
+            }
+            val pager = (0 until host.childCount).map(host::getChildAt)
+                .firstOrNull { it.isShown && it.javaClass.name.contains("ViewPager") } ?: return native(event)
+            if (source === host) {
+                if (point(host, bar, event.x, event.y)[1] < 0) return native(event)
+                for (i in host.indexOfChild(pager) + 1 until host.childCount) {
+                    val child = host.getChildAt(i)
+                    if (child !== bar && child.isShown && child !in clearedDecorations && contains(host, child, event))
+                        return native(event)
+                }
+            }
+            cancel()
+            owner = WeakReference(source); target = WeakReference(scrollTarget(pager))
+            down = MotionEvent.obtain(event)
+        }
+        if (owner?.get() !== source || down == null) return native(event)
+        val first = down!!
+        val dest = target?.get()
+        if (!on("玻璃底栏") || dest == null || !dest.isAttachedToWindow) { cancel(); return native(event) }
+        // 未接管前的多指手势仍归原生；不向列表合成缺失的 POINTER_DOWN。
+        if (!forwarding && event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) { clear(); return native(event) }
+        if (!forwarding && event.actionMasked == MotionEvent.ACTION_MOVE &&
+            kotlin.math.abs(event.x - first.x) > slop &&
+            kotlin.math.abs(event.x - first.x) >= kotlin.math.abs(event.y - first.y)) {
+            clear(); return native(event) // 首先形成横向手势后不再中途改投另一页列表。
+        }
+        if (!forwarding && event.actionMasked == MotionEvent.ACTION_MOVE &&
+            verticalBarDrag(event.x - first.x, event.y - first.y, slop)) {
+            val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+            try { native(cancel) } finally { cancel.recycle() }
+            forwarding = true
+            host.requestDisallowInterceptTouchEvent(true)
+            send(source, dest, first)
+        }
+        if (forwarding) send(source, dest, event) else native(event)
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) clear()
+        return true
+    }
+    private fun clear() {
+        down?.recycle(); down = null; owner = null; target = null; forwarding = false
+        bar.get()?.parent?.requestDisallowInterceptTouchEvent(false)
+    }
+    fun cancel() {
+        val source = owner?.get(); val dest = target?.get()
+        val event = down?.let { MotionEvent.obtain(it).apply { action = MotionEvent.ACTION_CANCEL } }
+        val active = forwarding
+        clear()
+        if (source != null && event != null) try {
+            if (active && dest != null) send(source, dest, event) else source.dispatchTouchEvent(event)
+        } finally { event.recycle() } else event?.recycle()
+    }
+}
+private val barTouchHosts = WeakHashMap<ViewGroup, WeakReference<ViewGroup>>()
 
 /** 页签定宽 56dp：material 给的是平分整条的 weight，QQ 的页签视图又是 match_parent，胶囊就只能跟屏幕一样长。 */
 private fun fit(tab: View) {
@@ -316,6 +443,11 @@ internal fun exactBadgeText(label: String?, count: Long): String? =
 internal fun legacyBadgeCount(args: Array<out Any?>): Long? =
     (args.getOrNull(2) as? Number)?.toLong()?.takeIf { it > 99 && (args.getOrNull(1) as? Number)?.toInt() in setOf(3, 4, 7, 9) }
 
+/** QUIBadge 的 d.a 入口会先 setRedText("99+") 并清空 mNum，必须在这个入口保留真计数。 */
+internal fun unclampedBadgeArgs(args: Array<Any?>): Array<Any?> =
+    if (args.size == 5 && legacyBadgeCount(args) != null)
+        args.copyOf().also { it[3] = Int.MAX_VALUE } else args
+
 internal fun numericBadgeWidth(textWidth: Float, height: Int, horizontalPadding: Int): Int =
     maxOf(height, kotlin.math.ceil(textWidth.toDouble()).toInt() + horizontalPadding * 2)
 
@@ -334,6 +466,7 @@ private class BadgeLayout(view: View) {
 }
 private val badgeLayouts = WeakHashMap<View, BadgeLayout>()
 private var restoreNativeBadge: ((View) -> Unit)? = null
+private var refreshNativeBadges: (() -> Unit)? = null
 private fun restoreBadgeLayouts() {
     badgeLayouts.entries.toList().forEach { (view, state) ->
         state.restore(view)
@@ -349,12 +482,10 @@ fun exactCount() {
     val num = badge.getDeclaredField("mNum").apply { isAccessible = true }
     val paint = badge.getDeclaredField("mTextPaint").apply { isAccessible = true }
     val minHeight = badge.method("getMinHeight").apply { isAccessible = true }
-    restoreNativeBadge = { view ->
-        if (badge.isInstance(view)) {
-            val count = (num.get(view) as Number).toLong()
-            text.set(view, if (count > 99) "99+" else count.toString())
-        }
-    }
+    // 关闭时保留真实数据记录、恢复原文字；再开启不必等新消息触发一次绑定。
+    val counts = WeakHashMap<View, Long>()
+    val nativeTexts = WeakHashMap<View, String>()
+    restoreNativeBadge = { view -> nativeTexts.remove(view)?.let { text.set(view, it); view.invalidate() } }
     val legacy = cls("com.tencent.widget.d").getDeclaredMethod("d", TextView::class.java,
         Integer.TYPE, Integer.TYPE, Integer.TYPE, Integer.TYPE, String::class.java, Boolean::class.javaPrimitiveType)
     fun wrap(view: View) {
@@ -366,17 +497,54 @@ fun exactCount() {
     fun expand(value: Any?) {
         val view = value as? View ?: return
         val label = text.get(view) as? String ?: return
-        val count = (num.get(view) as? Number)?.toLong() ?: return
+        val count = counts[view] ?: (num.get(view) as? Number)?.toLong() ?: return
         val fixed = exactBadgeText(label, count) ?: return
+        nativeTexts.putIfAbsent(view, label)
         wrap(view); text.set(view, fixed)
         view.requestLayout(); view.invalidate()
     }
-    hook(badge.method("updateNum")) { chain -> chain.proceed().also { expand(chain.thisObject) } }
+    refreshNativeBadges = { counts.keys.toList().forEach { expand(it) } }
+    fun beforeBinding(view: View) {
+        badgeLayouts.remove(view)?.restore(view)
+        restoreNativeBadge?.invoke(view)
+        counts.remove(view)
+    }
+    val binding = cls("com.tencent.widget.d").getDeclaredMethod("a", badge,
+        Integer.TYPE, Integer.TYPE, Integer.TYPE, String::class.java)
+    hook(binding, gated = false) { chain ->
+        val args = chain.args.toTypedArray()
+        val view = args[0] as? View
+        chain.proceed(if (on("显示具体未读条数")) unclampedBadgeArgs(args) else args).also {
+            if (view != null) {
+                legacyBadgeCount(args)?.let { counts[view] = it } ?: counts.remove(view)
+                if (on("显示具体未读条数")) expand(view)
+            }
+        }
+    }
+    // 用公开数量入口，不依赖私有 updateNum 是否被内联；关闭时也记录以支持即时重开。
+    for (name in listOf("setRedNum", "setGrayNum", "setAIOBarNum")) {
+        hook(badge.getDeclaredMethod(name, Integer.TYPE), gated = false) { chain ->
+            val view = chain.thisObject as View
+            beforeBinding(view)
+            chain.proceed().also {
+                counts[view] = (chain.getArg(0) as Number).toLong()
+                if (on("显示具体未读条数")) expand(view)
+            }
+        }
+    }
+    // 数字变成 NEW、红点或图标时清掉旧计数，禁止把复用视图的旧数字填到新文案。
+    for (name in listOf("setRedText", "setGrayText", "setRedDot", "setGrayDot", "setIcon",
+            "setRedNumWithIcon", "setGrayNumWIthIcon")) {
+        hook(badge.method(name), gated = false) { chain ->
+            beforeBinding(chain.thisObject as View)
+            chain.proceed()
+        }
+    }
     hook(badge.method("getMinWidth")) { chain ->
         val native = chain.proceed()
         val view = chain.thisObject as? View ?: return@hook native
         val label = text.get(view) as? String ?: return@hook native
-        val count = (num.get(view) as? Number)?.toLong() ?: return@hook native
+        val count = counts[view] ?: (num.get(view) as? Number)?.toLong() ?: return@hook native
         if (count <= 99 || label != count.toString()) return@hook native
         numericBadgeWidth((paint.get(view) as Paint).measureText(label), minHeight.invoke(view) as Int, (4 * view.dp).toInt())
     }

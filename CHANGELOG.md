@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-10-15 — 修正底栏背景滚动对象，接入 NT 输入与底栏数量绑定器
+
+- 用户明确底部背景拖不动、TG 输入开关无区别、99+ 仍未修，前一包效果不成立。确认所需是从底栏背景滑动也能滚动后面的列表，不是移动底栏或菜单；删除误加的菜单拖动。
+- 底栏及周围底部空白保留原生 DOWN/点击，纵向位移超过触摸阈值后取消原生点击，把原 DOWN 与后续事件按浮点矩阵转交背后的可见原生滚动容器；不移动底栏，不手动调用列表拦截、不伪造 UP，保留横向手势、徽标原生拖动及上层按钮/浮层。关闭、取消、分离时回收事件并取消转交。
+- 实读 TabFrameControllerImpl.updateFrames → FrameControllerInjectImpl.b → widget.d.a(QUIBadge,style,count,limit,label)：超过 limit 会 setRedText("99+")，并将 mNum 清零，绕过原先只处理数量方法的实现。改在 d.a 入口保留真实数值，接入公开数量 setter；记录开关关闭时的实际绑定，重开即时重应用，不必等新消息。NEW/红点/图标等模式会清除旧计数，关闭恢复原文字和布局。
+- 真包 NT 的 AIOEditText 在 ConstraintLayout 内（dxg.xml），不要求旧版 PanelIconLinearLayout。改从 InputEditTextVBDelegate.U 的真实 e 字段接入，按编辑器而非图标带去重；开关关闭也保持发现，明确刷新现有实例，移除强制开启迁移。NT 输入行清背景，仍保留原生编辑器、发送按钮、尺寸和父子关系。
+- 本地类型检查与 25 项 Kotlin 回归通过，198 条真包符号零不匹配；13 项工具/源码契约及 5 项清理测试通过，源码契约用于防止再次接错入口。没有设备连接，手势、输入开关和实际角标仍不冒称已通过设备验收。
+
 ## 2026-10-15 — 截图确认 99+ 与小扳手后修真实计数入口和菜单尺寸
 
 - 截图仍显示 99+ 和小扳手，撤回之前将其视为已修复的结论。用 Androguard 4.1.4 的 DAD 反编译与本仓 DEX 工具交叉检查 QQ 9.2.10：com.tencent.widget.d#d(TextView, style, count, background, limit, label, flag) 的真实数量是第 3 个参数；旧代码读第 2 个 style，数量自然不会超过 99。按完整签名装钩并修正参数，增加回归；不再从整树中的任意文字猜数字。QUIBadge 同时按原 Paint 测量数字宽度，不再只改 mText 却沿用 99+ 固定宽度；TextView 数字保持居中及左右对称内边距，关闭恢复布局。

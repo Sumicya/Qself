@@ -11,25 +11,37 @@ import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 
 /** 不搬移、不隐藏输入或按钮；玻璃只覆盖真实 EditText，不再给整个按钮父框铺底。 */
-private val inputs = WeakHashMap<ViewGroup, WeakReference<NativeInput>>()
+private val inputs = WeakHashMap<EditText, WeakReference<NativeInput>>()
 
+/** NT 绑定器直接提供真实 EditText；发现钩子始终运行，开关只控制样式，关闭时也能登记。 */
+fun inputLayout() {
+    val delegate = cls("com.tencent.mobileqq.aio.input.edit.delegate.InputEditTextVBDelegate")
+    val edit = delegate.getDeclaredField("e").apply { isAccessible = true }
+    val prepared = delegate.getDeclaredMethod("U", cls("com.tencent.mobileqq.aio.input.adorn.e"))
+    hook(prepared, gated = false) { chain -> chain.proceed().also {
+        (edit.get(chain.thisObject) as? EditText)?.let { tgInput(it) }
+    } }
+}
+
+/** 兼容旧布局，但不再从任意祖先搜索第一个编辑器，更不强制把用户关闭的开关改回开启。 */
 fun tgInput(strip: ViewGroup) {
-    store()?.let { prefs ->
-        if (!prefs.getBoolean("tg-input-native-layout", false)) {
-            prefs.edit().putBoolean("TG输入栏", true).putBoolean("tg-input-native-layout", true).apply()
-        }
-    }
-    inputs[strip]?.get()?.let { it.sync(); return }
     fun findEdit(view: View): EditText? {
         if (view is EditText) return view
-        if (view.javaClass.name.let { "RecyclerView" in it || "ListView" in it || "ViewPager" in it }) return null
         if (view is ViewGroup) for (i in 0 until view.childCount) findEdit(view.getChildAt(i))?.let { return it }
         return null
     }
-    val edit = generateSequence(strip.parent as? ViewGroup) { it.parent as? ViewGroup }
-        .take(4).firstNotNullOfOrNull { findEdit(it) } ?: return
-    inputs[strip] = WeakReference(NativeInput(strip, edit).also { it.sync() })
+    val parent = strip.parent as? ViewGroup ?: return
+    val row = (0 until parent.childCount).map(parent::getChildAt)
+        .firstOrNull { it.javaClass.name.endsWith(".InputLinearLayout") } ?: return
+    findEdit(row)?.let { tgInput(it, strip) }
 }
+
+fun tgInput(edit: EditText, strip: ViewGroup? = null) {
+    inputs[edit]?.get()?.let { it.sync(); return }
+    inputs[edit] = WeakReference(NativeInput(edit, strip).also { it.sync() })
+}
+
+fun refreshInputLayout() { inputs.values.mapNotNull { it.get() }.forEach { it.sync() } }
 
 /** 只分配现有按钮之外的剩余空隙，不改按钮宽度/weight，不挤掉原生触摸区。 */
 internal fun inputButtonGap(available: Int, occupied: Int, count: Int, desired: Int): Int =
@@ -61,7 +73,7 @@ private class ButtonMargin(view: View, val params: ViewGroup.MarginLayoutParams)
     } } }
 }
 
-private class NativeInput(strip: ViewGroup, edit: EditText) :
+private class NativeInput(edit: EditText, strip: ViewGroup?) :
     ViewTreeObserver.OnPreDrawListener, ViewTreeObserver.OnGlobalLayoutListener, View.OnAttachStateChangeListener {
     private val strip = WeakReference(strip)
     private val edit = WeakReference(edit)
@@ -78,7 +90,10 @@ private class NativeInput(strip: ViewGroup, edit: EditText) :
     private var focusAnimator: ValueAnimator? = null
     init {
         // 真包布局 r/i/{ez,k_...}.xml：InputLinearLayout 和图标带各有一层实色背景。
-        decorations.add(InputDecoration(strip))
+        strip?.let { decorations.add(InputDecoration(it)) }
+        // NT dxg.xml：编辑器与发送按钮的 ConstraintLayout 自带不透明背景。
+        if (edit.javaClass.name == "com.tencent.mobileqq.aio.input.edit.AIOEditText")
+            (edit.parent as? ViewGroup)?.let { decorations.add(InputDecoration(it)) }
         val row = generateSequence(edit.parent as? ViewGroup) { it.parent as? ViewGroup }
             .take(4).firstOrNull { it.javaClass.name.endsWith(".InputLinearLayout") }
         if (row != null) {
@@ -93,9 +108,9 @@ private class NativeInput(strip: ViewGroup, edit: EditText) :
                     decorations.add(InputDecoration(view, true))
             } }
         }
-        strip.viewTreeObserver.addOnPreDrawListener(this)
-        strip.viewTreeObserver.addOnGlobalLayoutListener(this)
-        strip.addOnAttachStateChangeListener(this)
+        edit.viewTreeObserver.addOnPreDrawListener(this)
+        edit.viewTreeObserver.addOnGlobalLayoutListener(this)
+        edit.addOnAttachStateChangeListener(this)
     }
     fun sync() {
         val edit = edit.get() ?: return
@@ -148,7 +163,7 @@ private class NativeInput(strip: ViewGroup, edit: EditText) :
     override fun onViewDetachedFromWindow(view: View) = dispose()
     fun dispose() {
         restore(); glass.dispose()
-        val view = strip.get() ?: return
+        val view = edit.get() ?: return
         if (view.viewTreeObserver.isAlive) {
             view.viewTreeObserver.removeOnPreDrawListener(this)
             view.viewTreeObserver.removeOnGlobalLayoutListener(this)

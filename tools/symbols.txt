@@ -234,3 +234,18 @@ member! com.tencent.mobileqq.quibadge.QUIBadge#getMinWidth
 member! com.tencent.mobileqq.quibadge.QUIBadge#getMinHeight
 class  com.tencent.mobileqq.activity.aio.InputLinearLayout
 class  com.tencent.qui.quiblurview.QQBlurView
+
+# 新版实际入口：NT 输入编辑器及 QUIBadge 数量转文本之前的绑定器
+class com.tencent.mobileqq.aio.input.edit.AIOEditText
+class com.tencent.mobileqq.aio.input.edit.delegate.InputEditTextVBDelegate
+field com.tencent.mobileqq.aio.input.edit.delegate.InputEditTextVBDelegate#e
+member! com.tencent.mobileqq.aio.input.edit.delegate.InputEditTextVBDelegate#U
+class com.tencent.mobileqq.aio.input.adorn.e
+member! com.tencent.widget.d#a
+member! com.tencent.mobileqq.quibadge.QUIBadge#setRedText
+member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayText
+member! com.tencent.mobileqq.quibadge.QUIBadge#setRedDot
+member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayDot
+member! com.tencent.mobileqq.quibadge.QUIBadge#setIcon
+member! com.tencent.mobileqq.quibadge.QUIBadge#setRedNumWithIcon
+member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayNumWIthIcon

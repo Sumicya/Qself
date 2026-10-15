@@ -44,8 +44,8 @@ fun installFeature(name: String?, body: () -> Any?) {
  * 装钩子。libxposed 默认（PROTECTIVE）异常模式：钩子在 proceed 前抛异常 = 这一次当没装，
  * QQ 原方法照常跑，所以钩子体不必 try/catch。不调用 proceed 就是替换原方法。
  */
-fun hook(target: Executable, body: (Chain) -> Any?): XposedInterface.HookHandle {
-    val name = feature
+fun hook(target: Executable, gated: Boolean = true, body: (Chain) -> Any?): XposedInterface.HookHandle {
+    val name = if (gated) feature else null
     return xposed.hook(target).intercept { chain -> if (name == null || on(name)) body(chain) else chain.proceed() }
         .also { installing?.add(it) }
 }
