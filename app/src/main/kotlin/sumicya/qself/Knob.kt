@@ -82,7 +82,7 @@ fun knob(bar: View) {
     val count = strip?.let { group -> (0 until group.childCount).count { group.getChildAt(it).visibility == View.VISIBLE } } ?: 1
     val clearance = if (kernel) kernelOverhang((bar.width-8*dp)/count.coerceAtLeast(1), dp) else 0
     val gap = (8 * dp).toInt()
-    val beside = room >= gap + clearance + size
+    val beside = room >= gap + clearance + size + gap // 还需保留屏幕端的 8dp，不能避让后贴边。
     val bottom = if (beside) decor.height - at[1] - (bar.height + size) / 2
         else decor.height - at[1] + gap + if (kernel) kernelOverhang(56*dp, dp) else 0
     val end = if (beside) room - gap - clearance - size else gap

@@ -72,6 +72,6 @@ class KernelPortTest(unittest.TestCase):
 
     def test_knob_layout_reserves_pressed_visual_envelope_without_restylizing_it(self):
         knob = (ROOT / 'app/src/main/kotlin/sumicya/qself/Knob.kt').read_text()
-        self.assertIn('room >= gap + clearance + size', knob)
+        self.assertIn('room >= gap + clearance + size + gap', knob)
         self.assertIn('kernelOverhang((bar.width-8*dp)/count.coerceAtLeast(1), dp)', knob)
         self.assertIn('roundBar = true', knob)
