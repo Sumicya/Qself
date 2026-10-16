@@ -23,7 +23,7 @@ def artifact(i, name=None):
 
 
 class CleanupTest(unittest.TestCase):
-    def execute(self, runs, arts, apply=False, failures=None):
+    def execute(self, runs, arts, apply=False, failures=None, scope='actions', releases=(), tags=()):
         calls, output = [], io.StringIO()
         failures = failures or {}
 
@@ -43,18 +43,25 @@ class CleanupTest(unittest.TestCase):
                     code, err = 1, f'failure (HTTP {failures[endpoint]})'
             elif '--paginate' in args:
                 endpoint = args[3]
-                objects = arts if '/artifacts?' in endpoint else runs
+                if '/releases?' in endpoint:
+                    objects = releases
+                elif '/git/matching-refs/tags/' in endpoint:
+                    objects = [dict(ref='refs/tags/' + t) for t in tags]
+                else:
+                    objects = arts if '/artifacts?' in endpoint else runs
                 text = '\n'.join(json.dumps(x) for x in objects)
             else:
                 text = json.dumps(dict(run(1), status='completed'))
             return subprocess.CompletedProcess(args, code, stdout=text, stderr=err)
 
-        env = dict(REPO='Sumicya/Qself', SELF='999', SEGMENTS='5', CLEANUP_APPLY=str(apply).lower())
+        env = dict(REPO='Sumicya/Qself', SEGMENTS='5', CLEANUP_APPLY=str(apply).lower(), CLEANUP_SCOPE=scope)
+        if scope == 'actions':
+            env['SELF'] = '999'    # releases 档不需要 SELF，也不该读它
         with patch.dict(os.environ, env), patch('subprocess.run', side_effect=command), contextlib.redirect_stdout(output):
             try:
                 runpy.run_path(str(SCRIPT), run_name='__main__')
             except SystemExit as e:
-                return calls, output.getvalue(), str(e)
+                return calls, output.getvalue(), None if e.code == 0 else str(e)   # SystemExit(0) 是正常收口
         return calls, output.getvalue(), None
 
     def test_global_artifact_and_strict_run_limits(self):
@@ -105,6 +112,50 @@ class CleanupTest(unittest.TestCase):
         mutations = [c for c in calls if '-X' in c]
         self.assertEqual(mutations[0][-1], 'repos/Sumicya/Qself/actions/runs/1/cancel')
         self.assertEqual(mutations[-1][-1], 'repos/Sumicya/Qself/actions/runs/1')
+
+    def release(self, i, tag=None):
+        return dict(id=i, tag_name=tag or f'Qself-26.10.15.{i}.{i}', created_at=f'2026-10-15T00:00:{i:02d}Z')
+
+    def test_releases_scope_keeps_one_and_deletes_old_with_tags(self):
+        rels = [self.release(i) for i in (1, 2, 3)] + [self.release(9, 'other-1.0')]
+        tags = [r['tag_name'] for r in rels[:3]] + ['Qself-orphan']
+        calls, output, error = self.execute([], [], True, scope='releases', releases=rels, tags=tags)
+        self.assertIsNone(error)
+        self.assertEqual([c[-1] for c in calls if '-X' in c], [
+            'repos/Sumicya/Qself/releases/2', 'repos/Sumicya/Qself/releases/1',   # 按新到旧删
+            'repos/Sumicya/Qself/git/refs/tags/Qself-26.10.15.1.1',
+            'repos/Sumicya/Qself/git/refs/tags/Qself-26.10.15.2.2',
+            'repos/Sumicya/Qself/git/refs/tags/Qself-orphan'])   # 保留 3 号 Release 及其 tag；非本项目前缀的不碰
+        self.assertFalse(any(c[0] == 'git' for c in calls))      # 不取号、不要求完整历史
+        self.assertIn('清理完成', output)
+
+    def test_releases_scope_dry_run_deletes_nothing(self):
+        rels = [self.release(1), self.release(2)]
+        calls, output, error = self.execute([], [], False, scope='releases', releases=rels, tags=['Qself-orphan'])
+        self.assertIsNone(error)
+        self.assertFalse(any('-X' in c for c in calls))
+        self.assertIn('将删 Release', output)
+
+    def test_releases_failed_delete_keeps_tag_and_reds_job(self):
+        rels = [self.release(1), self.release(2)]
+        endpoint = 'repos/Sumicya/Qself/releases/1'
+        calls, output, error = self.execute([], [], True, {endpoint: '500'}, 'releases', rels,
+                                            [r['tag_name'] for r in rels])
+        self.assertIsNotNone(error)
+        self.assertFalse(any('-X' in c and '/git/refs/tags/' in c[-1] for c in calls))
+        self.assertIn('对应 Release 删除失败', output)
+
+    def test_releases_403_warns_with_contents_write(self):
+        rels = [self.release(1), self.release(2)]
+        endpoint = 'repos/Sumicya/Qself/releases/1'
+        _, output, error = self.execute([], [], True, {endpoint: '403'}, 'releases', rels, [])
+        self.assertIsNone(error)
+        self.assertIn('缺 contents: write 权限', output)
+        self.assertIn('清理未完成', output)
+
+    def test_unknown_scope_is_refused(self):
+        _, _, error = self.execute([], [], scope='both')
+        self.assertIn('CLEANUP_SCOPE', error)
 
 
 if __name__ == '__main__':

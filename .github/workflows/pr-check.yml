@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:
-      group: qself-cleanup-artifacts
+      group: qself-cleanup
       cancel-in-progress: false
     permissions:
       actions: write
@@ -77,4 +77,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SELF: ${{ github.run_id }}
+          CLEANUP_SCOPE: actions
         run: python3 .github/scripts/cleanup.py

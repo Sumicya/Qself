@@ -12,7 +12,8 @@
 # dex 作业拿真 QQ 包核每一个落点；apk 作业按五段版本出 debug APK 放进 Artifacts。
 # 清理逻辑只一份 `.github/scripts/cleanup.py`：本工作流 `CLEANUP_APPLY: 'true'` 真删，权限 actions: write；
 # PR 校验工作流同一份脚本、同值真删（会话推送即触发），两处挂同一个 concurrency group 串行；
-# Release（1 个）/ tag 收口要 contents: write，只在默认分支跑，分开授权不同授。
+# Release（1 个）/ tag 清理是同一份脚本的 CLEANUP_SCOPE=releases 档，单独作业只授 contents: write，只在默认分支跑，
+# 不与 actions: write 同授；三个清理作业共用 concurrency group `qself-cleanup`。
 # 禁止用 run_number、历史成功数、现存 artifact 最大号等旧锚取数。
 # CI 不创建 Release、正式发行 tag 与 Release asset；发布只由主人主动发起。
 name: Build
@@ -124,7 +125,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     concurrency:
-      group: qself-cleanup-artifacts
+      group: qself-cleanup
       cancel-in-progress: false
     permissions:
       actions: write
@@ -139,66 +140,31 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SELF: ${{ github.run_id }}
+          CLEANUP_SCOPE: actions
         run: python3 .github/scripts/cleanup.py
 
   # Release / tag 清理：动的是发行对象，要 contents: write，所以单独作业、只在默认分支上动，
-  # 与上面那个 actions: write 的作业分开授权（规范禁止两者同授）。
+  # 与上面那个 actions: write 的作业分开授权（规范禁止两者同授）；脚本与上面同一份，CLEANUP_SCOPE=releases。
   # 这条 if 只拦「在会话分支上动发行对象」，不砍出包验证 —— 出包与上传在 apk 作业，与本作业无关。
+  # 三个清理作业同一 concurrency group 串行；Release 清理幂等，被后到作业顶掉时下一次推送补上。
   cleanup-releases:
     needs: apk
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     concurrency:
-      group: qself-cleanup-releases
+      group: qself-cleanup
       cancel-in-progress: false
     permissions:
       contents: write
     steps:
-      - name: 项目 Release 只留最近 1 个
+      # 只为拿到脚本：不取号、不需要完整历史；不留下带写权限的 git 凭据。
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: 项目 Release 只留最近 1 个，无对应 Release 的 tag 一并删
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json, os, subprocess
-          from datetime import datetime
-
-          REPO = os.environ["REPO"]
-          PREFIX = "Qself-"
-          KEEP = 1
-
-          def gh(*args, check=True):
-              p = subprocess.run(["gh", *args], capture_output=True, text=True)
-              if check and p.returncode != 0:
-                  raise SystemExit("gh " + " ".join(args) + " 失败：" + p.stderr.strip())
-              return p.stdout
-
-          def at(obj):
-              return datetime.fromisoformat(obj["created_at"].replace("Z", "+00:00"))
-
-          out = gh("api", "--paginate", f"repos/{REPO}/releases?per_page=100", "--jq", ".[]")
-          rels = [json.loads(l) for l in out.splitlines() if l.strip()]
-          rels = sorted([r for r in rels if r["tag_name"].startswith(PREFIX)], key=at, reverse=True)
-          keep, drop = rels[:KEEP], rels[KEEP:]
-          kept_tags = {r["tag_name"] for r in keep}
-          print("Release 保留清单：", [r["tag_name"] for r in keep] or "（无）")
-          print("Release 删除清单：", [r["tag_name"] for r in drop] or "（无）")
-          for r in drop:
-              gh("api", "-X", "DELETE", f"repos/{REPO}/releases/{r['id']}")
-              print(f"已删 Release {r['tag_name']}")
-          for r in drop:
-              tag = r["tag_name"]
-              if tag in kept_tags:
-                  continue
-              p = subprocess.run(["gh", "api", f"repos/{REPO}/git/ref/tags/{tag}"], capture_output=True, text=True)
-              if p.returncode != 0:
-                  if "Not Found" in p.stderr:
-                      print(f"tag {tag} 已不存在，跳过")
-                      continue
-                  raise SystemExit(f"查 tag {tag} 失败：{p.stderr.strip()}")
-              gh("api", "-X", "DELETE", f"repos/{REPO}/git/ref/tags/{tag}")
-              print(f"已删 tag {tag}")
-          print(f"本项目 Release 共 {len(rels)} 个，保留 {len(keep)} 个")
-          PY
+          CLEANUP_SCOPE: releases
+        run: python3 .github/scripts/cleanup.py

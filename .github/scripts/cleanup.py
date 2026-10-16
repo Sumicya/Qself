@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""清理本仓超量 artifact 与运行记录。逻辑只写这一份，两个工作流调用同一文件、都真删：
+"""清理本仓超量 artifact、运行记录、Release 与 tag。逻辑只写这一份，两个工作流、各清理作业都调用同一文件。
 
-- PR 校验工作流 `pr-check.yml`：权限 `actions: write`，`CLEANUP_APPLY='true'` —— 真删。
+按 `CLEANUP_SCOPE` 分两档，写权限分开授，不同授（规范 R6）：
+
+- `actions`（默认）：artifact 与运行记录。权限 `actions: write` + `contents: read`。
+  PR 校验工作流 `pr-check.yml` 与出包工作流 `build.yml` 各一个作业，`CLEANUP_APPLY='true'` 真删。
   会话推送即触发；真删的调用点必须会话可达，否则清理一次也不会发生（规范 b0594d3）。
-- 出包工作流 `build.yml`：权限 `actions: write`，`CLEANUP_APPLY='true'` —— 真删，出包后收口。
-  两处挂同一个 `concurrency` group 串行，避免并发删同一对象。
+- `releases`：Release 只留最近 1 个，无保留 Release 对应的 `Qself-` tag 一并删。权限只授 `contents: write`，
+  只在出包工作流 `build.yml` 里、默认分支上跑；不取号，不需要完整历史。
+
+三个清理作业共用同一个 `concurrency` group `qself-cleanup` 串行，避免并发删同一对象。
 
 清理失败按原因分口径（规范 a8787a8）：403 权限类打 `::warning::` 写明对象、端点与返回码后继续，
 不让 job 红；403 以外的失败当轮即红 job 并逐条点名附返回码。
-只读预演（`actions: read` + `CLEANUP_APPLY='false'`）是备用形态，禁止拿「预演已证」当清理已做。
+只读预演（`CLEANUP_APPLY='false'`）是备用形态，禁止拿「预演已证」当清理已做。
 
-判据五条：命名、来源、重复当日序号、号源口径、数量。
+actions 档判据五条：命名、来源、重复当日序号、号源口径、数量。
 artifact 全仓按 created_at 保留最新 5 个；运行记录每工作流按开始时间保留最新 5 条。
 先列完整计划，再删产物，超限未完成运行先取消。运行上限优先，超限运行承载的候选保留产物也删除。
 
@@ -24,15 +29,20 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 REPO = os.environ["REPO"]
-SELF = int(os.environ["SELF"])
+SCOPE = os.environ.get("CLEANUP_SCOPE", "actions").strip()
+if SCOPE not in ("actions", "releases"):
+    raise SystemExit(f"CLEANUP_SCOPE 只能是 actions 或 releases，收到 {SCOPE!r}")
+SELF = int(os.environ["SELF"]) if SCOPE == "actions" else 0   # releases 档不清运行记录，不需要
 SEGMENTS = int(os.environ["SEGMENTS"])
 APPLY = os.environ.get("CLEANUP_APPLY", "false").strip().lower() == "true"
 PREFIX = "Qself-"
 KEEP = 5                       # 全仓 artifact 5 个、每工作流 run 5 条
+KEEP_RELEASES = 1              # Release 1 个，tag 与 Release 同口径
+NEED = "contents: write" if SCOPE == "releases" else "actions: write"
 CST = timezone(timedelta(hours=8))
 TODAY = datetime.now(CST).strftime("%Y-%m-%d")
 VERB = "删" if APPLY else "将删"
-print(f"cleanup.py 启动参数：SEGMENTS={SEGMENTS} CLEANUP_APPLY={'true' if APPLY else 'false'} "
+print(f"cleanup.py 启动参数：SCOPE={SCOPE} SEGMENTS={SEGMENTS} CLEANUP_APPLY={'true' if APPLY else 'false'} "
       f"PREFIX={PREFIX} KEEP={KEEP} SELF={SELF} TODAY={TODAY} REPO={REPO}")
 print("删除失败分级口径：DELETE 403 → ::warning:: 降级不红；403 以外 → ::error:: 累积，脚本末尾红 job")
 
@@ -44,17 +54,18 @@ def git_out(*args):
 
 
 # 取号核对：号源只有 git 提交数一处（规范 c5ac12d:55），这里把两条命令的输出打出来，让日志能独立核对。
-_since = datetime.now(CST).strftime("%Y-%m-%dT00:00:00+08:00")
-_head = git_out("rev-parse", "HEAD")
-_total = git_out("rev-list", "--count", "HEAD")
-_daily = git_out("rev-list", "--count", f"--since={_since}", "HEAD")
-_shallow = git_out("rev-parse", "--is-shallow-repository")
-print(f"取号核对：head={_head} 总序号={_total} 当日序号={_daily} 浅克隆={_shallow}"
-      f"（浅克隆为 true 时这两个数不可信）")
-print(f"取号命令原文：git rev-list --count HEAD ／ git rev-list --count --since={_since} HEAD")
-
-if _shallow != "false" or not all((_head, _total, _daily)):
-    raise SystemExit("完整历史或取号失败，停止清理")
+# 只 actions 档需要：releases 档不取号。
+def check_history():
+    since = datetime.now(CST).strftime("%Y-%m-%dT00:00:00+08:00")
+    head = git_out("rev-parse", "HEAD")
+    total = git_out("rev-list", "--count", "HEAD")
+    daily = git_out("rev-list", "--count", f"--since={since}", "HEAD")
+    shallow = git_out("rev-parse", "--is-shallow-repository")
+    print(f"取号核对：head={head} 总序号={total} 当日序号={daily} 浅克隆={shallow}"
+          f"（浅克隆为 true 时这两个数不可信）")
+    print(f"取号命令原文：git rev-list --count HEAD ／ git rev-list --count --since={since} HEAD")
+    if shallow != "false" or not all((head, total, daily)):
+        raise SystemExit("完整历史或取号失败，停止清理")
 
 
 def gh(*args):
@@ -91,7 +102,7 @@ def mutate(method, endpoint, label):
     code = http_code(p.stderr)
     if code == "403":
         DENIED.append((endpoint, label))
-        print(f"::warning::{label} 未完成：{endpoint} HTTP 403，缺 actions: write 权限")
+        print(f"::warning::{label} 未完成：{endpoint} HTTP 403，缺 {NEED} 权限")
     else:
         FAILED.append((endpoint, label, code, p.stderr.strip()[:200]))
     return False
@@ -101,6 +112,54 @@ def delete(kind, obj_id, label, why):
     print(f"  {'删' if APPLY else '将删'} {label}（{why}）")
     return not APPLY or mutate("DELETE", f"repos/{REPO}/actions/{kind}/{obj_id}", label)
 
+
+def finish():
+    """收尾：非 403 失败红 job，403 只报缺口；两档共用。"""
+    if FAILED:
+        for endpoint, label, code, err in FAILED:
+            print(f"  ::error::{label} 删除失败（HTTP {code}，非权限类）：{endpoint} — {err}")
+        raise SystemExit(f"清理失败 {len(FAILED)} 个对象（非 403，按规范 a8787a8 当轮红 job）")
+    if DENIED:
+        print(f"清理未完成：{len(DENIED)} 个对象存在 HTTP 403 权限缺口")
+    elif APPLY:
+        print("清理完成：计划内删除全部成功")
+    else:
+        print("只读扫描完成：未执行删除")
+
+
+def clean_releases():
+    """Release 只留最近 1 个；tag 与 Release 同口径：无保留 Release 对应的 Qself- tag 一并删。"""
+    rels = sorted((r for r in list_all(f"repos/{REPO}/releases?per_page=100", ".")
+                   if r["tag_name"].startswith(PREFIX)),
+                  key=lambda r: (r["created_at"], r["id"]), reverse=True)
+    keep, drop = rels[:KEEP_RELEASES], rels[KEEP_RELEASES:]
+    kept_tags = {r["tag_name"] for r in keep}
+    tags = [t["ref"][len("refs/tags/"):]
+            for t in list_all(f"repos/{REPO}/git/matching-refs/tags/{PREFIX}", ".")]
+    drop_tags = sorted(t for t in tags if t not in kept_tags)
+    print("Release 保留清单：", [r["tag_name"] for r in keep] or "（无）")
+    print("Release 删除清单：", [r["tag_name"] for r in drop] or "（无）")
+    print("tag 删除清单：", drop_tags or "（无）")
+    stuck = set()                  # Release 没删掉的 tag 不删，避免留下指向缺失 tag 的 Release
+    for r in drop:
+        print(f"  {VERB} Release {r['tag_name']}（数量：超出上限 {KEEP_RELEASES}）")
+        if APPLY and not mutate("DELETE", f"repos/{REPO}/releases/{r['id']}", f"Release {r['tag_name']}"):
+            stuck.add(r["tag_name"])
+    for tag in drop_tags:
+        if tag in stuck:
+            print(f"  tag {tag} 未删：对应 Release 删除失败")
+            continue
+        print(f"  {VERB} tag {tag}（无保留 Release 对应）")
+        if APPLY:
+            mutate("DELETE", f"repos/{REPO}/git/refs/tags/{tag}", f"tag {tag}")
+    print(f"本项目 Release 共 {len(rels)} 个，保留 {len(keep)} 个；tag 共 {len(tags)} 个")
+
+
+if SCOPE == "releases":
+    clean_releases()
+    finish()
+    raise SystemExit(0)
+check_history()
 
 runs = list_all(f"repos/{REPO}/actions/runs?per_page=100", ".workflow_runs")
 run_by_id = {r["id"]: r for r in runs}
@@ -243,13 +302,4 @@ for r, ws, why in drop_r:
                 continue
     delete("runs", r["id"], f"run={r['id']} {ws}", why)
 
-if FAILED:
-    for endpoint, label, code, err in FAILED:
-        print(f"  ::error::{label} 删除失败（HTTP {code}，非权限类）：{endpoint} — {err}")
-    raise SystemExit(f"清理失败 {len(FAILED)} 个对象（非 403，按规范 a8787a8 当轮红 job）")
-if DENIED:
-    print(f"清理未完成：{len(DENIED)} 个对象存在 HTTP 403 权限缺口")
-elif APPLY:
-    print("清理完成：计划内删除全部成功")
-else:
-    print("只读扫描完成：未执行删除")
+finish()
