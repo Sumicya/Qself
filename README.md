@@ -4,10 +4,12 @@
 开关不在模块里，在 QQ 主页底栏胶囊旁边那颗 52dp 玻璃三线菜单圆钮里：点开是宽不超过 360dp、高在原面板基础上增加最多 80dp、上限 520dp 的紧凑玻璃面板，一行两项、
 画出来的 ✓/–/✗ 加一句描述（✗ = 这版 QQ 没装上），存进 QQ 自己的 SharedPreferences。
 
+## 要求
+
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
 但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，223 条）——换版本先看那张表红哪条，别猜。
 
-## 做了什么
+## 功能
 
 外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
 - 首页底栏按 [KernelSU 固定源码](https://github.com/tiann/KernelSU/tree/3186a2fe2107f7170e06dab7aa157eb10ae7759f/manager/app/src/main/java/me/weishu/kernelsu/ui/component) 移植到原生 View：64dp 栏 / 最小 76dp 页签 / 56dp 指示器高度、4dp 模糊、24dp 折射、按压色散、双峰重力高光和解析弹簧；横向拖动释放后选择真实 QQ 页签，纵向仍转交背后原生内容页。仅改底栏；菜单/圆钮材质不变，圆钮位置预留按压扩张空间，不增加 APK 依赖。QQ 与 Compose 的组合背景存在差异，**不宣称已完成一比一设备验收**；详细对应与差异见 [移植记录](docs/kernel-port.md)。
@@ -39,7 +41,7 @@
 - 灯塔 (beacon) 与 StatisticCollector 的统计上报空转
 - 不初始化崩溃上报
 
-## 用
+## 安装与使用
 
 1. Actions 里下载最新一次构建的 APK（或 `gh run download -R Sumicya/Qself`），安装
 2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开
@@ -50,7 +52,28 @@
    —— ✗ 就是那个功能在这版 QQ 里找不到落点，其余不受影响。**把这一行贴回来就能修。**
 5. 之后换 APK 直接覆盖安装；当前仓库不保存正式签名私钥，正式签名 APK 不能从本仓库自动推导。
 
-## 结构
+## 构建
+
+本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）出 APK。
+当前仓库不保存签名私钥；debug APK 使用 Android 默认 debug 签名，正式签名需由仓库外的安全签名环境提供。
+失败日志以 GitHub Actions 原始日志为准。
+本地没有 Android SDK 时用 `ci/check.sh` 做类型检查 + 跑 ProtoTest（第一次会拉工具链到 `~/.cache/qself-tc`）。
+版本号 `yy.m.d.当日序号.总序号`，按 git 提交数取，由 `build.yml` 在 CI 里算。
+
+### 核落点
+
+**改任何落点之前先跑 `tools/dexcheck.py`。**
+
+```sh
+git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
+python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 223 条全绿才算数
+python3 tools/ui_paths.py qq.apk                                   # 完整签名、字段读写和调用关系；不是设备验收
+python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
+```
+
+### 源码结构
+
+纯 Kotlin，九个源码文件，没有第三方依赖、没有 `.so`、不联网。开关状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
 
 ```
 app/src/main/kotlin/sumicya/qself/
@@ -71,13 +94,65 @@ tools/dexq.py        最小反汇编器：按签名找落点（上游用 DexKit 
 ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
 ```
 
-## 核落点
+## 项目限制
 
-```sh
-git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
-python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 223 条全绿才算数
-python3 tools/ui_paths.py qq.apk                                   # 完整签名、字段读写和调用关系；不是设备验收
-python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
-```
+### 写法
+
+按 [ponytail](https://github.com/DietrichGebert/ponytail) 来：
+
+- 先问「不做行不行」；再看仓库里有没有现成的；再看 Kotlin 标准库；再看 Android 原生 API；最后才写代码
+- 不加抽象、不加依赖、不加样板；能删就删；一个功能 = 一个顶层函数 + `Qself.kt` 清单里一行（清单顺序就是开关顺序）
+- 钩子体不要 try/catch 兜底整个功能：libxposed 默认异常模式下，钩子抛异常等于这一次没装。
+  但**从 `chain` 取参数、反射取视图这类可能落在兄弟子类上的动作要包 `runCatching`** —— 挂点在基类时，钩子会盖住所有子类
+- 每项安装经 `installFeature()`：异常撤掉本项已经安装的钩子；钩子经 `hook()` 自动受开关管，视图规则自己 `on("功能名")`
+- 连发昵称/间距在绑定及开关变化时应用；头像 pre-draw 只采样位置并提交重绘，不请求布局或取消帧，禁止恢复延迟注册。用列表本地浮点矩阵统一绘制/触摸坐标，浮动位置不加追赶补间；续条仅收紧正文容器的正 topMargin，不改正文内边距；昵称操作 i1 容器并读取主表与活跃附加表 G，组首固定。原生测量阶段可排除头像槽撑高，须按原生求解器保留其余子控件、最小高度及 EXACTLY 约束；复用和关闭还原并重测。数据提交时统一重算组键及完整组边界，不能按挂载行数判断单条。
+- 输入保留 QQ 原 EditText 和父层级；不得带回旧输入栏搬移/隐藏/压缩方案，不得重新加入“昵称只留名字”。
+- minSdk 36：只有 Android 16，别写 `SDK_INT` 判断和降级分支
+- 故意省掉的地方写 `ponytail:` 注释，说清上限和往上走的路
+- 非平凡逻辑留一份能跑的检查（目前只有 `ProtoTest.kt`）
+- 外观文件（`Glass.kt` / `KernelBar.kt` / `Input.kt` / `Looks.kt` / `Knob.kt`）的实际视觉与生命周期不能由 dex 核验代替，必须真机检查；
+  改完说清楚改了哪块长相，别让人猜
+- 代码先行，解释不超过三行；中文
+
+### 怎么找落点
+
+类名、方法名全部从 9.2.10 的 dex 里查出来，写进 `tools/symbols.txt`，不是猜的。
+
+混淆过的短名字（`a`、`k`、`d1`）按签名找，别按名字猜：`tools/dexq.py` 是个最小反汇编器，
+打印一个类里每个方法用到的字符串、读写的字段、调用的方法 —— 上游 QAuxiliary 用 DexKit 在运行时搜的就是这些判据，
+这里离线搜同一件事，搜到就把名字写进表和代码。两条规矩：
+
+- `Class<*>.method(name)` 和 `constant()` 都往父类找（QQ 的挂点大半声明在 MVVM 基类 / Api 基类上），
+  `declaredMethods` 只翻本类会静悄悄空转；反射**调用**用 `getMethod`（public + 父类），装钩子用 `method()`
+- `dexq.py` 按 DEX 格式分别重置 direct/virtual 方法差分索引；声明关系可用 class_data 核对，
+  运行时解析仍沿父类查找。`constant()` 的 pick 必须带名字过滤，避免改到父类的无关方法。
+- 解析方法要在**装的时候**做完（`val m = c.getMethod("x")`），别写在钩子体里 —— 找不到就当场 ✗ 报出来，
+  而不是每次绑定时被 `runCatching` 吞掉，看起来装着其实什么都没干
+
+换版本时：
+1. 拿到 QQ 的 APK（`Sumicya/qqapk` 里是 9.2.10 的分卷，`cat qq.a* > qq.apk`）
+2. `python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin`，看哪条红
+3. 红的那条用 `tools/dexq.py` 按签名找新名字（参数类型、用到的字符串、读的字段），先改表再改代码
+4. 装上后看 `logcat -s Qself` 那一行，✗ 的再修
+
+### 做不到的（别再去挖一遍）
+
+- **全量 Monet 化**：QQ 没有集中的取色入口。`com.tencent.mobileqq.theme` 包里只有 DarkModeManager /
+  ThemeConstants，一个返回颜色的方法都没有；界面颜色散在 QUI 设计系统的几百个 drawable 里
+  （`qui_button_bg_primary_default`、`qui_aio_word_primary`…）。Telegram/NagramX 能全量 Monet
+  是因为有 `Theme.getColor(key)` 一个口子。hook `Resources.getColor` 只能碰纯色资源、碰不到 drawable，
+  还会把整个 UI 弄花 —— 所以 Monet 只作用在 Qself 自己画的那几块玻璃上（`Glass.kt` / `Knob.kt`）。
+- **屏蔽更新**：`UpgradeController` 在 9.2.10 里没有了，`ConfigHandler` 也没有上游要找的
+  `void(UpgradeDetailWrapper)`；`UpgradeBannerProcessor` 里对不上 `void(Message,long,boolean)`。要做得重新找落点。
+- **屏蔽抖动窗口**：`AIOShakeHelper` 类不存在（上游自己写着「作用暂时不明」）。
+- **移除消息列表顶栏横幅广告**：上游靠的 `QbossADImmersionBannerManager` 不存在；剩下的
+  Renewals/Push/DressUp/VasAD 四个 BannerProcessor 的 `handleMessage(Message)→boolean` 返回值语义
+  没机器验不了，不敢直接吞。要做就走 Looks.kt 的视图规则，别猜返回值。
+- **语音转发及保存**：上游 411 行，要自己建确认对话框和长按菜单，不是一个钩子的事。
+- **气泡尾巴**：尾巴画在 9-patch 里（`skin_aio_*_bubble_nor/pressed`，朝头像那侧凸 17 行像素），QQ 也确实自带
+  同尺寸(110x106)无尾巴的 `_simple` 版 —— 但两套九宫格内边距不一样，直接换 id 会让消息文字不居中；
+  而且真机上聊天里本来就没有尾巴（NT 聊天大概率不走这套图，只有充值气泡/皮肤走）。0.8.1 试过，已撤，别再碰。
 
 GPL-3.0-or-later。源自 [QAuxiliary](https://github.com/cinit/QAuxiliary)，只留了思路，聊天等原有实现重写；底栏包含注明来源的上游算法和着色器，见 [第三方许可](third_party/NOTICE.md)。
+
+遵循 [Sumicya/selfs](https://github.com/Sumicya/selfs) 最新 GLOBAL.md。
