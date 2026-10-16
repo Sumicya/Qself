@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 NAMES = ('ROUNDED_RECT_REFRACTION_SHADER', 'ROUNDED_RECT_REFRACTION_WITH_DISPERSION_SHADER',
-         'BLOOM_STROKE_SHADER_DUAL', 'COLOR_CONTROLS_SHADER')
+         'BLOOM_STROKE_SHADER_DUAL', 'COLOR_CONTROLS_SHADER', 'INTERACTIVE_HIGHLIGHT_SHADER')
 
 
 def shaders():
@@ -26,4 +26,4 @@ if __name__ == '__main__':
         assert skia.RuntimeEffect.MakeForShader(shader) is not None, name
         print(f'Skia {skia.__version__}: {name} 编译通过（非设备验证）')
 
-    print("::notice title=KernelSU shader compilation::Skia 138 CPU compiled all 4 ported shaders; Android GPU/device verification is not performed.")
+    print(f"::notice title=KernelSU shader compilation::Skia 138 CPU compiled all {len(NAMES)} ported shaders; Android GPU/device verification is not performed.")

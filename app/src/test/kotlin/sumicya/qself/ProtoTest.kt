@@ -143,6 +143,34 @@ class ProtoTest {
         assertFalse(conflict.first == conflict.second)
     }
 
+    @Test fun kernelWidthUsesUpstream76RatherThanThe56Height() {
+        assertEquals(76, kernelTabWidth(1f, 0))
+        assertEquals(228, kernelTabWidth(3f, 120))
+        assertEquals(300, kernelTabWidth(3f, 300))
+    }
+
+    @Test fun kernelPressHoldThenReleaseActuallyDrivesBothSprings() {
+        val press = KernelSpring(1f, 1000f)
+        val scale = KernelSpring(.6f, 250f, 1f)
+        press.target = 1f; scale.target = 78f/56f
+        repeat(30) { press.step(1f/60); scale.step(1f/60) }
+        assertTrue(press.value > .99f)
+        assertTrue(scale.value > 1.38f)
+        press.target = 0f; scale.target = 1f
+        repeat(120) { press.step(1f/60); scale.step(1f/60) }
+        assertEquals(0f, press.value)
+        assertEquals(1f, scale.value)
+    }
+
+    @Test fun kernelKnobClearanceCoversPressAndVelocityStretchAtAllWidths() {
+        for (density in listOf(1f, 2.75f, 3f)) for (width in listOf(76f, 120f, 300f)) {
+            val px = width*density
+            val envelope = (px*(1.43f*1.25f-1f)/2f - 4*density).coerceAtLeast(0f) + 12*density
+            assertTrue(kernelOverhang(px, density) >= envelope)
+        }
+        assertEquals(39, kernelOverhang(76f, 1f))
+    }
+
     @Test fun kernelCriticalSpringSettlesWithoutOvershoot() {
         val spring = KernelSpring(1f, 1000f)
         spring.target = 1f

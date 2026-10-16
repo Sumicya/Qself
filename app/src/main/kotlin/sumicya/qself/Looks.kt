@@ -205,10 +205,10 @@ private class BarState(bar: ViewGroup) {
     val ambientShadow = bar.outlineAmbientShadowColor
     val spotShadow = bar.outlineSpotShadowColor
     val padding = intArrayOf(bar.paddingLeft, bar.paddingTop, bar.paddingRight, bar.paddingBottom)
+    val stripClip = (bar.getChildAt(0) as? ViewGroup)?.let { it.clipChildren to it.clipToPadding }
     val stripPadding = bar.getChildAt(0)?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
     val tabs = WeakHashMap<View, Pair<ViewGroup.LayoutParams, IntArray>>()
-    val touch = nativeBarContent?.invoke(bar)?.let { BarTouch(bar, it) }
-    init { if (touch == null) log("底栏原生绑定未匹配，不接管手势") }
+    val touch = BarTouch(bar, nativeBarContent?.invoke(bar))
     var scrollListener: ViewTreeObserver.OnScrollChangedListener? = null
     var layoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
     var drawListener: ViewTreeObserver.OnPreDrawListener? = null
@@ -217,7 +217,7 @@ private val floatStates = WeakHashMap<ViewGroup, BarState>()
 private fun restoreBar(bar: ViewGroup) {
     val state = floatStates.remove(bar) ?: return
     (bar.parent as? ViewGroup)?.let { barTouchHosts.remove(it) }
-    state.touch?.dispose()
+    state.touch.dispose()
     if (bar.viewTreeObserver.isAlive) {
         state.scrollListener?.let(bar.viewTreeObserver::removeOnScrollChangedListener)
         state.layoutListener?.let(bar.viewTreeObserver::removeOnGlobalLayoutListener)
@@ -231,6 +231,9 @@ private fun restoreBar(bar: ViewGroup) {
     bar.elevation = state.elevation
     state.padding.let { bar.setPadding(it[0], it[1], it[2], it[3]) }
     state.stripPadding?.let { bar.getChildAt(0)?.setPadding(it[0], it[1], it[2], it[3]) }
+    state.stripClip?.let { old -> (bar.getChildAt(0) as? ViewGroup)?.let {
+        it.clipChildren = old.first; it.clipToPadding = old.second
+    } }
     state.tabs.forEach { (tab, old) ->
         tab.layoutParams = copyLayoutParams(old.first)
         old.second.let { tab.setPadding(it[0], it[1], it[2], it[3]) }
@@ -297,6 +300,7 @@ private fun float(bar: ViewGroup) {
     // 两头的留白放在页签条上而不是 bar 上：material 固定模式会把页签条量成 bar 的整宽（含 padding），放 bar 上会挤歪。
     bar.setPadding(0, 0, 0, 0)
     bar.getChildAt(0)?.setPadding((4 * dp).toInt(), (4 * dp).toInt(), (4 * dp).toInt(), (4 * dp).toInt())
+    (bar.getChildAt(0) as? ViewGroup)?.let { it.clipChildren = false; it.clipToPadding = false }
     val glass = Glass(bar, kernelBar = true) { selectedTab(bar) }
     bar.background = glass
     // 内容一滚、布局一变就重画一次玻璃（底栏自己不会因为身后的东西动而重画）；选中页签换了也要重画。
@@ -319,14 +323,15 @@ internal fun verticalBarDrag(dx: Float, dy: Float, slop: Int): Boolean =
 internal fun barTouchOffset(point: Float, size: Int): Float =
     if (size <= 2) 0f else point.coerceIn(1f, size - 1f) - point
 
-private class BarTouch(bar: ViewGroup, pager: ViewGroup) {
-    private val pager = WeakReference(pager)
+private class BarTouch(bar: ViewGroup, pager: ViewGroup?) {
+    private val pager = pager?.let { WeakReference(it) }
     private val bar = WeakReference(bar)
     private var owner: WeakReference<ViewGroup>? = null
     private var target: WeakReference<View>? = null
     private var down: MotionEvent? = null
     private var forwarding = false
     private var selecting = false
+    private var badgeGesture = false
     private var offsetX = 0f
     private var offsetY = 0f
     private val slop = android.view.ViewConfiguration.get(bar.context).scaledTouchSlop
@@ -334,7 +339,10 @@ private class BarTouch(bar: ViewGroup, pager: ViewGroup) {
         override fun onViewAttachedToWindow(view: View) = Unit
         override fun onViewDetachedFromWindow(view: View) = cancel()
     }
-    init { bar.addOnAttachStateChangeListener(attach) }
+    init {
+        bar.addOnAttachStateChangeListener(attach)
+        if (pager == null) log("底栏原生内容页未绑定：保留按压/横拖，不猜纵滑目标")
+    }
     fun dispose() { cancel(); bar.get()?.removeOnAttachStateChangeListener(attach) }
 
     private fun point(source: View, dest: View, x: Float, y: Float): FloatArray {
@@ -358,7 +366,8 @@ private class BarTouch(bar: ViewGroup, pager: ViewGroup) {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             // 宿主先正常向胶囊分发；胶囊内部由自己的钩子跟踪，不拦设置按钮/浮层。
             if (source === host && contains(host, bar, event)) return native(event)
-            // 未读徽标的原生拖动消除/长按不交给列表。
+            // 徽标仍原生拖动/长按，但 DOWN 的视觉反馈不再漏掉。
+            var nativeBadge = false
             if (source === bar) {
                 fun badgeHit(view: View): Boolean {
                     if (!view.isShown || !contains(bar, view, event)) return false
@@ -366,10 +375,11 @@ private class BarTouch(bar: ViewGroup, pager: ViewGroup) {
                         .any { it.name == "com.tencent.mobileqq.quibadge.QUIBadge" }) return true
                     return view is ViewGroup && (0 until view.childCount).any { badgeHit(view.getChildAt(it)) }
                 }
-                if (badgeHit(bar)) return native(event)
+                nativeBadge = badgeHit(bar)
             }
-            val pager = pager.get()?.takeIf { it.isShown && it.parent === host } ?: return native(event)
+            val pager = pager?.get()?.takeIf { it.isShown && it.parent === host }
             if (source === host) {
+                if (pager == null) return native(event)
                 if (point(host, bar, event.x, event.y)[1] < 0) return native(event)
                 for (i in host.indexOfChild(pager) + 1 until host.childCount) {
                     val child = host.getChildAt(i)
@@ -378,13 +388,20 @@ private class BarTouch(bar: ViewGroup, pager: ViewGroup) {
                 }
             }
             cancel()
-            owner = WeakReference(source); target = WeakReference(pager)
+            badgeGesture = nativeBadge
+            owner = WeakReference(source); target = pager?.let { WeakReference(it) }
             down = MotionEvent.obtain(event)
+            if (source === bar) (bar.background as? Glass)?.kernelTouchDown(event.x)
         }
         if (owner?.get() !== source || down == null) return native(event)
         val first = down!!
         val dest = target?.get()
-        if (!on("玻璃底栏") || dest == null || !dest.isAttachedToWindow) { cancel(); return native(event) }
+        if (!on("玻璃底栏") || (dest != null && !dest.isAttachedToWindow)) { cancel(); return native(event) }
+        if (badgeGesture) {
+            val handled = native(event)
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) clear()
+            return handled
+        }
         // 未接管前的多指手势仍归原生；不向列表合成缺失的 POINTER_DOWN。
         if (!forwarding && event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
             (bar.background as? Glass)?.endKernelDrag(false)
@@ -411,7 +428,7 @@ private class BarTouch(bar: ViewGroup, pager: ViewGroup) {
             }
             return true
         }
-        if (!forwarding && event.actionMasked == MotionEvent.ACTION_MOVE &&
+        if (!forwarding && dest != null && event.actionMasked == MotionEvent.ACTION_MOVE &&
             verticalBarDrag(event.x - first.x, event.y - first.y, slop)) {
             val anchor = point(source, dest, first.x, first.y)
             offsetX = barTouchOffset(anchor[0], dest.width)
@@ -423,15 +440,17 @@ private class BarTouch(bar: ViewGroup, pager: ViewGroup) {
                 return native(event) // 原生页拒绝 DOWN 就不能宣称已接管，也不能吞掉后续事件。
             }
             forwarding = true
+            (bar.background as? Glass)?.kernelTouchEnd()
             host.requestDisallowInterceptTouchEvent(true)
         }
-        if (forwarding) send(source, dest, event) else native(event)
+        if (forwarding && dest != null) send(source, dest, event) else native(event)
         if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) clear()
         return true
     }
     private fun clear() {
         if (selecting) (bar.get()?.background as? Glass)?.endKernelDrag(false)
-        selecting = false
+        selecting = false; badgeGesture = false
+        (bar.get()?.background as? Glass)?.kernelTouchEnd()
         down?.recycle(); down = null; owner = null; target = null; forwarding = false; offsetX = 0f; offsetY = 0f
         bar.get()?.parent?.requestDisallowInterceptTouchEvent(false)
     }
@@ -447,14 +466,15 @@ private class BarTouch(bar: ViewGroup, pager: ViewGroup) {
 }
 private val barTouchHosts = WeakHashMap<ViewGroup, WeakReference<ViewGroup>>()
 
-/** 页签定宽 56dp：material 给的是平分整条的 weight，QQ 的页签视图又是 match_parent，胶囊就只能跟屏幕一样长。 */
+/** 上游最小宽 76dp、指示器高 56dp；各项等宽，数字变长时一同扩展。 */
 private val countTabWidths = WeakHashMap<View, Int>()
 
 private fun fit(tab: View) {
     val strip = tab.parent as? ViewGroup
-    val w = maxOf((56 * tab.dp).toInt(), strip?.let { group ->
-        (0 until group.childCount).maxOfOrNull { countTabWidths[group.getChildAt(it)] ?: 0 }
-    } ?: 0) // 收窄：胶囊两端正好包住首尾页签的圆
+    val w = kernelTabWidth(tab.dp, strip?.let { group ->
+        (0 until group.childCount).filter { group.getChildAt(it).visibility != View.GONE }
+            .maxOfOrNull { countTabWidths[group.getChildAt(it)] ?: 0 }
+    } ?: 0)
     val lp = tab.layoutParams as? LinearLayout.LayoutParams ?: return
     if (lp.width == w && lp.weight == 0f && tab.paddingLeft == 0) return
     lp.width = w

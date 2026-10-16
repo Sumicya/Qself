@@ -10,7 +10,7 @@
 ## 做了什么
 
 外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
-- 首页底栏按 [KernelSU 固定源码](https://github.com/tiann/KernelSU/tree/3186a2fe2107f7170e06dab7aa157eb10ae7759f/manager/app/src/main/java/me/weishu/kernelsu/ui/component) 移植到原生 View：64dp 栏 / 56dp 指示器、4dp 模糊、24dp 折射、按压色散、双峰重力高光和解析弹簧；横向拖动释放后选择真实 QQ 页签，纵向仍转交背后原生内容页。仅改底栏，菜单/圆钮不变，不增加 APK 依赖。QQ 与 Compose 的组合背景存在差异，**不宣称已完成一比一设备验收**；详细对应与差异见 [移植记录](docs/kernel-port.md)。
+- 首页底栏按 [KernelSU 固定源码](https://github.com/tiann/KernelSU/tree/3186a2fe2107f7170e06dab7aa157eb10ae7759f/manager/app/src/main/java/me/weishu/kernelsu/ui/component) 移植到原生 View：64dp 栏 / 最小 76dp 页签 / 56dp 指示器高度、4dp 模糊、24dp 折射、按压色散、双峰重力高光和解析弹簧；横向拖动释放后选择真实 QQ 页签，纵向仍转交背后原生内容页。仅改底栏；菜单/圆钮材质不变，圆钮位置预留按压扩张空间，不增加 APK 依赖。QQ 与 Compose 的组合背景存在差异，**不宣称已完成一比一设备验收**；详细对应与差异见 [移植记录](docs/kernel-port.md)。
 - 底栏角标按真实计数入口展开「99+」；底栏 QUIBadge 在 widget.d.a 转文字之前保留第 3 个参数的真实数量，数字宽度与左右内边距一同调整；底栏纯数字不画红底或边框，按页签横向居中（仍待设备验收）
 - **Monet 取色**：玻璃的罩色、选中圆、圆钮的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色

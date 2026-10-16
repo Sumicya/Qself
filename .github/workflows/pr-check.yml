@@ -33,7 +33,7 @@ jobs:
           python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin --quiet
           python3 tools/ui_paths.py qq.apk
           python3 -m unittest discover -s tools -p 'test_*.py'
-      - name: Skia CPU 编译四份移植着色器（不是设备验收）
+      - name: Skia CPU 编译五份移植着色器（不是设备验收）
         run: bash ci/check-shaders.sh
 
   test:

@@ -239,24 +239,27 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         return true
     }
 
-    // View 只会把 pressed state 传给 stateful background；底栏还会由 sync() 检查子页签。
+    // 底栏的按压直接由 DOWN/UP/CANCEL 驱动；通用材质才读取 View pressed。
     override fun isStateful() = true
 
     override fun onStateChange(state: IntArray): Boolean {
         if (kernel != null) {
-            kernel.sync(state.contains(android.R.attr.state_pressed) || hasPressedDescendant(host))
+            kernel.sync()
             return true
         }
         return setPress(state.contains(android.R.attr.state_pressed))
     }
 
-    /** 选中页签换了就重画；每帧 pre-draw 时由宿主调一次。底栏自己拿不到 pressed
-     * （触摸被页签吃掉），在这里看子/孙视图有没有被按着。 */
+    /** 每帧 pre-draw 同步选中项；仅通用材质检查后代 pressed，底栏由真实触摸驱动。 */
     fun sync() {
-        kernel?.let { it.sync(host.isPressed || hasPressedDescendant(host)); return }
+        kernel?.let { it.sync(); return }
         if (selected?.invoke() !== target) invalidateSelf()
         setPress(host.isPressed || hasPressedDescendant(host))
     }
+
+    internal val isKernelBar: Boolean get() = kernel != null
+    fun kernelTouchDown(x: Float) { kernel?.touchDown(x) }
+    fun kernelTouchEnd() { kernel?.touchEnd() }
 
     fun beginKernelDrag(x: Float): Boolean {
         val renderer = kernel ?: return false

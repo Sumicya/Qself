@@ -52,7 +52,7 @@ class AppearanceContractTest(unittest.TestCase):
     def test_background_drag_replays_down_after_native_cancel(self):
         body = LOOKS.split('private class BarTouch(', 1)[1].split('private val barTouchHosts', 1)[0]
         self.assertLess(body.index('try { native(cancel) }'), body.index('send(source, dest, first)'))
-        self.assertLess(body.index('send(source, dest, first)'), body.index('if (forwarding) send(source, dest, event)'))
+        self.assertLess(body.index('send(source, dest, first)'), body.index('if (forwarding && dest != null) send(source, dest, event)'))
         self.assertIn('copy.transform(matrix); copy.offsetLocation(offsetX, offsetY); dest.dispatchTouchEvent(copy)', body)
         self.assertIn('onViewDetachedFromWindow(view: View) = cancel()', body)
         self.assertNotIn('onInterceptTouchEvent(', body)
@@ -64,7 +64,7 @@ class AppearanceContractTest(unittest.TestCase):
         self.assertIn('frame.getDeclaredMethod("a")', LOOKS)
         self.assertIn('if (tab.get(owner) !== bar) null', LOOKS)
         self.assertIn('?.takeIf { it.parent === bar.parent }', LOOKS)
-        self.assertIn('target = WeakReference(pager)', LOOKS)
+        self.assertIn('target = pager?.let { WeakReference(it) }', LOOKS)
         for forbidden in ('scrollTarget(', 'canScrollVertically(', 'pager.width / 2', 'contains("ViewPager")'):
             self.assertNotIn(forbidden, LOOKS)
 

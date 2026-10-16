@@ -50,6 +50,10 @@ internal fun kernelIndex(x: Float, width: Float, count: Int, rtl: Boolean): Int 
     if (count <= 0 || width <= 8f) 0 else (((if (rtl) width - x else x) - 4f) /
         ((width - 8f) / count)).toInt().coerceIn(0, count - 1)
 
+/** 上游 BottomBarMiuix.defaultMinSize(76.dp)，56dp 是高度，不是页签宽度。 */
+internal fun kernelTabWidth(density: Float, badgeWidth: Int): Int =
+    max((76 * density).toInt(), badgeWidth)
+
 /** QQ 仍持有真实页签、点击及无障碍；这里只接管底栏背景、按压和横向选择。 */
 internal class KernelBar(private val host: View, private val behind: (Canvas) -> Unit,
     private val invalidate: () -> Unit) : SensorEventListener {
@@ -62,6 +66,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     private val colorControls = RuntimeShader(COLOR_CONTROLS_SHADER)
     private val dispersion = RuntimeShader(ROUNDED_RECT_REFRACTION_WITH_DISPERSION_SHADER)
     private val bloom = RuntimeShader(BLOOM_STROKE_SHADER_DUAL)
+    private val interactive = RuntimeShader(INTERACTIVE_HIGHLIGHT_SHADER)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
     private val value = KernelSpring(1f, 1000f)
@@ -77,7 +82,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     private var posted = false
     private var lastFrame = 0L
     private var ready = false
-    private var pressed = false
+    private var touching = false
     private var releasing = false
     private var dragging = false
     private var chosen: View? = null
@@ -132,19 +137,35 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         strip?.let { it.translationX = remember(it)[2] + panel() }
         tabs().forEach { tab ->
             val old = remember(tab)
-            val factor = if (tab === chosen || tab.isSelected) 1f + .2f * p else 1f
+            val factor = 1f + .2f * p // 上游的内容缩放作用于整行，不只选中项。
             tab.scaleX = old[0] * factor; tab.scaleY = old[1] * factor
         }
     }
-    fun sync(isPressed: Boolean) {
+    fun sync() {
         val tabs = tabs()
         val selected = tabs.indexOfFirst { it.isSelected }.coerceAtLeast(0)
         if (!ready && tabs.isNotEmpty()) { value.snap(selected.toFloat()); chosen = tabs.getOrNull(selected); ready = true }
-        if (!dragging && chosen !== tabs.getOrNull(selected)) {
+        if (!dragging && !touching && chosen !== tabs.getOrNull(selected)) {
             chosen = tabs.getOrNull(selected); value.target = selected.toFloat()
             press(true); releasing = true; schedule()
         }
-        if (!dragging && isPressed != pressed) { pressed = isPressed; press(isPressed) }
+    }
+    // DOWN/UP 来自实际分发链，不依赖 QQ 子视图延迟设置 pressed 或内容页绑定成功。
+    fun touchDown(x: Float) {
+        sync()
+        touching = true
+        value.target = kernelIndex(x / dp, host.width / dp, tabs().size,
+            host.layoutDirection == View.LAYOUT_DIRECTION_RTL).toFloat()
+        press(true)
+    }
+    fun touchEnd() {
+        if (!touching) return
+        touching = false
+        if (dragging) end(false)
+        else {
+            value.target = tabs().indexOfFirst { it.isSelected }.coerceAtLeast(0).toFloat()
+            press(false)
+        }
     }
     private fun press(down: Boolean) {
         if (down) {
@@ -189,10 +210,10 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         sensors.getDefaultSensor(Sensor.TYPE_GRAVITY)?.let { sensors.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
     }
     fun stop() {
-        attached = false; dragging = false; posted = false; lastFrame = 0L
+        attached = false; dragging = false; touching = false; posted = false; lastFrame = 0L
         frameClock.removeFrameCallback(frame); sensors.unregisterListener(this)
         originals.forEach { (view, old) -> view.scaleX = old[0]; view.scaleY = old[1]; view.translationX = old[2] }
-        originals.clear(); ready = false; chosen = null; releasing = false; pressed = false
+        originals.clear(); ready = false; chosen = null; releasing = false
         springs.forEach { it.snap(if (it === scaleX || it === scaleY) 1f else 0f) }
         scene.discardDisplayList(); base.discardDisplayList(); indicator.discardDisplayList(); shadow.discardDisplayList()
         baseKey = 0L
@@ -249,13 +270,13 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     fun draw(canvas: Canvas, bounds: Rect, alpha: Int, filter: ColorFilter?) {
         if (bounds.isEmpty) return
         if (!canvas.isHardwareAccelerated) {
-            paint.color = if (night()) 0xFF242428.toInt() else 0xFFF5F5F5.toInt()
+            paint.color = if (night()) 0xFF242424.toInt() else Color.WHITE
             canvas.drawRoundRect(RectF(bounds),bounds.height()/2f,bounds.height()/2f,paint)
             return // 软件截图不能执行 RenderNode；不是把纯色路径当作玻璃验收。
         }
         val w = bounds.width(); val h = bounds.height(); val pad = (40*dp).toInt()
         val p = progress.value.coerceIn(0f,1f); val surface = RectF(0f,0f,w.toFloat(),h.toFloat())
-        val layer = canvas.saveLayer(RectF(bounds), Paint().apply { this.alpha = alpha; colorFilter = filter })
+        val layer = canvas.saveLayer(RectF(bounds).apply { inset(-pad.toFloat(), -pad.toFloat()) }, Paint().apply { this.alpha = alpha; colorFilter = filter })
         canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
         try {
             scene.setPosition(-pad,-pad,w+pad,h+pad)
@@ -286,9 +307,14 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
                     paint.blendMode = BlendMode.PLUS
                     paint.color = Color.argb((.06f*hp*255).toInt(),255,255,255)
                     canvas.drawRect(surface,paint)
-                    paint.shader = RadialGradient((value.value+.5f)*((w-8*dp)/tabs().size.coerceAtLeast(1))+4*dp,
-                        h/2f,h*1.2f,intArrayOf(Color.argb((.12f*hp*255).toInt(),255,255,255),Color.TRANSPARENT),
-                        floatArrayOf(.5f,1f),Shader.TileMode.CLAMP)
+                    val tabWidth = (w-8*dp)/tabs().size.coerceAtLeast(1)
+                    val logical = (value.value+.5f)*tabWidth
+                    val hx = if (host.layoutDirection == View.LAYOUT_DIRECTION_RTL) w-logical else logical
+                    interactive.setFloatUniform("size", w.toFloat(), h.toFloat())
+                    interactive.setColorUniform("color", Color.argb((.12f*hp*255).toInt(),255,255,255))
+                    interactive.setFloatUniform("radius", min(w,h)*1.2f)
+                    interactive.setFloatUniform("position", (hx+shift).coerceIn(0f,w.toFloat()), h/2f)
+                    paint.shader = interactive
                     canvas.drawRect(surface,paint); paint.shader = null; paint.blendMode = null
                 }
             }
@@ -311,9 +337,12 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
                 try { ic.translate(pad-rect.left,pad-rect.top); ic.drawRenderNode(base) } finally { indicator.endRecording() }
                 rounded(canvas,rect) {
                     canvas.drawRenderNode(indicator)
+                    // base 只包含折射背景；指示器另叠一次 surface，不能省略或当成重复罩色。
                     paint.color = if (night()) 0x66242424 else 0x66FFFFFF
                     canvas.drawRect(rect,paint)
-                    paint.color = Color.argb(((.1f*(1-p)+.03f*p)*255).toInt(),if(night())255 else 0,if(night())255 else 0,if(night())255 else 0)
+                    paint.color = Color.argb((.1f*(1-p)*255).toInt(),if(night())255 else 0,if(night())255 else 0,if(night())255 else 0)
+                    canvas.drawRect(rect,paint)
+                    paint.color = Color.argb((.03f*p*255).toInt(),0,0,0)
                     canvas.drawRect(rect,paint)
                     if (p > .001f) {
                         val blurRadius = 8*dp*p
@@ -600,3 +629,16 @@ private const val COLOR_CONTROLS_SHADER = """
         return half4(c * a, a);
     }
 """
+
+// KernelSU InteractiveHighlight.kt 原 smoothstep 高光，不能以线性 RadialGradient 替代。
+private const val INTERACTIVE_HIGHLIGHT_SHADER = """
+    uniform float2 size;
+    layout(color) uniform half4 color;
+    uniform float radius;
+    uniform float2 position;
+
+    half4 main(float2 coord) {
+        float dist = distance(coord, position);
+        float intensity = smoothstep(radius, radius * 0.5, dist);
+        return color * intensity;
+    }"""

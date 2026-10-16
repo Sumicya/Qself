@@ -32,6 +32,8 @@ import android.window.OnBackInvokedDispatcher
 import java.util.Collections
 import java.util.WeakHashMap
 import kotlin.math.min
+import kotlin.math.ceil
+import kotlin.math.max
 
 private const val KNOB = "qself-knob"
 private const val SHEET = "qself-sheet"
@@ -61,6 +63,10 @@ private fun View.pressMotion() {
     })
 }
 
+/** 1.8 包住 78/56 按压弹簧峰值×最大速度伸长；另留整栏扩张 8dp、平移 4dp。 */
+internal fun kernelOverhang(tabWidth: Float, density: Float): Int =
+    ceil(max(0f, tabWidth * .4f - 4 * density) + 12 * density).toInt()
+
 fun knob(bar: View) {
     val decor = bar.rootView as? ViewGroup ?: return
     val old = decor.findViewWithTag<View>(KNOB)
@@ -69,11 +75,17 @@ fun knob(bar: View) {
     val dp = bar.dp
     val size = (52 * dp).toInt()
     val at = IntArray(2).also(bar::getLocationInWindow)
-    val room = decor.width - at[0] - bar.width
-    val beside = room >= (8 * dp).toInt() + size
+    val room = if (decor.layoutDirection == View.LAYOUT_DIRECTION_RTL) at[0]
+        else decor.width - at[0] - bar.width
+    val kernel = (bar.background as? Glass)?.isKernelBar == true
+    val strip = (bar as? ViewGroup)?.getChildAt(0) as? ViewGroup
+    val count = strip?.let { group -> (0 until group.childCount).count { group.getChildAt(it).visibility == View.VISIBLE } } ?: 1
+    val clearance = if (kernel) kernelOverhang((bar.width-8*dp)/count.coerceAtLeast(1), dp) else 0
+    val gap = (8 * dp).toInt()
+    val beside = room >= gap + clearance + size
     val bottom = if (beside) decor.height - at[1] - (bar.height + size) / 2
-        else decor.height - at[1] + (8 * dp).toInt()
-    val end = if (beside) room - (8 * dp).toInt() - size else (8 * dp).toInt()
+        else decor.height - at[1] + gap + if (kernel) kernelOverhang(56*dp, dp) else 0
+    val end = if (beside) room - gap - clearance - size else gap
     if (old != null) {
         old.visibility = View.VISIBLE
         val lp = old.layoutParams as ViewGroup.MarginLayoutParams

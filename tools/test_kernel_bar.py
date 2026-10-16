@@ -51,3 +51,27 @@ class KernelPortTest(unittest.TestCase):
         self.assertIn('verticalBarDrag(event.x - first.x', LOOKS)
         self.assertIn('send(source, dest, event)', LOOKS)
         self.assertIn('state.parentClip', LOOKS)
+
+    def test_down_starts_press_without_pager_or_native_pressed_polling(self):
+        self.assertIn('val touch = BarTouch(bar, nativeBarContent?.invoke(bar))', LOOKS)
+        body = LOOKS.split('private class BarTouch(', 1)[1].split('private val barTouchHosts', 1)[0]
+        self.assertLess(body.index('kernelTouchDown(event.x)'), body.index('kotlin.math.abs(event.x - first.x) > slop'))
+        self.assertIn('kernelTouchEnd()', body)
+        self.assertNotIn('isPressed', KERNEL)
+        self.assertIn('if (!dragging && !touching && chosen', KERNEL)
+        self.assertIn('badgeGesture = nativeBadge', body)
+        self.assertIn('touching = false', KERNEL.split('fun stop()', 1)[1])
+
+    def test_pressed_pill_and_tab_content_are_not_clipped_to_the_bar_height(self):
+        self.assertIn('inset(-pad.toFloat(), -pad.toFloat())', KERNEL)
+        self.assertIn('it.clipChildren = false; it.clipToPadding = false', LOOKS)
+        self.assertIn('it.clipChildren = old.first; it.clipToPadding = old.second', LOOKS)
+        self.assertIn('val factor = 1f + .2f * p', KERNEL)
+        self.assertNotIn('paint.shader = RadialGradient', KERNEL)
+        self.assertIn('RuntimeShader(INTERACTIVE_HIGHLIGHT_SHADER)', KERNEL)
+
+    def test_knob_layout_reserves_pressed_visual_envelope_without_restylizing_it(self):
+        knob = (ROOT / 'app/src/main/kotlin/sumicya/qself/Knob.kt').read_text()
+        self.assertIn('room >= gap + clearance + size', knob)
+        self.assertIn('kernelOverhang((bar.width-8*dp)/count.coerceAtLeast(1), dp)', knob)
+        self.assertIn('roundBar = true', knob)
