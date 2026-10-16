@@ -32,10 +32,12 @@ import kotlin.math.min
  * 罩一层淡色。没有高光也没有描边；按下去透镜凹一点、整面浮一层柔光。全在 GPU 上，
  * 每帧只多录一遍身后的 display list。
  *
+ * 主页底栏单独委托 KernelBar，使用上游模糊/折射/高光，不走以下通用材质。
  * [radius] 圆角上限（默认全圆 = 胶囊 / 圆钮），[selected] 给底栏用：返回当前选中的页签，
  * 玻璃里就多一块会弹着滑过去的亮胶囊。
  */
-class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, private val roundBar: Boolean = false, private val selected: (() -> View?)? = null) : Drawable() {
+class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, private val roundBar: Boolean = false, kernelBar: Boolean = false, private val selected: (() -> View?)? = null) : Drawable() {
+    private val kernel = if (kernelBar) KernelBar(host, { behind(it) }, { invalidateSelf() }) else null
     private val dp = host.dp
     private val node = RenderNode("qself-glass")
     private val pad = (12 * dp).toInt() // 边缘折射往里采样，留一点余量就够
@@ -64,14 +66,16 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     private var toX = 0f
     private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> key = 0L; invalidateSelf() }
     private val attachListener = object : View.OnAttachStateChangeListener {
-        override fun onViewAttachedToWindow(v: View) { key = 0L; invalidateSelf() }
+        override fun onViewAttachedToWindow(v: View) { kernel?.attach(); key = 0L; invalidateSelf() }
         override fun onViewDetachedFromWindow(v: View) { stopAnimations() }
     }
     init {
+        if (host.isAttachedToWindow) kernel?.attach()
         host.addOnLayoutChangeListener(layoutListener)
         host.addOnAttachStateChangeListener(attachListener)
     }
     private fun stopAnimations() {
+        kernel?.stop()
         pressAnim.cancel(); anim.cancel(); press = 0f; pressed = false; target = null
         busy = false; key = 0L; node.discardDisplayList()
     }
@@ -90,6 +94,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     override fun draw(canvas: Canvas) {
         val b = bounds
         if (b.isEmpty) return
+        kernel?.let { it.draw(canvas, b, drawableAlpha, drawableColorFilter); return }
         val night = night()
         if (roundBar) {
             // KernelSU 无模糊分支的全圆角底色 + 独立圆形选中项；只填充，不描边、不录制背景。
@@ -237,15 +242,28 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     // View 只会把 pressed state 传给 stateful background；底栏还会由 sync() 检查子页签。
     override fun isStateful() = true
 
-    override fun onStateChange(state: IntArray): Boolean =
-        setPress(state.contains(android.R.attr.state_pressed))
+    override fun onStateChange(state: IntArray): Boolean {
+        if (kernel != null) {
+            kernel.sync(state.contains(android.R.attr.state_pressed) || hasPressedDescendant(host))
+            return true
+        }
+        return setPress(state.contains(android.R.attr.state_pressed))
+    }
 
     /** 选中页签换了就重画；每帧 pre-draw 时由宿主调一次。底栏自己拿不到 pressed
      * （触摸被页签吃掉），在这里看子/孙视图有没有被按着。 */
     fun sync() {
+        kernel?.let { it.sync(host.isPressed || hasPressedDescendant(host)); return }
         if (selected?.invoke() !== target) invalidateSelf()
         setPress(host.isPressed || hasPressedDescendant(host))
     }
+
+    fun beginKernelDrag(x: Float): Boolean {
+        val renderer = kernel ?: return false
+        renderer.begin(x); return true
+    }
+    fun dragKernel(x: Float) { kernel?.drag(x) }
+    fun endKernelDrag(commit: Boolean) { kernel?.end(commit) }
 
     private fun hasPressedDescendant(v: View): Boolean {
         if (v.isPressed) return true

@@ -39,6 +39,9 @@ android {
         }
     }
 
+    // 将源码移植的许可随 APK 一同分发，不添加任何运行库。
+    sourceSets["main"].assets.srcDir(rootProject.file("third_party"))
+
     buildFeatures {
         buildConfig = true // 只为日志里那一句版本号
     }

@@ -143,6 +143,64 @@ class ProtoTest {
         assertFalse(conflict.first == conflict.second)
     }
 
+    @Test fun kernelCriticalSpringSettlesWithoutOvershoot() {
+        val spring = KernelSpring(1f, 1000f)
+        spring.target = 1f
+        var previous = 0f
+        repeat(240) {
+            spring.step(1f / 120)
+            assertTrue(spring.value >= previous && spring.value <= 1f)
+            previous = spring.value
+        }
+        assertEquals(1f, spring.value)
+        assertEquals(0f, spring.velocity)
+        assertFalse(spring.step(1f / 60))
+    }
+
+    @Test fun kernelScaleUsesUnderdampedOvershootAndRestores() {
+        val spring = KernelSpring(.6f, 250f, 1f)
+        spring.target = 78f / 56f
+        var peak = 1f
+        repeat(240) { spring.step(1f / 120); peak = maxOf(peak, spring.value) }
+        assertTrue(peak > spring.target)
+        spring.target = 1f
+        repeat(240) { spring.step(1f / 120) }
+        assertEquals(1f, spring.value)
+    }
+
+    @Test fun kernelSpringIsIndependentOfDisplayRefreshRate() {
+        fun run(fps: Int): Float {
+            val spring = KernelSpring(.7f, 250f)
+            spring.target = 1f
+            repeat(fps / 2) { spring.step(1f / fps) }
+            return spring.value
+        }
+        assertTrue(kotlin.math.abs(run(30) - run(120)) < .0001f)
+        assertTrue(kotlin.math.abs(run(60) - run(120)) < .0001f)
+    }
+
+    @Test fun kernelSpringRetargetDoesNotResetPositionOrVelocity() {
+        val spring = KernelSpring(.6f, 250f)
+        spring.target = 1f
+        repeat(4) { spring.step(1f / 60) }
+        val position = spring.value
+        val velocity = spring.velocity
+        spring.target = 0f
+        assertEquals(position, spring.value)
+        assertEquals(velocity, spring.velocity)
+        repeat(240) { spring.step(1f / 120) }
+        assertEquals(0f, spring.value)
+    }
+
+    @Test fun kernelIndexHonorsPaddingRtlAndBounds() {
+        assertEquals(0, kernelIndex(-10f, 232f, 4, false))
+        assertEquals(3, kernelIndex(240f, 232f, 4, false))
+        assertEquals(3, kernelIndex(4f, 232f, 4, true))
+        assertEquals(0, kernelIndex(228f, 232f, 4, true))
+        assertEquals(1, kernelIndex(88f, 232f, 4, false))
+        assertEquals(0, kernelIndex(8f, 0f, 0, false))
+    }
+
     @Test fun plainBottomCountDoesNotReplaceDotsNewOrIconBadges() {
         assertTrue(bottomNumericBadge("1200", 2))
         assertTrue(bottomNumericBadge("9", 9))

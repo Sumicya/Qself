@@ -3,7 +3,7 @@
 ## 是什么
 
 一个纯钩子的 LSPosed 模块（libxposed API 102），只针对 QQ 9.2.10 / Android 16。模块 APK 没有界面；
-纯 Kotlin，八个源码文件，没有第三方依赖、没有 `.so`、不联网。外观照 NagramXF 那套长相做（液态玻璃 + Monet 取色 + 原生输入区玻璃化）。
+纯 Kotlin，九个源码文件，没有第三方依赖、没有 `.so`、不联网。主页底栏按 KernelSU 算法移植，不引入 Compose/Miuix 运行库；其余玻璃保留 NagramXF 方向和原生输入区玻璃化。
 
 开关是 QQ 主页底栏右上角一颗圆钮弹出的紧凑玻璃面板，状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
 
@@ -23,7 +23,7 @@
 - minSdk 36：只有 Android 16，别写 `SDK_INT` 判断和降级分支
 - 故意省掉的地方写 `ponytail:` 注释，说清上限和往上走的路
 - 非平凡逻辑留一份能跑的检查（目前只有 `ProtoTest.kt`）
-- 外观文件（`Glass.kt` / `Input.kt` / `Looks.kt` / `Knob.kt`）的实际视觉与生命周期不能由 dex 核验代替，必须真机检查；
+- 外观文件（`Glass.kt` / `KernelBar.kt` / `Input.kt` / `Looks.kt` / `Knob.kt`）的实际视觉与生命周期不能由 dex 核验代替，必须真机检查；
   改完说清楚改了哪块长相，别让人猜
 - 代码先行，解释不超过三行；中文
 

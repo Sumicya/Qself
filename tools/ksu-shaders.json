@@ -1,0 +1,18 @@
+{
+  "kernelsu_ref": "3186a2fe2107f7170e06dab7aa157eb10ae7759f",
+  "miuix_ref": "v0.9.4",
+  "expanded_shader_sha256": {
+    "ROUNDED_RECT_REFRACTION_SHADER": "5bb433b1704ff072228c2ffce5c353ec65e78af2787174e6c5beffcad922d1fc",
+    "ROUNDED_RECT_REFRACTION_WITH_DISPERSION_SHADER": "580a5726f73c9e8857322205a78e88cf34e7576bada87d512481eef5801ab1f2",
+    "BLOOM_STROKE_SHADER_DUAL": "2e14e2de4e3a60a4afbbd1619443f21bd4d945d8ff09116439cbf3754d6ad383",
+    "COLOR_CONTROLS_SHADER": "f58f70cac1c0f4b670fb8480e2eeeea62f65a5ab6224ef263ca5dc6d08cab9c1"
+  },
+  "miuix_commit": "39c40f99844227b853f0049a0933b1f3ae6c00ba",
+  "source_file_sha256": {
+    "FloatingBottomBar.kt": "7b9f68d8e56336e511640822c9807989d0d751ac832a0a542e9d75374b72bca9",
+    "Lens.kt": "9ad786e59e092575ac2eec22f34835d98e48b6bfc494f4c7c4235b23383420d0",
+    "DampedDragAnimation.kt": "d9feb6e69bcc294b21c9bd14f8287147817d405d79654de600ee15fb42171b51",
+    "MiuixShaders.kt": "2703d5a86bbac35797c87fc6131c92be2d126fe77bf0d99fae34e84984c5ecda",
+    "HighlightStyle.kt": "fd9d1f7e034d1d48e0551e5e8a81c729d7cd8b02ef63385368b695118ca64487"
+  }
+}

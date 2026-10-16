@@ -201,6 +201,9 @@ private class BarState(bar: ViewGroup) {
     val outline = bar.outlineProvider
     val clip = bar.clipToOutline
     val elevation = bar.elevation
+    val parentClip = (bar.parent as? ViewGroup)?.clipChildren
+    val ambientShadow = bar.outlineAmbientShadowColor
+    val spotShadow = bar.outlineSpotShadowColor
     val padding = intArrayOf(bar.paddingLeft, bar.paddingTop, bar.paddingRight, bar.paddingBottom)
     val stripPadding = bar.getChildAt(0)?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
     val tabs = WeakHashMap<View, Pair<ViewGroup.LayoutParams, IntArray>>()
@@ -223,6 +226,8 @@ private fun restoreBar(bar: ViewGroup) {
     (bar.background as? Glass)?.dispose()
     bar.layoutParams = copyLayoutParams(state.params)
     bar.background = state.background; bar.outlineProvider = state.outline; bar.clipToOutline = state.clip
+    state.parentClip?.let { (bar.parent as? ViewGroup)?.clipChildren = it }
+    bar.outlineAmbientShadowColor = state.ambientShadow; bar.outlineSpotShadowColor = state.spotShadow
     bar.elevation = state.elevation
     state.padding.let { bar.setPadding(it[0], it[1], it[2], it[3]) }
     state.stripPadding?.let { bar.getChildAt(0)?.setPadding(it[0], it[1], it[2], it[3]) }
@@ -267,13 +272,17 @@ private fun homeBar(bar: ViewGroup) {
 
 private fun float(bar: ViewGroup) {
     bar.outlineProvider = capsule()
-    bar.clipToOutline = true
+    bar.clipToOutline = false // 上游按压指示器从 56dp 扩到 78dp，不能裁在 64dp 栏内。
+    (bar.parent as? ViewGroup)?.clipChildren = false
     val dp = bar.dp
     (bar.parent as? ViewGroup)?.let { barTouchHosts[it] = WeakReference(bar) }
-    bar.elevation = 4 * dp
+    bar.elevation = 10 * dp
+    bar.outlineAmbientShadowColor = if (night()) 0x33000000 else 0x1A000000
+    bar.outlineSpotShadowColor = bar.outlineAmbientShadowColor
     // 胶囊只包住页签、居中：iOS 那样不是通栏。
     bar.layoutParams?.let {
         it.width = ViewGroup.LayoutParams.WRAP_CONTENT
+        it.height = (64 * dp).toInt()
         when (it) {
             is FrameLayout.LayoutParams -> it.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
             is LinearLayout.LayoutParams -> it.gravity = Gravity.CENTER_HORIZONTAL
@@ -286,9 +295,9 @@ private fun float(bar: ViewGroup) {
         bar.layoutParams = it
     }
     // 两头的留白放在页签条上而不是 bar 上：material 固定模式会把页签条量成 bar 的整宽（含 padding），放 bar 上会挤歪。
-    bar.setPadding(0, bar.paddingTop, 0, bar.paddingBottom)
-    bar.getChildAt(0)?.setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0) // 两端留白收掉，玻璃贴着按钮
-    val glass = Glass(bar, roundBar = true) { selectedTab(bar) }
+    bar.setPadding(0, 0, 0, 0)
+    bar.getChildAt(0)?.setPadding((4 * dp).toInt(), (4 * dp).toInt(), (4 * dp).toInt(), (4 * dp).toInt())
+    val glass = Glass(bar, kernelBar = true) { selectedTab(bar) }
     bar.background = glass
     // 内容一滚、布局一变就重画一次玻璃（底栏自己不会因为身后的东西动而重画）；选中页签换了也要重画。
     val weak = WeakReference(bar)
@@ -317,6 +326,7 @@ private class BarTouch(bar: ViewGroup, pager: ViewGroup) {
     private var target: WeakReference<View>? = null
     private var down: MotionEvent? = null
     private var forwarding = false
+    private var selecting = false
     private var offsetX = 0f
     private var offsetY = 0f
     private val slop = android.view.ViewConfiguration.get(bar.context).scaledTouchSlop
@@ -376,11 +386,30 @@ private class BarTouch(bar: ViewGroup, pager: ViewGroup) {
         val dest = target?.get()
         if (!on("玻璃底栏") || dest == null || !dest.isAttachedToWindow) { cancel(); return native(event) }
         // 未接管前的多指手势仍归原生；不向列表合成缺失的 POINTER_DOWN。
-        if (!forwarding && event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) { clear(); return native(event) }
-        if (!forwarding && event.actionMasked == MotionEvent.ACTION_MOVE &&
+        if (!forwarding && event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
+            (bar.background as? Glass)?.endKernelDrag(false)
+            clear(); return native(event)
+        }
+        if (!forwarding && !selecting && event.actionMasked == MotionEvent.ACTION_MOVE &&
             kotlin.math.abs(event.x - first.x) > slop &&
             kotlin.math.abs(event.x - first.x) >= kotlin.math.abs(event.y - first.y)) {
-            clear(); return native(event) // 首先形成横向手势后不再中途改投另一页列表。
+            val glass = bar.background as? Glass
+            val start = point(source, bar, first.x, first.y)
+            if (source === bar && glass?.beginKernelDrag(start[0]) == true) {
+                val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+                try { native(cancel) } finally { cancel.recycle() }
+                selecting = true; host.requestDisallowInterceptTouchEvent(true)
+            } else { clear(); return native(event) }
+        }
+        if (selecting) {
+            val glass = bar.background as? Glass
+            if (event.actionMasked == MotionEvent.ACTION_MOVE) glass?.dragKernel(point(source, bar, event.x, event.y)[0])
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                selecting = false
+                glass?.endKernelDrag(event.actionMasked == MotionEvent.ACTION_UP)
+                clear()
+            }
+            return true
         }
         if (!forwarding && event.actionMasked == MotionEvent.ACTION_MOVE &&
             verticalBarDrag(event.x - first.x, event.y - first.y, slop)) {
@@ -401,6 +430,8 @@ private class BarTouch(bar: ViewGroup, pager: ViewGroup) {
         return true
     }
     private fun clear() {
+        if (selecting) (bar.get()?.background as? Glass)?.endKernelDrag(false)
+        selecting = false
         down?.recycle(); down = null; owner = null; target = null; forwarding = false; offsetX = 0f; offsetY = 0f
         bar.get()?.parent?.requestDisallowInterceptTouchEvent(false)
     }
@@ -420,7 +451,10 @@ private val barTouchHosts = WeakHashMap<ViewGroup, WeakReference<ViewGroup>>()
 private val countTabWidths = WeakHashMap<View, Int>()
 
 private fun fit(tab: View) {
-    val w = maxOf((56 * tab.dp).toInt(), countTabWidths[tab] ?: 0) // 收窄：胶囊两端正好包住首尾页签的圆
+    val strip = tab.parent as? ViewGroup
+    val w = maxOf((56 * tab.dp).toInt(), strip?.let { group ->
+        (0 until group.childCount).maxOfOrNull { countTabWidths[group.getChildAt(it)] ?: 0 }
+    } ?: 0) // 收窄：胶囊两端正好包住首尾页签的圆
     val lp = tab.layoutParams as? LinearLayout.LayoutParams ?: return
     if (lp.width == w && lp.weight == 0f && tab.paddingLeft == 0) return
     lp.width = w
@@ -445,7 +479,7 @@ private fun settle(bar: ViewGroup) {
     val delta = inset - (absorbed[bar] ?: 0) // QQ 反复设同一个值时不要越挪越高
     (bar.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
         it.bottomMargin += delta
-        if (it.height > 0) it.height -= delta
+        it.height = (64 * bar.dp).toInt()
         absorbed[bar] = inset
         bar.setPadding(bar.paddingLeft, bar.paddingTop, bar.paddingRight, 0)
         bar.layoutParams = it

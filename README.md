@@ -10,7 +10,7 @@
 ## 做了什么
 
 外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
-- 首页底栏参考 KernelSU 的无模糊分支，使用全圆角底色和独立圆形选中项：保留面状高光，不模糊、不描边、不录制背景；页签最小 56dp，可随数字宽度变长
+- 首页底栏按 [KernelSU 固定源码](https://github.com/tiann/KernelSU/tree/3186a2fe2107f7170e06dab7aa157eb10ae7759f/manager/app/src/main/java/me/weishu/kernelsu/ui/component) 移植到原生 View：64dp 栏 / 56dp 指示器、4dp 模糊、24dp 折射、按压色散、双峰重力高光和解析弹簧；横向拖动释放后选择真实 QQ 页签，纵向仍转交背后原生内容页。仅改底栏，菜单/圆钮不变，不增加 APK 依赖。QQ 与 Compose 的组合背景存在差异，**不宣称已完成一比一设备验收**；详细对应与差异见 [移植记录](docs/kernel-port.md)。
 - 底栏角标按真实计数入口展开「99+」；底栏 QUIBadge 在 widget.d.a 转文字之前保留第 3 个参数的真实数量，数字宽度与左右内边距一同调整；底栏纯数字不画红底或边框，按页签横向居中（仍待设备验收）
 - **Monet 取色**：玻璃的罩色、选中圆、圆钮的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色
@@ -61,7 +61,8 @@ app/src/main/kotlin/sumicya/qself/
   Chat.kt    聊天，含防撤回用的几十行 protobuf 读取、撤回灰字、连发合并、回复不@
   Looks.kt   外观：盯住每个 Activity 的视图树套规则
   Input.kt   TG 式输入栏
-  Glass.kt   液态玻璃 Drawable（RenderNode + AGSL + Monet 取色，底栏用时自带滑动亮胶囊）
+  Glass.kt   通用液态玻璃 Drawable；仅主页底栏委托 KernelBar
+  KernelBar.kt   KernelSU 算法的无依赖 View 移植（着色器 / 弹簧 / 手势 / 生命周期）
 app/src/test/kotlin/sumicya/qself/ProtoTest.kt   协议、分组、间距、菜单尺寸等纯逻辑回归
 app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop、作用域
 tools/symbols.txt    落点表：代码依赖的每一个名字
@@ -79,4 +80,4 @@ python3 tools/ui_paths.py qq.apk                                   # 完整签�
 python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
 ```
 
-GPL-3.0-or-later。源自 [QAuxiliary](https://github.com/cinit/QAuxiliary)，只留了思路，代码全部重写。
+GPL-3.0-or-later。源自 [QAuxiliary](https://github.com/cinit/QAuxiliary)，只留了思路，聊天等原有实现重写；底栏包含注明来源的上游算法和着色器，见 [第三方许可](third_party/NOTICE.md)。

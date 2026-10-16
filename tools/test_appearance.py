@@ -36,14 +36,16 @@ class AppearanceContractTest(unittest.TestCase):
         self.assertIn('edit.viewTreeObserver.addOnPreDrawListener(this)', INPUT)
         self.assertNotIn('setMinimumHeight', INPUT)
 
-    def test_round_bar_has_no_blur_or_border_and_badges_are_text_only(self):
+    def test_menu_round_style_is_preserved_and_badges_are_text_only(self):
         glass = (ROOT / 'app/src/main/kotlin/sumicya/qself/Glass.kt').read_text()
         branch = glass.split('if (roundBar)', 1)[1].split('lens.setFloatUniform', 1)[0]
         for forbidden in ('backdrop(', 'drawBorder', 'STROKE', 'RenderEffect'):
             self.assertNotIn(forbidden, branch)
         self.assertIn('drawRoundRect', branch)
         self.assertIn('pill(canvas, night)', branch)
-        self.assertIn('roundBar = true', LOOKS)
+        self.assertIn('kernelBar = true', LOOKS)
+        knob = (SRC / 'Knob.kt').read_text()
+        self.assertIn('roundBar = true', knob)
         self.assertIn('badge.getDeclaredMethod("onDraw"', LOOKS)
         self.assertIn('countTabWidths', LOOKS)
 
