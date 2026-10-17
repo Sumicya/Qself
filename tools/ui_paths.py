@@ -53,6 +53,12 @@ RULES = {
     ('com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickComponentV4', 'd1',
      'V I,com.tencent.aio.data.msglist.a,java.util.List'): (
         set(), {f'{COMPONENT}#i1', 'android.view.View#setVisibility'}),
+    (BADGE, 'onLayout', 'V Z,I,I,I,I'): (
+        {f'{BADGE}#mDelegateRect:android.graphics.Rect'},
+        {f'{BADGE}#getExtendHitRect', 'android.view.View#onLayout'}),
+    (BADGE, 'initPaint', 'V '): (
+        {'android.graphics.Paint$Align#CENTER:android.graphics.Paint$Align', f'{BADGE}#mTextPaint:android.graphics.Paint'},
+        {'android.graphics.Paint#setTextAlign'}),
     (BADGE, 'drawText', 'V android.graphics.Canvas'): (
         {f'{BADGE}#mTextPaint:android.graphics.Paint'}, {f'{BADGE}#drawBackground', f'{BADGE}#drawBorder', 'android.graphics.Canvas#drawText'}),
 }

@@ -8,7 +8,7 @@
 
 ### 数字定位
 
-旧代码先清空 translationX，再把 `getLocationInWindow` 的整数窗口位置与局部宽度相减，结果直接写入局部 translationX；祖先缩放时单位不一致。现在两点均通过完整矩阵变换进入 badge.parent 坐标，再作差增量校正，不先清零；复制 QQ Paint 后显式指定 `Paint.Align.CENTER`，保留原生 Y 布局。仍按真实计数展开、纯数字无红底，宽度随数字增长。纯逻辑测试覆盖多种宽度、窗口缩放、镜像和重复定位；不等同于 Android Matrix 实机测试。
+旧代码先清空 translationX，再把 `getLocationInWindow` 的整数窗口位置与局部宽度相减，结果直接写入局部 translationX；祖先缩放时单位不一致。现在两点均通过完整矩阵变换进入 badge.parent 坐标，再作差增量校正，不先清零；复制 QQ Paint 后显式指定 `Paint.Align.CENTER`，保留原生 Y 布局。追加 DEX 核对确认 QQ 的 initPaint 原本就设置 CENTER，所以该显式设置只是防御，不把它冒称为已证实的左漂根因。QQ onLayout 会更新 mDelegateRect，故先校正位置，再执行原生布局回调更新触摸区域，避免数字移走而命中区域留在旧位置。仍按真实计数展开、纯数字无红底，宽度随数字增长。纯逻辑测试覆盖多种宽度、窗口缩放、镜像和重复定位；不等同于 Android Matrix 实机测试。
 
 ### 绘制层对应
 
@@ -32,7 +32,7 @@
 
 ## 验证记录与未验收部分
 
-2026-10-17 09:30（Asia/Shanghai），针对本次未提交工作树、以 Qself `cebf9ad78fae0df6dc93944fd9aebe604703b64d` 为父提交：
+2026-10-17 09:36（Asia/Shanghai），针对本轮工作树；实现始于 Qself `cebf9ad78fae0df6dc93944fd9aebe604703b64d`，提交后 CI 结果另以对应运行记录为准：
 
 - `bash ci/check.sh`：Kotlin 类型检查、43 项纯逻辑测试通过。
 - `python3 -m unittest discover -s tools -p 'test_*.py'`：35 项工具/源码契约通过。

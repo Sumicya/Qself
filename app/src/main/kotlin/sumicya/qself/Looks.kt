@@ -618,13 +618,14 @@ fun exactCount() {
     }
     hook(badge.getDeclaredMethod("onLayout", Boolean::class.javaPrimitiveType,
         Integer.TYPE, Integer.TYPE, Integer.TYPE, Integer.TYPE), gated = false) { chain ->
-        chain.proceed().also {
+        // 真包 onLayout 会更新 mDelegateRect；先校正位置，再让原生更新触摸区域。
+        run {
             val view = chain.thisObject as View
-            val tab = bottomTab(view) ?: return@also
+            val tab = bottomTab(view) ?: return@run
             val label = text.get(view) as? String
             if (on("显示具体未读条数") && bottomNumericBadge(label, viewType.getInt(view))) {
                 badgeLayouts.getOrPut(view) { BadgeLayout(view) }
-                val parent = view.parent as? View ?: return@also
+                val parent = view.parent as? View ?: return@run
                 val transform = Matrix()
                 tab.transformMatrixToGlobal(transform); parent.transformMatrixToLocal(transform)
                 val anchor = floatArrayOf(tab.width/2f,tab.height/2f).also(transform::mapPoints)
@@ -636,6 +637,7 @@ fun exactCount() {
                 if (countTabWidths.put(tab, needed) != needed) fit(tab)
             } else if (countTabWidths.remove(tab) != null) fit(tab)
         }
+        chain.proceed()
     }
     // 底栏纯数字直接绘字，不调用原生 drawBackground/drawBorder；其他场景不动。
     hook(badge.getDeclaredMethod("onDraw", android.graphics.Canvas::class.java)) { chain ->

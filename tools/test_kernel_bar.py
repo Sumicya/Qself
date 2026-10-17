@@ -101,6 +101,7 @@ class KernelPortTest(unittest.TestCase):
         self.assertNotIn('view.translationX = 0f',body)
         self.assertIn('parent.transformMatrixToLocal(transform)',body)
         self.assertIn('textAlign = Paint.Align.CENTER',LOOKS)
+        self.assertLess(body.index('view.translationX = centeredBadgeTranslation'),body.index('chain.proceed()'))
 
     def test_backdrop_uses_a_single_full_coordinate_transform(self):
         glass = (ROOT / 'app/src/main/kotlin/sumicya/qself/Glass.kt').read_text()
