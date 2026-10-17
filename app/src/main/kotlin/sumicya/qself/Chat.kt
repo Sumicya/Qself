@@ -1,14 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself
 
+import android.graphics.Canvas
+import android.graphics.ColorFilter
+import android.graphics.Matrix
+import android.graphics.RectF
+import android.graphics.PixelFormat
+import android.graphics.Rect
+import android.graphics.drawable.Drawable
+import android.util.SparseArray
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.view.ViewConfiguration
+import android.view.ViewTreeObserver
+import java.lang.ref.WeakReference
 import org.json.JSONArray
 import org.json.JSONObject
 import java.lang.reflect.Proxy
 import java.util.Collections
 import java.util.WeakHashMap
-import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.abs
 
 /** 聊天：会员装饰归零、防撤回、连发合并、转发、「+」面板、昵称行、轻互动、表情雨。 */
 
@@ -189,49 +200,640 @@ fun stripSyncRecall(sync: ByteArray): ByteArray {
     return out.toByteArray()
 }
 
-// ---- 连发合并：同一人 5 分钟内连着发的消息，后面那些不再画头像（占位留着，气泡不会往边上挪）和昵称行。
-// 列表适配器绑定每一行时先看它跟上一行是不是「连发」，头像 / 昵称组件绑定完再按结果折起来。
+// ---- TG 连发：昵称固定组首，头像按内容中心浮动；保留原层级，仅收紧续条正上间距。
 
-private val grouped: MutableSet<Long> = Collections.newSetFromMap(ConcurrentHashMap())
-private val folded = WeakHashMap<View, Int>()
-
-fun groupRuns() {
-    val adapter = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a")
-    // 取数据和取表头数的方法装的时候就解析好：找不到直接 ✗ 报出来，别在每次绑定时静悄悄空转。
-    val data = adapter.getMethod("d0")
-    val head = adapter.getMethod("i0")
-    hook(adapter.method("n0")) { chain ->
-        val self = chain.thisObject
-        val list = runCatching { data.invoke(self)?.let { it.javaClass.getMethod("u").invoke(it) } as? List<*> }.getOrNull()
-        val i = chain.getArg(1) as Int - (runCatching { head.invoke(self) as Int }.getOrNull() ?: 0)
-        val cur = list?.getOrNull(i)
-        msgId(cur)?.let { if (follows(list?.getOrNull(i - 1), cur)) grouped.add(it) else grouped.remove(it) }
-        chain.proceed()
-    }
-    val avatar = cls("com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent")
-    val nick = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2")
-    for ((c, mode) in listOf(avatar to View.INVISIBLE, nick to View.GONE)) {
-        val root = c.getMethod("f1") // 组件的根视图，声明在 MVVM 基类上
-        hook(c.method("d1")) { chain ->
-            // 先还原上一次折的，让 QQ 自己的绑定从干净状态开始；绑完再按需要折。
-            val v = runCatching { root.invoke(chain.thisObject) as? View }.getOrNull()
-            v?.let { view -> folded.remove(view)?.let { view.visibility = it } }
-            chain.proceed().also {
-                val id = runCatching { msgId(chain.getArg(1)) }.getOrNull()
-                if (v != null && id != null && id in grouped) { folded[v] = v.visibility; v.visibility = mode }
-            }
-        }
+/** 正常消息按 msgId；待发送消息没有 id 时按组首对象身份，不能跳过自己的待发送消息。 */
+internal class RunKey(private val item: Any) {
+    private val id = msgId(item)?.takeIf { it != 0L }
+    override fun equals(other: Any?): Boolean = other is RunKey &&
+        if (id != null) id == other.id else other.id == null && item === other.item
+    override fun hashCode(): Int = id?.hashCode() ?: System.identityHashCode(item)
+}
+/** 同一帧的消息快照共享索引；每个长组只回溯一次，帧前失效，避免复用旧列表缓存。 */
+internal class RunStarts(val size: Int) {
+    private val starts = IntArray(size) { -1 }
+    fun start(index: Int, joinsPrevious: (Int) -> Boolean): Int {
+        require(index in 0 until size)
+        if (starts[index] >= 0) return starts[index]
+        var cursor = index
+        while (cursor > 0 && starts[cursor] < 0 && joinsPrevious(cursor)) cursor--
+        val start = if (starts[cursor] >= 0) starts[cursor] else cursor
+        for (i in cursor..index) starts[i] = start
+        return start
     }
 }
 
-/** 两条都是正经消息（不是灰字 5 / 开场白 29）、同一发送者、相隔不到 5 分钟。 */
+internal fun compactMessageTop(original: Int, continued: Boolean, density: Float): Int =
+    if (continued && original > 0) minOf(original, (2 * density).toInt()) else original
+
+private class RunSpacing(view: View) {
+    private val view = WeakReference(view)
+    private val params = view.layoutParams as? ViewGroup.MarginLayoutParams
+    private val top = params?.topMargin ?: 0
+    fun apply(continued: Boolean): Boolean {
+        val view = view.get() ?: return false
+        val params = params ?: return false
+        if (view.layoutParams !== params) return false
+        val target = compactMessageTop(top, continued, view.dp)
+        if (params.topMargin == target) return false
+        params.topMargin = target
+        view.layoutParams = params
+        return true
+    }
+}
+
+/** 模块覆盖与 QQ 原生可见性分开，原生异步刷新不能把续条昵称/重复头像重新亮出来。 */
+internal fun runVisibility(native: Int, override: Int?): Int =
+    if (override == View.INVISIBLE && native != View.VISIBLE) native else override ?: native
+
+private val runMeasurements = WeakHashMap<View, WeakReference<RunBinding>>()
+private val runVisibilities = WeakHashMap<View, RunVisibility>()
+private class RunVisibility(view: View) {
+    private val view = WeakReference(view)
+    var native = view.visibility
+    private var override: Int? = null
+    var writing = false
+    init { runVisibilities[view] = this }
+    fun receive(value: Int): Int { native = value; return runVisibility(native, override) }
+    fun apply(value: Int?) {
+        override = value
+        view.get()?.let {
+            val target = runVisibility(native, override)
+            if (it.visibility != target) {
+                writing = true
+                try { it.visibility = target } finally { writing = false }
+            }
+        }
+    }
+    fun dispose() {
+        apply(null)
+        view.get()?.let { if (runVisibilities[it] === this) runVisibilities.remove(it) }
+    }
+}
+private class RunAvatar(container: View, image: View) {
+    val container = WeakReference(container)
+    val image = WeakReference(image)
+    val visibility = RunVisibility(container)
+    fun hide() = visibility.apply(View.INVISIBLE)
+    fun restore() = visibility.apply(null)
+}
+private class RunLayout(val avatars: List<RunAvatar>, nicks: List<View>, contents: List<View>, slots: List<View>,
+    root: View, avatarSlots: List<View>) {
+    private val root = WeakReference(root)
+    val avatarSlots = avatarSlots.map { WeakReference(it) }
+    private var compact = false
+    val spacing = slots.map(::RunSpacing)
+    val nicks = nicks.map(::RunVisibility)
+    val contents = contents.map { WeakReference(it) }
+    val contentSlots = slots.map { WeakReference(it) }
+    fun apply(continued: Boolean, enabled: Boolean) {
+        val next = enabled && continued
+        if (compact != next) { compact = next; root.get()?.requestLayout() }
+        spacing.forEach { it.apply(enabled && continued) }
+        if (!enabled) avatars.forEach { it.restore() }
+        nicks.forEach { it.apply(if (enabled && continued) View.GONE else null) }
+    }
+    fun restore() = apply(false, false)
+    fun dispose() {
+        restore()
+        avatars.forEach { it.visibility.dispose() }
+        nicks.forEach { it.dispose() }
+        root.get()?.let { if (runMeasurements[it]?.get()?.layout === this) runMeasurements.remove(it) }
+    }
+}
+private class RunBinding(val item: Any, adapter: Any, var index: Int, var group: RunKey,
+    var continued: Boolean, var continues: Boolean, var layout: RunLayout? = null) {
+    val adapter = WeakReference(adapter)
+    var valid = true
+}
+private val bindingRun = ThreadLocal<Pair<View, RunBinding>>()
+private val runIndexes = WeakHashMap<Any, Pair<WeakReference<List<*>>, RunStarts>>()
+private val pendingAttachments = WeakHashMap<View, View.OnAttachStateChangeListener>()
+private val pendingRun = WeakHashMap<View, RunBinding>()
+private val runAvatars = WeakHashMap<ViewGroup, WeakReference<RunAvatars>>()
+
+fun groupRuns() {
+    // 始终跟踪复用；昵称/间距在绑定和开关变化时处理，绘制器只跟随滚动。
+    val owner = feature
+    feature = null
+    try {
+        val adapter = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a")
+        val data = adapter.getMethod("d0")
+        val head = adapter.getMethod("i0")
+        val differ = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.AutoCancelAsyncListDiffer")
+        val current = differ.getDeclaredMethod("u")
+        val committed = differ.getDeclaredMethod("j", List::class.java,
+            cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.e"))
+        val differAdapters = WeakHashMap<Any, WeakReference<Any>>()
+        val vb = cls("com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB")
+        val vbRoot = vb.getMethod("s1")
+        val registry = vb.getMethod("o1")
+        val components = cls("com.tencent.mobileqq.aio.msglist.holder.g").getMethod("get")
+        val component = cls("com.tencent.mobileqq.aio.msglist.holder.component.c")
+        val componentRoot = component.getMethod("f1")
+        val componentSlot = component.getMethod("i1")
+        val extras = vb.getDeclaredField("G").apply { isAccessible = true }
+        val constraints = cls("androidx.constraintlayout.widget.ConstraintLayout")
+        val params = cls("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+        val widget = params.getDeclaredMethod("getConstraintWidget")
+        val widgetType = cls("androidx.constraintlayout.solver.widgets.ConstraintWidget")
+        val widgetY = widgetType.getDeclaredMethod("getY")
+        val widgetHeight = widgetType.getDeclaredMethod("getHeight")
+        val measured = View::class.java.getDeclaredMethod("setMeasuredDimension", Integer.TYPE, Integer.TYPE)
+            .apply { isAccessible = true }
+        val avatarType = cls("com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent")
+        // 真包 C1 的访问标记为 0x12（private final），getMethod 只查 public 会使整项安装失败。
+        val avatarImage = avatarType.method("C1").apply { isAccessible = true }
+        val nickType = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2")
+        val slotNickType = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickComponentV4")
+        val contentType = cls("com.tencent.mobileqq.aio.msglist.holder.component.BaseContentComponent")
+        val bindingVB = ThreadLocal<Boolean>()
+        var reported = false
+        var warned = false
+        fun unbind(row: View) = runAvatars.values.mapNotNull { it.get() }.forEach { it.unbind(row) }
+        fun register(row: View, run: RunBinding) {
+            if (!row.isAttachedToWindow || pendingRun[row] !== run || run.layout == null) return
+            val host = generateSequence(row.parent) { it.parent }.filterIsInstance<ViewGroup>()
+                .firstOrNull { parent -> generateSequence<Class<*>>(parent.javaClass) { it.superclass }
+                    .any { it.name == "androidx.recyclerview.widget.RecyclerView" } } ?: return
+            val renderer = runAvatars[host]?.get() ?: RunAvatars(host).also {
+                runAvatars[host] = WeakReference(it)
+            }
+            renderer.bind(row, run)
+            val layout = run.layout ?: return
+            if (!reported && layout.avatars.isNotEmpty() && layout.contents.isNotEmpty()) {
+                reported = true
+                log("TG连发定位：原头像容器=${layout.avatars.size}，实际内容=${layout.contents.size}，昵称=${layout.nicks.size}；按内容中心定位")
+            }
+        }
+        fun capture(binder: Any, row: View, run: RunBinding) {
+            run.layout = runCatching {
+                val table = components.invoke(registry.invoke(binder)) as SparseArray<*>
+                val active = extras.get(binder) as SparseArray<*>
+                val all = (0 until table.size()).map { table.valueAt(it) } +
+                    (0 until active.size()).map { active.valueAt(it) }
+                val avatars = ArrayList<RunAvatar>()
+                val avatarSlots = ArrayList<View>()
+                val nicks = ArrayList<View>()
+                val contents = ArrayList<View>()
+                val slots = ArrayList<View>()
+                // 主表 + 已激活附加表 G；不是把未创建容器的 f.a 全部拿来猜。
+                for (c in all.filterNotNull().distinct()) {
+                    when {
+                        avatarType.isInstance(c) -> {
+                            val view = componentRoot.invoke(c) as? View ?: continue
+                            val image = avatarImage.invoke(c) as? View ?: continue
+                            (componentSlot.invoke(c) as? View)?.let { avatarSlots.add(it) }
+                            if (avatars.none { it.container.get() === view }) avatars.add(RunAvatar(view, image))
+                        }
+                        (nickType.isInstance(c) || slotNickType.isInstance(c)) -> (componentSlot.invoke(c) as? View)?.let { nicks.add(it) }
+                        contentType.isInstance(c) -> {
+                            (componentRoot.invoke(c) as? View)?.let { contents.add(it) }
+                            // VB.H1 改的是 component.i1().layoutParams.topMargin，不是 VB 根视图。
+                            (componentSlot.invoke(c) as? View)?.let { slots.add(it) }
+                        }
+                    }
+                }
+                RunLayout(avatars, nicks.distinct(), contents.distinct(), slots.distinct(),
+                    vbRoot.invoke(binder) as View, avatarSlots.distinct())
+            }.onFailure { if (!warned) { warned = true; log("TG连发定位：组件读取失败，未改该消息布局", it) } }.getOrNull()
+            run.layout?.let { runMeasurements[vbRoot.invoke(binder) as View] = WeakReference(run) }
+            run.layout?.apply(run.continued, on("连发合并"))
+            register(row, run)
+        }
+        fun context(binder: Any): Pair<View, RunBinding>? {
+            bindingRun.get()?.let { return it }
+            val root = runCatching { vbRoot.invoke(binder) as? View }.getOrNull() ?: return null
+            val row = generateSequence(root) { it.parent as? View }.firstOrNull { pendingRun.containsKey(it) } ?: return null
+            return pendingRun[row]?.let { row to it }
+        }
+        hook(vb.method("k1")) { chain ->
+            if (!vb.isInstance(chain.thisObject)) return@hook chain.proceed()
+            val context = context(chain.thisObject)
+            context?.first?.let(::unbind)
+            val previous = bindingVB.get()
+            bindingVB.set(true)
+            try { chain.proceed().also {
+                context?.let { (row, run) -> capture(chain.thisObject, row, run) }
+            } } finally { if (previous == null) bindingVB.remove() else bindingVB.set(previous) }
+        }
+        // 延后激活昵称等附加组件也要登记，不能只拍第一次 k1 的组件快照。
+        hook(vb.getDeclaredMethod("j1", Integer.TYPE)) { chain ->
+            if (bindingVB.get() == true ||
+                (extras.get(chain.thisObject) as SparseArray<*>).get(chain.getArg(0) as Int) != null) return@hook chain.proceed()
+            val context = context(chain.thisObject)
+            context?.first?.let(::unbind)
+            chain.proceed().also { context?.let { (row, run) -> capture(chain.thisObject, row, run) } }
+        }
+        hook(View::class.java.getDeclaredMethod("setVisibility", Integer.TYPE)) { chain ->
+            val state = runVisibilities[chain.thisObject]
+            if (state == null || state.writing) chain.proceed()
+            else chain.proceed(arrayOf<Any?>(state.receive(chain.getArg(0) as Int)))
+        }
+        // 原生头像保持已测量以供浮绘，但续条行高不再被头像槽撑大。
+        // 直接采用 ConstraintLayout.onLayout 使用的 widget Y/height，不猜子视图坐标。
+        hook(constraints.getDeclaredMethod("onMeasure", Integer.TYPE, Integer.TYPE)) { chain ->
+            chain.proceed().also {
+                val row = chain.thisObject as ViewGroup
+                val run = runMeasurements[row]?.get() ?: return@also
+                val layout = run.layout ?: return@also
+                if (!run.valid || !run.continued || !on("连发合并") ||
+                    View.MeasureSpec.getMode(chain.getArg(1) as Int) == View.MeasureSpec.EXACTLY) return@also
+                val excluded = layout.avatarSlots.mapNotNull { it.get() }
+                var bottom = 0
+                for (i in 0 until row.childCount) {
+                    val child = row.getChildAt(i)
+                    val lp = child.layoutParams
+                    if (child in excluded || child.visibility == View.GONE ||
+                        lp.height == ViewGroup.LayoutParams.MATCH_PARENT || !params.isInstance(lp)) continue
+                    val native = widget.invoke(lp) ?: continue
+                    bottom = maxOf(bottom, (widgetY.invoke(native) as Int) + (widgetHeight.invoke(native) as Int))
+                }
+                val target = compactRunHeight(row.measuredHeight, bottom, row.paddingBottom, row.minimumHeight)
+                if (target < row.measuredHeight) measured.invoke(row, row.measuredWidthAndState,
+                    View.resolveSizeAndState(target, chain.getArg(1) as Int,
+                        row.measuredHeightAndState and View.MEASURED_STATE_MASK))
+            }
+        }
+        fun regroup(owner: Any, list: List<*>, starts: RunStarts) {
+            for ((_, run) in pendingRun) if (run.adapter.get() === owner) {
+                val index = runItemIndex(list, run.item, run.index)
+                run.valid = index >= 0
+                if (index < 0) { run.layout?.restore(); continue }
+                run.index = index
+                val start = starts.start(index) { i -> follows(list[i - 1], list[i]) }
+                run.group = RunKey(list[start]!!)
+                run.continued = start < index
+                run.continues = index < list.lastIndex && follows(list[index], list[index + 1])
+                run.layout?.apply(run.continued, on("连发合并"))
+            }
+            runAvatars.values.mapNotNull { it.get() }.forEach { it.refresh() }
+        }
+        hook(committed) { chain -> chain.proceed().also {
+            val owner = differAdapters[chain.thisObject]?.get() ?: return@also
+            val list = current.invoke(chain.thisObject) as? List<*> ?: return@also
+            runIndexes.remove(owner)
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) regroup(owner, list, RunStarts(list.size))
+        } }
+        hook(adapter.method("n0")) { chain ->
+            val row = runCatching { chain.getArg(0)?.get("itemView") as? View }.getOrNull()
+            row?.let { pendingRun.remove(it); unbind(it) }
+            val source = data.invoke(chain.thisObject)
+            if (source != null) differAdapters[source] = WeakReference(chain.thisObject)
+            val list = source?.let { current.invoke(it) as? List<*> }
+            val index = chain.getArg(1) as Int - (head.invoke(chain.thisObject) as Int)
+            val run = if (list != null && index in list.indices) {
+                val cache = runIndexes[chain.thisObject]?.takeIf { it.first.get() === list && it.second.size == list.size }
+                    ?: (WeakReference(list) to RunStarts(list.size)).also { runIndexes[chain.thisObject] = it }
+                regroup(chain.thisObject, list, cache.second)
+                val start = cache.second.start(index) { i -> follows(list[i - 1], list[i]) }
+                list[index]?.let { RunBinding(it, chain.thisObject, index, RunKey(list[start]!!), start < index,
+                    index < list.lastIndex && follows(list[index], list[index + 1])) }
+            } else null
+            if (row != null && run != null) pendingRun[row] = run
+            val previous = bindingRun.get()
+            bindingRun.set(if (row != null && run != null) row to run else null)
+            try {
+                chain.proceed().also {
+                    if (row != null && run != null) {
+                        pendingRun[row] = run
+                        if (row.isAttachedToWindow) register(row, run) else if (!pendingAttachments.containsKey(row)) {
+                            // 同步接入首次 attach，在这一帧 pre-draw 前定位，不排主线程 post 队列。
+                            val listener = object : View.OnAttachStateChangeListener {
+                                override fun onViewAttachedToWindow(view: View) {
+                                    view.removeOnAttachStateChangeListener(this)
+                                    pendingAttachments.remove(view)
+                                    pendingRun[view]?.let { register(view, it) }
+                                }
+                                override fun onViewDetachedFromWindow(view: View) = Unit
+                            }
+                            pendingAttachments[row] = listener
+                            row.addOnAttachStateChangeListener(listener)
+                        }
+                    }
+                }
+            } finally { bindingRun.set(previous) }
+        }
+        hook(ViewGroup::class.java.getDeclaredMethod("dispatchTouchEvent", MotionEvent::class.java)) { chain ->
+            val renderer = runAvatars[chain.thisObject]?.get()
+            if (renderer?.touch(chain.getArg(0) as MotionEvent) == true) true else chain.proceed()
+        }
+    } finally { feature = owner }
+}
+
+private class RunRow(val run: RunBinding, val layout: RunLayout) {
+    val group get() = run.group
+    val continued get() = run.continued
+    fun restore() = layout.dispose()
+}
+
+/** 布局在绑定/设置变化时完成；滚动帧只采样几何并提交到同一帧的 overlay。 */
+private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObserver.OnPreDrawListener,
+    View.OnAttachStateChangeListener {
+    private val rows = WeakHashMap<View, RunRow>()
+    private class Face(val group: RunKey, val view: View, val target: View,
+        val matrix: Matrix, val toTarget: Matrix, val rect: RectF)
+    private var faces = emptyList<Face>()
+    private var viewport = Rect()
+    private val toHost = Matrix()
+    private var pressed: Face? = null
+    private var tracking = false
+    private var downX = 0f
+    private var downY = 0f
+    private var dragging = false
+    private val slop = ViewConfiguration.get(host.context).scaledTouchSlop
+    init {
+        host.overlay.add(this)
+        host.viewTreeObserver.addOnPreDrawListener(this)
+        host.addOnAttachStateChangeListener(this)
+    }
+    fun unbind(row: View) {
+        val state = rows.remove(row) ?: return
+        val containers = state.layout.avatars.mapNotNull { it.container.get() }
+        if (pressed?.target in containers) cancelPressed()
+        val next = faces.filterNot { it.target in containers }
+        commitFrame(next, viewport)
+        state.restore()
+    }
+    fun bind(row: View, run: RunBinding) {
+        if (rows[row]?.run === run && rows[row]?.layout === run.layout) return
+        unbind(row)
+        run.layout?.let { layout ->
+            layout.apply(run.continued, on("连发合并"))
+            rows[row] = RunRow(run, layout)
+            host.invalidate()
+        }
+    }
+    fun refresh() {
+        val enabled = on("连发合并")
+        rows.values.forEach { if (it.run.valid) it.layout.apply(it.continued, enabled) else it.layout.restore() }
+        if (!enabled) { cancelPressed(); commitFrame(emptyList(), viewport) }
+        host.invalidate()
+    }
+    private fun inHost(view: View) = Matrix().also {
+        view.transformMatrixToGlobal(it)
+        it.postConcat(toHost)
+    }
+    private fun rectangle(view: View, matrix: Matrix): RectF? {
+        if (view.width <= 0 || view.height <= 0) return null
+        return RectF(0f, 0f, view.width.toFloat(), view.height.toFloat()).also(matrix::mapRect)
+            .takeIf { it.left.isFinite() && it.top.isFinite() && it.right.isFinite() && it.bottom.isFinite() && !it.isEmpty }
+    }
+    private fun commitFrame(next: List<Face>, clip: Rect) {
+        // 改 Kotlin 坐标不会让硬件 overlay 的 display list 自动失效，必须显式提交重绘。
+        // 只在几何/内容变化时失效，静止时不制造无穷刷新循环。
+        val changed = viewport != clip || next.size != faces.size || next.indices.any { i ->
+            val old = faces[i]; val new = next[i]
+            old.view !== new.view || old.target !== new.target || old.matrix != new.matrix || new.view.isDirty
+        }
+        faces = next
+        viewport = Rect(clip)
+        pressed?.let { old ->
+            val current = next.firstOrNull { it.target === old.target }
+            if (current == null) cancelPressed() else pressed = current
+        }
+        if (changed) invalidateSelf()
+    }
+    override fun onPreDraw(): Boolean {
+        runIndexes.clear()
+        val clip = Rect()
+        if (!on("连发合并") || !host.getLocalVisibleRect(clip)) {
+            commitFrame(emptyList(), clip)
+            return true
+        }
+        if (host.clipToPadding) {
+            clip.left = maxOf(clip.left, host.paddingLeft)
+            clip.top = maxOf(clip.top, host.paddingTop)
+            clip.right = minOf(clip.right, host.width - host.paddingRight)
+            clip.bottom = minOf(clip.bottom, host.height - host.paddingBottom)
+        }
+        val global = Matrix()
+        host.transformMatrixToGlobal(global)
+        if (clip.isEmpty || !global.invert(toHost)) { commitFrame(emptyList(), clip); return true }
+        setBounds(0, 0, host.width, host.height)
+        val groups = LinkedHashMap<RunKey, MutableList<RunRow>>()
+        // 不在这里恢复昵称或间距，不 requestLayout，也不取消正在滚动的一帧。
+        for ((row, state) in rows) if (state.run.valid && row.isAttachedToWindow && row.parent === host)
+            groups.getOrPut(state.group) { ArrayList() }.add(state)
+        val next = ArrayList<Face>()
+        for ((key, group) in groups) {
+            var firstCenter = Float.POSITIVE_INFINITY
+            var lastCenter = Float.NEGATIVE_INFINITY
+            var hasStart = false
+            var hasEnd = false
+            for (state in group) {
+                var top = Float.POSITIVE_INFINITY
+                var bottom = Float.NEGATIVE_INFINITY
+                // 异步正文根被替换/暂时隐藏时仍取稳定的原生正文槽，不能退回行顶头像。
+                val roots = state.layout.contents.mapNotNull { it.get() }.filter {
+                    it.isAttachedToWindow && it.visibility != View.GONE && it.width > 0 && it.height > 0
+                }
+                val geometry = roots.ifEmpty { state.layout.contentSlots.mapNotNull { it.get() } }
+                for (content in geometry) {
+                    if (!content.isAttachedToWindow || content.visibility == View.GONE) continue
+                    val rect = rectangle(content, inHost(content)) ?: continue
+                    top = minOf(top, rect.top); bottom = maxOf(bottom, rect.bottom)
+                }
+                if (top.isFinite() && bottom.isFinite()) {
+                    val center = (top + bottom) / 2
+                    firstCenter = minOf(firstCenter, center); lastCenter = maxOf(lastCenter, center)
+                    hasStart = hasStart || !state.run.continued
+                    hasEnd = hasEnd || !state.run.continues
+                }
+            }
+            val avatars = group.flatMap { it.layout.avatars }
+            // 尽量保留上帧同一个原图源，不能每滚入一行就切到新的头像组件。
+            val preferred = pressed?.takeIf { it.group == key }?.target
+                ?: faces.firstOrNull { it.group == key }?.target
+            val candidates = avatars.sortedBy { if (it.container.get() === preferred) 0 else 1 }
+            var face: Face? = null
+            for (avatar in candidates) {
+                if (avatar.visibility.native != View.VISIBLE) continue
+                val image = avatar.image.get() ?: continue
+                if (image.visibility != View.VISIBLE) continue
+                val container = avatar.container.get() ?: continue
+                val matrix = inHost(image)
+                val rect = rectangle(image, matrix) ?: continue
+                val y = floatingRunAvatarTop(firstCenter, lastCenter, clip.top.toFloat(), clip.bottom.toFloat(),
+                    rect.height(), 4 * host.dp, hasStart, hasEnd) ?: continue
+                val delta = y - rect.top
+                matrix.postTranslate(0f, delta)
+                val targetMatrix = inHost(container).apply { postTranslate(0f, delta) }
+                val inverse = Matrix()
+                if (!targetMatrix.invert(inverse)) continue
+                rect.offset(0f, delta)
+                face = Face(key, image, container, matrix, inverse, rect)
+                break
+            }
+            if (face == null) {
+                // 正文异步切换的一帧沿用本组上次有效位置，不能恢复到 QQ 的行顶位置。
+                val old = faces.firstOrNull { previous -> previous.group == key && avatars.any {
+                    it.image.get() === previous.view && it.visibility.native == View.VISIBLE
+                } }
+                if (old != null && old.view.isAttachedToWindow) {
+                    val matrix = inHost(old.view)
+                    val source = rectangle(old.view, matrix)
+                    if (source != null) {
+                        val top = old.rect.top.coerceIn(clip.top.toFloat() - source.height(),
+                            maxOf(clip.top.toFloat() - source.height(), clip.bottom - source.height() - 4 * host.dp))
+                        val delta = top - source.top
+                        matrix.postTranslate(0f, delta)
+                        val targetMatrix = inHost(old.target).apply { postTranslate(0f, delta) }
+                        val inverse = Matrix()
+                        if (targetMatrix.invert(inverse)) {
+                            source.offset(0f, delta)
+                            face = Face(key, old.view, old.target, matrix, inverse, source)
+                        }
+                    }
+                }
+            }
+            // 没有可绘制源时不能把原生头像也隐藏，否则异步绑定期间整组头像消失。
+            if (face != null) { avatars.forEach { it.hide() }; next.add(face) }
+            else avatars.forEach { it.restore() }
+        }
+        commitFrame(next, clip)
+        return true
+    }
+    override fun draw(canvas: Canvas) {
+        for (face in faces) {
+            val save = canvas.save()
+            canvas.clipRect(viewport)
+            canvas.concat(face.matrix)
+            face.view.draw(canvas)
+            canvas.restoreToCount(save)
+        }
+    }
+    private fun cancelPressed() {
+        val face = pressed ?: return
+        val now = android.os.SystemClock.uptimeMillis()
+        val cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, downX, downY, 0)
+        cancel.transform(face.toTarget)
+        try { face.target.dispatchTouchEvent(cancel) } finally { cancel.recycle(); pressed = null }
+    }
+    fun touch(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            if (!on("连发合并")) return false
+            pressed = faces.lastOrNull { viewport.contains(event.x.toInt(), event.y.toInt()) && it.rect.contains(event.x, event.y) }
+            tracking = pressed != null
+            downX = event.x; downY = event.y; dragging = false
+        }
+        if (!tracking) return false
+        // DOWN 先让列表停止旧惯性；之后列表就是触摸目标，只走 onTouchEvent。
+        // 不能在 UP 再调 onInterceptTouchEvent：RecyclerView 会先清速度，导致惯性失效。
+        if (event.actionMasked == MotionEvent.ACTION_DOWN && host.onInterceptTouchEvent(event)) {
+            cancelPressed(); dragging = true
+        }
+        host.onTouchEvent(event)
+        if (!on("连发合并")) cancelPressed()
+        val move = kotlin.math.abs(event.x - downX) > slop || kotlin.math.abs(event.y - downY) > slop ||
+            event.actionMasked == MotionEvent.ACTION_POINTER_DOWN
+        if (!dragging && move) { cancelPressed(); dragging = true }
+        pressed?.let { face ->
+            val copy = MotionEvent.obtain(event)
+            copy.transform(face.toTarget)
+            try { face.target.dispatchTouchEvent(copy) } finally { copy.recycle() }
+        }
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            pressed = null; tracking = false
+        }
+        return true
+    }
+    override fun onViewDetachedFromWindow(view: View) {
+        cancelPressed()
+        if (tracking) {
+            val now = android.os.SystemClock.uptimeMillis()
+            val cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, downX, downY, 0)
+            try { host.onTouchEvent(cancel) } finally { cancel.recycle(); tracking = false }
+        }
+        rows.values.forEach { it.restore() }
+        commitFrame(emptyList(), Rect())
+        if (host.viewTreeObserver.isAlive) host.viewTreeObserver.removeOnPreDrawListener(this)
+        host.overlay.remove(this)
+    }
+    fun dispose() {
+        onViewDetachedFromWindow(host)
+        rows.clear()
+        host.removeOnAttachStateChangeListener(this)
+    }
+    override fun onViewAttachedToWindow(view: View) {
+        refresh()
+        host.overlay.add(this)
+        host.viewTreeObserver.addOnPreDrawListener(this)
+    }
+    override fun setAlpha(alpha: Int) = Unit
+    override fun setColorFilter(filter: ColorFilter?) = Unit
+    @Deprecated("Drawable opacity") override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+fun refreshChatLayout() {
+    runAvatars.values.mapNotNull { it.get() }.forEach { it.refresh() }
+    pendingRun.values.forEach { run -> run.layout?.apply(run.continued, on("连发合并")) }
+}
+
+fun resetChatLayout() {
+    runAvatars.values.mapNotNull { it.get() }.forEach { it.dispose() }
+    pendingAttachments.entries.toList().forEach { (view, listener) -> view.removeOnAttachStateChangeListener(listener) }
+    pendingRun.values.forEach { it.layout?.dispose() }
+    runAvatars.clear(); pendingRun.clear(); runIndexes.clear(); pendingAttachments.clear(); runVisibilities.clear(); runMeasurements.clear(); bindingRun.remove()
+}
+
+/** 单条严格按内容中心；长组跟随最后一条内容中心，并约束在组首与可见底部之间。 */
+internal fun floatingAvatarTop(firstCenter: Float, lastCenter: Float, viewportTop: Float, viewportBottom: Float,
+    height: Float, gap: Float): Float? {
+    if (!firstCenter.isFinite() || !lastCenter.isFinite() || !height.isFinite() || height <= 0 ||
+        !viewportTop.isFinite() || !viewportBottom.isFinite() || viewportBottom <= viewportTop ||
+        !gap.isFinite() || gap < 0 || firstCenter > lastCenter ||
+        lastCenter + height / 2 <= viewportTop || firstCenter - height / 2 >= viewportBottom) return null
+    return maxOf(firstCenter, minOf(lastCenter, viewportBottom - height / 2 - gap)) - height / 2
+}
+
+/** 只有双方共有的标识才能比较；不能一条用 UID、另一条用后来才补齐的 UIN。 */
+internal fun runSenderPair(uid: String?, uin: Long?, self: Boolean, previousUid: String?, previousUin: Long?,
+    previousSelf: Boolean): Pair<String?, String?> = when {
+    self && previousSelf -> "self" to "self"
+    !uid.isNullOrBlank() && !previousUid.isNullOrBlank() -> "uid:$uid" to "uid:$previousUid"
+    uin != null && uin > 0 && previousUin != null && previousUin > 0 -> "uin:$uin" to "uin:$previousUin"
+    else -> null to null
+}
+
+internal fun runItemIndex(list: List<*>, item: Any, previous: Int): Int {
+    if (list.getOrNull(previous) === item) return previous
+    list.indexOfFirst { it === item }.takeIf { it >= 0 }?.let { return it }
+    val id = msgId(item)?.takeIf { it != 0L } ?: return -1
+    return list.indexOfFirst { msgId(it) == id }
+}
+
+internal fun compactRunHeight(nativeHeight: Int, contentBottom: Int, paddingBottom: Int, minimum: Int): Int =
+    if (contentBottom <= 0) nativeHeight else minOf(nativeHeight, maxOf(minimum, contentBottom + paddingBottom))
+
+/** 可见的只有组中间一条时，不能误当成整个组只有一条；起止约束来自消息数据。 */
+internal fun floatingRunAvatarTop(first: Float, last: Float, top: Float, bottom: Float, height: Float, gap: Float,
+    hasStart: Boolean, hasEnd: Boolean): Float? {
+    if (!first.isFinite() || !last.isFinite() || first > last) return null
+    return floatingAvatarTop(if (hasStart) first else minOf(first, top - height),
+        if (hasEnd) last else maxOf(last, bottom + height), top, bottom, height, gap)
+}
+
+/** 跨日、倒序、不同发送者和系统消息均断组；连续消息只合并五分钟内的。 */
+internal fun continuesMessageRun(sender: String?, previousSender: String?, time: Long, previousTime: Long,
+    type: Int?, previousType: Int?): Boolean = !sender.isNullOrEmpty() && sender == previousSender &&
+    type != null && previousType != null && type !in setOf(5, 29) && previousType !in setOf(5, 29) &&
+    time >= previousTime && time - previousTime <= 300 &&
+    (time + 8 * 3600) / 86400 == (previousTime + 8 * 3600) / 86400
+
 private fun follows(prev: Any?, cur: Any?): Boolean {
+    if (prev === cur) return false
+    val previousId = msgId(prev)
+    if (previousId != null && previousId != 0L && previousId == msgId(cur)) return false
     val a = record(prev) ?: return false
     val b = record(cur) ?: return false
-    val sender = a.get("senderUid") as? String
-    return !sender.isNullOrEmpty() && sender == b.get("senderUid") &&
-        a.get("msgType") !in setOf(5, 29) && b.get("msgType") !in setOf(5, 29) &&
-        abs((b.get("msgTime") as Long) - (a.get("msgTime") as Long)) <= 300
+    val t0 = a.get("msgTime") as? Long ?: return false
+    val t1 = b.get("msgTime") as? Long ?: return false
+    fun self(item: Any?): Boolean =
+        runCatching { item?.javaClass?.getMethod("isSelf")?.invoke(item) as? Boolean }.getOrNull() == true
+    val sender = runSenderPair(b.get("senderUid") as? String, b.get("senderUin") as? Long, self(cur),
+        a.get("senderUid") as? String, a.get("senderUin") as? Long, self(prev))
+    return continuesMessageRun(sender.first, sender.second, t1, t0, b.get("msgType") as? Int, a.get("msgType") as? Int)
 }
 
 private fun record(item: Any?): Any? = item?.let { runCatching { it.javaClass.getMethod("getMsgRecord").invoke(it) }.getOrNull() }
@@ -266,26 +868,26 @@ fun noForwardLimit() {
     val act = cls("com.tencent.mobileqq.activity.ForwardRecentActivity")
     val rec = cls("com.tencent.mobileqq.selectmember.ResultRecord")
     // 要反射的东西装的时候全解析好：缺一个当场 ✗，别等到点转发才发现
-    val keyOf = act.getMethod("getForwardTargetKey", String::class.java, Integer.TYPE)
+    val keyOf = act.getDeclaredMethod("getForwardTargetKey", String::class.java, Integer.TYPE).apply { isAccessible = true }
     val copyOf = rec.getMethod("copyResultRecord", rec)
     val typeOf = rec.getMethod("getUinType")
-    val refresh = act.getMethod("refreshRightBtn")
-    hook(act.method("add2ForwardTargetList")) { chain ->
+    val refresh = act.getDeclaredMethod("refreshRightBtn").apply { isAccessible = true }
+    val syncSearch = act.getDeclaredMethod("setSearchSelectedAndJoinedUins").apply { isAccessible = true }
+    hook(act.getDeclaredMethod("add2ForwardTargetList", rec)) { chain ->
         val r = chain.getArg(0) ?: return@hook false
         val self = chain.thisObject
         val map = self.get("mForwardTargetMap") as? MutableMap<Any, Any?> ?: return@hook chain.proceed()
         val key = keyOf.invoke(self, r.get("uin"), typeOf.invoke(r)) ?: return@hook chain.proceed()
         map[key] = copyOf.invoke(r, r)
         refresh.invoke(self)
+        syncSearch.invoke(self)
         // 顶部那条「已选 N 人」按签名找（void(List, boolean)），找不到就算了，不影响转发本身
         self.get("mSelectedAndSearchBar")?.let { bar ->
             bar.javaClass.declaredMethods
                 .firstOrNull { it.returnType == Void.TYPE && it.parameterTypes.contentEquals(arrayOf(List::class.java, Boolean::class.java)) }
-                ?.invoke(bar, ArrayList(map.values), true)
+                ?.apply { isAccessible = true }?.invoke(bar, ArrayList(map.values), true)
         }
         true
-        // ponytail: 搜索页的勾选状态没同步（上游那半是死代码，mSearchFragment 这条路没核）。
-        // 真机上搜索页勾选对不上的话，再去找它的 setSelectedAndJoinedUins。
     }
 }
 
@@ -306,33 +908,6 @@ fun plusPanel() {
 private fun title(item: Any): String? =
     runCatching { item.javaClass.getMethod("getTitle").invoke(item) as? String }.getOrNull()
         ?: runCatching { item.javaClass.getMethod("getName").invoke(item) as? String }.getOrNull()
-
-// ---- 昵称行只留名字：群等级、头衔、成员等级、会员图标各是一个 block，问「这条消息要不要我」时一律答否。
-
-private val NICK_DROP = setOf(
-    "com.tencent.qqnt.aio.gradelevel.AIOTroopMemberGradeLevelBlock",
-    "com.tencent.qqnt.aio.mutualmark.AIOTroopHonorNickBlock",
-    "com.tencent.qqnt.aio.nick.memberlevel.AIOTroopMemberLevelBlock",
-    "com.tencent.mobileqq.vas.vipicon.AIOVipIconProcessor",
-    "com.tencent.mobileqq.vas.vipicon.AIOVipIconExProcessor",
-    "com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.block.AIONickIconSimpleBlock",
-)
-
-fun plainNick() {
-    val block = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock")
-    val viewOf = block.method("h") // 该 block 已经建出来的 View（可能还没有）
-    hook(block.method("l")) { chain ->
-        val self = chain.thisObject
-        if (generateSequence<Class<*>>(self.javaClass) { it.superclass }.none { it.name in NICK_DROP }) return@hook chain.proceed()
-        (viewOf.invoke(self) as? View)?.visibility = View.GONE
-        false
-    }
-    // 调用 l() 的两处都是小方法，ART 可能把它们内联，钩子就落空；反优化保证走钩子。
-    cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickSlotContainer").declaredMethods
-        .filter { it.name == "d" }.forEach { xposed.deoptimize(it) }
-    cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2").declaredMethods
-        .filter { it.name == "d1" }.forEach { xposed.deoptimize(it) }
-}
 
 // ---- 轻互动（戳一戳那类全屏特效）与表情雨：配置列表永远为空。
 

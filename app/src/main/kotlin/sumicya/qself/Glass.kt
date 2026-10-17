@@ -4,10 +4,11 @@ package sumicya.qself
 import android.animation.ValueAnimator
 import android.content.res.Configuration
 import android.content.res.Resources
+import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
-import android.graphics.LinearGradient
 import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.PixelFormat
@@ -32,10 +33,12 @@ import kotlin.math.min
  * 罩一层淡色。没有高光也没有描边；按下去透镜凹一点、整面浮一层柔光。全在 GPU 上，
  * 每帧只多录一遍身后的 display list。
  *
+ * 底栏、设置入口、菜单与输入区共享 KernelBar 的模糊/折射/罩色；面板保留自身圆角，不复制胶囊几何。
  * [radius] 圆角上限（默认全圆 = 胶囊 / 圆钮），[selected] 给底栏用：返回当前选中的页签，
  * 玻璃里就多一块会弹着滑过去的亮胶囊。
  */
-class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, private val selected: (() -> View?)? = null) : Drawable() {
+class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, kernelBar: Boolean = false, kernelButton: Boolean = false, kernelSurface: Boolean = false, private val selected: (() -> View?)? = null) : Drawable() {
+    private val kernel = if (kernelBar || kernelButton || kernelSurface) KernelBar(host, { behind(it) }, { invalidateSelf() }, standalone = !kernelBar, cornerRadius = if (kernelSurface) radius else Float.MAX_VALUE, deformBody = !kernelSurface) else null
     private val dp = host.dp
     private val node = RenderNode("qself-glass")
     private val pad = (12 * dp).toInt() // 边缘折射往里采样，留一点余量就够
@@ -62,12 +65,25 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     private var target: View? = null
     private var fromX = 0f
     private var toX = 0f
+    private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> key = 0L; invalidateSelf() }
+    private val attachListener = object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(v: View) { kernel?.attach(); key = 0L; invalidateSelf() }
+        override fun onViewDetachedFromWindow(v: View) { stopAnimations() }
+    }
     init {
-        host.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> key = 0L; invalidateSelf() }
-        host.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) { key = 0L; invalidateSelf() }
-            override fun onViewDetachedFromWindow(v: View) { busy = false; key = 0L }
-        })
+        if (host.isAttachedToWindow) kernel?.attach()
+        host.addOnLayoutChangeListener(layoutListener)
+        host.addOnAttachStateChangeListener(attachListener)
+    }
+    private fun stopAnimations() {
+        kernel?.stop()
+        pressAnim.cancel(); anim.cancel(); press = 0f; pressed = false; target = null
+        busy = false; key = 0L; node.discardDisplayList()
+    }
+    fun dispose() {
+        stopAnimations()
+        host.removeOnLayoutChangeListener(layoutListener)
+        host.removeOnAttachStateChangeListener(attachListener)
     }
 
     private val anim = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -79,6 +95,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     override fun draw(canvas: Canvas) {
         val b = bounds
         if (b.isEmpty) return
+        kernel?.let { it.draw(canvas, b, drawableAlpha, drawableColorFilter); return }
         val night = night()
         lens.setFloatUniform("press", press)
         val layerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -156,7 +173,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             child = p
         }
         for ((p, c) in levels.asReversed()) {
-            p.background?.let { paint(rc, p) { bg -> it.draw(bg) } }
+            p.background?.let { paint(rc, p, background = true) { bg -> it.draw(bg) } }
             val hostIndex = p.indexOfChild(c)
             val hostZ = c.z
             for (i in 0 until p.childCount) {
@@ -169,13 +186,14 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         }
     }
 
-    private inline fun paint(rc: Canvas, v: View, body: (Canvas) -> Unit) {
-        v.getLocationInWindow(there)
+    private inline fun paint(rc: Canvas, v: View, background: Boolean = false, body: (Canvas) -> Unit) {
+        val transform = Matrix()
+        v.transformMatrixToGlobal(transform)
+        host.transformMatrixToLocal(transform)
         val save = rc.save()
-        rc.translate((there[0] - here[0]).toFloat(), (there[1] - here[1]).toFloat())
-        rc.concat(v.matrix)
+        rc.concat(transform)
         rc.clipRect(0, 0, v.width, v.height)
-        rc.translate(-v.scrollX.toFloat(), -v.scrollY.toFloat())
+        if (!background) rc.translate(-v.scrollX.toFloat(), -v.scrollY.toFloat())
         if (v.alpha < 1f) {
             val layerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { alpha = (v.alpha * 255f).toInt() }
             val layer = rc.saveLayer(0f, 0f, v.width.toFloat(), v.height.toFloat(), layerPaint)
@@ -194,30 +212,58 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     }
 
     private fun overlaps(v: View): Boolean {
-        v.getLocationInWindow(there)
-        return there[1] < here[1] + host.height + pad && there[1] + v.height > here[1] - pad &&
-            there[0] < here[0] + host.width + pad && there[0] + v.width > here[0] - pad
+        val transform = Matrix()
+        v.transformMatrixToGlobal(transform); host.transformMatrixToLocal(transform)
+        val rect = RectF(0f,0f,v.width.toFloat(),v.height.toFloat()).also(transform::mapRect)
+        val margin = if (kernel != null) 40*dp else pad.toFloat()
+        return rect.intersects(-margin,-margin,host.width+margin,host.height+margin)
     }
+    fun drawKernelContent(canvas: Canvas): Boolean = runCatching {
+        kernel?.drawContent(canvas,bounds) ?: false
+    }.onFailure {
+        if (lastFailureKey != Long.MAX_VALUE) {
+            lastFailureKey = Long.MAX_VALUE
+            log("KernelSU 内容合成失败，本帧保留 QQ 原生绘制；不是玻璃验收通过",it)
+        }
+    }.getOrDefault(false)
 
-    private fun setPress(p: Boolean) {
-        if (p == pressed) return
+    private fun setPress(p: Boolean): Boolean {
+        if (p == pressed) return false
         pressed = p
         pressAnim.cancel()
         pressAnim.setFloatValues(press, if (p) 1f else 0f)
-        pressAnim.start()
+        if (ValueAnimator.areAnimatorsEnabled()) pressAnim.start() else { press = if (p) 1f else 0f; invalidateSelf() }
+        return true
     }
+
+    // 底栏的按压直接由 DOWN/UP/CANCEL 驱动；通用材质才读取 View pressed。
+    override fun isStateful() = true
 
     override fun onStateChange(state: IntArray): Boolean {
-        setPress(state.contains(android.R.attr.state_pressed))
-        return false
+        if (kernel != null) {
+            kernel.sync()
+            return true
+        }
+        return setPress(state.contains(android.R.attr.state_pressed))
     }
 
-    /** 选中页签换了就重画；每帧 pre-draw 时由宿主调一次。底栏自己拿不到 pressed
-     * （触摸被页签吃掉），在这里看子/孙视图有没有被按着。 */
+    /** 每帧 pre-draw 同步选中项；仅通用材质检查后代 pressed，底栏由真实触摸驱动。 */
     fun sync() {
+        kernel?.let { it.sync(); return }
         if (selected?.invoke() !== target) invalidateSelf()
         setPress(host.isPressed || hasPressedDescendant(host))
     }
+
+    internal val isKernelBar: Boolean get() = kernel?.standalone == false
+    fun kernelTouchDown(x: Float, y: Float = host.height / 2f) { kernel?.touchDown(x, y) }
+    fun kernelTouchEnd(commit: Boolean = false) { kernel?.touchEnd(commit) }
+
+    fun beginKernelDrag(x: Float): Boolean {
+        val renderer = kernel ?: return false
+        renderer.begin(x); return true
+    }
+    fun dragKernel(x: Float) { kernel?.drag(x) }
+    fun endKernelDrag(commit: Boolean) { kernel?.end(commit) }
 
     private fun hasPressedDescendant(v: View): Boolean {
         if (v.isPressed) return true
@@ -238,7 +284,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             fromX = if (first) x else fromX + (toX - fromX) * f
             target = t
             anim.cancel()
-            if (!first) anim.start()
+            if (!first && ValueAnimator.areAnimatorsEnabled()) anim.start()
         }
         toX = x
         val cx = fromX + (toX - fromX) * (if (anim.isRunning) spring(anim.animatedFraction) else 1f)

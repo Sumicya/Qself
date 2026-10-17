@@ -1,0 +1,81 @@
+# Qself PR 校验工作流 —— 跑校验与清理真删：不取号、不出包、不上传 artifact。
+# 与 build.yml 分开是规范要求：run_number 在运行创建时就分配，且按工作流计数；
+# 触发只允许 pull_request；出包与版本号在 build.yml。
+name: PR check
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+# 与 build.yml 同值：同一份 .github/scripts/cleanup.py，这里真删 —— 会话推送即触发，
+# 真删的调用点必须会话可达（规范 b0594d3）；两处清理作业挂同一个 concurrency group 串行。
+# fork PR 或 DELETE 403 时脚本打 ::warning:: 降级为预演，不让 job 红。
+env:
+  SEGMENTS: '5'
+  CLEANUP_APPLY: 'true'
+
+jobs:
+  # 落点核对：真包在 Sumicya/qqapk（qq.aa..qq.ae 拼起来）。表红了就是这版 QQ 里名字对不上，出包也是白出。
+  dex:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: 拼出真 QQ 包
+        run: |
+          git clone -q --depth 1 https://github.com/Sumicya/qqapk qq
+          cat qq/qq.a* > qq.apk && rm -rf qq
+          ls -l qq.apk
+      - name: 逐个核落点
+        run: |
+          python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin --quiet
+          python3 tools/ui_paths.py qq.apk
+          python3 -m unittest discover -s tools -p 'test_*.py'
+      - name: Skia CPU 编译五份移植着色器（不是设备验收）
+        run: bash ci/check-shaders.sh
+
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+      - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
+      - uses: gradle/actions/setup-gradle@v6
+      # 不取号：仅给单测一个五段格式夹具（versionCode > 0），不组装/上传 APK，不作为产物号源。
+      - name: 单元测试（不取号）
+        env:
+          QSELF_VERSION: 00.0.0.0.1
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+
+  # 清理真删：与出包工作流同一份脚本（.github/scripts/cleanup.py），会话可达的那个真删调用点 ——
+  # 会话推送即触发；与 build.yml 的 cleanup-artifacts 同一 concurrency group 串行，避免并发删同一对象。
+  cleanup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: qself-cleanup
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      # 清理脚本启动要打印两条取号命令的输出：浅克隆下会打出 1，所以这里也要完整历史。
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: 按五条判据清理（真删）
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SELF: ${{ github.run_id }}
+          CLEANUP_SCOPE: actions
+        run: python3 .github/scripts/cleanup.py

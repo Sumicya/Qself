@@ -23,20 +23,38 @@ fun cls(name: String): Class<*> = Class.forName(name, false, loader)
 
 /** 正在装的功能名。hook() 把它记进钩子，运行时按开关决定走不走；null = 不受开关管。 */
 var feature: String? = null
+private var installing: MutableList<XposedInterface.HookHandle>? = null
+
+/** 每项功能安装原子化：失败撤掉本项已装钩子，不能留下“显示 ✗ 但半项仍生效”。 */
+fun installFeature(name: String?, body: () -> Any?) {
+    check(installing == null) { "不支持嵌套安装" }
+    val handles = ArrayList<XposedInterface.HookHandle>()
+    installing = handles
+    val previous = feature
+    feature = name
+    try { body() } catch (failure: Throwable) {
+        handles.asReversed().forEach { handle ->
+            runCatching { handle.unhook() }.exceptionOrNull()?.let(failure::addSuppressed)
+        }
+        throw failure
+    } finally { installing = null; feature = previous }
+}
 
 /**
  * 装钩子。libxposed 默认（PROTECTIVE）异常模式：钩子在 proceed 前抛异常 = 这一次当没装，
  * QQ 原方法照常跑，所以钩子体不必 try/catch。不调用 proceed 就是替换原方法。
  */
-fun hook(target: Executable, body: (Chain) -> Any?): XposedInterface.HookHandle {
-    val name = feature
+fun hook(target: Executable, gated: Boolean = true, body: (Chain) -> Any?): XposedInterface.HookHandle {
+    val name = if (gated) feature else null
     return xposed.hook(target).intercept { chain -> if (name == null || on(name)) body(chain) else chain.proceed() }
+        .also { installing?.add(it) }
 }
 
 private var prefs: SharedPreferences? = null
 
 /** 开关存在 QQ 自己的 SharedPreferences「qself」里，缺省全开；Application 还没建起来时也当开。 */
-fun on(name: String): Boolean = store()?.getBoolean(name, true) ?: true
+fun on(name: String): Boolean = name !in failed &&
+    (store()?.getBoolean(name, featureDefaults[name] ?: true) ?: (featureDefaults[name] ?: true))
 
 fun store(): SharedPreferences? = prefs ?: runCatching {
     (Class.forName("android.app.ActivityThread").getMethod("currentApplication").invoke(null) as? Context)

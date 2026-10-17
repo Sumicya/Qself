@@ -1,7 +1,7 @@
 #!/bin/bash
 # 没有 Android SDK / Gradle 的机器上做类型检查 + 跑 ProtoTest（CI 之外的快速回路）。
 # 第一次跑会把 kotlinc（npm）、JRE（PyPI jdk4py）、android.jar、libxposed 源码拉到 ~/.cache/qself-tc。
-set -e
+set -euo pipefail
 T=${QSELF_TC:-$HOME/.cache/qself-tc}
 R=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$T" && cd "$T"
@@ -32,15 +32,14 @@ fun main() {
     val t = sumicya.qself.ProtoTest()
     var n = 0
     for (m in t.javaClass.declaredMethods.filter { it.isAnnotationPresent(Test::class.java) }.sortedBy { it.name }) {
-        try { m.invoke(t); n++ } catch (e: java.lang.reflect.InvocationTargetException) { println("FAIL ${m.name}: ${e.cause}"); System.exit(1) }
+        try { m.invoke(t); n++ } catch (e: java.lang.reflect.InvocationTargetException) { println("FAIL ${m.name}: ${e.cause}"); e.cause?.printStackTrace(); System.exit(1) }
     }
     println("$n tests passed")
 }
 EOK
 export JAVA_HOME=$T/jdk4py/jdk4py/java-runtime PATH=$T/jdk4py/jdk4py/java-runtime/bin:$PATH
 JAVA=$(find "$T/libxposed-api/api/src/main/java" "$T/stubs" -name "*.java")
-rm -rf "$T/out" "$T/t"
-kotlinc/bin/kotlinc -jvm-target 21 -cp android.jar -d "$T/out" "$R"/app/src/main/kotlin/sumicya/qself/*.kt "$R"/app/src/test/kotlin/sumicya/qself/*.kt kstub/junit.kt $JAVA bc/sumicya/qself/BuildConfig.java 2>&1 | grep -v "^$" || true
-echo "compiled: $(ls "$T/out/sumicya/qself" 2>/dev/null | wc -l) classes"
-kotlinc/bin/kotlinc -nowarn -jvm-target 21 -cp android.jar -d "$T/t" "$R"/app/src/main/kotlin/sumicya/qself/Chat.kt "$R"/app/src/main/kotlin/sumicya/qself/Hook.kt "$R"/app/src/test/kotlin/sumicya/qself/ProtoTest.kt kstub/junit.kt kstub/run.kt $JAVA 2>&1 | grep -v "^$" || true
+rm -rf "$T/t"
+kotlinc/bin/kotlinc -jvm-target 21 -cp android.jar -d "$T/t" "$R"/app/src/main/kotlin/sumicya/qself/*.kt "$R"/app/src/test/kotlin/sumicya/qself/*.kt kstub/junit.kt kstub/run.kt $JAVA bc/sumicya/qself/BuildConfig.java 2>&1 | tee "$T/compile-all.log"
+echo "compiled: $(find "$T/t/sumicya/qself" -type f -name '*.class' | wc -l) classes"
 java -cp "$T/t:$T/kotlinc/lib/kotlin-stdlib.jar" RunKt

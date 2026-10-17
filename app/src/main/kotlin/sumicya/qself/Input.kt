@@ -1,229 +1,179 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself
 
-import android.text.Editable
-import android.text.TextWatcher
-import android.view.Gravity
+import android.animation.ValueAnimator
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.TextView
+import android.view.ViewTreeObserver
+import android.widget.EditText
+import android.widget.RelativeLayout
+import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 
-/**
- * Telegram（iOS 26）式输入栏：一颗悬浮的玻璃胶囊 [表情 · QQ 的输入框 · +]，右边一颗独立的玻璃圆钮（麦克风）；
- * 一打字 QQ 自己的「发送」块在框里亮出来、麦克风收起。输入栏的底色去掉，胶囊直接浮在聊天背景上。
- *
- * QQ 输入框下面那条图标带（PanelIconLinearLayout）藏起来，但它的按钮还活着：新行里的按钮是
- * 它们的镜子 —— 同一个 drawable，所以表情 ⇄ 键盘的状态跟着走 —— 点下去调原按钮的
- * performClick()，每个面板还是 QQ 自己的行为（相册在 + 里，TG 也没有单独的相册钮）。
- */
-private val rows = WeakHashMap<View, Row>()
+/** 不搬移、不隐藏输入或按钮；玻璃只覆盖真实 EditText，不再给整个按钮父框铺底。 */
+private val inputs = WeakHashMap<EditText, WeakReference<NativeInput>>()
 
-private const val ROW = "qself-row"
+/** NT 绑定器直接提供真实 EditText；发现钩子始终运行，开关只控制样式，关闭时也能登记。 */
+fun inputLayout() {
+    val delegate = cls("com.tencent.mobileqq.aio.input.edit.delegate.InputEditTextVBDelegate")
+    val edit = delegate.getDeclaredField("e").apply { isAccessible = true }
+    val prepared = delegate.getDeclaredMethod("U", cls("com.tencent.mobileqq.aio.input.adorn.e"))
+    hook(prepared, gated = false) { chain -> chain.proceed().also {
+        (edit.get(chain.thisObject) as? EditText)?.let { tgInput(it) }
+    } }
+}
 
+/** 兼容旧布局，但不再从任意祖先搜索第一个编辑器，更不强制把用户关闭的开关改回开启。 */
 fun tgInput(strip: ViewGroup) {
-    rows[strip]?.let { it.sync(); return }
-    val scope = strip.parent as? ViewGroup ?: return
-    val edit = find(scope) { it is TextView && (idName(it) == "input" || it.javaClass.simpleName.contains("EditText")) } as? TextView ?: return
-    val box = edit.parent as? ViewGroup ?: return
-    // host 取 box 和图标带的最小公共容器（输入栏自己）。往上多拿一级（聊天根容器）的话，
-    // 消息列表就成了 host 的兄弟槽位，会被 collapse 压掉、输入行也会被挤。
-    val host = generateSequence(box.parent as? ViewGroup) { it.parent as? ViewGroup }
-        .firstOrNull { p -> generateSequence(strip as View) { it.parent as? View }.any { it === p } } ?: return
-    if (host.tag == ROW) return // 热重载前的上一代已经排好了这一行
-    rows[strip] = Row(strip, edit, box, host, find(box) { idName(it) == "send_btn" }).also { it.sync() }
-}
-
-private fun find(v: View, pred: (View) -> Boolean): View? {
-    if (pred(v)) return v
-    if (v is ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i), pred)?.let { return it }
-    return null
-}
-
-private fun idName(v: View): String? =
-    if (v.id == View.NO_ID) null else runCatching { v.resources.getResourceEntryName(v.id) }.getOrNull()
-
-/** 我们这行里的按钮：显示跟 QQ 原按钮一样的图，点击转交给它。 */
-private class Mirror(val from: ImageView, val view: ImageView) {
-    private var shown: Any? = null
-
-    fun sync() {
-        val d = from.drawable
-        if (d !== shown) {
-            shown = d
-            view.setImageDrawable(d?.constantState?.newDrawable(from.resources)?.mutate() ?: d)
-            view.imageTintList = from.imageTintList
-        }
+    fun findEdit(view: View): EditText? {
+        if (view is EditText) return view
+        if (view is ViewGroup) for (i in 0 until view.childCount) findEdit(view.getChildAt(i))?.let { return it }
+        return null
     }
+    val parent = strip.parent as? ViewGroup ?: return
+    val row = (0 until parent.childCount).map(parent::getChildAt)
+        .firstOrNull { it.javaClass.name.endsWith(".InputLinearLayout") } ?: return
+    findEdit(row)?.let { tgInput(it, strip) }
 }
 
-private class Row(val strip: ViewGroup, val edit: TextView, val box: ViewGroup, val host: ViewGroup, val send: View?) {
-    private val row = LinearLayout(strip.context)
-    private val mirrors = ArrayList<Mirror>(4)
-    private val squeezed = HashMap<View, Int>()
-    private var sendVisibility: Int? = null
-    private val originalVisibility = HashMap<View, Int>()
-    private val originalBackgrounds = HashMap<View, android.graphics.drawable.Drawable?>()
-    private val originalBoxHeight = box.layoutParams?.height ?: ViewGroup.LayoutParams.WRAP_CONTENT
-    private val mic: Mirror?
+fun tgInput(edit: EditText, strip: ViewGroup? = null) {
+    inputs[edit]?.get()?.let { it.sync(); return }
+    inputs[edit] = WeakReference(NativeInput(edit, strip).also { it.sync() })
+}
 
+fun refreshInputLayout() { inputs.values.mapNotNull { it.get() }.forEach { it.sync() } }
+
+/** 只分配现有按钮之外的剩余空隙，不改按钮宽度/weight，不挤掉原生触摸区。 */
+internal fun inputButtonGap(available: Int, occupied: Int, count: Int, desired: Int): Int =
+    if (count < 2) 0 else minOf(desired, ((available - occupied) / (count - 1)).coerceAtLeast(0))
+
+private class InputDecoration(view: View, private val hide: Boolean = false) {
+    private val view = WeakReference(view)
+    private val background = view.background
+    private val foreground = view.foreground
+    private val visibility = view.visibility
+    fun apply() { view.get()?.let {
+        if (hide) { if (it.visibility == View.VISIBLE) it.visibility = View.INVISIBLE }
+        else { if (it.background != null) it.background = null; if (it.foreground != null) it.foreground = null }
+    } }
+    fun restore() { view.get()?.let { it.background = background; it.foreground = foreground; if (hide) it.visibility = visibility } }
+}
+
+private class ButtonMargin(view: View, val params: ViewGroup.MarginLayoutParams) {
+    private val view = WeakReference(view)
+    private val start = params.marginStart
+    private val end = params.marginEnd
+    fun apply(gap: Int) {
+        val view = view.get() ?: return
+        if (view.layoutParams !== params || params.marginStart == gap && params.marginEnd == 0) return
+        params.marginStart = gap; params.marginEnd = 0; view.layoutParams = params
+    }
+    fun restore() { view.get()?.let { if (it.layoutParams === params) {
+        params.marginStart = start; params.marginEnd = end; it.layoutParams = params
+    } } }
+}
+
+private class NativeInput(edit: EditText, strip: ViewGroup?) :
+    ViewTreeObserver.OnPreDrawListener, ViewTreeObserver.OnGlobalLayoutListener, View.OnAttachStateChangeListener {
+    private val strip = WeakReference(strip)
+    private val edit = WeakReference(edit)
+    private val background = edit.background
+    private val outline = edit.outlineProvider
+    private val clip = edit.clipToOutline
+    private val originalTranslationZ = edit.translationZ
+    private val glass = Glass(edit, 22 * edit.dp, kernelSurface = true)
+    private val shape = capsule(22 * edit.dp)
+    private val margins = WeakHashMap<View, ButtonMargin>()
+    private val decorations = ArrayList<InputDecoration>()
+    private var applied = false
+    private var focused = edit.hasFocus()
+    private var focusAnimator: ValueAnimator? = null
     init {
-        val icons = (0 until strip.childCount).mapNotNull { i ->
-            find(strip.getChildAt(i)) { it is ImageView && it.contentDescription != null } as? ImageView
+        // 真包布局 r/i/{ez,k_...}.xml：InputLinearLayout 和图标带各有一层实色背景。
+        strip?.let { decorations.add(InputDecoration(it)) }
+        // NT dxg.xml：编辑器与发送按钮的 ConstraintLayout 自带不透明背景。
+        if (edit.javaClass.name == "com.tencent.mobileqq.aio.input.edit.AIOEditText")
+            (edit.parent as? ViewGroup)?.let { decorations.add(InputDecoration(it)) }
+        val row = generateSequence(edit.parent as? ViewGroup) { it.parent as? ViewGroup }
+            .take(4).firstOrNull { it.javaClass.name.endsWith(".InputLinearLayout") }
+        if (row != null) {
+            generateSequence(edit.parent as? ViewGroup) { it.parent as? ViewGroup }
+                .takeWhile { it !== row.parent }.forEach { decorations.add(InputDecoration(it)) }
+            // 只处理明确与输入行对齐的 QQBlurView；不清整页聊天背景，不碰内容/回复面板。
+            (row.parent as? ViewGroup)?.let { parent -> for (i in 0 until parent.childCount) {
+                val view = parent.getChildAt(i)
+                val lp = view.layoutParams as? RelativeLayout.LayoutParams ?: continue
+                if (view.javaClass.name.endsWith(".QQBlurView") && row.id != View.NO_ID &&
+                    lp.rules[RelativeLayout.ALIGN_TOP] == row.id && lp.rules[RelativeLayout.ALIGN_PARENT_BOTTOM] != 0)
+                    decorations.add(InputDecoration(view, true))
+            } }
         }
-        fun icon(vararg keys: String) = icons.firstOrNull { i -> keys.any { i.contentDescription.toString().contains(it) } }
-
-        val ctx = strip.context
-        val dp = strip.dp
-        fun mirror(from: ImageView): Mirror {
-            val view = ImageView(ctx).apply {
-                scaleType = ImageView.ScaleType.CENTER_INSIDE
-                contentDescription = from.contentDescription
-                val p = (9 * dp).toInt()
-                setPadding(p, p, p, p)
-                background = borderlessRipple(this)
-                setOnClickListener { from.performClick() }
-                setOnLongClickListener { from.performLongClick() }
-                layoutParams = LinearLayout.LayoutParams((44 * dp).toInt(), (44 * dp).toInt())
-            }
-            return Mirror(from, view).also { it.sync(); mirrors += it }
-        }
-
-        val emoji = icon("表情")?.let(::mirror)
-        val more = icon("更多", "加号")?.let(::mirror)
-        mic = icon("语音")?.let(::mirror)
-
-        row.orientation = LinearLayout.HORIZONTAL
-        row.gravity = Gravity.CENTER_VERTICAL
-        row.tag = ROW
-        originalVisibility[strip] = strip.visibility
-        strip.visibility = View.GONE
-
-        // 玻璃胶囊就是输入框：[表情][QQ 的框（去掉自己的底色）][+]；多行时圆角封顶 22dp。
-        val field = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            outlineProvider = capsule(22 * dp)
-            clipToOutline = true
-            background = Glass(this, 22 * dp)
-            isClickable = true // 空的地方按下去也有按压反馈（玻璃凹+柔光）；按钮在子视图里照旧先接触摸
-            setPadding((2 * dp).toInt(), 0, (2 * dp).toInt(), 0)
-        }
-        val index = host.indexOfChild(box)
-        val boxLp = box.layoutParams.apply {
-            if (height > 0) height = originalBoxHeight + (12 * dp).toInt()
-        }
-        host.removeView(box)
-        originalBackgrounds[edit] = edit.background
-        originalBackgrounds[box] = box.background
-        edit.background = null
-        box.background = null
-        emoji?.view?.let(field::addView)
-        field.addView(box, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        more?.view?.let(field::addView)
-        row.addView(field, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-            setMargins((8 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
-        })
-        mic?.view?.let {
-            it.outlineProvider = capsule()
-            it.clipToOutline = true
-            it.background = Glass(it)
-            (it.layoutParams as LinearLayout.LayoutParams).marginEnd = (8 * dp).toInt()
-            row.addView(it)
-        }
-        host.addView(row, index.coerceIn(0, host.childCount), boxLp)
-        strip.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) = Unit
-            override fun onViewDetachedFromWindow(v: View) {
-                restore()
-                rows.remove(strip)
-            }
-        })
-
-        edit.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(s: Editable?) = swap()
-        })
+        edit.viewTreeObserver.addOnPreDrawListener(this)
+        edit.viewTreeObserver.addOnGlobalLayoutListener(this)
+        edit.addOnAttachStateChangeListener(this)
     }
-
     fun sync() {
-        mirrors.forEach { it.sync() }
-        swap()
-        star()
-        collapse()
-    }
-
-    /** QQ 塞在输入框右端的 AI 星星之类的图标钮：框里除了「发送」只留文字。 */
-    private fun star() {
-        fun go(v: View) {
-            if (v === send || v === edit) return
-            if (v is ImageView) {
-                originalVisibility.putIfAbsent(v, v.visibility)
-                if (v.visibility != View.GONE) v.visibility = View.GONE
-            } else if (v is ViewGroup) for (i in 0 until v.childCount) go(v.getChildAt(i))
+        val edit = edit.get() ?: return
+        if (!on("TG输入栏")) { restore(); return }
+        decorations.forEach { it.apply() }
+        if (edit.background !== glass) edit.background = glass
+        if (edit.outlineProvider !== shape) edit.outlineProvider = shape
+        if (!edit.clipToOutline) edit.clipToOutline = true
+        glass.sync()
+        val focus = edit.hasFocus()
+        if (!applied || focused != focus) {
+            focused = focus; focusAnimator?.cancel()
+            val target = originalTranslationZ + if (focus) 2 * edit.dp else 0f
+            if (!ValueAnimator.areAnimatorsEnabled()) edit.translationZ = target
+            else focusAnimator = ValueAnimator.ofFloat(edit.translationZ, target).apply {
+                duration = 140
+                addUpdateListener { this@NativeInput.edit.get()?.translationZ = it.animatedValue as Float }
+                start()
+            }
         }
-        go(box)
+        if (!applied) { applied = true; onGlobalLayout() }
     }
-
+    override fun onGlobalLayout() {
+        if (!on("TG输入栏")) return
+        val strip = strip.get() ?: return
+        if (strip.width <= 0) return
+        val children = (0 until strip.childCount).map(strip::getChildAt).filter { it.visibility == View.VISIBLE }
+        if (children.any { it.width <= 0 }) return
+        val gap = inputButtonGap(strip.width - strip.paddingLeft - strip.paddingRight,
+            children.sumOf { it.width }, children.size, (8 * strip.dp).toInt())
+        children.forEachIndexed { index, view ->
+            val lp = view.layoutParams as? ViewGroup.MarginLayoutParams ?: return@forEachIndexed
+            val state = margins[view]?.takeIf { it.params === lp } ?: ButtonMargin(view, lp).also { margins[view] = it }
+            state.apply(if (index == 0) 0 else gap)
+        }
+    }
     private fun restore() {
-        squeezed.forEach { (view, height) ->
-            view.layoutParams?.let { lp -> lp.height = height; view.layoutParams = lp }
+        if (!applied) return
+        focusAnimator?.cancel(); focusAnimator = null
+        edit.get()?.let {
+            it.background = background; it.outlineProvider = outline; it.clipToOutline = clip
+            it.translationZ = originalTranslationZ
         }
-        squeezed.clear()
-        originalVisibility.forEach { (view, visibility) ->
-            if (view !== strip) view.visibility = visibility
-        }
-        originalVisibility[strip]?.let { strip.visibility = it }
-        originalBackgrounds.forEach { (view, background) -> view.background = background }
-        box.layoutParams?.let { lp ->
-            if (originalBoxHeight > 0) {
-                lp.height = originalBoxHeight
-                box.layoutParams = lp
-            }
-        }
+        decorations.forEach { it.restore() }
+        margins.values.forEach { it.restore() }; margins.clear()
+        applied = false
     }
+    override fun onPreDraw(): Boolean { sync(); return true }
+    override fun onViewAttachedToWindow(view: View) = Unit
+    override fun onViewDetachedFromWindow(view: View) = dispose()
+    fun dispose() {
+        restore(); glass.dispose()
+        val view = edit.get() ?: return
+        if (view.viewTreeObserver.isAlive) {
+            view.viewTreeObserver.removeOnPreDrawListener(this)
+            view.viewTreeObserver.removeOnGlobalLayoutListener(this)
+        }
+        view.removeOnAttachStateChangeListener(this)
+        inputs.remove(view)
+    }
+}
 
-    /** 图标带没了，QQ 还留着那块空位。里面什么都没有的兄弟槽位压到 0 高；QQ 一往里放东西它自己长回来。 */
-    private fun collapse() {
-        for (i in 0 until host.childCount) {
-            val child = host.getChildAt(i)
-            if (child === row || child !is ViewGroup) continue
-            val nm = child.javaClass.name // 列表类的槽位再空也不是图标带留下的空位，不压
-            if ("Recycler" in nm || "ListView" in nm || "Pager" in nm) continue
-            val lp = child.layoutParams ?: continue
-            if (blank(child)) {
-                if (child !in squeezed && child.height > 0) {
-                    squeezed[child] = lp.height
-                    lp.height = 0
-                    child.layoutParams = lp
-                }
-            } else {
-                squeezed.remove(child)?.let { lp.height = it; child.layoutParams = lp }
-            }
-        }
-    }
-
-    private fun blank(v: View): Boolean = when {
-        v.visibility == View.GONE -> true
-        v is ViewGroup -> (0 until v.childCount).all { blank(v.getChildAt(it)) }
-        else -> false
-    }
-
-    /** 空输入框显麦克风，一打字就换成 QQ 自己的发送按钮。 */
-    private fun swap() {
-        val m = mic ?: return
-        val s = send ?: return
-        if (edit.text.isNullOrEmpty()) {
-            if (sendVisibility == null) sendVisibility = s.visibility
-            if (s.visibility != View.GONE) s.visibility = View.GONE
-            if (m.view.visibility != View.VISIBLE) m.view.visibility = View.VISIBLE
-        } else {
-            sendVisibility?.let { if (s.visibility != it) s.visibility = it }
-            sendVisibility = null
-            if (m.view.visibility != View.GONE) m.view.visibility = View.GONE
-        }
-    }
+fun resetInputLayout() {
+    inputs.values.mapNotNull { it.get() }.forEach { it.dispose() }
+    inputs.clear()
 }

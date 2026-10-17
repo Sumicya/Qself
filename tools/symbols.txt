@@ -103,21 +103,9 @@ field  com.tencent.mobileqq.activity.ForwardRecentActivity#mForwardTargetMap
 field  com.tencent.mobileqq.activity.ForwardRecentActivity#mSelectedAndSearchBar
 # 「隐藏在线状态」是视图规则，认的是服务器发的文案，dex 里没有对应落点。
 
-# ---------- 昵称行只留名字 Chat.kt
-class  com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock
-member! com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock#l
-member! com.tencent.mobileqq.aio.msglist.holder.component.nick.block.LazyNickBlock#h
-class  com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickSlotContainer
-member! com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickSlotContainer#d
+# ---------- 连发组首昵称（不移除等级/头衔/会员装饰）
 class  com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2
-member! com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2#d1
 member! com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2#f1
-class  com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.block.AIONickIconSimpleBlock
-class  com.tencent.qqnt.aio.gradelevel.AIOTroopMemberGradeLevelBlock
-class  com.tencent.qqnt.aio.mutualmark.AIOTroopHonorNickBlock
-class  com.tencent.qqnt.aio.nick.memberlevel.AIOTroopMemberLevelBlock
-class  com.tencent.mobileqq.vas.vipicon.AIOVipIconProcessor
-class  com.tencent.mobileqq.vas.vipicon.AIOVipIconExProcessor
 
 # ---------- 转发页 Chat.kt
 class  com.tencent.mobileqq.activity.ForwardRecentActivity
@@ -152,9 +140,15 @@ member com.tencent.mobileqq.statistics.StatisticCollector#report
 class  com.tencent.feedback.eup.CrashReport
 member com.tencent.feedback.eup.CrashReport#initCrashReport
 
-# ---------- 具体未读条数：QQ 封顶 99+ 的两个出口，盖回真数字
+# ---------- 具体未读条数：QQ 封顶 99+ 的出口，盖回真数字
 class  com.tencent.mobileqq.quibadge.QUIBadge
 member! com.tencent.mobileqq.quibadge.QUIBadge#updateNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setRedNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#setAIOBarNum
+member! com.tencent.mobileqq.quibadge.QUIBadge#onDraw
+field  com.tencent.mobileqq.quibadge.QUIBadge#mText
+field  com.tencent.mobileqq.quibadge.QUIBadge#mNum
 class  com.tencent.widget.d
 member! com.tencent.widget.d#d
 
@@ -219,3 +213,98 @@ text   腾讯文档
 text   打卡
 text   天气
 text   等级
+
+# TG 连发头像浮层：祖先列表类型来自真包
+class  androidx.recyclerview.widget.RecyclerView
+
+# 消息内容几何与一次性组件采集（QQ 9.2.10 真包 class_data 核过）
+member! com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB#o1
+class  com.tencent.mobileqq.aio.msglist.holder.g
+member! com.tencent.mobileqq.aio.msglist.holder.g#get
+class  com.tencent.mobileqq.aio.msglist.holder.component.c
+member! com.tencent.mobileqq.aio.msglist.holder.component.c#f1
+class  com.tencent.mobileqq.aio.msglist.holder.component.BaseContentComponent
+member! com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent#C1
+member! com.tencent.mobileqq.aio.msg.AIOMsgItem#isSelf
+field  com.tencent.qqnt.kernel.nativeinterface.MsgRecord#senderUin
+
+# 精确未读的实际测量路径与原生输入布局（Androguard + 真包 DEX/AXML 交叉核验）
+field  com.tencent.mobileqq.quibadge.QUIBadge#mTextPaint
+member! com.tencent.mobileqq.quibadge.QUIBadge#getMinWidth
+member! com.tencent.mobileqq.quibadge.QUIBadge#getMinHeight
+class  com.tencent.mobileqq.activity.aio.InputLinearLayout
+class  com.tencent.qui.quiblurview.QQBlurView
+
+# 新版实际入口：NT 输入编辑器及 QUIBadge 数量转文本之前的绑定器
+class com.tencent.mobileqq.aio.input.edit.AIOEditText
+class com.tencent.mobileqq.aio.input.edit.delegate.InputEditTextVBDelegate
+field com.tencent.mobileqq.aio.input.edit.delegate.InputEditTextVBDelegate#e
+member! com.tencent.mobileqq.aio.input.edit.delegate.InputEditTextVBDelegate#U
+class com.tencent.mobileqq.aio.input.adorn.e
+member! com.tencent.widget.d#a
+member! com.tencent.mobileqq.quibadge.QUIBadge#setRedText
+member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayText
+member! com.tencent.mobileqq.quibadge.QUIBadge#setRedDot
+member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayDot
+member! com.tencent.mobileqq.quibadge.QUIBadge#setIcon
+member! com.tencent.mobileqq.quibadge.QUIBadge#setRedNumWithIcon
+member! com.tencent.mobileqq.quibadge.QUIBadge#setGrayNumWIthIcon
+
+# 原生底栏内容绑定：不按宽高/滚动能力挑容器
+class com.tencent.mobileqq.tab.TabFrameLayout
+field com.tencent.mobileqq.tab.TabFrameLayout#e
+field com.tencent.mobileqq.tab.TabFrameLayout#d
+member! com.tencent.mobileqq.tab.TabFrameLayout#a
+member! com.tencent.mobileqq.tab.TabFrameLayout#onFinishInflate
+
+# TG 分组的真实组件槽位、活跃附加组件、列表提交与原生测量
+member! com.tencent.mobileqq.aio.msglist.holder.component.c#i1
+field com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB#G
+member! com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB#j1
+class com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.AutoCancelAsyncListDiffer
+member! com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.AutoCancelAsyncListDiffer#u
+member! com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.AutoCancelAsyncListDiffer#j
+class com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.differ.e
+class androidx.constraintlayout.widget.ConstraintLayout
+member! androidx.constraintlayout.widget.ConstraintLayout#onMeasure
+class androidx.constraintlayout.widget.ConstraintLayout$LayoutParams
+member! androidx.constraintlayout.widget.ConstraintLayout$LayoutParams#getConstraintWidget
+class androidx.constraintlayout.solver.widgets.ConstraintWidget
+member! androidx.constraintlayout.solver.widgets.ConstraintWidget#getY
+member! androidx.constraintlayout.solver.widgets.ConstraintWidget#getHeight
+
+# 实际存在的 slot 昵称分支，不能只处理 pit V2
+class com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickComponentV4
+member! com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickComponentV4#d1
+member! com.tencent.mobileqq.quibadge.QUIBadge#drawText
+member! com.tencent.mobileqq.quibadge.QUIBadge#onLayout
+member! com.tencent.mobileqq.quibadge.QUIBadge#onDraw
+field com.tencent.mobileqq.quibadge.QUIBadge#mViewType
+
+# ---------- 消息内时间 / At 对象 / 原生头像圆角 MessageStyle.kt
+class com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent
+member! com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent#d1
+member! com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent#f1
+class com.tencent.qqnt.aio.widget.AIOMsgTextView
+class com.tencent.qqnt.aio.widget.SelectableTextView
+member! com.tencent.qqnt.aio.widget.SelectableTextView#onTouchEvent
+class com.tencent.qqnt.base.widget.RoundRectImageView
+member! com.tencent.qqnt.base.widget.RoundRectImageView#setCornerRadiusAndMode
+field com.tencent.qqnt.base.widget.RoundRectImageView#mRadius
+field com.tencent.qqnt.base.widget.RoundRectImageView#mRoundMode
+class com.tencent.relation.common.api.IRelationNTUinAndUidApi
+member! com.tencent.relation.common.api.IRelationNTUinAndUidApi#getUinFromUid
+class com.tencent.mobileqq.qroute.QRoute
+member! com.tencent.mobileqq.qroute.QRoute#api
+class com.tencent.mobileqq.profilecard.data.AllInOne
+class com.tencent.mobileqq.profilecard.activity.FriendProfileCardActivity
+class com.tencent.qqnt.kernel.nativeinterface.TextElement
+field com.tencent.qqnt.kernel.nativeinterface.TextElement#atUid
+field com.tencent.qqnt.kernel.nativeinterface.TextElement#atNtUid
+field com.tencent.qqnt.kernel.nativeinterface.TextElement#atType
+field com.tencent.qqnt.kernel.nativeinterface.TextElement#content
+field com.tencent.qqnt.kernel.nativeinterface.MsgRecord#elements
+field com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgTime
+field com.tencent.qqnt.kernel.nativeinterface.MsgRecord#chatType
+class com.tencent.aio.data.msglist.a
+member! com.tencent.mobileqq.activity.ForwardRecentActivity#setSearchSelectedAndJoinedUins
