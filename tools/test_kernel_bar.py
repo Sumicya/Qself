@@ -27,16 +27,17 @@ class KernelPortTest(unittest.TestCase):
         self.assertEqual((ROOT / 'LICENSE').read_bytes(), (ROOT / 'third_party/LICENSE-GPL-3.0.txt').read_bytes())
         self.assertIn('assets.srcDir(rootProject.file("third_party"))', gradle)
 
-    def test_blur_lens_dispersion_and_bloom_are_connected(self):
-        for operation in ('RenderEffect.createBlurEffect(4*dp,4*dp', '24*dp,24*dp,false',
+    def test_reduced_blur_keeps_lens_and_dispersion_without_edge_stroke(self):
+        for operation in ('RenderEffect.createBlurEffect(2*dp,2*dp', '24*dp,24*dp,false',
                           '10*dp*p,14*dp*p,true', '"chromaticAberration",.5f',
-                          '"in_saturation", 1.5f', 'shine(canvas,surface,.75f,-45f)',
-                          'shine(canvas,rect,p,90f)', '8*dp*p'):
+                          '"in_saturation", 1.5f', '8*dp*p'):
             self.assertIn(operation, KERNEL)
         self.assertIn('Glass(bar, kernelBar = true)', LOOKS)
+        self.assertNotIn('shine(canvas',KERNEL)
+        self.assertNotIn('RuntimeShader(BLOOM_STROKE_SHADER_DUAL)',KERNEL)
 
-    def test_frame_and_sensor_lifecycles_are_balanced(self):
-        for operation in ('frameClock.removeFrameCallback(frame)', 'sensors.unregisterListener(this)',
+    def test_frame_and_tracker_lifecycles_are_balanced(self):
+        for operation in ('frameClock.removeFrameCallback(frame)', 'combined.discardDisplayList()',
                           'if (moving) schedule() else lastFrame = 0L',
                           'if (!attached || posted) return', 'tracker?.recycle()'):
             self.assertIn(operation, KERNEL)
@@ -72,12 +73,14 @@ class KernelPortTest(unittest.TestCase):
         self.assertNotIn('paint.shader = RadialGradient', KERNEL)
         self.assertIn('RuntimeShader(INTERACTIVE_HIGHLIGHT_SHADER)', KERNEL)
 
-    def test_knob_layout_reserves_pressed_visual_envelope_without_restylizing_it(self):
+    def test_knob_uses_optical_gap_same_height_and_stable_root_coordinates(self):
         knob = (ROOT / 'app/src/main/kotlin/sumicya/qself/Knob.kt').read_text()
-        self.assertIn('room >= gap + clearance + width + gap', knob)
-        self.assertIn('kernelOverhang((bar.width-8*dp)/count.coerceAtLeast(1), dp)', knob)
-        self.assertIn('76 * dp', knob)
-        self.assertIn('52 * dp', knob)
+        self.assertIn('room >= gap+visibleWidth+inset+edge',knob)
+        self.assertIn('val gap = (12*density).toInt()',knob)
+        self.assertNotIn('kernelOverhang',knob)
+        self.assertIn('decor.transformMatrixToLocal(transform)',knob)
+        self.assertIn('76*density',knob)
+        self.assertIn('64*density',knob)
         self.assertIn('InsetDrawable(glass,inset)', knob)
         self.assertIn('kernelButton = true', knob)
         self.assertIn('pressMotion(glass)', knob)
@@ -111,3 +114,15 @@ class KernelPortTest(unittest.TestCase):
         self.assertNotIn('rc.concat(v.matrix)',body)
         self.assertNotIn('there[0] - here[0]',body)
         self.assertIn('if (!background) rc.translate',body)
+
+    def test_both_rows_have_explicit_palette_and_foreground_does_not_wash_it_out(self):
+        self.assertIn('neutralTint.colorFilter = PorterDuffColorFilter',KERNEL)
+        self.assertIn('canvas.saveLayer(null,neutralTint)',KERNEL)
+        self.assertIn('tint.colorFilter = PorterDuffColorFilter',KERNEL)
+        foreground = KERNEL.split('fun drawContent(',1)[1].split('rounded(canvas,rect) {',1)[1]
+        self.assertNotIn('0x66121212',foreground)
+        self.assertNotIn('0x66FAFAFA',foreground)
+        self.assertIn('(.1f*(1-p)*255)',foreground)
+        self.assertIn('(.03f*p*255)',foreground)
+        self.assertNotIn('setImageTintList',KERNEL)
+        self.assertNotIn('setTextColor',KERNEL)

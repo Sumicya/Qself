@@ -189,13 +189,39 @@ class ProtoTest {
         assertEquals(1f, scale.value)
     }
 
-    @Test fun kernelKnobClearanceCoversPressAndVelocityStretchAtAllWidths() {
-        for (density in listOf(1f, 2.75f, 3f)) for (width in listOf(76f, 120f, 300f)) {
-            val px = width*density
-            val envelope = (px*(1.43f*1.25f-1f)/2f - 4*density).coerceAtLeast(0f) + 12*density
-            assertTrue(kernelOverhang(px, density) >= envelope)
+    @Test fun knobMatchesBarVisibleHeightAndUses12dpOpticalGap() {
+        val p = knobPlacement(420,800,100f,500f,260f,564f,1f,false)
+        assertTrue(p.beside)
+        assertEquals(92,p.width); assertEquals(80,p.height)
+        val outerLeft = 420-p.end-p.width
+        val outerTop = 800-p.bottom-p.height
+        assertEquals(12,outerLeft+8-260)
+        assertEquals(500,outerTop+8)
+        assertEquals(564,800-p.bottom-8)
+    }
+
+    @Test fun knobOpticalGapAndHeightMirrorInRtl() {
+        val p = knobPlacement(420,800,160f,500f,320f,564f,1f,true)
+        assertTrue(p.beside)
+        assertEquals(12,160-(p.end+p.width-8))
+        assertEquals(532,800-p.bottom-p.height/2)
+        assertEquals(knobPlacement(420,800,100f,500f,260f,564f,1f,false).bottom,p.bottom)
+    }
+
+    @Test fun knobFallsAboveWithoutAddingTheMaximumPressEnvelope() {
+        for (d in listOf(1f,1.3f,2.75f,3f)) {
+            val height = (800*d).toInt()
+            val p = knobPlacement((360*d).toInt(),height,100*d,500*d,260*d,564*d,d,false)
+            assertFalse(p.beside)
+            val inset = (8*d).toInt()
+            assertEquals((64*d).toInt(),p.height-2*inset)
+            val visibleBottom = height-p.bottom-inset
+            assertTrue(kotlin.math.abs(500*d-visibleBottom-(12*d).toInt()) <= 1f)
+            val wide = knobPlacement((420*d).toInt(),height,100*d,500*d,260*d,564*d,d,false)
+            assertTrue(wide.beside)
+            val visibleTop = height-wide.bottom-wide.height+inset
+            assertTrue(kotlin.math.abs(visibleTop-500*d) <= 1f)
         }
-        assertEquals(39, kernelOverhang(76f, 1f))
     }
 
     @Test fun kernelCriticalSpringSettlesWithoutOvershoot() {

@@ -3,14 +3,8 @@
 // Lens 和 BloomStroke AGSL 保留上游 Apache-2.0 实现，来源和许可见 third_party/NOTICE.md。
 package sumicya.qself
 
-import android.content.Context
 import android.graphics.*
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.view.Choreographer
-import android.view.Surface
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.PathInterpolator
@@ -57,7 +51,7 @@ internal fun kernelTabWidth(density: Float, badgeWidth: Int): Int =
 
 /** QQ 仍持有真实页签、点击及无障碍；这里只接管底栏背景、按压和横向选择。 */
 internal class KernelBar(private val host: View, private val behind: (Canvas) -> Unit,
-    private val invalidate: () -> Unit, val standalone: Boolean = false) : SensorEventListener {
+    private val invalidate: () -> Unit, val standalone: Boolean = false) {
     private val dp = host.dp
     private val scene = RenderNode("ksu-scene")
     private val base = RenderNode("ksu-base")
@@ -65,6 +59,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     private val tabLens = RuntimeShader(ROUNDED_RECT_REFRACTION_SHADER)
     private val tabContent = RenderNode("ksu-tab-content")
     private val combined = RenderNode("ksu-combined-backdrop")
+    private val neutralTint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val tint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val coordinates = Matrix()
     private var drawingTabs = false
@@ -74,7 +69,6 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     private val lens = RuntimeShader(ROUNDED_RECT_REFRACTION_SHADER)
     private val colorControls = RuntimeShader(COLOR_CONTROLS_SHADER)
     private val dispersion = RuntimeShader(ROUNDED_RECT_REFRACTION_WITH_DISPERSION_SHADER)
-    private val bloom = RuntimeShader(BLOOM_STROKE_SHADER_DUAL)
     private val interactive = RuntimeShader(INTERACTIVE_HIGHLIGHT_SHADER)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
@@ -99,9 +93,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     private var tracker: VelocityTracker? = null
     private var trackingVelocity = false
     private var dragX = 0f
-    private var angle = -PI.toFloat() / 2
     private var attached = false
-    private val sensors = host.context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private var baseKey = 0L
     private val frame = object : Choreographer.FrameCallback {
         override fun doFrame(now: Long) {
@@ -224,31 +216,16 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         if (attached) return
         attached = true
         tracker = VelocityTracker.obtain()
-        sensors.getDefaultSensor(Sensor.TYPE_GRAVITY)?.let { sensors.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
     }
     fun stop() {
         attached = false; dragging = false; touching = false; posted = false; lastFrame = 0L
-        frameClock.removeFrameCallback(frame); sensors.unregisterListener(this)
+        frameClock.removeFrameCallback(frame)
         tracker?.recycle(); tracker = null; trackingVelocity = false
         ready = false; chosen = null; observed = null; releasing = false
         springs.forEach { it.snap(if (it === scaleX || it === scaleY) 1f else 0f) }
         scene.discardDisplayList(); base.discardDisplayList(); indicator.discardDisplayList(); shadow.discardDisplayList()
         tabSurface.discardDisplayList(); tabContent.discardDisplayList(); combined.discardDisplayList()
         baseKey = 0L
-    }
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-    override fun onSensorChanged(event: SensorEvent) {
-        var x = event.values[0] / SensorManager.GRAVITY_EARTH
-        var y = event.values[1] / SensorManager.GRAVITY_EARTH
-        val oldX = x
-        when (host.display?.rotation) {
-            Surface.ROTATION_90 -> { x = -y; y = oldX }
-            Surface.ROTATION_180 -> { x = -x; y = -y }
-            Surface.ROTATION_270 -> { x = y; y = -oldX }
-        }
-        val step = (3 * PI / 180).toFloat()
-        val next = if (x*x + y*y > .01f) (atan2(y, x) / step).roundToInt() * step else -PI.toFloat()/2
-        if (angle != next) { angle = next; invalidate() }
     }
     private fun rounded(canvas: Canvas, rect: RectF, body: () -> Unit) {
         val save = canvas.save()
@@ -263,28 +240,6 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         shader.setFloatUniform("refractionAmount", -amount)
         shader.setFloatUniform("depthEffect", if (depth) 1f else 0f)
     }
-    private fun shine(canvas: Canvas, rect: RectF, alpha: Float, degrees: Float) {
-        if (alpha <= 0f) return
-        val w = rect.width(); val h = rect.height(); val r = min(w,h)/2
-        bloom.setFloatUniform("halfView", w/2, h/2); bloom.setFloatUniform("halfViewFloor", floor(w/2), floor(h/2))
-        bloom.setFloatUniform("cornerRadii", r,r,r,r); bloom.setFloatUniform("strokeWidth", dp)
-        bloom.setFloatUniform("innerBlurRadius", 2*dp); bloom.setFloatUniform("innerBlurRadiusSq", 4*dp*dp)
-        bloom.setFloatUniform("highlightAlpha", alpha); bloom.setColorUniform("strokeColor", Color.WHITE)
-        bloom.setFloatUniform("strokeAlphaMul", .12f)
-        val rad = angle + degrees * PI.toFloat()/180
-        val len = sqrt(1f + .05f*.05f)
-        bloom.setFloatUniform("lightDir1", cos(rad)/len, sin(rad)/len, -.05f/len)
-        bloom.setColorUniform("lightColor1", Color.WHITE); bloom.setFloatUniform("lightIntensity1", 1f)
-        val l2 = sqrt(.1f*.1f + .5f*.5f)
-        bloom.setFloatUniform("lightDir2", 0f, .1f/l2, -.5f/l2)
-        bloom.setColorUniform("lightColor2", Color.WHITE); bloom.setFloatUniform("lightIntensity2", .4f)
-        val save = canvas.save()
-        try {
-            canvas.translate(rect.left, rect.top)
-            paint.shader = bloom; paint.blendMode = BlendMode.PLUS
-            canvas.drawRect(0f,0f,w,h,paint)
-        } finally { paint.shader = null; paint.blendMode = null; canvas.restoreToCount(save) }
-    }
     private fun drawAt(canvas: Canvas, node: RenderNode, x: Float, y: Float) {
         val save = canvas.save()
         try { canvas.translate(x,y); canvas.drawRenderNode(node) } finally { canvas.restoreToCount(save) }
@@ -292,7 +247,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     private fun material(canvas: Canvas, node: RenderNode, rect: RectF, shift: Float) {
         rounded(canvas,rect) {
             drawAt(canvas,node,0f,rect.top)
-            paint.color = if (night()) 0x66242424 else 0x66FFFFFF
+            paint.color = if (night()) 0x66121212 else 0x66FAFAFA
             canvas.drawRect(rect,paint)
             val hp = highlight.value.coerceIn(0f,1f)
             if (hp > 0) {
@@ -321,7 +276,6 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
             val grow = 1f+16*dp/w.coerceAtLeast(1)*p
             canvas.scale(grow,grow,surface.centerX(),surface.centerY())
             material(canvas,base,surface,panel())
-            shine(canvas,surface,.75f,-45f)
         } finally { canvas.restoreToCount(save) }
     }
     private fun prepare(bounds: Rect) {
@@ -335,7 +289,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
             colorControls.setFloatUniform("in_contrast", 1f)
             colorControls.setFloatUniform("in_saturation", 1.5f)
             val color = RenderEffect.createRuntimeShaderEffect(colorControls,"child")
-            val blur = RenderEffect.createBlurEffect(4*dp,4*dp,color,Shader.TileMode.CLAMP)
+            val blur = RenderEffect.createBlurEffect(2*dp,2*dp,color,Shader.TileMode.CLAMP)
             configure(lens,w.toFloat(),h.toFloat(),pad.toFloat(),24*dp,24*dp,false)
             base.setRenderEffect(RenderEffect.createChainEffect(RenderEffect.createRuntimeShaderEffect(lens,"content"),blur))
             if (!standalone) {
@@ -409,7 +363,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         try {
             cc.translate(pad.toFloat(),pad.toFloat()); cc.drawRenderNode(scene)
             material(cc,tabSurface,RectF(0f,4*dp,w.toFloat(),60*dp),panel())
-            tint.colorFilter = PorterDuffColorFilter(monet(night(),0xFF) ?: if(night()) 0xFF9BC1FF.toInt() else 0xFF3482FF.toInt(), PorterDuff.Mode.SRC_IN)
+            tint.colorFilter = PorterDuffColorFilter(monet(night(),0xFF) ?: if(night()) 0xFF0091FF.toInt() else 0xFF0088FF.toInt(), PorterDuff.Mode.SRC_IN)
             val layer = cc.saveLayer(null,tint)
             try {
                 val factor = 1f + .2f * p
@@ -430,7 +384,10 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
             canvas.translate(bounds.left.toFloat()+panel(),bounds.top.toFloat())
             // 覆盖 TabLayout.onDraw 的旧装饰，避免旧选中背景混进玻璃。
             body(canvas,w,h,p)
-            canvas.drawRenderNode(tabContent)
+            // 普通行统一中性色，不能透出 QQ 的另一套选中蓝；只改变录制层，不写 QQ 控件属性。
+            neutralTint.colorFilter = PorterDuffColorFilter(if (night()) Color.WHITE else 0xFF1C1C1E.toInt(),PorterDuff.Mode.SRC_IN)
+            val normalLayer = canvas.saveLayer(null,neutralTint)
+            try { canvas.drawRenderNode(tabContent) } finally { canvas.restoreToCount(normalLayer) }
             val tw = (w-8*dp)/tabs().size
             val pos = if (host.layoutDirection == View.LAYOUT_DIRECTION_RTL) tabs().lastIndex-value.value else value.value
             val rect = RectF(4*dp+pos*tw,4*dp,4*dp+(pos+1)*tw,60*dp)
@@ -448,9 +405,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
                 try { ic.translate(pad-rect.left,pad-rect.top); ic.drawRenderNode(combined) } finally { indicator.endRecording() }
                 rounded(canvas,rect) {
                     drawAt(canvas, indicator, rect.left-pad, rect.top-pad)
-                    // combined 是原背景 + 强调色内容副本；指示器另有上游 surface 罩色。
-                    paint.color = if (night()) 0x66242424 else 0x66FFFFFF
-                    canvas.drawRect(rect,paint)
+                    // AndroidLiquidGlass 前景不再叠 40% surface，避免再次压暗强调色。
                     paint.color = Color.argb((.1f*(1-p)*255).toInt(),if(night())255 else 0,if(night())255 else 0,if(night())255 else 0)
                     canvas.drawRect(rect,paint)
                     paint.color = Color.argb((.03f*p*255).toInt(),0,0,0)
@@ -472,7 +427,6 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
                         drawAt(canvas, shadow, rect.left-pad, rect.top-pad)
                     }
                 }
-                shine(canvas,rect,p,90f)
             } finally { canvas.restoreToCount(save) }
 
         } finally { paint.shader=null; paint.blendMode=null; canvas.restoreToCount(layer) }

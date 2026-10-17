@@ -7,6 +7,8 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ContextWrapper
 import android.content.res.ColorStateList
+import android.graphics.Matrix
+import android.graphics.RectF
 import android.graphics.Outline
 import android.graphics.Canvas
 import android.graphics.ColorFilter
@@ -34,9 +36,8 @@ import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
 import java.util.Collections
 import java.util.WeakHashMap
+import kotlin.math.roundToInt
 import kotlin.math.min
-import kotlin.math.ceil
-import kotlin.math.max
 
 private const val KNOB = "qself-knob"
 private const val SHEET = "qself-sheet"
@@ -62,14 +63,29 @@ private fun View.pressMotion(kernel: Glass? = null) {
         override fun onViewDetachedFromWindow(view: View) {
             view.animate().cancel()
             if (kernel == null) (view.background as? Glass)?.dispose()
-            // Kernel Glass 自己的 attach listener 停帧/停传感器，重新挂载时可再次启动。
+            // Kernel Glass 自己的 attach listener 停帧/释放速度跟踪器，重新挂载时可再次启动。
         }
     })
 }
 
-/** 1.8 包住 78/56 按压弹簧峰值×最大速度伸长；另留整栏扩张 8dp、平移 4dp。 */
-internal fun kernelOverhang(tabWidth: Float, density: Float): Int =
-    ceil(max(0f, tabWidth * .4f - 4 * density) + 12 * density).toInt()
+/** 间距以静止可见玻璃边缘计，不把最大的动画包络当作静态空白。 */
+internal data class KnobPlacement(val width: Int, val height: Int, val bottom: Int, val end: Int, val beside: Boolean)
+internal fun knobPlacement(decorWidth: Int, decorHeight: Int, left: Float, top: Float,
+    right: Float, bottom: Float, density: Float, rtl: Boolean): KnobPlacement {
+    val inset = (8*density).toInt()
+    val visibleWidth = (76*density).toInt()
+    val visibleHeight = (64*density).toInt()
+    val width = visibleWidth+2*inset
+    val height = visibleHeight+2*inset
+    val gap = (12*density).toInt()
+    val edge = (8*density).toInt()
+    val room = if (rtl) left else decorWidth-right
+    val beside = room >= gap+visibleWidth+inset+edge
+    val end = if (beside) (room-gap-visibleWidth-inset).roundToInt() else edge
+    val marginBottom = if (beside) (decorHeight-(top+bottom)/2-height/2f).roundToInt()
+        else (decorHeight-top+gap-inset).roundToInt()
+    return KnobPlacement(width,height,marginBottom,end,beside)
+}
 
 fun knob(bar: View) {
     val decor = bar.rootView as? ViewGroup ?: return
@@ -77,22 +93,15 @@ fun knob(bar: View) {
     if (bar.height == 0) return
     if (!bar.isShown) { old?.visibility = View.GONE; return }
     val dp = bar.dp
-    // 可见短胶囊 76×52dp；四周 8dp 留给材质扩张，不扩大或缩放真实命中坐标。
+    // 可见 76×64dp，与静止底栏同高；物理布局保留四周 8dp 绘制空间。
     val inset = (8 * dp).toInt()
-    val width = (76 * dp).toInt() + 2*inset
-    val height = (52 * dp).toInt() + 2*inset
-    val at = IntArray(2).also(bar::getLocationInWindow)
-    val room = if (decor.layoutDirection == View.LAYOUT_DIRECTION_RTL) at[0]
-        else decor.width - at[0] - bar.width
-    val kernel = (bar.background as? Glass)?.isKernelBar == true
-    val strip = (bar as? ViewGroup)?.getChildAt(0) as? ViewGroup
-    val count = strip?.let { group -> (0 until group.childCount).count { group.getChildAt(it).visibility == View.VISIBLE } } ?: 1
-    val clearance = if (kernel) kernelOverhang((bar.width-8*dp)/count.coerceAtLeast(1), dp) else 0
-    val gap = (8 * dp).toInt()
-    val beside = room >= gap + clearance + width + gap // 还需保留屏幕端的 8dp，不能避让后贴边。
-    val bottom = if (beside) decor.height - at[1] - (bar.height + height) / 2
-        else decor.height - at[1] + gap + if (kernel) kernelOverhang(56*dp, dp) else 0
-    val end = if (beside) room - gap - clearance - width else gap
+    val transform = Matrix()
+    bar.transformMatrixToGlobal(transform); decor.transformMatrixToLocal(transform)
+    val rect = RectF(0f,0f,bar.width.toFloat(),bar.height.toFloat()).also(transform::mapRect)
+    val placement = knobPlacement(decor.width,decor.height,rect.left,rect.top,rect.right,rect.bottom,
+        dp,decor.layoutDirection == View.LAYOUT_DIRECTION_RTL)
+    val width = placement.width; val height = placement.height
+    val bottom = placement.bottom; val end = placement.end
     if (old != null) {
         old.visibility = View.VISIBLE
         val lp = old.layoutParams as ViewGroup.MarginLayoutParams
@@ -110,11 +119,12 @@ fun knob(bar: View) {
         imageTintList = ColorStateList.valueOf(monet(night(), 0xFF)
             ?: if (night()) 0xFFFFFFFF.toInt() else 0xFF1C1C1E.toInt())
         scaleType = ImageView.ScaleType.CENTER_INSIDE
-        val padding = (12 * dp).toInt() + inset
-        setPadding(padding, padding, padding, padding)
+        val glyphSize = (32*dp).toInt()
+        val horizontal = (width-glyphSize)/2; val vertical = (height-glyphSize)/2
+        setPadding(horizontal,vertical,horizontal,vertical)
         outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
-                outline.setRoundRect(inset,inset,view.width-inset,view.height-inset,26*dp)
+                outline.setRoundRect(inset,inset,view.width-inset,view.height-inset,32*dp)
             }
         }
         clipToOutline = false; elevation = 6 * dp

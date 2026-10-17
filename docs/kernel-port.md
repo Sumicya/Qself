@@ -2,6 +2,20 @@
 
 固定来源：KernelSU [`3186a2fe`](https://github.com/tiann/KernelSU/tree/3186a2fe2107f7170e06dab7aa157eb10ae7759f/manager/app/src/main/java/me/weishu/kernelsu/ui/component)，Miuix 0.9.4 / `39c40f99844227b853f0049a0933b1f3ae6c00ba`。许可、着色器展开哈希见 `third_party/NOTICE.md`、`tools/ksu-shaders.json`。不引入 Compose、Miuix 或其它运行库，QQ 保留真实页签、子控件、点击与无障碍。
 
+## 当前外观调整：以用户确认与 AndroidLiquidGlass 为准
+
+用户明确截图中的透镜形变正常，不把放大/按压胶囊改成所谓“修复”；本轮只调按钮排布、去边线、降低模糊及颜色覆盖。截图仅是上一包的反馈，不能作为本轮新包效果已通过的证据。
+
+新增固定参考：[AndroidLiquidGlass `65ab177e90e5c1d8c62e70cf7755841982da65f6`](https://github.com/Kyant0/AndroidLiquidGlass/tree/65ab177e90e5c1d8c62e70cf7755841982da65f6)，实际默认分支 kmp。读取 LiquidBottomTabs / LiquidBottomTab / LiquidButton 源码，不把该库称为苹果官方 iOS 27 实现。它的 BottomTabs 示例模糊为 8dp、Button 为 2dp；按用户“降低模糊”的要求统一采用 2dp，不盲目复制 8dp。
+
+- 设置短胶囊可见 76×64dp，与静止底栏同高、垂直中心对齐；以玻璃可见边缘计 12dp 间距，四周仍有 8dp 绘制空间。不再把最大按压/速度形变包络作为静态空白。父坐标用完整矩阵计算，LTR/RTL 对称；不足时仍上置，按压不重算位置。静止间距变小意味着高速形变时可进入这段间隙，不再声称预留完整最大包络。
+- 去掉主材质与指示器的 BloomStroke 边缘高光带，也取消无用的重力监听；保留内部交互柔光、折射、色散、内阴影与原弹簧比例。AGSL 原公式哈希不改，BloomStroke 字符串仅作来源快照，不再实例化。
+- 普通 QQ 内容的录制层统一中性色；强调色副本整层着色，保留抗锯齿和透明度，不直接修改真实控件的 tint/textColor。Monet 开关仍有效，关闭时采用参考示例的浅/深色蓝。基础 surface 改为示例的 #FAFAFA / #121212（40%）；前景不再叠加额外 40% surface，仅保留原有静止与按压遮罩，避免强调色被再次压暗。
+- 本轮先修可直接证明的着色层与罩色顺序，保留 QQ 原图标形状，没有重绘图标。若仍需替换图形，属于后续图标绘制工作，不能把整层着色说成已经重绘。
+- 未新增运行依赖，不改 QQ 真实页签/触摸/徽标绑定，不改菜单面板。无本轮 GPU 或 QQ 实机复验，不称为 iOS 27 一比一效果。
+
+以下为上一轮实现与检查记录，其中 4dp 模糊、BloomStroke、76×52dp 和重力监听的描述已被本节明确替代。
+
 ## 2026-10-17：根据用户实测修正渲染链
 
 用户反馈数字左漂、玻璃没有完整按上游、设置按钮没有胶囊形态。此前的测试通过不能推翻这些失败证据。
