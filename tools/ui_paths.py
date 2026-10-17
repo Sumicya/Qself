@@ -63,6 +63,20 @@ RULES = {
         {f'{BADGE}#mTextPaint:android.graphics.Paint'}, {f'{BADGE}#drawBackground', f'{BADGE}#drawBorder', 'android.graphics.Canvas#drawText'}),
 }
 
+FORWARD = 'com.tencent.mobileqq.activity.ForwardRecentActivity'
+RULES.update({
+    (FORWARD, 'getForwardTargetKey', 'java.lang.String java.lang.String,I'): (set(), {'java.lang.StringBuilder#toString'}),
+    (FORWARD, 'setSearchSelectedAndJoinedUins', 'V '): (set(), {f'{FORWARD}#getSelectedUins', f'{FORWARD}#getJoinUins'}),
+    (FORWARD, 'refreshRightBtn', 'V '): ({f'{FORWARD}#mForwardTargetMap:java.util.Map'}, {'java.util.Map#size'}),
+    ('com.tencent.qqnt.base.widget.RoundRectImageView', 'checkPathChanged', 'V '):
+        ({'com.tencent.qqnt.base.widget.RoundRectImageView#mRoundMode:I'}, {'android.graphics.Path#addRoundRect'}),
+    ('com.tencent.qqnt.base.widget.RoundRectImageView', 'setCornerRadiusAndMode', 'V I,I'):
+        ({'com.tencent.qqnt.base.widget.RoundRectImageView#mRadius:I', 'com.tencent.qqnt.base.widget.RoundRectImageView#mRoundMode:I'}, set()),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent', 'd1',
+     'V I,com.tencent.aio.data.msglist.a,java.util.List'): (set(), set()),
+    ('com.tencent.qqnt.aio.widget.SelectableTextView', 'onTouchEvent', 'Z android.view.MotionEvent'): (set(), set()),
+})
+
 
 def field_accesses(dex, offset):
     """记录实际字段读写方向，避免把引用字段当成已证明字段赋值。"""
@@ -97,10 +111,22 @@ def verify(apk):
                 continue
             dex = Dex(archive.read(name), name)
             for owner in sorted({key[0] for key in pending}):
-                for method, signature, offset in methods_of(dex, owner) or []:
+                for method, signature, offset, flags in methods_of(dex, owner, with_access=True) or []:
                     key = owner, method, signature
                     if key not in pending:
                         continue
+                    if owner == FORWARD and method != 'setSearchSelectedAndJoinedUins':
+                        assert not flags & 1, (key, "非 public，运行时必须 declared + accessible", flags)
+                    if owner == 'com.tencent.qqnt.base.widget.RoundRectImageView' and method == 'checkPathChanged':
+                        # 固定 QQ 9.2.10：const/4 v3,1；if-eq v2,v3 跳向四角等半径分支，而非把 mode 当位掩码。
+                        assert struct.unpack_from('<H', dex.b, offset + 0x50)[0] == 0x1312
+                        opcode, delta = struct.unpack_from('<Hh', dex.b, offset + 0x54)
+                        assert opcode == 0x3232
+                        target = offset + 0x54 + 2 * delta
+                        assert struct.unpack_from('<H', dex.b, target)[0] == 0xe254
+                        method_index = struct.unpack_from('<H', dex.b, target + 0x20)[0]
+                        _, prototype, _ = struct.unpack_from('<HHI', dex.b, dex.omth + 8 * method_index)
+                        assert dex.proto(prototype) == 'V android.graphics.RectF,F,F,android.graphics.Path$Direction'
                     assert offset, f'目标不能是 abstract/native: {key}'
                     _, fields, calls = disasm(dex, offset)
                     wanted_fields, wanted_calls = pending.pop(key)
@@ -114,7 +140,7 @@ def verify(apk):
                         assert all(('write', field) in access for field in wanted_fields), (key, access)
                     proof.append({'dex': name, 'method': f'{owner}#{method} {signature}',
                                   'fields': sorted(wanted_fields), 'calls': sorted(wanted_calls),
-                                  'field_access': access})
+                                  'field_access': access, 'access_flags': flags})
     assert not pending, f'完整签名没有匹配: {list(pending)}'
     return proof
 

@@ -38,7 +38,7 @@ import kotlin.math.min
  * 玻璃里就多一块会弹着滑过去的亮胶囊。
  */
 class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, kernelBar: Boolean = false, kernelButton: Boolean = false, kernelSurface: Boolean = false, private val selected: (() -> View?)? = null) : Drawable() {
-    private val kernel = if (kernelBar || kernelButton || kernelSurface) KernelBar(host, { behind(it) }, { invalidateSelf() }, standalone = !kernelBar, cornerRadius = if (kernelSurface) radius else Float.MAX_VALUE) else null
+    private val kernel = if (kernelBar || kernelButton || kernelSurface) KernelBar(host, { behind(it) }, { invalidateSelf() }, standalone = !kernelBar, cornerRadius = if (kernelSurface) radius else Float.MAX_VALUE, deformBody = !kernelSurface) else null
     private val dp = host.dp
     private val node = RenderNode("qself-glass")
     private val pad = (12 * dp).toInt() // 边缘折射往里采样，留一点余量就够
@@ -255,7 +255,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     }
 
     internal val isKernelBar: Boolean get() = kernel?.standalone == false
-    fun kernelTouchDown(x: Float) { kernel?.touchDown(x) }
+    fun kernelTouchDown(x: Float, y: Float = host.height / 2f) { kernel?.touchDown(x, y) }
     fun kernelTouchEnd(commit: Boolean = false) { kernel?.touchEnd(commit) }
 
     fun beginKernelDrag(x: Float): Boolean {

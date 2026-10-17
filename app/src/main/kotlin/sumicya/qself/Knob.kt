@@ -115,11 +115,11 @@ fun knob(bar: View) {
         tag = KNOB
         contentDescription = "Qself 设置"
         isFocusable = true
-        setImageDrawable(MenuGlyph())
+        setImageDrawable(MenuGlyph(dp))
         imageTintList = ColorStateList.valueOf(monet(night(), 0xFF)
             ?: if (night()) 0xFFFFFFFF.toInt() else 0xFF1C1C1E.toInt())
         scaleType = ImageView.ScaleType.CENTER_INSIDE
-        val glyphSize = (32*dp).toInt()
+        val glyphSize = (24*dp).toInt()
         val horizontal = (width-glyphSize)/2; val vertical = (height-glyphSize)/2
         setPadding(horizontal,vertical,horizontal,vertical)
         outlineProvider = object : ViewOutlineProvider() {
@@ -171,7 +171,10 @@ internal fun menuPlacement(width: Int, height: Int, left: Int, top: Int, right: 
 }
 
 /** 明确的三线菜单，替换 Android 自带的小扳手图标。 */
-private class MenuGlyph : Drawable() {
+private class MenuGlyph(dp: Float) : Drawable() {
+    private val intrinsic = (24 * dp).toInt()
+    override fun getIntrinsicWidth() = intrinsic
+    override fun getIntrinsicHeight() = intrinsic
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = -1; strokeWidth = 2f; strokeCap = Paint.Cap.ROUND
     }
@@ -267,7 +270,16 @@ private fun sheet(anchor: View) {
     val ink = if (night()) 0xFFF2F2F7.toInt() else 0xFF1C1C1E.toInt()
     val sub = if (night()) 0xFF98989E.toInt() else 0xFF6E6E73.toInt()
     val dim = FrameLayout(ctx).apply { tag = SHEET; alpha = 0f }
-    val card = LinearLayout(ctx).apply {
+    val card = object : LinearLayout(ctx) {
+        override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+            val glass = background as? Glass
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> glass?.kernelTouchDown(event.x, event.y)
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> glass?.kernelTouchEnd()
+            }
+            return super.dispatchTouchEvent(event)
+        }
+    }.apply {
         orientation = LinearLayout.VERTICAL; isClickable = true
         val radius = 22 * dp
         background = Glass(this, radius, kernelSurface = true); outlineProvider = capsule(radius); clipToOutline = true
@@ -351,12 +363,47 @@ private fun sheet(anchor: View) {
         background = menuPress(dp)
         setOnClickListener { body() }
     }
+    grid.addView(TextView(ctx).apply {
+        text = "消息外观"; textSize = 15f; setTextColor(ink)
+        setPadding((6 * dp).toInt(), (16 * dp).toInt(), 0, (8 * dp).toInt())
+    })
+    val format = android.widget.EditText(ctx).apply {
+        setText(prefs.getString(TIME_PATTERN, "HH:mm")); textSize = 14f; setTextColor(ink)
+        hint = "时间格式，例如 MM-dd HH:mm:ss"; setHintTextColor(sub); isSingleLine = true
+        filters = arrayOf(android.text.InputFilter.LengthFilter(80))
+        contentDescription = "消息内时间格式"
+    }
+    grid.addView(format)
+    grid.addView(button("保存时间格式") {
+        val value = format.text.toString()
+        if (!validTimePattern(value)) format.error = "格式无效，例如 HH:mm 或 MM-dd HH:mm:ss"
+        else { prefs.edit().putString(TIME_PATTERN, value).apply(); refreshMessageStyle(); format.error = null }
+    })
+    val cornerLabel = TextView(ctx).apply { textSize = 13f; setTextColor(ink) }
+    grid.addView(cornerLabel)
+    val radiusSeek = android.widget.SeekBar(ctx).apply {
+        max = 50; progress = (prefs.getInt(AVATAR_RADIUS, 20)).coerceIn(0, 50)
+        cornerLabel.text = "头像圆角：$progress%（0 为直角，50 为圆形）"
+        contentDescription = "头像圆角百分比"
+        setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: android.widget.SeekBar, value: Int, user: Boolean) {
+                cornerLabel.text = "头像圆角：$value%（0 为直角，50 为圆形）"
+            }
+            override fun onStartTrackingTouch(bar: android.widget.SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: android.widget.SeekBar) {
+                prefs.edit().putInt(AVATAR_RADIUS, bar.progress).apply(); refreshMessageStyle()
+            }
+        })
+    }
+    grid.addView(radiusSeek)
     grid.addView(LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.END
         addView(button("恢复默认") {
             val edit = prefs.edit()
             features.forEach { edit.putBoolean(it.name, it.default) }
-            edit.apply(); paints.forEach { it() }; refreshLooks(); card.invalidate()
+            edit.putString(TIME_PATTERN, "HH:mm").putInt(AVATAR_RADIUS, 20)
+            edit.apply(); format.setText("HH:mm"); radiusSeek.progress = 20
+            paints.forEach { it() }; refreshLooks(); card.invalidate()
         })
         addView(button("结束进程") {
             AlertDialog.Builder(ctx).setTitle("结束 QQ 当前进程？")

@@ -674,7 +674,8 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
                     val matrix = inHost(old.view)
                     val source = rectangle(old.view, matrix)
                     if (source != null) {
-                        val top = minOf(old.rect.top, clip.bottom - source.height() - 4 * host.dp)
+                        val top = old.rect.top.coerceIn(clip.top.toFloat() - source.height(),
+                            maxOf(clip.top.toFloat() - source.height(), clip.bottom - source.height() - 4 * host.dp))
                         val delta = top - source.top
                         matrix.postTranslate(0f, delta)
                         val targetMatrix = inHost(old.target).apply { postTranslate(0f, delta) }
@@ -686,8 +687,9 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
                     }
                 }
             }
-            avatars.forEach { it.hide() }
-            face?.let { next.add(it) }
+            // 没有可绘制源时不能把原生头像也隐藏，否则异步绑定期间整组头像消失。
+            if (face != null) { avatars.forEach { it.hide() }; next.add(face) }
+            else avatars.forEach { it.restore() }
         }
         commitFrame(next, clip)
         return true
@@ -866,26 +868,26 @@ fun noForwardLimit() {
     val act = cls("com.tencent.mobileqq.activity.ForwardRecentActivity")
     val rec = cls("com.tencent.mobileqq.selectmember.ResultRecord")
     // 要反射的东西装的时候全解析好：缺一个当场 ✗，别等到点转发才发现
-    val keyOf = act.getMethod("getForwardTargetKey", String::class.java, Integer.TYPE)
+    val keyOf = act.getDeclaredMethod("getForwardTargetKey", String::class.java, Integer.TYPE).apply { isAccessible = true }
     val copyOf = rec.getMethod("copyResultRecord", rec)
     val typeOf = rec.getMethod("getUinType")
-    val refresh = act.getMethod("refreshRightBtn")
-    hook(act.method("add2ForwardTargetList")) { chain ->
+    val refresh = act.getDeclaredMethod("refreshRightBtn").apply { isAccessible = true }
+    val syncSearch = act.getDeclaredMethod("setSearchSelectedAndJoinedUins").apply { isAccessible = true }
+    hook(act.getDeclaredMethod("add2ForwardTargetList", rec)) { chain ->
         val r = chain.getArg(0) ?: return@hook false
         val self = chain.thisObject
         val map = self.get("mForwardTargetMap") as? MutableMap<Any, Any?> ?: return@hook chain.proceed()
         val key = keyOf.invoke(self, r.get("uin"), typeOf.invoke(r)) ?: return@hook chain.proceed()
         map[key] = copyOf.invoke(r, r)
         refresh.invoke(self)
+        syncSearch.invoke(self)
         // 顶部那条「已选 N 人」按签名找（void(List, boolean)），找不到就算了，不影响转发本身
         self.get("mSelectedAndSearchBar")?.let { bar ->
             bar.javaClass.declaredMethods
                 .firstOrNull { it.returnType == Void.TYPE && it.parameterTypes.contentEquals(arrayOf(List::class.java, Boolean::class.java)) }
-                ?.invoke(bar, ArrayList(map.values), true)
+                ?.apply { isAccessible = true }?.invoke(bar, ArrayList(map.values), true)
         }
         true
-        // ponytail: 搜索页的勾选状态没同步（上游那半是死代码，mSearchFragment 这条路没核）。
-        // 真机上搜索页勾选对不上的话，再去找它的 setSelectedAndJoinedUins。
     }
 }
 

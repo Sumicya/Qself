@@ -54,7 +54,7 @@ internal fun kernelRadius(width: Float, height: Float, limit: Float): Float =
 
 /** QQ 仍持有真实页签、点击及无障碍；这里只接管底栏背景、按压和横向选择。 */
 internal class KernelBar(private val host: View, private val behind: (Canvas) -> Unit,
-    private val invalidate: () -> Unit, val standalone: Boolean = false, private val cornerRadius: Float = Float.MAX_VALUE) {
+    private val invalidate: () -> Unit, val standalone: Boolean = false, private val cornerRadius: Float = Float.MAX_VALUE, private val deformBody: Boolean = true) {
     private val dp = host.dp
     private val scene = RenderNode("ksu-scene")
     private val base = RenderNode("ksu-base")
@@ -95,6 +95,8 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     private var observed: View? = null
     private var tracker: VelocityTracker? = null
     private var trackingVelocity = false
+    private var touchX = 0f
+    private var touchY = 0f
     private var dragX = 0f
     private var attached = false
     private var baseKey = 0L
@@ -157,7 +159,8 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         }
     }
     // DOWN/UP 来自实际分发链，不依赖 QQ 子视图延迟设置 pressed 或内容页绑定成功。
-    fun touchDown(x: Float) {
+    fun touchDown(x: Float, y: Float = host.height / 2f) {
+        touchX = x; touchY = y
         sync()
         touching = true
         tracker?.clear(); trackingVelocity = true
@@ -263,11 +266,11 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
                 canvas.drawRect(rect,paint)
                 val tabWidth = (rect.width()-8*dp)/tabs().size.coerceAtLeast(1)
                 val logical = (value.value+.5f)*tabWidth
-                val hx = if (standalone) rect.width()/2 else if (host.layoutDirection == View.LAYOUT_DIRECTION_RTL) rect.width()-logical else logical
+                val hx = if (standalone) touchX.coerceIn(0f, rect.width()) else if (host.layoutDirection == View.LAYOUT_DIRECTION_RTL) rect.width()-logical else logical
                 interactive.setFloatUniform("size", rect.width(), rect.height())
                 interactive.setColorUniform("color", Color.argb((.12f*hp*255).toInt(),255,255,255))
                 interactive.setFloatUniform("radius", min(rect.width(),rect.height())*1.2f)
-                interactive.setFloatUniform("position", (hx+shift).coerceIn(0f,rect.width()), rect.height()/2)
+                interactive.setFloatUniform("position", (hx+shift).coerceIn(0f,rect.width()), if (standalone) touchY.coerceIn(0f, rect.height()) else rect.height()/2)
                 val save = canvas.save()
                 try {
                     canvas.translate(rect.left,rect.top); paint.shader = interactive
@@ -280,7 +283,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         val surface = RectF(0f,0f,w.toFloat(),h.toFloat())
         val save = canvas.save()
         try {
-            val grow = 1f+16*dp/w.coerceAtLeast(1)*p
+            val grow = if (deformBody) 1f+16*dp/w.coerceAtLeast(1)*p else 1f
             canvas.scale(grow,grow,surface.centerX(),surface.centerY())
             material(canvas,base,surface,panel())
         } finally { canvas.restoreToCount(save) }

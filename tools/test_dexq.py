@@ -23,6 +23,13 @@ class DexMethodsTest(unittest.TestCase):
         self.assertEqual(methods_of(self.fixture(), 'Target'),
                          [('directMethod', 'V ', 0), ('virtualMethod', 'V ', 0)])
 
+    def test_access_flags_distinguish_private_helpers_from_public_methods(self):
+        fixture = self.fixture()
+        fixture.b[69] = 2
+        fixture.b[72] = 1
+        self.assertEqual([('directMethod', 'V ', 0, 2), ('virtualMethod', 'V ', 0, 1)],
+                         methods_of(fixture, 'Target', with_access=True))
+
     def test_reject_method_owned_by_another_class(self):
         with self.assertRaisesRegex(ValueError, '所属类'):
             methods_of(self.fixture(wrong_owner=True), 'Target')

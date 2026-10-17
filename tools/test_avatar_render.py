@@ -71,7 +71,8 @@ class AvatarRenderContractTest(unittest.TestCase):
         self.assertIn('hasStart = hasStart || !state.run.continued', RENDER)
         self.assertIn('hasEnd = hasEnd || !state.run.continues', RENDER)
         fallback = RENDER.split('if (face == null)', 1)[1].split('commitFrame(next, clip)', 1)[0]
-        self.assertNotIn('avatars.forEach { it.restore() }', fallback)
+        self.assertIn('if (face != null) { avatars.forEach { it.hide() }; next.add(face) }', fallback)
+        self.assertIn('else avatars.forEach { it.restore() }', fallback)
 
     def test_native_interception_does_not_clear_velocity_before_up(self):
         body = RENDER.split('fun touch(', 1)[1].split('override fun onViewDetachedFromWindow', 1)[0]

@@ -27,6 +27,9 @@ val features = listOf(
     Feature("统一字体", true, "魔法字体归零", ::plainFont),
     Feature("去头像挂件", true, "消息头像不画挂件", ::noPendant),
     Feature("防撤回", true, "撤回的消息留下，插灰字", ::antiRecall),
+    Feature("消息内时间", true, "文字消息统一内边距，下部绘制自定义格式时间", ::messageTimestamps),
+    Feature("头像圆角", true, "聊天头像圆角比例可调，关闭恢复原样", ::customAvatarCorners),
+    Feature("消息显示At对象", true, "点按群消息中的 @名字 打开对应资料卡", ::clickableMentions),
     Feature("连发合并", true, "昵称固定组首，单条头像与消息居中，连发头像随组浮动", ::groupRuns),
     Feature("回复不@", true, "回复不往输入框插 @昵称", ::replyNoAt),
     Feature("转发多选", true, "转发页常显多选入口", ::multiForward),
@@ -110,7 +113,7 @@ private fun restoreUi(): Boolean {
     var failure: Throwable? = null
     val restore = Runnable {
         try {
-            resetChatLayout(); resetInputLayout(); resetLooks(); resetMenus()
+            resetMessageStyle(); resetChatLayout(); resetInputLayout(); resetLooks(); resetMenus()
         } catch (t: Throwable) { failure = t } finally { finished.countDown() }
     }
     if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) restore.run()

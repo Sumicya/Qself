@@ -432,6 +432,37 @@ class ProtoTest {
         assertEquals(0f, kernelRadius(0f, 0f, 22f))
     }
 
+    @Test fun messageTimestampFormatsSecondsAndRejectsInvalidPatterns() {
+        val utc = java.time.ZoneOffset.UTC
+        assertEquals("2023-11-14 22:13:20", messageTime(1700000000L, "yyyy-MM-dd HH:mm:ss", utc))
+        assertEquals("06:13", messageTime(1700000000L, "HH:mm", java.time.ZoneOffset.ofHours(8)))
+        assertEquals("22:13", messageTime(1700000000L, "invalid[", utc))
+        assertEquals("", messageTime(0, "HH:mm", utc))
+        assertEquals("", messageTime(Long.MAX_VALUE, "HH:mm", utc))
+        assertFalse(validTimePattern(""))
+        assertFalse(validTimePattern("invalid["))
+        assertFalse(validTimePattern("HH:mm\nss"))
+        assertFalse(validTimePattern("x".repeat(81)))
+        assertTrue(validTimePattern("MM-dd HH:mm:ss"))
+    }
+
+    @Test fun avatarRadiusIsBoundedAndScalesWithTheRealImageSize() {
+        assertEquals(0, avatarCorner(48, 0))
+        assertEquals(9, avatarCorner(48, 20))
+        assertEquals(24, avatarCorner(48, 50))
+        assertEquals(24, avatarCorner(48, 100))
+        assertEquals(0, avatarCorner(48, -1))
+        assertEquals(0, avatarCorner(-1, 50))
+    }
+
+    @Test fun mentionRangesKeepRepeatedNamesUnicodeAndAtAllDistinct() {
+        val ranges = mentionRanges("😀 @甲 @甲 @全体成员", listOf(Triple("@甲", 12L, ""), Triple("@甲", 13L, ""),
+            Triple("@全体成员", 0L, "")))
+        assertEquals(listOf(MentionRange(3, 5, 12L, ""), MentionRange(6, 8, 13L, "")), ranges)
+        assertEquals(listOf(MentionRange(0, 2, 0L, "u_test")), mentionRanges("@乙", listOf(Triple("@乙", 0L, "u_test"))))
+        assertEquals(emptyList<MentionRange>(), mentionRanges("plain", listOf(Triple("@甲", 12L, ""))))
+    }
+
     private fun varint(v: Long): ByteArray {
         var x = v
         val out = ArrayList<Byte>()

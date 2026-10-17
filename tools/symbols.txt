@@ -280,3 +280,31 @@ member! com.tencent.mobileqq.quibadge.QUIBadge#drawText
 member! com.tencent.mobileqq.quibadge.QUIBadge#onLayout
 member! com.tencent.mobileqq.quibadge.QUIBadge#onDraw
 field com.tencent.mobileqq.quibadge.QUIBadge#mViewType
+
+# ---------- 消息内时间 / At 对象 / 原生头像圆角 MessageStyle.kt
+class com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent
+member! com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent#d1
+member! com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent#f1
+class com.tencent.qqnt.aio.widget.AIOMsgTextView
+class com.tencent.qqnt.aio.widget.SelectableTextView
+member! com.tencent.qqnt.aio.widget.SelectableTextView#onTouchEvent
+class com.tencent.qqnt.base.widget.RoundRectImageView
+member! com.tencent.qqnt.base.widget.RoundRectImageView#setCornerRadiusAndMode
+field com.tencent.qqnt.base.widget.RoundRectImageView#mRadius
+field com.tencent.qqnt.base.widget.RoundRectImageView#mRoundMode
+class com.tencent.relation.common.api.IRelationNTUinAndUidApi
+member! com.tencent.relation.common.api.IRelationNTUinAndUidApi#getUinFromUid
+class com.tencent.mobileqq.qroute.QRoute
+member! com.tencent.mobileqq.qroute.QRoute#api
+class com.tencent.mobileqq.profilecard.data.AllInOne
+class com.tencent.mobileqq.profilecard.activity.FriendProfileCardActivity
+class com.tencent.qqnt.kernel.nativeinterface.TextElement
+field com.tencent.qqnt.kernel.nativeinterface.TextElement#atUid
+field com.tencent.qqnt.kernel.nativeinterface.TextElement#atNtUid
+field com.tencent.qqnt.kernel.nativeinterface.TextElement#atType
+field com.tencent.qqnt.kernel.nativeinterface.TextElement#content
+field com.tencent.qqnt.kernel.nativeinterface.MsgRecord#elements
+field com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgTime
+field com.tencent.qqnt.kernel.nativeinterface.MsgRecord#chatType
+class com.tencent.aio.data.msglist.a
+member! com.tencent.mobileqq.activity.ForwardRecentActivity#setSearchSelectedAndJoinedUins

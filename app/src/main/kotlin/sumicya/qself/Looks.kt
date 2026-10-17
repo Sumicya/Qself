@@ -73,6 +73,7 @@ fun refreshLooks() {
     if (!on("显示具体未读条数")) restoreBadgeLayouts() else refreshNativeBadges?.invoke()
     refreshInputLayout()
     refreshChatLayout()
+    refreshMessageStyle()
     watched.values.mapNotNull { it.get() }.forEach { it.refresh() }
 }
 

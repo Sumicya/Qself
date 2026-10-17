@@ -83,7 +83,7 @@ def disasm(d, code_off):
     return strs, flds, calls
 
 
-def methods_of(d, cls_name):
+def methods_of(d, cls_name, with_access=False):
     """-> [(方法名, 签名, code_off)]；code_off 为 0 表示 abstract / native。"""
     t, s = d.types(), d.strings()
     for i in range(d.ncls):
@@ -105,14 +105,15 @@ def methods_of(d, cls_name):
             for _ in range(count):
                 di, p = uleb(d.b, p)
                 idx += di
-                _, p = uleb(d.b, p)
+                access, p = uleb(d.b, p)
                 co, p = uleb(d.b, p)
                 if idx >= d.nmth:
                     raise ValueError(f"method_idx {idx} >= {d.nmth}")
                 c, pr, n = struct.unpack_from("<HHI", d.b, d.omth + 8 * idx)
                 if c != cidx:
                     raise ValueError("class_data 方法所属类不匹配")
-                out.append((s[n], d.proto(pr), co))
+                method = (s[n], d.proto(pr), co)
+                out.append(method + (access,) if with_access else method)
         return out
     return None
 
