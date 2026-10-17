@@ -65,6 +65,31 @@ class AppearanceContractTest(unittest.TestCase):
         for forbidden in ('scrollTarget(', 'canScrollVertically(', 'pager.width / 2', 'contains("ViewPager")'):
             self.assertNotIn(forbidden, LOOKS)
 
+    def test_menu_and_input_share_material_without_darkening_the_backdrop(self):
+        menu = (SRC / 'Knob.kt').read_text().split('private fun sheet(', 1)[1]
+        self.assertIn('kernelSurface = true', menu)
+        self.assertIn('kernelSurface = true', INPUT)
+        self.assertNotIn('0x66000000', menu)
+        self.assertNotIn('borderlessRipple', menu)
+        self.assertNotIn('pressMotion()', menu)
+        self.assertIn('配置已开启', menu)
+        self.assertIn('不代表效果已验证', menu)
+        self.assertIn('部分功能需重进页面或重启', menu)
+        self.assertIn('只结束当前进程', menu)
+        self.assertNotIn('indices step 2', menu)
+        self.assertIn('grid.addView(TextView', menu)
+        self.assertIn('grid.addView(LinearLayout', menu)
+
+    def test_menu_repositions_and_releases_layout_listener(self):
+        menu = (SRC / 'Knob.kt').read_text().split('private fun sheet(', 1)[1]
+        self.assertIn('anchor.transformMatrixToGlobal(matrix)', menu)
+        self.assertIn('decor.transformMatrixToLocal(matrix)', menu)
+        self.assertIn('WindowInsets.Type.ime()', menu)
+        self.assertIn('addOnGlobalLayoutListener(layout)', menu)
+        self.assertIn('removeOnGlobalLayoutListener(layout)', menu)
+        self.assertIn('card.pivotX', menu)
+        self.assertIn('card.pivotY', menu)
+
     def test_menus_do_not_implement_the_background_drag_request(self):
         menu = (SRC / 'Knob.kt').read_text()
         self.assertNotIn('dim.setOnTouchListener', menu)

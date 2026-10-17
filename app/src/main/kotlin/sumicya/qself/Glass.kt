@@ -33,12 +33,12 @@ import kotlin.math.min
  * 罩一层淡色。没有高光也没有描边；按下去透镜凹一点、整面浮一层柔光。全在 GPU 上，
  * 每帧只多录一遍身后的 display list。
  *
- * 主页底栏和独立设置短胶囊委托 KernelBar，使用上游模糊/折射/高光，不走以下通用材质。
+ * 底栏、设置入口、菜单与输入区共享 KernelBar 的模糊/折射/罩色；面板保留自身圆角，不复制胶囊几何。
  * [radius] 圆角上限（默认全圆 = 胶囊 / 圆钮），[selected] 给底栏用：返回当前选中的页签，
  * 玻璃里就多一块会弹着滑过去的亮胶囊。
  */
-class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, kernelBar: Boolean = false, kernelButton: Boolean = false, private val selected: (() -> View?)? = null) : Drawable() {
-    private val kernel = if (kernelBar || kernelButton) KernelBar(host, { behind(it) }, { invalidateSelf() }, standalone = kernelButton) else null
+class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, kernelBar: Boolean = false, kernelButton: Boolean = false, kernelSurface: Boolean = false, private val selected: (() -> View?)? = null) : Drawable() {
+    private val kernel = if (kernelBar || kernelButton || kernelSurface) KernelBar(host, { behind(it) }, { invalidateSelf() }, standalone = !kernelBar, cornerRadius = if (kernelSurface) radius else Float.MAX_VALUE) else null
     private val dp = host.dp
     private val node = RenderNode("qself-glass")
     private val pad = (12 * dp).toInt() // 边缘折射往里采样，留一点余量就够

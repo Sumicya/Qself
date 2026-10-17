@@ -81,7 +81,7 @@ private class NativeInput(edit: EditText, strip: ViewGroup?) :
     private val outline = edit.outlineProvider
     private val clip = edit.clipToOutline
     private val originalTranslationZ = edit.translationZ
-    private val glass = Glass(edit, 22 * edit.dp)
+    private val glass = Glass(edit, 22 * edit.dp, kernelSurface = true)
     private val shape = capsule(22 * edit.dp)
     private val margins = WeakHashMap<View, ButtonMargin>()
     private val decorations = ArrayList<InputDecoration>()

@@ -49,9 +49,12 @@ internal fun kernelIndex(x: Float, width: Float, count: Int, rtl: Boolean): Int 
 internal fun kernelTabWidth(density: Float, badgeWidth: Int): Int =
     max((76 * density).toInt(), badgeWidth)
 
+internal fun kernelRadius(width: Float, height: Float, limit: Float): Float =
+    min(limit, min(width, height) / 2).coerceAtLeast(0f)
+
 /** QQ 仍持有真实页签、点击及无障碍；这里只接管底栏背景、按压和横向选择。 */
 internal class KernelBar(private val host: View, private val behind: (Canvas) -> Unit,
-    private val invalidate: () -> Unit, val standalone: Boolean = false) {
+    private val invalidate: () -> Unit, val standalone: Boolean = false, private val cornerRadius: Float = Float.MAX_VALUE) {
     private val dp = host.dp
     private val scene = RenderNode("ksu-scene")
     private val base = RenderNode("ksu-base")
@@ -130,6 +133,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         posted = true; frameClock.postFrameCallback(frame)
     }
     private fun tabs(): List<View> {
+        if (standalone) return emptyList()
         val strip = (host as? ViewGroup)?.getChildAt(0) as? ViewGroup ?: return emptyList()
         if (strip.visibility != View.VISIBLE) return emptyList()
         return (0 until strip.childCount).map { strip.getChildAt(it) }.filter { it.visibility == View.VISIBLE }
@@ -229,12 +233,15 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     }
     private fun rounded(canvas: Canvas, rect: RectF, body: () -> Unit) {
         val save = canvas.save()
-        try { path.reset(); path.addRoundRect(rect, rect.height()/2, rect.height()/2, Path.Direction.CW); canvas.clipPath(path); body() }
+        try {
+            val r = kernelRadius(rect.width(), rect.height(), cornerRadius)
+            path.reset(); path.addRoundRect(rect, r, r, Path.Direction.CW); canvas.clipPath(path); body()
+        }
         finally { canvas.restoreToCount(save) }
     }
     private fun configure(shader: RuntimeShader, w: Float, h: Float, pad: Float, height: Float, amount: Float, depth: Boolean) {
         shader.setFloatUniform("size", w, h); shader.setFloatUniform("offset", -pad, -pad)
-        val r = min(w, h)/2
+        val r = kernelRadius(w, h, cornerRadius)
         shader.setFloatUniform("cornerRadii", r, r, r, r)
         shader.setFloatUniform("refractionHeight", height.coerceAtLeast(.001f))
         shader.setFloatUniform("refractionAmount", -amount)
@@ -306,7 +313,8 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         if (bounds.isEmpty) return
         if (!canvas.isHardwareAccelerated) {
             paint.color = if (night()) 0xFF242424.toInt() else Color.WHITE
-            canvas.drawRoundRect(RectF(bounds),bounds.height()/2f,bounds.height()/2f,paint)
+            val r = kernelRadius(bounds.width().toFloat(), bounds.height().toFloat(), cornerRadius)
+            canvas.drawRoundRect(RectF(bounds),r,r,paint)
             return // 软件 Canvas 不能执行 RenderNode，不作为玻璃验收。
         }
         // 主底栏整体在 dispatchDraw 合成，不能在内容之前再盖一份背景。

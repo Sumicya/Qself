@@ -407,6 +407,31 @@ class ProtoTest {
         assertEquals(984 to 1560, menuSize(1080, 2400, 3f))
     }
 
+    @Test fun menuDocksAboveBottomEntryAndBelowTopEntry() {
+        assertEquals(MenuPlacement(24, 1168, 360, 520), menuPlacement(400, 1920, 300, 1700, 376, 1764, 1f))
+        assertEquals(MenuPlacement(24, 156, 360, 520), menuPlacement(400, 1920, 300, 80, 376, 144, 1f))
+        val left = menuPlacement(400, 1920, 16, 1700, 92, 1764, 1f)
+        assertEquals(16, left.left)
+    }
+
+    @Test fun menuPlacementStaysInsideSafeAreaAcrossDensityAndResize() {
+        for (density in listOf(1f, 1.5f, 3f)) for (width in listOf(0, 20, 360, 1080)) {
+            for (height in listOf(0, 20, 168, 600, 2400)) for (anchorY in listOf(-100, 80, height + 100)) {
+                val p = menuPlacement(width, height, -20, anchorY, width + 40, anchorY + 64, density)
+                assertTrue(p.width >= 0 && p.height >= 0)
+                assertTrue(p.left >= 0 && p.top >= 0)
+                assertTrue(p.left + p.width <= width && p.top + p.height <= height)
+            }
+        }
+    }
+
+    @Test fun sharedMaterialKeepsPanelCornersInsteadOfTurningItIntoAPill() {
+        assertEquals(22f, kernelRadius(360f, 520f, 22f))
+        assertEquals(32f, kernelRadius(76f, 64f, Float.MAX_VALUE))
+        assertEquals(10f, kernelRadius(20f, 520f, 22f))
+        assertEquals(0f, kernelRadius(0f, 0f, 22f))
+    }
+
     private fun varint(v: Long): ByteArray {
         var x = v
         val out = ArrayList<Byte>()

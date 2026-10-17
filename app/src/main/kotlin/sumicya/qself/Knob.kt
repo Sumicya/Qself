@@ -146,11 +146,28 @@ fun borderlessRipple(view: View): Drawable? = TypedValue().let {
         view.context.getDrawable(it.resourceId) else null
 }
 
-/** 宽度不变，只向上下各扩约 40dp；屏幕/键盘边缘仍留出 16dp。 */
+/** 紧凑面板上限 360×520dp；屏幕/键盘边缘仍留出 16dp。 */
 internal fun menuSize(width: Int, height: Int, density: Float): Pair<Int, Int> {
     val old = min((height * 0.62f).toInt().coerceAtLeast(0), (440 * density).toInt())
     return min((width - 32 * density).toInt().coerceAtLeast(0), (360 * density).toInt()) to
         min(old + (80 * density).toInt(), (height - 32 * density).toInt().coerceAtLeast(0))
+}
+
+/** 坐标均为去除系统栏/键盘后的安全区；狭矮窗口允许覆盖入口，但不越界。 */
+internal data class MenuPlacement(val left: Int, val top: Int, val width: Int, val height: Int)
+internal fun menuPlacement(width: Int, height: Int, left: Int, top: Int, right: Int, bottom: Int,
+    density: Float): MenuPlacement {
+    val (w, limit) = menuSize(width, height, density)
+    val margin = (16 * density).toInt()
+    val gap = (12 * density).toInt()
+    val above = (top - gap - margin).coerceAtLeast(0)
+    val below = (height - bottom - gap - margin).coerceAtLeast(0)
+    val room = maxOf(above, below)
+    val h = if (room >= (240 * density).toInt()) min(limit, room) else limit
+    val x = ((left + right - w) / 2).coerceIn(min(margin, width.coerceAtLeast(0)), (width - w - margin).coerceAtLeast(min(margin, width.coerceAtLeast(0))))
+    val y = (if (above >= below) top - gap - h else bottom + gap)
+        .coerceIn(min(margin, height.coerceAtLeast(0)), (height - h - margin).coerceAtLeast(min(margin, height.coerceAtLeast(0))))
+    return MenuPlacement(x, y, w, h)
 }
 
 /** 明确的三线菜单，替换 Android 自带的小扳手图标。 */
@@ -234,6 +251,13 @@ private class Mark(private val dp: Float) : Drawable() {
     @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
+/** 面板内只用轻量状态填色，不逐项重复采样玻璃或叠加水波纹/缩放。 */
+private fun menuPress(dp: Float) = android.graphics.drawable.StateListDrawable().apply {
+    addState(intArrayOf(android.R.attr.state_pressed), android.graphics.drawable.GradientDrawable().apply {
+        cornerRadius = 12 * dp; setColor(if (night()) 0x18FFFFFF else 0x10000000)
+    })
+}
+
 private fun sheet(anchor: View) {
     val decor = anchor.rootView as? ViewGroup ?: return
     if (decor.findViewWithTag<View>(SHEET) != null) return
@@ -242,21 +266,21 @@ private fun sheet(anchor: View) {
     val dp = anchor.dp
     val ink = if (night()) 0xFFF2F2F7.toInt() else 0xFF1C1C1E.toInt()
     val sub = if (night()) 0xFF98989E.toInt() else 0xFF6E6E73.toInt()
-    val dim = FrameLayout(ctx).apply { tag = SHEET; setBackgroundColor(0x66000000); alpha = 0f }
+    val dim = FrameLayout(ctx).apply { tag = SHEET; alpha = 0f }
     val card = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL; isClickable = true
         val radius = 22 * dp
-        background = Glass(this, radius); outlineProvider = capsule(radius); clipToOutline = true
+        background = Glass(this, radius, kernelSurface = true); outlineProvider = capsule(radius); clipToOutline = true
         elevation = 8 * dp
         setPadding((10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt(), (6 * dp).toInt())
-        scaleX = 0.96f; scaleY = 0.96f; translationY = 16 * dp
+        scaleX = 0.94f; scaleY = 0.94f
     }
     var closing = false
     fun close() {
         if (closing) return
         closing = true
         card.animate().cancel(); dim.animate().cancel()
-        card.animate().scaleX(0.98f).scaleY(0.98f).translationY(card.translationY + 12 * dp)
+        card.animate().scaleX(0.94f).scaleY(0.94f)
             .setDuration(motionDuration(140)).setInterpolator(easing()).start()
         dim.animate().alpha(0f).setDuration(motionDuration(140)).withEndAction {
             (dim.parent as? ViewGroup)?.removeView(dim)
@@ -267,7 +291,7 @@ private fun sheet(anchor: View) {
     fun cell(feature: Feature): View {
         val mark = Mark(dp)
         val title = TextView(ctx).apply { text = feature.name; textSize = 14f; maxLines = 2 }
-        val desc = TextView(ctx).apply { text = feature.desc; textSize = 11f; setTextColor(sub); maxLines = 2 }
+        val desc = TextView(ctx).apply { textSize = 12f; setTextColor(sub) }
         val cell = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             minimumHeight = (64 * dp).toInt()
@@ -279,12 +303,16 @@ private fun sheet(anchor: View) {
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL; addView(title); addView(desc)
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            foreground = borderlessRipple(this)
-            pressMotion()
+            background = menuPress(dp)
         }
         val paint: () -> Unit = {
             val broken = feature.name in failed
-            mark.state(!broken && prefs.getBoolean(feature.name, feature.default), broken)
+            val enabled = prefs.getBoolean(feature.name, feature.default)
+            mark.state(!broken && enabled, broken)
+            val state = if (broken) "安装失败，点按查看原因" else if (enabled) "配置已开启" else "配置已关闭"
+            desc.text = feature.desc + "\n" + state
+            cell.contentDescription = feature.name + "，" + feature.desc + "，" + state
+            cell.isActivated = enabled && !broken
             title.setTextColor(if (broken) sub else ink)
             cell.isSelected = !broken && prefs.getBoolean(feature.name, feature.default)
         }
@@ -296,49 +324,70 @@ private fun sheet(anchor: View) {
                     .setPositiveButton("好", null).show()
             } else {
                 prefs.edit().putBoolean(feature.name, !prefs.getBoolean(feature.name, feature.default)).apply()
-                paint(); refreshLooks()
+                paints.forEach { it() }; refreshLooks(); card.invalidate()
             }
         }
         return cell
     }
     val grid = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-    for (i in features.indices step 2) grid.addView(LinearLayout(ctx).apply {
-        orientation = LinearLayout.HORIZONTAL
-        addView(cell(features[i]), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        addView(if (i + 1 < features.size) cell(features[i + 1]) else View(ctx),
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-    })
+    features.forEach { grid.addView(cell(it), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)) }
     val heading = TextView(ctx).apply {
         text = "Qself ${BuildConfig.VERSION_NAME}"; textSize = 15f; gravity = Gravity.CENTER; setTextColor(ink)
         minimumHeight = (40 * dp).toInt()
         setPadding(0, 0, 0, (8 * dp).toInt())
     }
     card.addView(heading)
+    grid.addView(TextView(ctx).apply {
+        text = "勾选仅表示配置开启，不代表效果已验证。部分功能需重进页面或重启 QQ；恢复默认也遵循此规则。"
+        textSize = 12f; setTextColor(sub)
+        setPadding((6 * dp).toInt(), 0, (6 * dp).toInt(), (8 * dp).toInt())
+    }, 0)
     card.addView(ScrollView(ctx).apply { isFillViewport = false; addView(grid) },
         LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     fun button(label: String, body: () -> Unit) = TextView(ctx).apply {
         text = label; textSize = 13f; gravity = Gravity.CENTER; setTextColor(ink)
         minimumHeight = (48 * dp).toInt()
         setPadding((10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt())
-        foreground = borderlessRipple(this); setOnClickListener { body() }; pressMotion()
+        background = menuPress(dp)
+        setOnClickListener { body() }
     }
-    card.addView(LinearLayout(ctx).apply {
-        gravity = Gravity.END
+    grid.addView(LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL; gravity = Gravity.END
         addView(button("恢复默认") {
             val edit = prefs.edit()
             features.forEach { edit.putBoolean(it.name, it.default) }
-            edit.apply(); paints.forEach { it() }; refreshLooks()
+            edit.apply(); paints.forEach { it() }; refreshLooks(); card.invalidate()
         })
-        addView(button("重启 QQ") { android.os.Process.killProcess(android.os.Process.myPid()) })
+        addView(button("结束进程") {
+            AlertDialog.Builder(ctx).setTitle("结束 QQ 当前进程？")
+                .setMessage("之后请重新打开 QQ。此操作只结束当前进程，不保证其他 QQ 进程同时退出。")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("结束") { _, _ -> android.os.Process.killProcess(android.os.Process.myPid()) }.show()
+        })
         addView(button("好", ::close))
     })
-    val insets = decor.rootWindowInsets?.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
-    val size = menuSize(decor.width - (insets?.left ?: 0) - (insets?.right ?: 0),
-        decor.height - (insets?.top ?: 0) - (insets?.bottom ?: 0), dp)
-    dim.addView(card, FrameLayout.LayoutParams(size.first, size.second, Gravity.CENTER).apply {
-        leftMargin = insets?.left ?: 0; rightMargin = insets?.right ?: 0
-        topMargin = insets?.top ?: 0; bottomMargin = insets?.bottom ?: 0
-    })
+    dim.addView(card, FrameLayout.LayoutParams(0, 0, Gravity.TOP or Gravity.LEFT))
+    fun place() {
+        val insets = decor.rootWindowInsets?.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
+        val safeLeft = insets?.left ?: 0; val safeTop = insets?.top ?: 0
+        val matrix = Matrix()
+        anchor.transformMatrixToGlobal(matrix); decor.transformMatrixToLocal(matrix)
+        val bounds = RectF(0f, 0f, anchor.width.toFloat(), anchor.height.toFloat())
+        matrix.mapRect(bounds)
+        val p = menuPlacement(decor.width - safeLeft - (insets?.right ?: 0),
+            decor.height - safeTop - (insets?.bottom ?: 0),
+            bounds.left.toInt() - safeLeft, bounds.top.toInt() - safeTop,
+            bounds.right.toInt() - safeLeft, bounds.bottom.toInt() - safeTop, dp)
+        val lp = card.layoutParams as FrameLayout.LayoutParams
+        if (lp.width != p.width || lp.height != p.height || lp.leftMargin != p.left + safeLeft || lp.topMargin != p.top + safeTop) {
+            lp.width = p.width; lp.height = p.height
+            lp.leftMargin = p.left + safeLeft; lp.topMargin = p.top + safeTop
+            card.layoutParams = lp
+        }
+        card.pivotX = (bounds.centerX() - p.left - safeLeft).coerceIn(0f, p.width.toFloat())
+        card.pivotY = (bounds.centerY() - p.top - safeTop).coerceIn(0f, p.height.toFloat())
+    }
+    val layout = android.view.ViewTreeObserver.OnGlobalLayoutListener { place() }
     dim.setOnClickListener { close() }
     dim.isFocusableInTouchMode = true
     dim.setOnKeyListener { _, key, event ->
@@ -354,12 +403,15 @@ private fun sheet(anchor: View) {
         override fun onViewDetachedFromWindow(view: View) {
             activity?.onBackInvokedDispatcher?.unregisterOnBackInvokedCallback(back)
             card.animate().cancel(); dim.animate().cancel()
+            if (decor.viewTreeObserver.isAlive) decor.viewTreeObserver.removeOnGlobalLayoutListener(layout)
             (card.background as? Glass)?.dispose()
             sheets.remove(dim)
         }
     })
     sheets.add(dim)
     decor.addView(dim, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    decor.viewTreeObserver.addOnGlobalLayoutListener(layout)
+    place()
     dim.requestFocus()
     dim.animate().alpha(1f).setDuration(motionDuration(180)).setInterpolator(easing()).start()
     card.animate().scaleX(1f).scaleY(1f).translationY(0f)

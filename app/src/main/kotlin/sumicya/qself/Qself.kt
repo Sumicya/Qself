@@ -46,7 +46,7 @@ val features = listOf(
 
 val featureDefaults = features.associate { it.name to it.default }
 
-/** libxposed 入口。装上即全部生效；开关在 QQ 主页右下角那颗圆钮里。 */
+/** libxposed 入口。功能默认开启；配置入口在 QQ 主页独立设置短胶囊中，实际生效受对象生命周期限制。 */
 class Qself : XposedModule() {
     private var process = ""
     private var installed: ClassLoader? = null
