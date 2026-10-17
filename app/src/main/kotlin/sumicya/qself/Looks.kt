@@ -3,6 +3,7 @@ package sumicya.qself
 
 import android.graphics.Canvas
 import android.graphics.Matrix
+import android.graphics.Rect
 import android.graphics.Paint
 import android.view.MotionEvent
 import android.view.Gravity
@@ -59,6 +60,9 @@ fun looks() {
 /** 三个输入均处于 badge.parent 的局部坐标；不把窗口像素直接写入 translationX。 */
 internal fun centeredBadgeTranslation(previous: Float, anchor: Float, center: Float): Float =
     if (anchor.isFinite() && center.isFinite()) previous + anchor - center else previous
+
+internal fun raisedBadgeTranslation(original: Float, glyphHeight: Int): Float =
+    original - glyphHeight.coerceAtLeast(0)/2f
 
 val View.dp: Float get() = resources.displayMetrics.density
 
@@ -219,6 +223,11 @@ private class BarState(bar: ViewGroup) {
     val stripClip = (bar.getChildAt(0) as? ViewGroup)?.let { it.clipChildren to it.clipToPadding }
     val stripPadding = bar.getChildAt(0)?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
     val tabs = WeakHashMap<View, Pair<ViewGroup.LayoutParams, IntArray>>()
+    val badgeClips = WeakHashMap<ViewGroup, Pair<Boolean, Boolean>>()
+    fun restoreBadgeClips() {
+        badgeClips.forEach { (group, old) -> group.clipChildren = old.first; group.clipToPadding = old.second }
+        badgeClips.clear()
+    }
     val touch = BarTouch(bar, nativeBarContent?.invoke(bar))
     var scrollListener: ViewTreeObserver.OnScrollChangedListener? = null
     var layoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
@@ -229,6 +238,10 @@ private fun restoreBar(bar: ViewGroup) {
     val state = floatStates.remove(bar) ?: return
     (bar.parent as? ViewGroup)?.let { barTouchHosts.remove(it) }
     state.touch.dispose()
+    state.restoreBadgeClips()
+    badgeLayouts.forEach { (view, layout) ->
+        if (generateSequence(view.parent as? View) { it.parent as? View }.any { it === bar }) layout.restorePosition(view)
+    }
     if (bar.viewTreeObserver.isAlive) {
         state.scrollListener?.let(bar.viewTreeObserver::removeOnScrollChangedListener)
         state.layoutListener?.let(bar.viewTreeObserver::removeOnGlobalLayoutListener)
@@ -552,13 +565,16 @@ private class BadgeLayout(view: View) {
     private val params = view.layoutParams?.let(::copyLayoutParams)
     private val minWidth = view.minimumWidth
     private val translationX = view.translationX
+    private val translationY = view.translationY
+    fun raise(view: View, glyphHeight: Int) { view.translationY = raisedBadgeTranslation(translationY,glyphHeight) }
+    fun restorePosition(view: View) { view.translationX = translationX; view.translationY = translationY; view.requestLayout() }
     private val padding = intArrayOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
     private val text = (view as? TextView)?.text
     private val gravity = (view as? TextView)?.gravity
     fun restore(view: View) {
         params?.let { view.layoutParams = copyLayoutParams(it) }
         view.minimumWidth = minWidth
-        view.translationX = translationX
+        restorePosition(view)
         view.setPadding(padding[0], padding[1], padding[2], padding[3])
         if (view is TextView) { view.text = text; gravity?.let { view.gravity = it } }
     }
@@ -572,6 +588,7 @@ private fun restoreBadgeLayouts() {
         if (view !is TextView) restoreNativeBadge?.invoke(view)
     }
     badgeLayouts.clear()
+    floatStates.values.forEach { it.restoreBadgeClips() }
     countTabWidths.keys.toList().forEach { tab -> countTabWidths.remove(tab); fit(tab) }
 }
 
@@ -616,6 +633,7 @@ fun exactCount() {
         val strip = bar.getChildAt(0) ?: return null
         return generateSequence(view) { it.parent as? View }.firstOrNull { it.parent === strip }
     }
+    val glyphBounds = Rect()
     hook(badge.getDeclaredMethod("onLayout", Boolean::class.javaPrimitiveType,
         Integer.TYPE, Integer.TYPE, Integer.TYPE, Integer.TYPE), gated = false) { chain ->
         // 真包 onLayout 会更新 mDelegateRect；先校正位置，再让原生更新触摸区域。
@@ -624,7 +642,20 @@ fun exactCount() {
             val tab = bottomTab(view) ?: return@run
             val label = text.get(view) as? String
             if (on("显示具体未读条数") && bottomNumericBadge(label, viewType.getInt(view))) {
-                badgeLayouts.getOrPut(view) { BadgeLayout(view) }
+                val layout = badgeLayouts.getOrPut(view) { BadgeLayout(view) }
+                // 用数字字形的实际高度，不以字号或 dp 猜测；从原始位置计算，重复布局不累积。
+                (paint.get(view) as Paint).getTextBounds("0123456789",0,10,glyphBounds)
+                layout.raise(view,glyphBounds.height())
+                val bar = tab.parent?.parent as? ViewGroup
+                floatStates[bar]?.let { state ->
+                    var group = view.parent as? ViewGroup
+                    while (group != null && group !== tab.parent) {
+                        state.badgeClips.getOrPut(group) { group.clipChildren to group.clipToPadding }
+                        group.clipChildren = false; group.clipToPadding = false
+                        if (group === tab) break
+                        group = group.parent as? ViewGroup
+                    }
+                }
                 val parent = view.parent as? View ?: return@run
                 val transform = Matrix()
                 tab.transformMatrixToGlobal(transform); parent.transformMatrixToLocal(transform)

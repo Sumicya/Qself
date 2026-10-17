@@ -10,6 +10,15 @@ import org.junit.Test
 
 /** 纯逻辑回归检查：防撤回 protobuf 判断与 99+ 精确数字替换条件。 */
 class ProtoTest {
+    @Test fun badgeRisesHalfAGlyphFromOriginalPositionWithoutLayoutDrift() {
+        assertEquals(-7f,raisedBadgeTranslation(0f,14))
+        assertEquals(-3.5f,raisedBadgeTranslation(4f,15))
+        assertEquals(4f,raisedBadgeTranslation(4f,0))
+        assertEquals(4f,raisedBadgeTranslation(4f,-1))
+        repeat(30) { assertEquals(-14f,raisedBadgeTranslation(7f,42)) }
+        assertEquals(0f,raisedBadgeTranslation(7f,14))
+    }
+
     @Test fun badgeCenterUsesParentUnitsAndIsIdempotentAcrossWindowScales() {
         // 模型验证局部量，不冒充 Android Matrix/GPU 测试。
         for (scale in listOf(.7f,1f,1.12f,2f,-1f)) {

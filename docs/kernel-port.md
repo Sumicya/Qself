@@ -6,6 +6,8 @@
 
 用户明确截图中的透镜形变正常，不把放大/按压胶囊改成所谓“修复”；本轮只调按钮排布、去边线、降低模糊及颜色覆盖。截图仅是上一包的反馈，不能作为本轮新包效果已通过的证据。
 
+数字新增上移：用当前 QQ Paint 测量 `0123456789` 的实际字形高度，上移一半，不改字号与水平中心。不按每次布局累加偏移；上移先于原生触摸区域更新。只放开该角标到所属页签之间的父级裁切，关闭具体计数或玻璃底栏时还原位置与裁切。尚无新包设备复验。
+
 新增固定参考：[AndroidLiquidGlass `65ab177e90e5c1d8c62e70cf7755841982da65f6`](https://github.com/Kyant0/AndroidLiquidGlass/tree/65ab177e90e5c1d8c62e70cf7755841982da65f6)，实际默认分支 kmp。读取 LiquidBottomTabs / LiquidBottomTab / LiquidButton 源码，不把该库称为苹果官方 iOS 27 实现。它的 BottomTabs 示例模糊为 8dp、Button 为 2dp；按用户“降低模糊”的要求统一采用 2dp，不盲目复制 8dp。
 
 - 设置短胶囊可见 76×64dp，与静止底栏同高、垂直中心对齐；以玻璃可见边缘计 12dp 间距，四周仍有 8dp 绘制空间。不再把最大按压/速度形变包络作为静态空白。父坐标用完整矩阵计算，LTR/RTL 对称；不足时仍上置，按压不重算位置。静止间距变小意味着高速形变时可进入这段间隙，不再声称预留完整最大包络。
@@ -22,7 +24,7 @@
 
 ### 数字定位
 
-旧代码先清空 translationX，再把 `getLocationInWindow` 的整数窗口位置与局部宽度相减，结果直接写入局部 translationX；祖先缩放时单位不一致。现在两点均通过完整矩阵变换进入 badge.parent 坐标，再作差增量校正，不先清零；复制 QQ Paint 后显式指定 `Paint.Align.CENTER`，保留原生 Y 布局。追加 DEX 核对确认 QQ 的 initPaint 原本就设置 CENTER，所以该显式设置只是防御，不把它冒称为已证实的左漂根因。QQ onLayout 会更新 mDelegateRect，故先校正位置，再执行原生布局回调更新触摸区域，避免数字移走而命中区域留在旧位置。仍按真实计数展开、纯数字无红底，宽度随数字增长。纯逻辑测试覆盖多种宽度、窗口缩放、镜像和重复定位；不等同于 Android Matrix 实机测试。
+旧代码先清空 translationX，再把 `getLocationInWindow` 的整数窗口位置与局部宽度相减，结果直接写入局部 translationX；祖先缩放时单位不一致。现在两点均通过完整矩阵变换进入 badge.parent 坐标，再作差增量校正，不先清零；复制 QQ Paint 后显式指定 `Paint.Align.CENTER`，Y 从原始位置上移半个数字字形高度。追加 DEX 核对确认 QQ 的 initPaint 原本就设置 CENTER，所以该显式设置只是防御，不把它冒称为已证实的左漂根因。QQ onLayout 会更新 mDelegateRect，故先校正位置，再执行原生布局回调更新触摸区域，避免数字移走而命中区域留在旧位置。仍按真实计数展开、纯数字无红底，宽度随数字增长。纯逻辑测试覆盖多种宽度、窗口缩放、镜像和重复定位；不等同于 Android Matrix 实机测试。
 
 ### 绘制层对应
 
@@ -46,7 +48,7 @@
 
 ## 验证记录与未验收部分
 
-2026-10-17 09:36（Asia/Shanghai），针对本轮工作树；实现始于 Qself `cebf9ad78fae0df6dc93944fd9aebe604703b64d`，提交后 CI 结果另以对应运行记录为准：
+2026-10-17 09:36（UTC+8），针对本轮工作树；实现始于 Qself `cebf9ad78fae0df6dc93944fd9aebe604703b64d`，提交后 CI 结果另以对应运行记录为准：
 
 - `bash ci/check.sh`：Kotlin 类型检查、43 项纯逻辑测试通过。
 - `python3 -m unittest discover -s tools -p 'test_*.py'`：35 项工具/源码契约通过。

@@ -126,3 +126,16 @@ class KernelPortTest(unittest.TestCase):
         self.assertIn('(.03f*p*255)',foreground)
         self.assertNotIn('setImageTintList',KERNEL)
         self.assertNotIn('setTextColor',KERNEL)
+
+    def test_half_glyph_lift_moves_widget_and_restores_position_and_clipping(self):
+        body = LOOKS.split('hook(badge.getDeclaredMethod("onLayout"',1)[1].split('// 底栏纯数字',1)[0]
+        self.assertIn('getTextBounds("0123456789",0,10,glyphBounds)',body)
+        self.assertLess(body.index('layout.raise(view,glyphBounds.height())'),body.index('chain.proceed()'))
+        self.assertIn('private val translationY = view.translationY',LOOKS)
+        self.assertIn('view.translationY = translationY',LOOKS)
+        self.assertIn('state.badgeClips.getOrPut',body)
+        self.assertIn('if (group === tab) break',body)
+        self.assertIn('floatStates.values.forEach { it.restoreBadgeClips() }',LOOKS)
+        restore = LOOKS.split('private fun restoreBar(',1)[1].split('private fun homeBar(',1)[0]
+        self.assertIn('state.restoreBadgeClips()',restore)
+        self.assertIn('layout.restorePosition(view)',restore)
