@@ -7,18 +7,21 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ContextWrapper
 import android.content.res.ColorStateList
+import android.graphics.Outline
 import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PathMeasure
 import android.graphics.PixelFormat
+import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.Drawable
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.animation.PathInterpolator
@@ -44,12 +47,12 @@ private fun easing() = PathInterpolator(0.2f, 0f, 0f, 1f)
 fun motionDuration(milliseconds: Long): Long = if (ValueAnimator.areAnimatorsEnabled()) milliseconds else 0L
 
 /** 只用于模块自己创建的按钮，不替换 QQ 原控件的触摸监听器。 */
-private fun View.pressMotion() {
+private fun View.pressMotion(kernel: Glass? = null) {
     setOnTouchListener { view, event ->
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> view.animate().scaleX(0.96f).scaleY(0.96f)
+            MotionEvent.ACTION_DOWN -> if (kernel != null) kernel.kernelTouchDown(event.x) else view.animate().scaleX(0.96f).scaleY(0.96f)
                 .setDuration(motionDuration(80)).setInterpolator(easing()).start()
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f)
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (kernel != null) kernel.kernelTouchEnd() else view.animate().scaleX(1f).scaleY(1f)
                 .setDuration(motionDuration(150)).setInterpolator(easing()).start()
         }
         false
@@ -58,7 +61,8 @@ private fun View.pressMotion() {
         override fun onViewAttachedToWindow(view: View) = Unit
         override fun onViewDetachedFromWindow(view: View) {
             view.animate().cancel()
-            (view.background as? Glass)?.dispose()
+            if (kernel == null) (view.background as? Glass)?.dispose()
+            // Kernel Glass 自己的 attach listener 停帧/停传感器，重新挂载时可再次启动。
         }
     })
 }
@@ -73,7 +77,10 @@ fun knob(bar: View) {
     if (bar.height == 0) return
     if (!bar.isShown) { old?.visibility = View.GONE; return }
     val dp = bar.dp
-    val size = (52 * dp).toInt()
+    // 可见短胶囊 76×52dp；四周 8dp 留给材质扩张，不扩大或缩放真实命中坐标。
+    val inset = (8 * dp).toInt()
+    val width = (76 * dp).toInt() + 2*inset
+    val height = (52 * dp).toInt() + 2*inset
     val at = IntArray(2).also(bar::getLocationInWindow)
     val room = if (decor.layoutDirection == View.LAYOUT_DIRECTION_RTL) at[0]
         else decor.width - at[0] - bar.width
@@ -82,15 +89,15 @@ fun knob(bar: View) {
     val count = strip?.let { group -> (0 until group.childCount).count { group.getChildAt(it).visibility == View.VISIBLE } } ?: 1
     val clearance = if (kernel) kernelOverhang((bar.width-8*dp)/count.coerceAtLeast(1), dp) else 0
     val gap = (8 * dp).toInt()
-    val beside = room >= gap + clearance + size + gap // 还需保留屏幕端的 8dp，不能避让后贴边。
-    val bottom = if (beside) decor.height - at[1] - (bar.height + size) / 2
+    val beside = room >= gap + clearance + width + gap // 还需保留屏幕端的 8dp，不能避让后贴边。
+    val bottom = if (beside) decor.height - at[1] - (bar.height + height) / 2
         else decor.height - at[1] + gap + if (kernel) kernelOverhang(56*dp, dp) else 0
-    val end = if (beside) room - gap - clearance - size else gap
+    val end = if (beside) room - gap - clearance - width else gap
     if (old != null) {
         old.visibility = View.VISIBLE
         val lp = old.layoutParams as ViewGroup.MarginLayoutParams
-        if (lp.width != size || lp.bottomMargin != bottom || lp.marginEnd != end) {
-            lp.width = size; lp.height = size; lp.bottomMargin = bottom; lp.marginEnd = end
+        if (lp.width != width || lp.height != height || lp.bottomMargin != bottom || lp.marginEnd != end) {
+            lp.width = width; lp.height = height; lp.bottomMargin = bottom; lp.marginEnd = end
             old.layoutParams = lp
         }
         return
@@ -103,17 +110,22 @@ fun knob(bar: View) {
         imageTintList = ColorStateList.valueOf(monet(night(), 0xFF)
             ?: if (night()) 0xFFFFFFFF.toInt() else 0xFF1C1C1E.toInt())
         scaleType = ImageView.ScaleType.CENTER_INSIDE
-        val padding = (12 * dp).toInt()
+        val padding = (12 * dp).toInt() + inset
         setPadding(padding, padding, padding, padding)
-        outlineProvider = capsule(); clipToOutline = true; elevation = 6 * dp
-        background = Glass(this, roundBar = true)
-        foreground = borderlessRipple(this)
+        outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                outline.setRoundRect(inset,inset,view.width-inset,view.height-inset,26*dp)
+            }
+        }
+        clipToOutline = false; elevation = 6 * dp
+        val glass = Glass(this, kernelButton = true)
+        background = InsetDrawable(glass,inset)
         setOnClickListener { sheet(it) }
-        pressMotion()
+        pressMotion(glass)
         alpha = 0f; scaleX = 0.9f; scaleY = 0.9f
     }
     knobs.add(button)
-    decor.addView(button, FrameLayout.LayoutParams(size, size, Gravity.END or Gravity.BOTTOM).apply {
+    decor.addView(button, FrameLayout.LayoutParams(width, height, Gravity.END or Gravity.BOTTOM).apply {
         marginEnd = end; bottomMargin = bottom
     })
     button.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(motionDuration(180)).setInterpolator(easing()).start()
@@ -138,8 +150,9 @@ private class MenuGlyph : Drawable() {
     }
     override fun draw(canvas: Canvas) {
         val save = canvas.save()
-        canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
-        canvas.scale(bounds.width() / 24f, bounds.height() / 24f)
+        val size = min(bounds.width(),bounds.height()).toFloat()
+        canvas.translate(bounds.exactCenterX()-size/2,bounds.exactCenterY()-size/2)
+        canvas.scale(size/24f,size/24f)
         for (y in listOf(6f, 12f, 18f)) canvas.drawLine(4f, y, 20f, y, paint)
         canvas.restoreToCount(save)
     }

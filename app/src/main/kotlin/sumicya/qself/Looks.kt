@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package sumicya.qself
 
+import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.view.MotionEvent
 import android.view.Gravity
@@ -40,6 +42,11 @@ fun looks() {
     hook(Instrumentation::class.java.getMethod("callActivityOnResume", Activity::class.java)) { chain ->
         chain.proceed().also { watch((chain.getArg(0) as Activity).window.decorView) }
     }
+    hook(ViewGroup::class.java.getDeclaredMethod("dispatchDraw", Canvas::class.java)) { chain ->
+        val source = chain.thisObject as? ViewGroup
+        val glass = source?.takeIf { it in floatStates }?.background as? Glass
+        if (glass?.drawKernelContent(chain.getArg(0) as Canvas) == true) null else chain.proceed()
+    }
     hook(ViewGroup::class.java.getDeclaredMethod("dispatchTouchEvent", MotionEvent::class.java)) { chain ->
         val source = chain.thisObject as? ViewGroup
         val bar = source?.let { barTouchHosts[it]?.get() ?: it }
@@ -48,6 +55,10 @@ fun looks() {
         else state.dispatch(source, chain.getArg(0) as MotionEvent) { event -> chain.proceed(arrayOf<Any?>(event)) as Boolean }
     }
 }
+
+/** 三个输入均处于 badge.parent 的局部坐标；不把窗口像素直接写入 translationX。 */
+internal fun centeredBadgeTranslation(previous: Float, anchor: Float, center: Float): Float =
+    if (anchor.isFinite() && center.isFinite()) previous + anchor - center else previous
 
 val View.dp: Float get() = resources.displayMetrics.density
 
@@ -443,6 +454,18 @@ private class BarTouch(bar: ViewGroup, pager: ViewGroup?) {
             (bar.background as? Glass)?.kernelTouchEnd()
             host.requestDisallowInterceptTouchEvent(true)
         }
+        if (!forwarding && source === bar && event.actionMasked == MotionEvent.ACTION_UP) {
+            val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+            try { native(cancel) } finally { cancel.recycle() }
+            val count = (bar.getChildAt(0) as? ViewGroup)?.let { strip ->
+                (0 until strip.childCount).count { strip.getChildAt(it).visibility == View.VISIBLE }
+            } ?: 0
+            val rtl = bar.layoutDirection == View.LAYOUT_DIRECTION_RTL
+            val sameTab = kernelIndex(event.x/bar.dp,bar.width/bar.dp,count,rtl) ==
+                kernelIndex(first.x/bar.dp,bar.width/bar.dp,count,rtl)
+            (bar.background as? Glass)?.kernelTouchEnd(sameTab && event.x in 0f..bar.width.toFloat() && event.y in 0f..bar.height.toFloat())
+            clear(); return true
+        }
         if (forwarding && dest != null) send(source, dest, event) else native(event)
         if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) clear()
         return true
@@ -601,10 +624,14 @@ fun exactCount() {
             val label = text.get(view) as? String
             if (on("显示具体未读条数") && bottomNumericBadge(label, viewType.getInt(view))) {
                 badgeLayouts.getOrPut(view) { BadgeLayout(view) }
-                view.translationX = 0f
-                val at = IntArray(2).also(view::getLocationInWindow)
-                val anchor = IntArray(2).also(tab::getLocationInWindow)
-                view.translationX = anchor[0] + tab.width / 2f - at[0] - view.width / 2f
+                val parent = view.parent as? View ?: return@also
+                val transform = Matrix()
+                tab.transformMatrixToGlobal(transform); parent.transformMatrixToLocal(transform)
+                val anchor = floatArrayOf(tab.width/2f,tab.height/2f).also(transform::mapPoints)
+                transform.reset()
+                view.transformMatrixToGlobal(transform); parent.transformMatrixToLocal(transform)
+                val center = floatArrayOf(view.width/2f,view.height/2f).also(transform::mapPoints)
+                view.translationX = centeredBadgeTranslation(view.translationX,anchor[0],center[0])
                 val needed = maxOf((56 * view.dp).toInt(), numericBadgeWidth((paint.get(view) as Paint).measureText(label), 0, (6 * view.dp).toInt()))
                 if (countTabWidths.put(tab, needed) != needed) fit(tab)
             } else if (countTabWidths.remove(tab) != null) fit(tab)
@@ -617,6 +644,7 @@ fun exactCount() {
         if (bottomTab(view) == null || !bottomNumericBadge(label, viewType.getInt(view))) chain.proceed()
         else {
             val p = Paint(paint.get(view) as Paint).apply {
+                textAlign = Paint.Align.CENTER
                 color = monet(night(), 0xFF) ?: if (night()) 0xFFFFB4AB.toInt() else 0xFFB3261E.toInt()
             }
             val metrics = p.fontMetrics

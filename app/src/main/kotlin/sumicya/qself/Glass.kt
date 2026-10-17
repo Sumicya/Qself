@@ -4,10 +4,11 @@ package sumicya.qself
 import android.animation.ValueAnimator
 import android.content.res.Configuration
 import android.content.res.Resources
+import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
-import android.graphics.LinearGradient
 import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.PixelFormat
@@ -32,12 +33,12 @@ import kotlin.math.min
  * 罩一层淡色。没有高光也没有描边；按下去透镜凹一点、整面浮一层柔光。全在 GPU 上，
  * 每帧只多录一遍身后的 display list。
  *
- * 主页底栏单独委托 KernelBar，使用上游模糊/折射/高光，不走以下通用材质。
+ * 主页底栏和独立设置短胶囊委托 KernelBar，使用上游模糊/折射/高光，不走以下通用材质。
  * [radius] 圆角上限（默认全圆 = 胶囊 / 圆钮），[selected] 给底栏用：返回当前选中的页签，
  * 玻璃里就多一块会弹着滑过去的亮胶囊。
  */
-class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, private val roundBar: Boolean = false, kernelBar: Boolean = false, private val selected: (() -> View?)? = null) : Drawable() {
-    private val kernel = if (kernelBar) KernelBar(host, { behind(it) }, { invalidateSelf() }) else null
+class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, kernelBar: Boolean = false, kernelButton: Boolean = false, private val selected: (() -> View?)? = null) : Drawable() {
+    private val kernel = if (kernelBar || kernelButton) KernelBar(host, { behind(it) }, { invalidateSelf() }, standalone = kernelButton) else null
     private val dp = host.dp
     private val node = RenderNode("qself-glass")
     private val pad = (12 * dp).toInt() // 边缘折射往里采样，留一点余量就够
@@ -96,21 +97,6 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         if (b.isEmpty) return
         kernel?.let { it.draw(canvas, b, drawableAlpha, drawableColorFilter); return }
         val night = night()
-        if (roundBar) {
-            // KernelSU 无模糊分支的全圆角底色 + 独立圆形选中项；只填充，不描边、不录制背景。
-            rect.set(b)
-            paint.alpha = drawableAlpha
-            paint.colorFilter = drawableColorFilter
-            val accent = monet(night, 0xFF)
-            paint.shader = LinearGradient(0f, b.top.toFloat(), 0f, b.bottom.toFloat(),
-                wash(if (night) 0xE83C3C40.toInt() else 0xF0FFFFFF.toInt(), accent),
-                wash(if (night) 0xE8242428.toInt() else 0xE8EDEDF2.toInt(), accent), Shader.TileMode.CLAMP)
-            val r = min(b.width(), b.height()) / 2f
-            canvas.drawRoundRect(rect, r, r, paint)
-            paint.shader = null
-            pill(canvas, night)
-            return
-        }
         lens.setFloatUniform("press", press)
         val layerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             alpha = drawableAlpha
@@ -187,7 +173,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             child = p
         }
         for ((p, c) in levels.asReversed()) {
-            p.background?.let { paint(rc, p) { bg -> it.draw(bg) } }
+            p.background?.let { paint(rc, p, background = true) { bg -> it.draw(bg) } }
             val hostIndex = p.indexOfChild(c)
             val hostZ = c.z
             for (i in 0 until p.childCount) {
@@ -200,13 +186,14 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         }
     }
 
-    private inline fun paint(rc: Canvas, v: View, body: (Canvas) -> Unit) {
-        v.getLocationInWindow(there)
+    private inline fun paint(rc: Canvas, v: View, background: Boolean = false, body: (Canvas) -> Unit) {
+        val transform = Matrix()
+        v.transformMatrixToGlobal(transform)
+        host.transformMatrixToLocal(transform)
         val save = rc.save()
-        rc.translate((there[0] - here[0]).toFloat(), (there[1] - here[1]).toFloat())
-        rc.concat(v.matrix)
+        rc.concat(transform)
         rc.clipRect(0, 0, v.width, v.height)
-        rc.translate(-v.scrollX.toFloat(), -v.scrollY.toFloat())
+        if (!background) rc.translate(-v.scrollX.toFloat(), -v.scrollY.toFloat())
         if (v.alpha < 1f) {
             val layerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { alpha = (v.alpha * 255f).toInt() }
             val layer = rc.saveLayer(0f, 0f, v.width.toFloat(), v.height.toFloat(), layerPaint)
@@ -225,10 +212,20 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
     }
 
     private fun overlaps(v: View): Boolean {
-        v.getLocationInWindow(there)
-        return there[1] < here[1] + host.height + pad && there[1] + v.height > here[1] - pad &&
-            there[0] < here[0] + host.width + pad && there[0] + v.width > here[0] - pad
+        val transform = Matrix()
+        v.transformMatrixToGlobal(transform); host.transformMatrixToLocal(transform)
+        val rect = RectF(0f,0f,v.width.toFloat(),v.height.toFloat()).also(transform::mapRect)
+        val margin = if (kernel != null) 40*dp else pad.toFloat()
+        return rect.intersects(-margin,-margin,host.width+margin,host.height+margin)
     }
+    fun drawKernelContent(canvas: Canvas): Boolean = runCatching {
+        kernel?.drawContent(canvas,bounds) ?: false
+    }.onFailure {
+        if (lastFailureKey != Long.MAX_VALUE) {
+            lastFailureKey = Long.MAX_VALUE
+            log("KernelSU 内容合成失败，本帧保留 QQ 原生绘制；不是玻璃验收通过",it)
+        }
+    }.getOrDefault(false)
 
     private fun setPress(p: Boolean): Boolean {
         if (p == pressed) return false
@@ -257,9 +254,9 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         setPress(host.isPressed || hasPressedDescendant(host))
     }
 
-    internal val isKernelBar: Boolean get() = kernel != null
+    internal val isKernelBar: Boolean get() = kernel?.standalone == false
     fun kernelTouchDown(x: Float) { kernel?.touchDown(x) }
-    fun kernelTouchEnd() { kernel?.touchEnd() }
+    fun kernelTouchEnd(commit: Boolean = false) { kernel?.touchEnd(commit) }
 
     fun beginKernelDrag(x: Float): Boolean {
         val renderer = kernel ?: return false

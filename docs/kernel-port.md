@@ -1,25 +1,44 @@
-# KernelSU 底栏移植
+# KernelSU 底栏与独立设置短胶囊
 
-用户选定：只替换主页底栏，以上游原效果为准；不引入 Compose/Miuix 依赖。因此采用渲染算法与动画逻辑的 Android View 移植，而非直接运行上游组件。菜单和圆钮不跟随改造，聊天问题不归入本轮完成项。
+固定来源：KernelSU [`3186a2fe`](https://github.com/tiann/KernelSU/tree/3186a2fe2107f7170e06dab7aa157eb10ae7759f/manager/app/src/main/java/me/weishu/kernelsu/ui/component)，Miuix 0.9.4 / `39c40f99844227b853f0049a0933b1f3ae6c00ba`。许可、着色器展开哈希见 `third_party/NOTICE.md`、`tools/ksu-shaders.json`。不引入 Compose、Miuix 或其它运行库，QQ 保留真实页签、子控件、点击与无障碍。
 
-固定来源及许可见 `third_party/NOTICE.md`。底栏高度 64dp，内边距 4dp，指示器高 56dp；实际调用处 BottomBarMiuix.kt 还要求页签最小宽 76dp，不能把 56dp 高度当作宽度；按压指示器比例 78/56，页签内容比例 1.2。底层饱和度 1.5、模糊半径 4dp、折射高度/幅度 24dp；指示器折射高度 10dp×按压进度、幅度 14dp×进度、深度效果和 0.5 色散。BloomStroke 使用原双峰着色器，1dp 高光带、2dp 内扩散、0.75 底层强度，并随重力以 3° 步长转动。
+## 2026-10-17：根据用户实测修正渲染链
 
-弹簧按原阻尼/刚度实现解析解：位置及按压 1/1000、X 缩放 .6/250、Y 缩放 .7/250、速度 .5/300；横向拖动释放后才触发 QQ 真实页签点击，取消回到原选中项。纵向手势仍按原生内容页转交，不移动菜单。帧回调只在弹簧活动时运行；分离/关闭还原真实 View 的变换并注销传感器。
+用户反馈数字左漂、玻璃没有完整按上游、设置按钮没有胶囊形态。此前的测试通过不能推翻这些失败证据。
 
-## 离线工具边界
+### 数字定位
 
-候选验证工具 skia-python 138.0：上游 https://github.com/kyamagu/skia-python ，BSD-3-Clause；用于在本地 CPU 编译移植的 SkSL/AGSL 字符串，经 PyPI 固定版本安装到工具缓存，不打进 APK、不接入应用、不上传素材。本地已安装，导入因缺少 libEGL.so.1 被阻断，未冒称本地 shader 编译通过；改在两个既有工作流调用 ci/check-shaders.sh，安装系统 EGL/GL 和独立工具环境后实际编译五份着色器。CI 是否通过以运行结果为准。Skia 编译不等于 Android RuntimeShader、QQ 截图或 LSPosed 设备验收。
+旧代码先清空 translationX，再把 `getLocationInWindow` 的整数窗口位置与局部宽度相减，结果直接写入局部 translationX；祖先缩放时单位不一致。现在两点均通过完整矩阵变换进入 badge.parent 坐标，再作差增量校正，不先清零；复制 QQ Paint 后显式指定 `Paint.Align.CENTER`，保留原生 Y 布局。仍按真实计数展开、纯数字无红底，宽度随数字增长。纯逻辑测试覆盖多种宽度、窗口缩放、镜像和重复定位；不等同于 Android Matrix 实机测试。
 
-## 尚不能称为一比一的部分
+### 绘制层对应
 
-QQ 原生视图保留，背景录制来自 QQ View 树，不是 Compose 的 LayerBackdrop。真实图标/文字仍由 QQ 绘制，未复制上游 Compose 的双层图标组合背景；底色已采用 Miuix v0.9.4 默认 surfaceContainer（白色 / #242424、40%），但未引入整套 Miuix Monet 主题运行时。以上差异以及手势、阴影和 GPU 结果必须明确记录，不能以参数一致或离线测试通过宣称完全照搬已验收。
+| 上游层 | View 移植 |
+| --- | --- |
+| 原始 backdrop | 录制祖先背景与前序兄弟；以 source→global→host 完整矩阵转换，避免窗口位移再叠加自身 matrix 的重复变换；背景与内容分别处理自身 scroll |
+| 64dp 普通 Row | 在主栏 dispatchDraw 合成材质及 QQ 内容；普通内容不参与 1.2 倍缩放，材质单独作 `1 + 16dp/width × progress` 扩张 |
+| 56dp 强调色隐藏 Row / tabsBackdrop | 调用真实 TabView 的原生 dispatchDraw 录制内容，跳过 TabView 自己的旧背景与水波纹；保留其子控件 drawChild、alpha、矩阵、动画及 display list；副本按每个页签中心作 `1 + .2 × progress` 缩放，再以强调色着色 |
+| combinedBackdrop | 原始场景 + 独立 56dp 模糊/折射/40% surface + 强调色内容副本 |
+| 前景指示器 | 在普通内容之后绘制，从 combinedBackdrop 取样；保留按压折射、色散、罩色、BloomStroke 与内阴影 |
 
-## 用户实测后的自查纠错
+不再给 host、strip 或 tab 写入材质动画用的 scale/translation；真实布局与命中区域不随按压改变。4dp 面板回弹在 Canvas 上施加，背景录制补偿该平移。指示器使用浮点 Canvas 位移，避免 RenderNode 整数位置截断；内阴影改为模糊外侧反向遮罩再裁切，不再用向下偏移的单侧残片代替。
 
-上一版 c80b1bdd 的 Kotlin/Skia 编译成功不代表实现完整：遗漏调用处的 76dp 最小宽，硬设 56×56 导致圆形；DOWN 未直接驱动按压，靠 QQ pressed 轮询，且内容页绑定失败会取消整个手势入口；绘制层范围仍按 64dp 栏高；暗色模式下的按压遮罩错误用了白色。上述为代码可直接证明的错误，不以安装版本解释用户实测。
+固定尺寸/效果：64dp 栏、4dp 内边距、最小 76dp 页签、56dp 指示器、78/56 按压比例；饱和度 1.5、4dp 模糊、24dp 基础折射；指示器 10/14dp×按压进度、深度效果与 0.5 色散；1dp/2dp 双峰高光、3° 重力量化、8dp×进度内阴影。五份 AGSL 保持固定源码哈希。
 
-本轮：页签宽改为 76dp 起并随数字共同增长；实际 DOWN/UP/CANCEL 驱动按压，徽标仍由 QQ 处理原生拖动/长按，多指、纵滑、取消及分离释放；内容页未绑定仅不接管纵滑，按压/横拖仍可用；扩绘制层边界，保存/还原页签条裁切；按上游分两层叠加静止黑/白和按压黑色（指示器的 40% surface 仍保留，base 本身没有录入该罩色）；整行内容随按压缩放；用原 smoothstep AGSL 替掉线性径向渐变。
+弹簧保留上游阻尼/刚度与连续位置/速度，不再截掉超过 64ms 的帧间隔。速度形变改为跟踪动画位置的 VelocityTracker 结果，不再对弹簧解析导数另作一遍滤波。点击释放取消原生待发点击，再调用真实页签 performClick 一次；横拖也只在释放时点击。释放后不再由 clear() 把目标重置为尚未更新的旧选择；仅在原生选择实际改变时同步。徽标原生拖动、多指取消、纵向转交背后原生内容页的分支保留。
 
-旁边 52dp 圆钮是 Qself 自己的设置入口，不是 KernelSU 底栏组件，材质没有跟随移植。此次只给原排布预留整栏扩张、面板平移和指示器按压/速度形变空间；同时保留屏幕端 8dp，侧边放不下仍按原规则放到右上方，不把旧圆钮称为 KernelSU 按钮。
+### 独立设置短胶囊
 
-新增测试约束实际 76dp 宽度、按住/松开弹簧、按钮避让、DOWN 接线和裁切还原。它们仍不是 Android 触摸分发或 GPU 真机测试，用户报告的现象只能作为上一版失败证据，不能据本地绿灯宣称本轮已在设备上修好。
+用户选择独立短胶囊，后续可根据实际效果改回圆形。可见尺寸 76×52dp，四周另留 8dp 绘制余量，物理布局不因按压改变。使用同一个 KernelBar 材质/按压弹簧（standalone 模式不画页签指示器），不再走旧 roundBar 渐变早退路径，也不叠加另一套水波纹或 0.96 倍 View 缩放。三线图标保持正方形比例并居中，不随胶囊宽度横向拉伸。空间不足仍置于右上方；菜单面板本身不扩张、不改材质。
+
+## 验证记录与未验收部分
+
+2026-10-17 09:30（Asia/Shanghai），针对本次未提交工作树、以 Qself `cebf9ad78fae0df6dc93944fd9aebe604703b64d` 为父提交：
+
+- `bash ci/check.sh`：Kotlin 类型检查、43 项纯逻辑测试通过。
+- `python3 -m unittest discover -s tools -p 'test_*.py'`：35 项工具/源码契约通过。
+- 清理脚本原有 10 项测试通过；本轮未修改清理或工作流。
+- 只读 QQ APK SHA-256 `34bdea66e738062c3f762f7da98132addc7170394605a4f5ca1944bee1280c84`：37 个 DEX、223 条符号匹配；`tools/ui_paths.py` 静态调用关系通过。QQTabLayout 继承 Material TabLayout，没有自行覆盖 dispatchDraw；TabLayout.onDraw 会画 TabView 旧背景，因此不能只在 background 阶段完成新合成。
+
+这些检查不执行 Android GPU 或 LSPosed 触摸分发。CI 的 Skia 138 CPU 编译亦不是设备截图。**尚无 Android 16 / QQ 真机复验，不宣称数字漂移已获实机确认，也不宣称一比一验收完成。**
+
+仍需核实的差异：View 场景录制不等于 Compose LayerBackdrop；图标为 QQ 真实内容而非 KernelSU 资源；强调色使用 Qself 动态色开关，surfaceContainer 使用 Miuix 默认白 / #242424（40%），没有移植 Miuix 全套 Monet/HCT 主题运行时；Android 与 Compose VelocityTracker 的逐帧结果尚未证明一致；外阴影仍由原生 elevation 提供，不是 Compose dropShadow。GPU 层合成、半透明背景、按压峰值/裁切、真实点击与纵滑交接仍待设备验收。软件 Canvas 或内容合成失败时的原生/纯色退化不计为玻璃通过。

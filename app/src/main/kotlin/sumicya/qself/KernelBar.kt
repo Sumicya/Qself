@@ -14,7 +14,8 @@ import android.view.Surface
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.PathInterpolator
-import java.util.WeakHashMap
+import android.view.MotionEvent
+import android.view.VelocityTracker
 import kotlin.math.*
 
 /** Compose spring 的解析解，不以固定时长的插值器冒充弹簧。单位质量。 */
@@ -24,7 +25,7 @@ internal class KernelSpring(val damping: Float, val stiffness: Float, initial: F
     var target = initial
     fun snap(to: Float) { value = to; target = to; velocity = 0f }
     fun step(seconds: Float): Boolean {
-        val t = seconds.coerceIn(0f, .064f)
+        val t = seconds.coerceAtLeast(0f)
         val w = sqrt(stiffness)
         val x = value - target
         val v = velocity
@@ -56,10 +57,18 @@ internal fun kernelTabWidth(density: Float, badgeWidth: Int): Int =
 
 /** QQ 仍持有真实页签、点击及无障碍；这里只接管底栏背景、按压和横向选择。 */
 internal class KernelBar(private val host: View, private val behind: (Canvas) -> Unit,
-    private val invalidate: () -> Unit) : SensorEventListener {
+    private val invalidate: () -> Unit, val standalone: Boolean = false) : SensorEventListener {
     private val dp = host.dp
     private val scene = RenderNode("ksu-scene")
     private val base = RenderNode("ksu-base")
+    private val tabSurface = RenderNode("ksu-tab-surface")
+    private val tabLens = RuntimeShader(ROUNDED_RECT_REFRACTION_SHADER)
+    private val tabContent = RenderNode("ksu-tab-content")
+    private val combined = RenderNode("ksu-combined-backdrop")
+    private val tint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val coordinates = Matrix()
+    private var drawingTabs = false
+    private val dispatchTabs = ViewGroup::class.java.getDeclaredMethod("dispatchDraw",Canvas::class.java).apply { isAccessible = true }
     private val indicator = RenderNode("ksu-indicator")
     private val shadow = RenderNode("ksu-inner-shadow")
     private val lens = RuntimeShader(ROUNDED_RECT_REFRACTION_SHADER)
@@ -86,26 +95,35 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     private var releasing = false
     private var dragging = false
     private var chosen: View? = null
+    private var observed: View? = null
+    private var tracker: VelocityTracker? = null
+    private var trackingVelocity = false
     private var dragX = 0f
     private var angle = -PI.toFloat() / 2
     private var attached = false
     private val sensors = host.context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    private val originals = WeakHashMap<View, FloatArray>()
     private var baseKey = 0L
     private val frame = object : Choreographer.FrameCallback {
         override fun doFrame(now: Long) {
             posted = false
             val dt = if (lastFrame == 0L) 1f / 60 else (now - lastFrame) / 1_000_000_000f
             lastFrame = now
-            speed.target = value.velocity / (tabs().size - 1).coerceAtLeast(1)
-            var moving = false
-            for (spring in springs) moving = spring.step(dt) || moving
+            val before = value.value
+            var moving = value.step(dt)
+            // 与上游一样跟踪动画值，而非直接拿弹簧导数再滤一次。
+            if (trackingVelocity && value.value != before) {
+                val time = now / 1_000_000
+                val sample = MotionEvent.obtain(time, time, MotionEvent.ACTION_MOVE, value.value, 0f, 0)
+                try { tracker?.addMovement(sample) } finally { sample.recycle() }
+                tracker?.computeCurrentVelocity(1000)
+                speed.snap((tracker?.xVelocity ?: 0f) / (tabs().size - 1).coerceAtLeast(1))
+            }
+            for (spring in springs) if (spring !== value) moving = spring.step(dt) || moving
             if (releasing && abs(value.value - value.target) < (tabs().size - 1).coerceAtLeast(1) * .025f) {
                 releasing = false
                 progress.target = 0f; scaleX.target = 1f; scaleY.target = 1f
                 moving = true
             }
-            applyLayers()
             invalidate()
             if (moving) schedule() else lastFrame = 0L
         }
@@ -115,55 +133,53 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         if (!android.animation.ValueAnimator.areAnimatorsEnabled()) {
             springs.forEach { it.snap(it.target) }
             if (releasing) { releasing = false; progress.snap(0f); scaleX.snap(1f); scaleY.snap(1f) }
-            applyLayers(); invalidate(); return
+            invalidate(); return
         }
         posted = true; frameClock.postFrameCallback(frame)
     }
     private fun tabs(): List<View> {
         val strip = (host as? ViewGroup)?.getChildAt(0) as? ViewGroup ?: return emptyList()
+        if (strip.visibility != View.VISIBLE) return emptyList()
         return (0 until strip.childCount).map { strip.getChildAt(it) }.filter { it.visibility == View.VISIBLE }
-    }
-    private fun remember(view: View) = originals.getOrPut(view) {
-        floatArrayOf(view.scaleX, view.scaleY, view.translationX)
     }
     private fun panel(): Float = 4 * dp * sign(offset.value) *
         ease.getInterpolation((abs(offset.value) / host.width.coerceAtLeast(1)).coerceIn(0f, 1f))
-    private fun applyLayers() {
-        val p = progress.value.coerceIn(0f, 1f)
-        val original = remember(host)
-        val grow = 1f + 16 * dp / host.width.coerceAtLeast(1) * p
-        host.scaleX = original[0] * grow; host.scaleY = original[1] * grow
-        val strip = (host as? ViewGroup)?.getChildAt(0)
-        strip?.let { it.translationX = remember(it)[2] + panel() }
-        tabs().forEach { tab ->
-            val old = remember(tab)
-            val factor = 1f + .2f * p // 上游的内容缩放作用于整行，不只选中项。
-            tab.scaleX = old[0] * factor; tab.scaleY = old[1] * factor
-        }
-    }
+    // View 坐标/命中区域不变；材质、普通内容、强调色副本分别在 Canvas 上变换。
     fun sync() {
         val tabs = tabs()
         val selected = tabs.indexOfFirst { it.isSelected }.coerceAtLeast(0)
-        if (!ready && tabs.isNotEmpty()) { value.snap(selected.toFloat()); chosen = tabs.getOrNull(selected); ready = true }
-        if (!dragging && !touching && chosen !== tabs.getOrNull(selected)) {
-            chosen = tabs.getOrNull(selected); value.target = selected.toFloat()
-            press(true); releasing = true; schedule()
+        val actual = tabs.getOrNull(selected)
+        if (!ready && tabs.isNotEmpty()) { value.snap(selected.toFloat()); chosen = actual; observed = actual; ready = true }
+        // 只响应原生选择的变化，不能每帧用尚未回调的旧选择覆盖刚释放的目标。
+        if (!dragging && !touching && observed !== actual) {
+            observed = actual
+            if (chosen !== actual) {
+                chosen = actual; value.target = selected.toFloat()
+                trackingVelocity = false; speed.target = 0f
+                press(true); releasing = true; highlight.target = 0f; schedule()
+            }
         }
     }
     // DOWN/UP 来自实际分发链，不依赖 QQ 子视图延迟设置 pressed 或内容页绑定成功。
     fun touchDown(x: Float) {
         sync()
         touching = true
+        tracker?.clear(); trackingVelocity = true
         value.target = kernelIndex(x / dp, host.width / dp, tabs().size,
             host.layoutDirection == View.LAYOUT_DIRECTION_RTL).toFloat()
         press(true)
     }
-    fun touchEnd() {
+    fun touchEnd(commit: Boolean = false) {
         if (!touching) return
         touching = false
         if (dragging) end(false)
         else {
-            value.target = tabs().indexOfFirst { it.isSelected }.coerceAtLeast(0).toFloat()
+            val items = tabs()
+            val index = if (commit) value.target.roundToInt().coerceIn(0, items.lastIndex.coerceAtLeast(0))
+                else items.indexOfFirst { it.isSelected }.coerceAtLeast(0)
+            chosen = items.getOrNull(index)
+            value.target = index.toFloat()
+            if (commit) chosen?.performClick()
             press(false)
         }
     }
@@ -195,7 +211,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     }
     fun end(commit: Boolean) {
         if (!dragging) return
-        dragging = false
+        dragging = false; touching = false
         val tabs = tabs()
         val index = if (commit) value.target.roundToInt().coerceIn(0, (tabs.size - 1).coerceAtLeast(0))
             else tabs.indexOfFirst { it.isSelected }.coerceAtLeast(0)
@@ -207,15 +223,17 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     fun attach() {
         if (attached) return
         attached = true
+        tracker = VelocityTracker.obtain()
         sensors.getDefaultSensor(Sensor.TYPE_GRAVITY)?.let { sensors.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
     }
     fun stop() {
         attached = false; dragging = false; touching = false; posted = false; lastFrame = 0L
         frameClock.removeFrameCallback(frame); sensors.unregisterListener(this)
-        originals.forEach { (view, old) -> view.scaleX = old[0]; view.scaleY = old[1]; view.translationX = old[2] }
-        originals.clear(); ready = false; chosen = null; releasing = false
+        tracker?.recycle(); tracker = null; trackingVelocity = false
+        ready = false; chosen = null; observed = null; releasing = false
         springs.forEach { it.snap(if (it === scaleX || it === scaleY) 1f else 0f) }
         scene.discardDisplayList(); base.discardDisplayList(); indicator.discardDisplayList(); shadow.discardDisplayList()
+        tabSurface.discardDisplayList(); tabContent.discardDisplayList(); combined.discardDisplayList()
         baseKey = 0L
     }
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
@@ -267,59 +285,152 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
             canvas.drawRect(0f,0f,w,h,paint)
         } finally { paint.shader = null; paint.blendMode = null; canvas.restoreToCount(save) }
     }
+    private fun drawAt(canvas: Canvas, node: RenderNode, x: Float, y: Float) {
+        val save = canvas.save()
+        try { canvas.translate(x,y); canvas.drawRenderNode(node) } finally { canvas.restoreToCount(save) }
+    }
+    private fun material(canvas: Canvas, node: RenderNode, rect: RectF, shift: Float) {
+        rounded(canvas,rect) {
+            drawAt(canvas,node,0f,rect.top)
+            paint.color = if (night()) 0x66242424 else 0x66FFFFFF
+            canvas.drawRect(rect,paint)
+            val hp = highlight.value.coerceIn(0f,1f)
+            if (hp > 0) {
+                paint.blendMode = BlendMode.PLUS
+                paint.color = Color.argb((.06f*hp*255).toInt(),255,255,255)
+                canvas.drawRect(rect,paint)
+                val tabWidth = (rect.width()-8*dp)/tabs().size.coerceAtLeast(1)
+                val logical = (value.value+.5f)*tabWidth
+                val hx = if (standalone) rect.width()/2 else if (host.layoutDirection == View.LAYOUT_DIRECTION_RTL) rect.width()-logical else logical
+                interactive.setFloatUniform("size", rect.width(), rect.height())
+                interactive.setColorUniform("color", Color.argb((.12f*hp*255).toInt(),255,255,255))
+                interactive.setFloatUniform("radius", min(rect.width(),rect.height())*1.2f)
+                interactive.setFloatUniform("position", (hx+shift).coerceIn(0f,rect.width()), rect.height()/2)
+                val save = canvas.save()
+                try {
+                    canvas.translate(rect.left,rect.top); paint.shader = interactive
+                    canvas.drawRect(0f,0f,rect.width(),rect.height(),paint)
+                } finally { canvas.restoreToCount(save); paint.shader = null; paint.blendMode = null }
+            }
+        }
+    }
+    private fun body(canvas: Canvas, w: Int, h: Int, p: Float) {
+        val surface = RectF(0f,0f,w.toFloat(),h.toFloat())
+        val save = canvas.save()
+        try {
+            val grow = 1f+16*dp/w.coerceAtLeast(1)*p
+            canvas.scale(grow,grow,surface.centerX(),surface.centerY())
+            material(canvas,base,surface,panel())
+            shine(canvas,surface,.75f,-45f)
+        } finally { canvas.restoreToCount(save) }
+    }
+    private fun prepare(bounds: Rect) {
+        val w = bounds.width(); val h = bounds.height(); val pad = (40*dp).toInt()
+        scene.setPosition(-pad,-pad,w+pad,h+pad)
+        val sc = scene.beginRecording(w+2*pad,h+2*pad)
+        try { sc.translate(pad-bounds.left.toFloat()-panel(),pad-bounds.top.toFloat()); behind(sc) } finally { scene.endRecording() }
+        val key = (w.toLong() shl 32) or h.toLong()
+        if (baseKey != key) {
+            colorControls.setFloatUniform("in_brightness", 0f)
+            colorControls.setFloatUniform("in_contrast", 1f)
+            colorControls.setFloatUniform("in_saturation", 1.5f)
+            val color = RenderEffect.createRuntimeShaderEffect(colorControls,"child")
+            val blur = RenderEffect.createBlurEffect(4*dp,4*dp,color,Shader.TileMode.CLAMP)
+            configure(lens,w.toFloat(),h.toFloat(),pad.toFloat(),24*dp,24*dp,false)
+            base.setRenderEffect(RenderEffect.createChainEffect(RenderEffect.createRuntimeShaderEffect(lens,"content"),blur))
+            if (!standalone) {
+                configure(tabLens,w.toFloat(),56*dp,pad.toFloat(),24*dp,24*dp,false)
+                tabSurface.setRenderEffect(RenderEffect.createChainEffect(RenderEffect.createRuntimeShaderEffect(tabLens,"content"),blur))
+            }
+            baseKey = key
+        }
+        base.setPosition(-pad,-pad,w+pad,h+pad)
+        val bc = base.beginRecording(w+2*pad,h+2*pad)
+        try { bc.translate(pad.toFloat(),pad.toFloat()); bc.drawRenderNode(scene) } finally { base.endRecording() }
+    }
     fun draw(canvas: Canvas, bounds: Rect, alpha: Int, filter: ColorFilter?) {
         if (bounds.isEmpty) return
         if (!canvas.isHardwareAccelerated) {
             paint.color = if (night()) 0xFF242424.toInt() else Color.WHITE
             canvas.drawRoundRect(RectF(bounds),bounds.height()/2f,bounds.height()/2f,paint)
-            return // 软件截图不能执行 RenderNode；不是把纯色路径当作玻璃验收。
+            return // 软件 Canvas 不能执行 RenderNode，不作为玻璃验收。
         }
-        val w = bounds.width(); val h = bounds.height(); val pad = (40*dp).toInt()
-        val p = progress.value.coerceIn(0f,1f); val surface = RectF(0f,0f,w.toFloat(),h.toFloat())
+        // 主底栏整体在 dispatchDraw 合成，不能在内容之前再盖一份背景。
+        if (!standalone) return
+        val pad = (40*dp).toInt()
         val layer = canvas.saveLayer(RectF(bounds).apply { inset(-pad.toFloat(), -pad.toFloat()) }, Paint().apply { this.alpha = alpha; colorFilter = filter })
-        canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
         try {
-            scene.setPosition(-pad,-pad,w+pad,h+pad)
-            val sc = scene.beginRecording(w+2*pad,h+2*pad)
-            try { sc.translate(pad.toFloat(),pad.toFloat()); behind(sc) } finally { scene.endRecording() }
-            val key = (w.toLong() shl 32) or h.toLong()
-            if (baseKey != key) {
-                configure(lens,w.toFloat(),h.toFloat(),pad.toFloat(),24*dp,24*dp,false)
-                colorControls.setFloatUniform("in_brightness", 0f)
-                colorControls.setFloatUniform("in_contrast", 1f)
-                colorControls.setFloatUniform("in_saturation", 1.5f)
-                val color = RenderEffect.createRuntimeShaderEffect(colorControls,"child")
-                val blur = RenderEffect.createBlurEffect(4*dp,4*dp,color,Shader.TileMode.CLAMP)
-                base.setRenderEffect(RenderEffect.createChainEffect(RenderEffect.createRuntimeShaderEffect(lens,"content"),blur))
-                baseKey = key
+            prepare(bounds)
+            canvas.translate(bounds.left.toFloat()+panel(), bounds.top.toFloat())
+            body(canvas,bounds.width(),bounds.height(),progress.value.coerceIn(0f,1f))
+        } finally { paint.shader=null; paint.blendMode=null; canvas.restoreToCount(layer) }
+    }
+    /** 只录制真实页签的内容孩子，不把 TabView 的旧选中背景/水波纹当作图标。 */
+    private fun captureTabs(w: Int, h: Int, pad: Int) {
+        tabContent.setPosition(-pad,-pad,w+pad,h+pad)
+        val tc = tabContent.beginRecording(w+2*pad,h+2*pad)
+        tc.translate(pad.toFloat(),pad.toFloat())
+        drawingTabs = true
+        try {
+            for (tab in tabs()) {
+                if (tab !is ViewGroup) continue
+                coordinates.reset(); tab.transformMatrixToGlobal(coordinates); host.transformMatrixToLocal(coordinates)
+                val save = tc.save()
+                try {
+                    tc.concat(coordinates)
+                    tc.translate(-tab.scrollX.toFloat(),-tab.scrollY.toFloat())
+                    var opacity = 1f
+                    var ancestor: View? = tab
+                    while (ancestor != null && ancestor !== host) {
+                        opacity *= ancestor.alpha
+                        ancestor = ancestor.parent as? View
+                    }
+                    val layer = tc.saveLayer(null, Paint().apply { alpha = (opacity * 255).toInt().coerceIn(0,255) })
+                    // 使用原生 drawChild 链：保留子控件矩阵、alpha、动画和 display list。
+                    // 只跳过 TabView 自己的背景/前景，不重画或替换 QQ 内容控件。
+                    try { dispatchTabs.invoke(tab,tc) } finally { tc.restoreToCount(layer) }
+                } finally { tc.restoreToCount(save) }
             }
-            base.setPosition(-pad,-pad,w+pad,h+pad)
-            val bc = base.beginRecording(w+2*pad,h+2*pad)
-            try { bc.translate(pad.toFloat(),pad.toFloat()); bc.drawRenderNode(scene) } finally { base.endRecording() }
-            val shift = panel()
-            canvas.translate(shift,0f)
-            rounded(canvas,surface) {
-                canvas.drawRenderNode(base)
-                paint.color = if (night()) 0x66242424 else 0x66FFFFFF
-                canvas.drawRoundRect(surface,h/2f,h/2f,paint)
-                val hp = highlight.value.coerceIn(0f,1f)
-                if (hp > 0) {
-                    paint.blendMode = BlendMode.PLUS
-                    paint.color = Color.argb((.06f*hp*255).toInt(),255,255,255)
-                    canvas.drawRect(surface,paint)
-                    val tabWidth = (w-8*dp)/tabs().size.coerceAtLeast(1)
-                    val logical = (value.value+.5f)*tabWidth
-                    val hx = if (host.layoutDirection == View.LAYOUT_DIRECTION_RTL) w-logical else logical
-                    interactive.setFloatUniform("size", w.toFloat(), h.toFloat())
-                    interactive.setColorUniform("color", Color.argb((.12f*hp*255).toInt(),255,255,255))
-                    interactive.setFloatUniform("radius", min(w,h)*1.2f)
-                    interactive.setFloatUniform("position", (hx+shift).coerceIn(0f,w.toFloat()), h/2f)
-                    paint.shader = interactive
-                    canvas.drawRect(surface,paint); paint.shader = null; paint.blendMode = null
+        } finally { drawingTabs = false; tabContent.endRecording() }
+    }
+    /** dispatchDraw 阶段：普通内容在底层，强调色副本进入组合背景，再由前景透镜取样。 */
+    fun drawContent(canvas: Canvas, bounds: Rect): Boolean {
+        if (standalone || drawingTabs || bounds.isEmpty || !canvas.isHardwareAccelerated || tabs().isEmpty()) return false
+        sync()
+        val w = bounds.width(); val h = bounds.height(); val pad = (40*dp).toInt()
+        val p = progress.value.coerceIn(0f,1f)
+        prepare(bounds)
+        captureTabs(w,h,pad)
+        tabSurface.setPosition(-pad,-pad,w+pad,ceil(56*dp).toInt()+pad)
+        val tb = tabSurface.beginRecording(w+2*pad,ceil(56*dp+2*pad).toInt())
+        try { tb.translate(pad.toFloat(),pad-4*dp); tb.drawRenderNode(scene) } finally { tabSurface.endRecording() }
+        combined.setPosition(-pad,-pad,w+pad,h+pad)
+        val cc = combined.beginRecording(w+2*pad,h+2*pad)
+        try {
+            cc.translate(pad.toFloat(),pad.toFloat()); cc.drawRenderNode(scene)
+            material(cc,tabSurface,RectF(0f,4*dp,w.toFloat(),60*dp),panel())
+            tint.colorFilter = PorterDuffColorFilter(monet(night(),0xFF) ?: if(night()) 0xFF9BC1FF.toInt() else 0xFF3482FF.toInt(), PorterDuff.Mode.SRC_IN)
+            val layer = cc.saveLayer(null,tint)
+            try {
+                val factor = 1f + .2f * p
+                for (tab in tabs()) {
+                    coordinates.reset(); tab.transformMatrixToGlobal(coordinates); host.transformMatrixToLocal(coordinates)
+                    val rect = RectF(0f,0f,tab.width.toFloat(),tab.height.toFloat()).also(coordinates::mapRect)
+                    val save = cc.save()
+                    try {
+                        cc.scale(factor,factor,rect.centerX(),rect.centerY())
+                        cc.clipRect(rect.left,-pad.toFloat(),rect.right,h+pad.toFloat())
+                        cc.drawRenderNode(tabContent)
+                    } finally { cc.restoreToCount(save) }
                 }
-            }
-            shine(canvas,surface,.75f,-45f)
-            if (!ready || tabs().isEmpty()) return
+            } finally { cc.restoreToCount(layer) }
+        } finally { combined.endRecording() }
+        val layer = canvas.saveLayer(RectF(bounds).apply { inset(-pad.toFloat(),-pad.toFloat()) },null)
+        try {
+            canvas.translate(bounds.left.toFloat()+panel(),bounds.top.toFloat())
+            // 覆盖 TabLayout.onDraw 的旧装饰，避免旧选中背景混进玻璃。
+            body(canvas,w,h,p)
+            canvas.drawRenderNode(tabContent)
             val tw = (w-8*dp)/tabs().size
             val pos = if (host.layoutDirection == View.LAYOUT_DIRECTION_RTL) tabs().lastIndex-value.value else value.value
             val rect = RectF(4*dp+pos*tw,4*dp,4*dp+(pos+1)*tw,60*dp)
@@ -332,12 +443,12 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
                 configure(dispersion,tw,56*dp,pad.toFloat(),10*dp*p,14*dp*p,true)
                 dispersion.setFloatUniform("chromaticAberration",.5f)
                 indicator.setRenderEffect(RenderEffect.createRuntimeShaderEffect(dispersion,"content"))
-                indicator.setPosition((rect.left-pad).toInt(),(rect.top-pad).toInt(),(rect.right+pad).toInt(),(rect.bottom+pad).toInt())
-                val ic = indicator.beginRecording((tw+2*pad).toInt(),(56*dp+2*pad).toInt())
-                try { ic.translate(pad-rect.left,pad-rect.top); ic.drawRenderNode(base) } finally { indicator.endRecording() }
+                indicator.setPosition(0,0,ceil(tw+2*pad).toInt(),ceil(56*dp+2*pad).toInt())
+                val ic = indicator.beginRecording(ceil(tw+2*pad).toInt(),ceil(56*dp+2*pad).toInt())
+                try { ic.translate(pad-rect.left,pad-rect.top); ic.drawRenderNode(combined) } finally { indicator.endRecording() }
                 rounded(canvas,rect) {
-                    canvas.drawRenderNode(indicator)
-                    // base 只包含折射背景；指示器另叠一次 surface，不能省略或当成重复罩色。
+                    drawAt(canvas, indicator, rect.left-pad, rect.top-pad)
+                    // combined 是原背景 + 强调色内容副本；指示器另有上游 surface 罩色。
                     paint.color = if (night()) 0x66242424 else 0x66FFFFFF
                     canvas.drawRect(rect,paint)
                     paint.color = Color.argb((.1f*(1-p)*255).toInt(),if(night())255 else 0,if(night())255 else 0,if(night())255 else 0)
@@ -346,26 +457,26 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
                     canvas.drawRect(rect,paint)
                     if (p > .001f) {
                         val blurRadius = 8*dp*p
-                        shadow.setPosition((rect.left-pad).toInt(),(rect.top-pad).toInt(),(rect.right+pad).toInt(),(rect.bottom+pad).toInt())
+                        shadow.setPosition(0,0,ceil(tw+2*pad).toInt(),ceil(56*dp+2*pad).toInt())
                         shadow.setRenderEffect(RenderEffect.createBlurEffect(blurRadius,blurRadius,Shader.TileMode.DECAL))
-                        val sh = shadow.beginRecording((tw+2*pad).toInt(),(56*dp+2*pad).toInt())
+                        val sh = shadow.beginRecording(ceil(tw+2*pad).toInt(),ceil(56*dp+2*pad).toInt())
                         try {
                             val outline = RectF(pad.toFloat(),pad.toFloat(),tw+pad,56*dp+pad)
-                            val mask = Path().apply { addRoundRect(outline,28*dp,28*dp,Path.Direction.CW) }
-                            sh.clipPath(mask)
+                            // 模糊外侧反向遮罩，再由前景胶囊裁切，四周均有内阴影。
                             paint.color = Color.argb((.15f*p*255).toInt(),0,0,0)
-                            sh.drawRoundRect(outline,28*dp,28*dp,paint)
-                            sh.translate(0f,blurRadius)
+                            sh.drawRect(0f,0f,tw+2*pad,56*dp+2*pad,paint)
                             paint.blendMode = BlendMode.CLEAR
                             sh.drawRoundRect(outline,28*dp,28*dp,paint)
                             paint.blendMode = null
                         } finally { shadow.endRecording() }
-                        canvas.drawRenderNode(shadow)
+                        drawAt(canvas, shadow, rect.left-pad, rect.top-pad)
                     }
                 }
                 shine(canvas,rect,p,90f)
             } finally { canvas.restoreToCount(save) }
+
         } finally { paint.shader=null; paint.blendMode=null; canvas.restoreToCount(layer) }
+        return true
     }
 }
 

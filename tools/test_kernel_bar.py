@@ -38,7 +38,7 @@ class KernelPortTest(unittest.TestCase):
     def test_frame_and_sensor_lifecycles_are_balanced(self):
         for operation in ('frameClock.removeFrameCallback(frame)', 'sensors.unregisterListener(this)',
                           'if (moving) schedule() else lastFrame = 0L',
-                          'if (!attached || posted) return', 'originals.clear()'):
+                          'if (!attached || posted) return', 'tracker?.recycle()'):
             self.assertIn(operation, KERNEL)
         self.assertNotIn('requestLayout()', KERNEL)
         self.assertNotIn('ValueAnimator.ofFloat', KERNEL)
@@ -47,6 +47,8 @@ class KernelPortTest(unittest.TestCase):
         drag = KERNEL.split('fun drag(x:', 1)[1].split('fun end(', 1)[0]
         self.assertNotIn('performClick', drag)
         self.assertIn('if (commit) chosen?.performClick()', KERNEL)
+        end = KERNEL.split('fun end(commit:',1)[1].split('fun attach()',1)[0]
+        self.assertLess(end.index('touching = false'),end.index('performClick()'))
         self.assertIn('endKernelDrag(event.actionMasked == MotionEvent.ACTION_UP)', LOOKS)
         self.assertIn('verticalBarDrag(event.x - first.x', LOOKS)
         self.assertIn('send(source, dest, event)', LOOKS)
@@ -58,7 +60,7 @@ class KernelPortTest(unittest.TestCase):
         self.assertLess(body.index('kernelTouchDown(event.x)'), body.index('kotlin.math.abs(event.x - first.x) > slop'))
         self.assertIn('kernelTouchEnd()', body)
         self.assertNotIn('isPressed', KERNEL)
-        self.assertIn('if (!dragging && !touching && chosen', KERNEL)
+        self.assertIn('if (!dragging && !touching && observed', KERNEL)
         self.assertIn('badgeGesture = nativeBadge', body)
         self.assertIn('touching = false', KERNEL.split('fun stop()', 1)[1])
 
@@ -72,6 +74,39 @@ class KernelPortTest(unittest.TestCase):
 
     def test_knob_layout_reserves_pressed_visual_envelope_without_restylizing_it(self):
         knob = (ROOT / 'app/src/main/kotlin/sumicya/qself/Knob.kt').read_text()
-        self.assertIn('room >= gap + clearance + size + gap', knob)
+        self.assertIn('room >= gap + clearance + width + gap', knob)
         self.assertIn('kernelOverhang((bar.width-8*dp)/count.coerceAtLeast(1), dp)', knob)
-        self.assertIn('roundBar = true', knob)
+        self.assertIn('76 * dp', knob)
+        self.assertIn('52 * dp', knob)
+        self.assertIn('InsetDrawable(glass,inset)', knob)
+        self.assertIn('kernelButton = true', knob)
+        self.assertIn('pressMotion(glass)', knob)
+        self.assertNotIn('roundBar = true', knob)
+
+    def test_content_is_composited_after_native_decoration_and_sampled_by_lens(self):
+        self.assertIn('getDeclaredMethod("dispatchDraw", Canvas::class.java)', LOOKS)
+        self.assertIn('drawKernelContent(chain.getArg(0) as Canvas)', LOOKS)
+        self.assertIn('dispatchTabs.invoke(tab,tc)', KERNEL)
+        self.assertIn('cc.drawRenderNode(tabContent)', KERNEL)
+        self.assertIn('ic.drawRenderNode(combined)', KERNEL)
+        self.assertIn('PorterDuff.Mode.SRC_IN', KERNEL)
+        for forbidden in ('host.scaleX =', 'host.scaleY =', 'tab.scaleX =', 'tab.scaleY =', 'it.translationX ='):
+            self.assertNotIn(forbidden, KERNEL)
+        self.assertIn('drawAt(canvas, indicator, rect.left-pad, rect.top-pad)', KERNEL)
+        self.assertIn('sh.drawRect(0f,0f,tw+2*pad,56*dp+2*pad,paint)', KERNEL)
+
+    def test_badge_alignment_does_not_mix_window_and_local_coordinates(self):
+        body = LOOKS.split('hook(badge.getDeclaredMethod("onLayout"',1)[1].split('// 底栏纯数字',1)[0]
+        self.assertNotIn('getLocationInWindow',body)
+        self.assertNotIn('view.translationX = 0f',body)
+        self.assertIn('parent.transformMatrixToLocal(transform)',body)
+        self.assertIn('textAlign = Paint.Align.CENTER',LOOKS)
+
+    def test_backdrop_uses_a_single_full_coordinate_transform(self):
+        glass = (ROOT / 'app/src/main/kotlin/sumicya/qself/Glass.kt').read_text()
+        body = glass.split('private inline fun paint(',1)[1].split('private fun isBehind',1)[0]
+        self.assertIn('v.transformMatrixToGlobal(transform)',body)
+        self.assertIn('host.transformMatrixToLocal(transform)',body)
+        self.assertNotIn('rc.concat(v.matrix)',body)
+        self.assertNotIn('there[0] - here[0]',body)
+        self.assertIn('if (!background) rc.translate',body)

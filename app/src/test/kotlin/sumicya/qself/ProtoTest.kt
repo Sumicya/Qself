@@ -10,6 +10,33 @@ import org.junit.Test
 
 /** 纯逻辑回归检查：防撤回 protobuf 判断与 99+ 精确数字替换条件。 */
 class ProtoTest {
+    @Test fun badgeCenterUsesParentUnitsAndIsIdempotentAcrossWindowScales() {
+        // 模型验证局部量，不冒充 Android Matrix/GPU 测试。
+        for (scale in listOf(.7f,1f,1.12f,2f,-1f)) {
+            for (width in listOf(8f,28f,96f)) {
+                val anchor = 118f
+                val left = 143f
+                var translation = 0f
+                repeat(20) {
+                    val anchorWindow = 231f+scale*anchor
+                    val centerWindow = 231f+scale*(left+width/2+translation)
+                    translation = centeredBadgeTranslation(translation,(anchorWindow-231f)/scale,(centerWindow-231f)/scale)
+                    assertTrue(kotlin.math.abs(left+width/2+translation-anchor) < .0001f)
+                }
+            }
+        }
+        assertEquals(12f,centeredBadgeTranslation(12f,Float.NaN,4f))
+    }
+
+    @Test fun kernelSpringDoesNotDiscardTimeAfterAStalledFrame() {
+        val once = KernelSpring(.7f,250f)
+        val split = KernelSpring(.7f,250f)
+        once.target = 1f; split.target = 1f
+        once.step(.12f); repeat(2) { split.step(.06f) }
+        assertTrue(kotlin.math.abs(once.value-split.value) < .00001f)
+        assertTrue(kotlin.math.abs(once.velocity-split.velocity) < .00001f)
+    }
+
     @Test fun badgeBindingRetainsRealCountBeforeSetRedTextResetsIt() {
         val original = arrayOf<Any?>(null, 3, 12345, 99, "")
         val fixed = unclampedBadgeArgs(original)
