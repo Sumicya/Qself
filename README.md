@@ -7,7 +7,7 @@
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
 但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，176 条）——换版本先看那张表红哪条，别猜。
 
-## 做了什么
+## 功能
 
 外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
 - 首页底栏浮成一颗居中的液态玻璃胶囊（每个页签 76dp，只包住页签）：不模糊，系统 `RenderEffect` + AGSL 做边缘折射、
@@ -40,7 +40,7 @@
 - 灯塔 (beacon) 与 StatisticCollector 的统计上报空转
 - 不初始化崩溃上报
 
-## 用
+## 安装与使用
 
 1. Actions 里下载最新一次构建的 APK（或 `gh run download -R Sumicya/Qself`），安装
 2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开
@@ -51,7 +51,7 @@
    —— ✗ 就是那个功能在这版 QQ 里找不到落点，其余不受影响。**把这一行贴回来就能修。**
 5. 之后换 APK 直接覆盖安装；当前仓库不保存正式签名私钥，正式签名 APK 不能从本仓库自动推导。
 
-## 结构
+## 构建
 
 ```
 app/src/main/kotlin/sumicya/qself/
@@ -71,7 +71,7 @@ tools/dexq.py        最小反汇编器：按签名找落点（上游用 DexKit 
 ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
 ```
 
-## 核落点
+## 项目限制
 
 ```sh
 git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
@@ -79,4 +79,8 @@ python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 176 条�
 python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
 ```
 
+## 许可证
+
 GPL-3.0-or-later。源自 [QAuxiliary](https://github.com/cinit/QAuxiliary)，只留了思路，代码全部重写。
+
+遵循 [Sumicya/selfs](https://github.com/Sumicya/selfs) 最新 GLOBAL.md。
