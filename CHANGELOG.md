@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-18 — 统一取号命令时区写法与许可证章节
+
+- 出包工作流的两条日期命令改用 UTC+8 固定偏移，保留原日期格式、提交计数、校验与上传逻辑。
+- README 的 GPL 许可证段落独立为「许可证」二级章节，放在末行规范指针之前；正文及其他章节保持不变。
+
 ## 2026-10-17 — 底栏数字上移半个字形高度
 
 - 用 QQ 当前字体测量数字字形高度，将角标整体上移一半，保留水平中心、字号和正常透镜形变；从原始位置计算，重复布局不累积。
@@ -38,11 +43,3 @@
 - 清理只留一份逻辑 `.github/scripts/cleanup.py`：新增 `CLEANUP_SCOPE`（`actions` 默认、`releases`）。Release 与 tag 清理由 build.yml 里内联的 Python 改为调用该脚本的 releases 档，并补上「无保留 Release 对应的 `Qself-` tag 一并删」；tag 删除改走 `git/refs/tags/` 路径。三个清理作业共用并发组 `qself-cleanup`；写权限仍分开授：actions 档 `actions: write` + `contents: read`，releases 档只 `contents: write`，releases 作业 checkout 不留凭据（`persist-credentials: false`）。
 - CHANGELOG 只留最新 5 条，更早 27 条原样移入 `bad/CHANGELOG-history.md`。
 - 验证：清理脚本测试 10 项通过（含 releases 档新增 5 项）；两个工作流 YAML 可解析、各作业权限与并发组符合上述设计。未在 GitHub Actions 上运行，Release / tag 的删除端点尚未实测。
-
-## 2026-10-16 — 根据实测失败自查底栏接线和尺寸
-
-- 上一版漏查 BottomBarMiuix.kt 调用处 defaultMinSize(76.dp)，错误保留 56dp 页签宽，导致 56×56 圆形；修正为 76dp 起，各可见页签随最长数字共同扩展。
-- 普通 DOWN 原先不直接触发按压，只有横移超过阈值才显式启动；按压还依赖 QQ 子视图 pressed 和原生内容页绑定。现在用实际 DOWN/UP/CANCEL 驱动，取消 pressed 轮询；内容页绑定失败只禁用纵滑交接，不再禁掉按压/横拖。徽标原生拖动/长按保留，视觉反馈也接入；纵滑接管、多指、取消和分离均释放按压。
-- 扩展背景绘制层边界、关闭并还原页签条裁切；整行内容缩放；按上游分两层画静止黑/白与按压黑色，修正暗色按压错误用白色。InteractiveHighlight 改用原 smoothstep AGSL，不再以线性 RadialGradient 近似；CI 编译增加为五份 shader。
-- 旁边 52dp 圆钮仍是原有 Qself 设置入口，不是 KernelSU 组件；材质不变，只修正排布避让，给按压扩张和速度形变留空间。放不下时仍按原规则置于右上方。
-- 本地 41 项 Kotlin、32 项工具、5 项清理逻辑测试通过；真 QQ DEX 与绑定路径另行核验。无设备，不能把源码纠错和测试通过说成实测已修复或整体一比一完成。

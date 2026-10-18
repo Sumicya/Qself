@@ -82,14 +82,14 @@ jobs:
             exit 1
           fi
           head_sha="$(git rev-parse HEAD)"
-          since="$(TZ=Asia/Shanghai date +%F)T00:00:00+08:00"
+          since="$(date -u -d '+8 hours' +%F)T00:00:00+08:00"
           if ! total="$(git rev-list --count HEAD)"; then echo "取不到总序号" >&2; exit 1; fi
           if ! daily="$(git rev-list --count --since="$since" HEAD)"; then echo "取不到当日序号" >&2; exit 1; fi
           [ -n "$total" ] && [ -n "$daily" ] || { echo "取号为空：total=$total daily=$daily" >&2; exit 1; }
           case "$total$daily" in *[!0-9]*) echo "取号含非数字：total=$total daily=$daily" >&2; exit 1;; esac
           [ "$total" -ge 1 ] || { echo "总序号小于 1：$total" >&2; exit 1; }
           # head 提交不在当日（UTC+8）时当日序号就是 0（重出旧提交的包），不写 1 冒充当日首包。
-          day="$(TZ=Asia/Shanghai date +%y.%-m.%-d)"
+          day="$(date -u -d '+8 hours' +%y.%-m.%-d)"
           version="$day.$daily.$total"
           echo "取号启动行：head=$head_sha 总序号=$total 当日序号=$daily 日期段=$day 版本=$version"
           echo "取号命令原文：git rev-list --count HEAD ／ git rev-list --count --since=\"$since\" HEAD"
