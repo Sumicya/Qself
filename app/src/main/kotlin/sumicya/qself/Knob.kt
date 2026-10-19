@@ -270,16 +270,8 @@ private fun sheet(anchor: View) {
     val ink = if (night()) 0xFFF2F2F7.toInt() else 0xFF1C1C1E.toInt()
     val sub = if (night()) 0xFF98989E.toInt() else 0xFF6E6E73.toInt()
     val dim = FrameLayout(ctx).apply { tag = SHEET; alpha = 0f }
-    val card = object : LinearLayout(ctx) {
-        override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-            val glass = background as? Glass
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> glass?.kernelTouchDown(event.x, event.y)
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> glass?.kernelTouchEnd()
-            }
-            return super.dispatchTouchEvent(event)
-        }
-    }.apply {
+    // 面板只提供玻璃材质；按压反馈由各项自己的状态背景负责，不能驱动整卡高亮。
+    val card = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL; isClickable = true
         val radius = 22 * dp
         background = Glass(this, radius, kernelSurface = true); outlineProvider = capsule(radius); clipToOutline = true

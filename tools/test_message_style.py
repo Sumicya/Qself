@@ -16,19 +16,23 @@ class MessageStyleContractTest(unittest.TestCase):
             self.assertIn('getDeclaredMethod', line)
             self.assertIn('isAccessible = true', line)
 
-    def test_icon_has_intrinsic_size_and_panel_highlight_uses_real_dispatch(self):
+    def test_icon_has_intrinsic_size_and_panel_never_highlights_as_one_item(self):
         self.assertIn('val glyphSize = (24*dp)', MENU)
         self.assertIn('override fun getIntrinsicWidth() = intrinsic', MENU)
         self.assertIn('override fun getIntrinsicHeight() = intrinsic', MENU)
-        self.assertIn('override fun dispatchTouchEvent(event: MotionEvent)', MENU)
-        self.assertIn('glass?.kernelTouchDown(event.x, event.y)', MENU)
-        self.assertIn('return super.dispatchTouchEvent(event)', MENU)
-        self.assertIn('MotionEvent.ACTION_CANCEL', MENU)
+        sheet = MENU.split('private fun sheet(', 1)[1]
+        self.assertNotIn('kernelTouchDown', sheet)
+        self.assertNotIn('override fun dispatchTouchEvent', sheet)
+        self.assertIn('background = menuPress(dp)', sheet)
+        self.assertIn('kernelSurface = true', sheet)
 
     def test_timestamp_is_an_overlay_not_appended_to_copyable_message(self):
         stamp = STYLE.split('private class MessageStamp(', 1)[1].split('fun messageTimestamps()', 1)[0]
         self.assertIn('v.overlay.add(this)', stamp)
         self.assertIn('vertical + line', stamp)
+        self.assertIn('side = (10 * v.dp)', stamp)
+        self.assertIn('vertical = (6 * v.dp)', stamp)
+        self.assertIn('v.height - v.paddingBottom', stamp)
         self.assertNotIn('v.text =', stamp)
         self.assertIn('it.minimumWidth = minimum', stamp)
         self.assertIn('removeOnLayoutChangeListener(this)', stamp)

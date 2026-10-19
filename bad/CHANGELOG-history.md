@@ -1,3 +1,10 @@
+## 2026-10-16 — 迁移 AGENTS.md，清理逻辑并成一份脚本
+
+- 按规范 S3 删除 AGENTS.md：仍有用的项目限制（ponytail 写法、输入栏与头像约束、找落点的方法、做不到的清单）迁入 README「项目限制」，构建说明并入「构建」；全局规则不复制，README 末行留规范指针。README 按 S1 重排为 要求 → 功能 → 安装与使用 → 构建 → 项目限制。
+- 清理只留一份逻辑 `.github/scripts/cleanup.py`：新增 `CLEANUP_SCOPE`（`actions` 默认、`releases`）。Release 与 tag 清理由 build.yml 里内联的 Python 改为调用该脚本的 releases 档，并补上「无保留 Release 对应的 `Qself-` tag 一并删」；tag 删除改走 `git/refs/tags/` 路径。三个清理作业共用并发组 `qself-cleanup`；写权限仍分开授：actions 档 `actions: write` + `contents: read`，releases 档只 `contents: write`，releases 作业 checkout 不留凭据（`persist-credentials: false`）。
+- CHANGELOG 只留最新 5 条，更早 27 条原样移入 `bad/CHANGELOG-history.md`。
+- 验证：清理脚本测试 10 项通过（含 releases 档新增 5 项）；两个工作流 YAML 可解析、各作业权限与并发组符合上述设计。未在 GitHub Actions 上运行，Release / tag 的删除端点尚未实测。
+
 ## 2026-10-16 — 根据实测失败自查底栏接线和尺寸
 
 - 上一版漏查 BottomBarMiuix.kt 调用处 defaultMinSize(76.dp)，错误保留 56dp 页签宽，导致 56×56 圆形；修正为 76dp 起，各可见页签随最长数字共同扩展。

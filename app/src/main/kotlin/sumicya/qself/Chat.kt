@@ -531,7 +531,7 @@ private class RunRow(val run: RunBinding, val layout: RunLayout) {
 private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObserver.OnPreDrawListener,
     View.OnAttachStateChangeListener {
     private val rows = WeakHashMap<View, RunRow>()
-    private class Face(val group: RunKey, val view: View, val target: View,
+    private class Face(val group: RunKey, val binding: RunBinding, val view: View, val target: View,
         val matrix: Matrix, val toTarget: Matrix, val rect: RectF)
     private var faces = emptyList<Face>()
     private var viewport = Rect()
@@ -584,12 +584,13 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
         // 只在几何/内容变化时失效，静止时不制造无穷刷新循环。
         val changed = viewport != clip || next.size != faces.size || next.indices.any { i ->
             val old = faces[i]; val new = next[i]
-            old.view !== new.view || old.target !== new.target || old.matrix != new.matrix || new.view.isDirty
+            old.view !== new.view || old.target !== new.target || old.binding !== new.binding ||
+                old.group != new.group || old.matrix != new.matrix || new.view.isDirty
         }
         faces = next
         viewport = Rect(clip)
         pressed?.let { old ->
-            val current = next.firstOrNull { it.target === old.target }
+            val current = next.firstOrNull { it.target === old.target && it.binding === old.binding && it.group == old.group }
             if (current == null) cancelPressed() else pressed = current
         }
         if (changed) invalidateSelf()
@@ -662,12 +663,13 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
                 val inverse = Matrix()
                 if (!targetMatrix.invert(inverse)) continue
                 rect.offset(0f, delta)
-                face = Face(key, image, container, matrix, inverse, rect)
+                val binding = group.first { state -> avatar in state.layout.avatars }.run
+                face = Face(key, binding, image, container, matrix, inverse, rect)
                 break
             }
             if (face == null) {
                 // 正文异步切换的一帧沿用本组上次有效位置，不能恢复到 QQ 的行顶位置。
-                val old = faces.firstOrNull { previous -> previous.group == key && avatars.any {
+                val old = faces.firstOrNull { previous -> previous.group == key && isCurrent(previous) && avatars.any {
                     it.image.get() === previous.view && it.visibility.native == View.VISIBLE
                 } }
                 if (old != null && old.view.isAttachedToWindow) {
@@ -682,7 +684,7 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
                         val inverse = Matrix()
                         if (targetMatrix.invert(inverse)) {
                             source.offset(0f, delta)
-                            face = Face(key, old.view, old.target, matrix, inverse, source)
+                            face = Face(key, old.binding, old.view, old.target, matrix, inverse, source)
                         }
                     }
                 }
@@ -694,8 +696,16 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
         commitFrame(next, clip)
         return true
     }
+    // RecyclerView 可在两次 pre-draw 之间重绑；绘制与每个触摸事件都核对绑定身份。
+    private fun isCurrent(face: Face): Boolean = face.binding.valid && face.binding.group == face.group &&
+        face.view.isAttachedToWindow && face.target.isAttachedToWindow && rows.values.any { state ->
+            state.run === face.binding && state.layout.avatars.any {
+                it.image.get() === face.view && it.container.get() === face.target
+            }
+        }
     override fun draw(canvas: Canvas) {
         for (face in faces) {
+            if (!isCurrent(face)) continue
             val save = canvas.save()
             canvas.clipRect(viewport)
             canvas.concat(face.matrix)
@@ -713,7 +723,7 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
     fun touch(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             if (!on("连发合并")) return false
-            pressed = faces.lastOrNull { viewport.contains(event.x.toInt(), event.y.toInt()) && it.rect.contains(event.x, event.y) }
+            pressed = faces.lastOrNull { isCurrent(it) && viewport.contains(event.x.toInt(), event.y.toInt()) && it.rect.contains(event.x, event.y) }
             tracking = pressed != null
             downX = event.x; downY = event.y; dragging = false
         }
@@ -724,7 +734,7 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
             cancelPressed(); dragging = true
         }
         host.onTouchEvent(event)
-        if (!on("连发合并")) cancelPressed()
+        if (!on("连发合并") || pressed?.let { !isCurrent(it) } == true) cancelPressed()
         val move = kotlin.math.abs(event.x - downX) > slop || kotlin.math.abs(event.y - downY) > slop ||
             event.actionMasked == MotionEvent.ACTION_POINTER_DOWN
         if (!dragging && move) { cancelPressed(); dragging = true }

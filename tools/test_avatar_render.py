@@ -74,6 +74,20 @@ class AvatarRenderContractTest(unittest.TestCase):
         self.assertIn('if (face != null) { avatars.forEach { it.hide() }; next.add(face) }', fallback)
         self.assertIn('else avatars.forEach { it.restore() }', fallback)
 
+    def test_recycled_views_cannot_continue_a_different_binding_or_group(self):
+        frame = RENDER.split('private fun commitFrame(', 1)[1].split('override fun onPreDraw()', 1)[0]
+        self.assertIn('it.binding === old.binding && it.group == old.group', frame)
+        valid = RENDER.split('private fun isCurrent(', 1)[1].split('override fun draw(', 1)[0]
+        for check in ('face.binding.valid', 'face.binding.group == face.group',
+                      'state.run === face.binding', 'it.image.get() === face.view',
+                      'it.container.get() === face.target', 'isAttachedToWindow'):
+            self.assertIn(check, valid)
+        draw = RENDER.split('override fun draw(', 1)[1].split('private fun cancelPressed()', 1)[0]
+        self.assertIn('if (!isCurrent(face)) continue', draw)
+        touch = RENDER.split('fun touch(', 1)[1].split('override fun onViewDetachedFromWindow', 1)[0]
+        self.assertIn('isCurrent(it) && viewport.contains', touch)
+        self.assertLess(touch.index('pressed?.let { !isCurrent(it) }'), touch.index('face.target.dispatchTouchEvent(copy)'))
+
     def test_native_interception_does_not_clear_velocity_before_up(self):
         body = RENDER.split('fun touch(', 1)[1].split('override fun onViewDetachedFromWindow', 1)[0]
         self.assertEqual(1, body.count('host.onInterceptTouchEvent(event)'))

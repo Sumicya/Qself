@@ -76,7 +76,7 @@ private class MessageStamp(view: TextView) : Drawable(), View.OnLayoutChangeList
         paint.textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 11f, v.resources.displayMetrics)
         paint.color = v.currentTextColor
         paint.alpha = (android.graphics.Color.alpha(v.currentTextColor) * .7f).toInt()
-        val side = (12 * v.dp).toInt(); val vertical = (8 * v.dp).toInt()
+        val side = (10 * v.dp).toInt(); val vertical = (6 * v.dp).toInt()
         val line = kotlin.math.ceil((paint.descent() - paint.ascent()).toDouble()).toInt() + (4 * v.dp).toInt()
         v.setPadding(side, vertical, side, vertical + line)
         v.minimumWidth = maxOf(minimum, (paint.measureText(label) + side * 2).toInt())
@@ -93,7 +93,7 @@ private class MessageStamp(view: TextView) : Drawable(), View.OnLayoutChangeList
         val text = TextUtils.ellipsize(label, paint, width, TextUtils.TruncateAt.END).toString()
         val x = if (v.layoutDirection == View.LAYOUT_DIRECTION_RTL) v.paddingLeft.toFloat()
             else v.width - v.paddingRight - paint.measureText(text)
-        canvas.drawText(text, x, v.height - 8 * v.dp - paint.descent(), paint)
+        canvas.drawText(text, x, v.height - v.paddingBottom + (4 * v.dp).toInt() - paint.ascent(), paint)
     }
     fun dispose() { restore(); view.get()?.removeOnLayoutChangeListener(this) }
     override fun setAlpha(alpha: Int) { paint.alpha = alpha; invalidateSelf() }
