@@ -26,6 +26,8 @@ import java.util.WeakHashMap
 
 internal const val TIME_PATTERN = "message_time_pattern"
 internal const val AVATAR_RADIUS = "avatar_radius_percent"
+internal const val TIME_FORMAT_GUIDE =
+    "格式码（左对齐显示）：yyyy/yy 年 · MM 月 · dd 日 · E 星期 · HH 24时 · hh 12时 · a 上下午 · mm 分 · ss 秒 · SSS 毫秒；文字用单引号包裹"
 internal fun validTimePattern(pattern: String): Boolean = pattern.length in 1..80 && pattern.none { it.isISOControl() } && runCatching {
     DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(Instant.EPOCH.atZone(ZoneId.systemDefault()))
 }.isSuccess
@@ -34,7 +36,8 @@ internal fun messageTime(seconds: Long, pattern: String, zone: ZoneId = ZoneId.s
         val fmt = if (validTimePattern(pattern)) pattern else "HH:mm"
         DateTimeFormatter.ofPattern(fmt, Locale.getDefault()).format(Instant.ofEpochSecond(seconds).atZone(zone)).take(120)
     }.getOrDefault("")
-internal fun avatarCorner(size: Int, percent: Int): Int = (size.coerceAtLeast(0) * percent.coerceIn(0, 50) / 100f).toInt()
+internal fun avatarCorner(size: Int, percent: Int): Int =
+    (size.coerceAtLeast(0) * percent.coerceIn(0, 50) / 100f).toInt()
 
 private fun messageRecord(item: Any?): Any? = item?.javaClass?.getMethod("getMsgRecord")?.invoke(item)
 private fun textViews(view: View): Sequence<TextView> = sequence {
@@ -64,6 +67,7 @@ private class MessageStamp(view: TextView) : Drawable(), View.OnLayoutChangeList
     private val view = WeakReference(view)
     private val padding = intArrayOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
     private var minimum = view.minimumWidth
+    private var origGravity = view.gravity
     private val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG)
     var seconds = 0L
     private var label = ""
@@ -72,12 +76,15 @@ private class MessageStamp(view: TextView) : Drawable(), View.OnLayoutChangeList
         view.get()?.let {
             padding[0] = it.paddingLeft; padding[1] = it.paddingTop; padding[2] = it.paddingRight; padding[3] = it.paddingBottom
             minimum = it.minimumWidth
+            origGravity = it.gravity
         }
     }
     fun restore() {
         view.get()?.let {
             it.overlay.remove(this)
-            it.setPadding(padding[0], padding[1], padding[2], padding[3]); it.minimumWidth = minimum
+            it.setPadding(padding[0], padding[1], padding[2], padding[3])
+            it.minimumWidth = minimum
+            it.gravity = origGravity
         }
     }
     fun apply() {
@@ -89,8 +96,9 @@ private class MessageStamp(view: TextView) : Drawable(), View.OnLayoutChangeList
         paint.textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 11f, v.resources.displayMetrics)
         paint.color = v.currentTextColor
         paint.alpha = (android.graphics.Color.alpha(v.currentTextColor) * .7f).toInt()
-        val side = (10 * v.dp).toInt(); val vertical = (6 * v.dp).toInt()
-        val line = kotlin.math.ceil((paint.descent() - paint.ascent()).toDouble()).toInt() + (4 * v.dp).toInt()
+        val side = (6 * v.dp).toInt(); val vertical = (4 * v.dp).toInt()
+        val line = kotlin.math.ceil((paint.descent() - paint.ascent()).toDouble()).toInt() + (2 * v.dp).toInt()
+        v.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
         v.setPadding(side, vertical, side, vertical + line)
         v.minimumWidth = maxOf(minimum, (paint.measureText(label) + side * 2).toInt())
         setBounds(0, 0, v.width, v.height)
@@ -104,9 +112,10 @@ private class MessageStamp(view: TextView) : Drawable(), View.OnLayoutChangeList
         if (!on("消息内时间") || label.isEmpty()) return
         val width = (v.width - v.paddingLeft - v.paddingRight).coerceAtLeast(0).toFloat()
         val text = TextUtils.ellipsize(label, paint, width, TextUtils.TruncateAt.END).toString()
-        val x = if (v.layoutDirection == View.LAYOUT_DIRECTION_RTL) v.paddingLeft.toFloat()
-            else v.width - v.paddingRight - paint.measureText(text)
-        canvas.drawText(text, x, v.height - v.paddingBottom + (4 * v.dp).toInt() - paint.ascent(), paint)
+        val x = if (v.layoutDirection == View.LAYOUT_DIRECTION_RTL)
+            (v.width - v.paddingRight - paint.measureText(text)).coerceAtLeast(0f)
+        else v.paddingLeft.toFloat()
+        canvas.drawText(text, x, v.height - v.paddingBottom + (2 * v.dp).toInt() - paint.ascent(), paint)
     }
     fun dispose() { restore(); view.get()?.removeOnLayoutChangeListener(this) }
     override fun setAlpha(alpha: Int) { paint.alpha = alpha; invalidateSelf() }
@@ -114,7 +123,7 @@ private class MessageStamp(view: TextView) : Drawable(), View.OnLayoutChangeList
     @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
-/** 非文本内容容器（图片、文件、语音、表情、卡片、视频）在 overlay 右下角绘制胶囊时间，不改动子 View 树。 */
+/** 非文本内容容器（图片、文件、语音、表情、卡片、视频）在 overlay 左下角绘制胶囊时间，不改动子 View 树。 */
 private class SurfaceStamp(view: View) : Drawable(), View.OnLayoutChangeListener {
     private val view = WeakReference(view)
     private val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG)
@@ -144,14 +153,16 @@ private class SurfaceStamp(view: View) : Drawable(), View.OnLayoutChangeListener
     override fun draw(canvas: Canvas) {
         val v = view.get() ?: return
         if (!on("消息内时间") || label.isEmpty() || v.width <= 0 || v.height <= 0) return
-        val padX = 6f * v.dp; val insetX = 6f * v.dp; val insetY = 4f * v.dp
+        val padX = 5f * v.dp; val insetX = 4f * v.dp; val insetY = 4f * v.dp
         val maxW = (v.width - 2f * insetX - 2f * padX).coerceAtLeast(0f)
         val text = TextUtils.ellipsize(label, paint, maxW, TextUtils.TruncateAt.END).toString()
         if (text.isEmpty()) return
         val textH = paint.descent() - paint.ascent()
         val pillW = paint.measureText(text) + 2f * padX
         val pillH = maxOf(17f * v.dp, textH + 5f * v.dp)
-        val left = if (v.layoutDirection == View.LAYOUT_DIRECTION_RTL) insetX else (v.width - insetX - pillW).coerceAtLeast(0f)
+        val left = if (v.layoutDirection == View.LAYOUT_DIRECTION_RTL)
+            (v.width - insetX - pillW).coerceAtLeast(0f)
+        else insetX.coerceAtMost((v.width - pillW).coerceAtLeast(0f))
         val top = (v.height - insetY - pillH).coerceAtLeast(0f)
         pill.set(left, top, left + pillW, top + pillH)
         val r = pillH / 2f
@@ -212,33 +223,116 @@ fun messageTimestamps() {
     }
 }
 
-private class AvatarCorners(view: View, val nativeRadius: Int, val nativeMode: Int,
-    private val setter: java.lang.reflect.Method) : View.OnLayoutChangeListener {
+private val inAioAvatarLoad = ThreadLocal<Boolean>()
+private class AvatarCorners(
+    view: View,
+    component: Any,
+    val nativeRadius: Int,
+    val nativeMode: Int,
+    private val setter: java.lang.reflect.Method,
+    private val loadAvatar: java.lang.reflect.Method,
+    private val msgField: java.lang.reflect.Field,
+    private val cacheField: java.lang.reflect.Field,
+) : View.OnLayoutChangeListener {
     private val view = WeakReference(view)
-    fun apply(enabled: Boolean = on("头像圆角")) {
+    private val component = WeakReference(component)
+    var loadedNoCircle = on("头像圆角")
+    var loadedSkipVas = loadedNoCircle && (store()?.getInt(AVATAR_RADIUS, 20) ?: 20) < 50
+    fun apply(enabled: Boolean = on("头像圆角"), allowReload: Boolean = true) {
         val v = view.get() ?: return
-        val radius = avatarCorner(minOf(v.width, v.height), store()?.getInt(AVATAR_RADIUS, 20) ?: 20)
-        // 真包 checkPathChanged 的 mode=1 分支调用四角等半径 addRoundRect；不是位掩码。
-        setter.invoke(v, if (enabled) radius else nativeRadius, if (enabled) 1 else nativeMode)
+        val percent = (store()?.getInt(AVATAR_RADIUS, 20) ?: 20).coerceIn(0, 50)
+        val wantNoCircle = enabled
+        val wantSkipVas = enabled && percent < 50
+        if (allowReload && inAioAvatarLoad.get() != true && (wantNoCircle != loadedNoCircle || wantSkipVas != loadedSkipVas)) {
+            component.get()?.let { comp ->
+                runCatching {
+                    val item = msgField.get(comp)
+                    if (item != null) {
+                        cacheField.set(comp, null)
+                        loadedNoCircle = wantNoCircle
+                        loadedSkipVas = wantSkipVas
+                        loadAvatar.invoke(comp, v.context, item)
+                    }
+                }
+            }
+        }
+        val size = minOf(v.width, v.height)
+        val radius = avatarCorner(size, percent)
+        // 真包 checkPathChanged 的 mode=1 分支调用四角等半径 addRoundRect；0%（90°直角）时置 0。
+        if (enabled) {
+            setter.invoke(v, radius, if (radius > 0) 1 else 0)
+        } else if (nativeMode == 0 && loadedNoCircle && size > 0) {
+            setter.invoke(v, size / 2, 1)
+        } else {
+            setter.invoke(v, nativeRadius, nativeMode)
+        }
         v.invalidate()
     }
-    override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) { apply() }
-    fun dispose() { apply(false); view.get()?.removeOnLayoutChangeListener(this) }
+    override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
+        apply(allowReload = false)
+    }
+    fun dispose() { apply(false, allowReload = false); view.get()?.removeOnLayoutChangeListener(this) }
 }
 private val corners = WeakHashMap<View, AvatarCorners>()
 fun customAvatarCorners() {
     val type = cls("com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent")
+    val msgItemType = cls("com.tencent.mobileqq.aio.msg.AIOMsgItem")
     val image = type.getDeclaredMethod("C1").apply { isAccessible = true }
+    val loadAvatar = type.getDeclaredMethod("K1", android.content.Context::class.java, msgItemType).apply { isAccessible = true }
+    val defaultFace = type.getDeclaredMethod("D1").apply { isAccessible = true }
+    val msgField = type.getDeclaredField("i").apply { isAccessible = true }
+    val cacheField = type.getDeclaredField("m").apply { isAccessible = true }
     val setter = cls("com.tencent.qqnt.base.widget.RoundRectImageView")
         .getDeclaredMethod("setCornerRadiusAndMode", Integer.TYPE, Integer.TYPE)
-    hook(type.getDeclaredMethod("d1", Integer.TYPE, cls("com.tencent.aio.data.msglist.a"), List::class.java), gated = false) { chain ->
-        val before = image.invoke(chain.thisObject) as? View
-        before?.let { corners.remove(it)?.dispose() }
-        chain.proceed().also {
-            val v = image.invoke(chain.thisObject) as? View ?: return@also
-            val state = AvatarCorners(v, v.get("mRadius") as Int, v.get("mRoundMode") as Int, setter)
-            corners[v] = state; v.addOnLayoutChangeListener(state); state.apply()
+    val metaBuilder = cls("com.tencent.qqnt.avatar.meta.b\$a")
+    val metaCircle = metaBuilder.getDeclaredMethod("m", java.lang.Boolean.TYPE)
+    val metaBuild = metaBuilder.getDeclaredMethod("b")
+    val optionBuilder = cls("com.tencent.qqnt.avatar.b\$a")
+    val optionVas = optionBuilder.getDeclaredMethod("i", cls("com.tencent.qqnt.avatar.i"))
+    val circleBitmap = cls("com.tencent.mobileqq.utils.BaseImageUtil").getDeclaredMethod(
+        "getCircleFaceBitmap", android.graphics.Bitmap::class.java, Integer.TYPE, Integer.TYPE
+    )
+    fun syncView(comp: Any) {
+        val v = image.invoke(comp) as? View ?: return
+        val existing = corners[v]
+        val state = if (existing != null) existing.also {
+            it.loadedNoCircle = on("头像圆角")
+            it.loadedSkipVas = it.loadedNoCircle && (store()?.getInt(AVATAR_RADIUS, 20) ?: 20) < 50
+        } else AvatarCorners(
+            v, comp, v.get("mRadius") as Int, v.get("mRoundMode") as Int,
+            setter, loadAvatar, msgField, cacheField,
+        ).also { corners[v] = it; v.addOnLayoutChangeListener(it) }
+        state.apply(allowReload = false)
+    }
+    // 普通聊天（J1=false）K1 走 FaceDrawableEngine 默认裁成 360° 圆形 Bitmap；开启头像圆角时切到 _no_circle 交给 RoundRectImageView 裁剪。
+    hook(metaBuild, gated = false) { chain ->
+        if (inAioAvatarLoad.get() == true && on("头像圆角")) {
+            metaCircle.invoke(chain.thisObject, false)
         }
+        chain.proceed()
+    }
+    hook(optionVas, gated = false) { chain ->
+        if (inAioAvatarLoad.get() == true && on("头像圆角") && (store()?.getInt(AVATAR_RADIUS, 20) ?: 20) < 50) {
+            chain.proceed(arrayOf<Any?>(null))
+        } else chain.proceed()
+    }
+    hook(circleBitmap, gated = false) { chain ->
+        if (inAioAvatarLoad.get() == true && on("头像圆角")) chain.getArg(0) else chain.proceed()
+    }
+    hook(defaultFace, gated = false) { chain ->
+        val prev = inAioAvatarLoad.get()
+        inAioAvatarLoad.set(true)
+        try { chain.proceed() } finally { if (prev == null) inAioAvatarLoad.remove() else inAioAvatarLoad.set(prev) }
+    }
+    hook(loadAvatar, gated = false) { chain ->
+        val prev = inAioAvatarLoad.get()
+        inAioAvatarLoad.set(true)
+        try {
+            chain.proceed().also { syncView(chain.thisObject) }
+        } finally { if (prev == null) inAioAvatarLoad.remove() else inAioAvatarLoad.set(prev) }
+    }
+    hook(type.getDeclaredMethod("d1", Integer.TYPE, cls("com.tencent.aio.data.msglist.a"), List::class.java), gated = false) { chain ->
+        chain.proceed().also { syncView(chain.thisObject) }
     }
 }
 
@@ -347,6 +441,7 @@ fun refreshMessageStyle() {
     }
     corners.values.toList().forEach { it.apply() }
     mentions.keys.toList().forEach(::applyMentions)
+    refreshChatLayout()
 }
 fun resetMessageStyle() {
     stamps.values.toList().forEach { it.dispose() }; stamps.clear()
@@ -354,5 +449,5 @@ fun resetMessageStyle() {
     timestampSlots.entries.toList().forEach { (slot, saved) -> slot.visibility = saved }; timestampSlots.clear()
     corners.values.toList().forEach { it.dispose() }; corners.clear()
     mentions.keys.toList().forEach { it.text = clearAtSpans(it) }
-    mentions.clear(); mentionDown.clear(); openMention = null
+    mentions.clear(); mentionDown.clear(); openMention = null; inAioAvatarLoad.remove()
 }

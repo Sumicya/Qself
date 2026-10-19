@@ -30,21 +30,26 @@ class MessageStyleContractTest(unittest.TestCase):
         stamp = STYLE.split('private class MessageStamp(', 1)[1].split('fun messageTimestamps()', 1)[0]
         self.assertIn('v.overlay.add(this)', stamp)
         self.assertIn('vertical + line', stamp)
-        self.assertIn('side = (10 * v.dp)', stamp)
-        self.assertIn('vertical = (6 * v.dp)', stamp)
+        self.assertIn('side = (6 * v.dp)', stamp)
+        self.assertIn('vertical = (4 * v.dp)', stamp)
+        self.assertIn('v.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL', stamp)
+        self.assertIn('else v.paddingLeft.toFloat()', stamp)
         self.assertIn('v.height - v.paddingBottom', stamp)
         self.assertNotIn('v.text =', stamp)
         self.assertIn('it.minimumWidth = minimum', stamp)
         self.assertIn('removeOnLayoutChangeListener(this)', stamp)
-        bind = STYLE.split('fun messageTimestamps()', 1)[1].split('private class AvatarCorners', 1)[0]
+        bind = STYLE.split('fun messageTimestamps()', 1)[1].split('private val inAioAvatarLoad', 1)[0]
         self.assertLess(bind.index('?.restore()'), bind.index('chain.proceed()'))
         self.assertIn('gated = false', bind)
 
     def test_avatar_radius_uses_native_roundrect_and_restores_saved_values(self):
         self.assertIn('"setCornerRadiusAndMode", Integer.TYPE, Integer.TYPE', STYLE)
-        self.assertIn('if (enabled) radius else nativeRadius', STYLE)
-        self.assertIn('if (enabled) 1 else nativeMode', STYLE)
-        self.assertIn('corners.remove(it)?.dispose()', STYLE)
+        self.assertIn('com.tencent.qqnt.avatar.meta.b\\$a', STYLE)
+        self.assertIn('com.tencent.qqnt.avatar.b\\$a', STYLE)
+        self.assertIn('getCircleFaceBitmap', STYLE)
+        self.assertIn('setter.invoke(v, radius, if (radius > 0) 1 else 0)', STYLE)
+        self.assertIn('setter.invoke(v, nativeRadius, nativeMode)', STYLE)
+        self.assertIn('TIME_FORMAT_GUIDE', MENU)
 
     def test_mentions_do_not_replace_native_movement_or_long_press(self):
         self.assertNotIn('movementMethod =', STYLE)

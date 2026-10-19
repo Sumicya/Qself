@@ -139,6 +139,29 @@ RULES.update({
     ('com.tencent.mobileqq.aio.msglist.holder.component.reply.AIOReplyComponent', 'C2', 'V com.tencent.mobileqq.aio.msglist.holder.skin.AIOBubbleSkinInfo'): (
         {'android.widget.LinearLayout$LayoutParams#leftMargin:I', 'android.widget.LinearLayout$LayoutParams#topMargin:I'},
         {'android.graphics.drawable.Drawable#mutate'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent', 'K1', 'V android.content.Context,com.tencent.mobileqq.aio.msg.AIOMsgItem'): (
+        {'com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent#m:java.lang.Object'},
+        {'com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent#C1', 'com.tencent.qqnt.avatar.b$a#i'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent', 'D1', 'android.graphics.drawable.Drawable '): (
+        set(), {'com.tencent.mobileqq.utils.BaseImageUtil#getCircleFaceBitmap'}),
+    ('com.tencent.qqnt.avatar.meta.b$a', 'm', 'com.tencent.qqnt.avatar.meta.b$a Z'): (
+        {'com.tencent.qqnt.avatar.meta.b$a#g:Z'}, set()),
+    ('com.tencent.qqnt.avatar.meta.b$a', 'b', 'com.tencent.qqnt.avatar.meta.b '): (
+        set(), {'com.tencent.qqnt.avatar.meta.b#<init>'}),
+    ('com.tencent.qqnt.avatar.b$a', 'i', 'V com.tencent.qqnt.avatar.i'): (
+        {'com.tencent.qqnt.avatar.b$a#f:com.tencent.qqnt.avatar.i'}, set()),
+    ('com.tencent.mobileqq.aio.msg.TextMsgContent', 'H', 'V com.tencent.mobileqq.aio.msg.ai'): (
+        {'com.tencent.mobileqq.aio.msg.TextMsgContent#e:com.tencent.fastertextview.wrapper.a'},
+        {'com.tencent.mobileqq.aio.msg.TextMsgContent#v', 'com.tencent.mobileqq.aio.msg.TextMsgContent#w'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.skin.padding.j', 'a', 'com.tencent.mobileqq.aio.msglist.holder.skin.padding.a com.tencent.mobileqq.aio.msg.AIOMsgItem'): (
+        {'com.tencent.mobileqq.aio.msglist.holder.skin.padding.j#a:I', 'com.tencent.mobileqq.aio.msglist.holder.skin.padding.j#b:I'},
+        {'com.tencent.mobileqq.aio.msg.AIOMsgItem#isSelf'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.template.g', 'q', 'V Z'): (
+        {'com.tencent.mobileqq.aio.msglist.holder.template.g#a:sm1.h'},
+        {'android.view.ViewGroup$MarginLayoutParams#setMarginStart', 'android.view.ViewGroup$MarginLayoutParams#setMarginEnd'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.template.l', 'q', 'V Z'): (
+        {'com.tencent.mobileqq.aio.msglist.holder.template.l#a:sm1.r'},
+        {'android.view.ViewGroup$MarginLayoutParams#setMarginEnd'}),
 })
 
 

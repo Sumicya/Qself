@@ -603,29 +603,46 @@ private fun sheet(anchor: View) {
     }
     grid.addView(TextView(ctx).apply {
         text = "消息外观"; textSize = 15f; setTextColor(ink)
-        setPadding((6 * dp).toInt(), (16 * dp).toInt(), 0, (8 * dp).toInt())
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (16 * dp).toInt(), 0, (6 * dp).toInt())
     })
     val format = android.widget.EditText(ctx).apply {
         setText(prefs.getString(TIME_PATTERN, "HH:mm")); textSize = 14f; setTextColor(ink)
         hint = "时间格式，例如 MM-dd HH:mm:ss"; setHintTextColor(sub); isSingleLine = true
+        gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
         filters = arrayOf(android.text.InputFilter.LengthFilter(80))
         contentDescription = "消息内时间格式"
     }
     grid.addView(format)
+    grid.addView(TextView(ctx).apply {
+        text = TIME_FORMAT_GUIDE
+        textSize = 11.5f; setTextColor(sub)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (2 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
+    })
     grid.addView(button("保存时间格式") {
         val value = format.text.toString()
         if (!validTimePattern(value)) format.error = "格式无效，例如 HH:mm 或 MM-dd HH:mm:ss"
         else { prefs.edit().putString(TIME_PATTERN, value).apply(); refreshMessageStyle(); format.error = null }
     })
-    val cornerLabel = TextView(ctx).apply { textSize = 13f; setTextColor(ink) }
+    val cornerLabel = TextView(ctx).apply {
+        textSize = 13f; setTextColor(ink)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+    }
     grid.addView(cornerLabel)
     val radiusSeek = android.widget.SeekBar(ctx).apply {
         max = 50; progress = (prefs.getInt(AVATAR_RADIUS, 20)).coerceIn(0, 50)
-        cornerLabel.text = "头像圆角：$progress%（0 为直角，50 为圆形）"
+        cornerLabel.text = "头像与右圆角：$progress%（0% 为 90°直角不圆角，50% 为圆形）"
         contentDescription = "头像圆角百分比"
         setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(bar: android.widget.SeekBar, value: Int, user: Boolean) {
-                cornerLabel.text = "头像圆角：$value%（0 为直角，50 为圆形）"
+                cornerLabel.text = "头像与右圆角：$value%（0% 为 90°直角不圆角，50% 为圆形）"
             }
             override fun onStartTrackingTouch(bar: android.widget.SeekBar) = Unit
             override fun onStopTrackingTouch(bar: android.widget.SeekBar) {

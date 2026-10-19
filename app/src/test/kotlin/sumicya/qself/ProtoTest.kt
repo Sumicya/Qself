@@ -549,23 +549,43 @@ class ProtoTest {
     }
 
     @Test fun nagramBubbleCornersAndRowMarginsFollowDirectionAndRunEdges() {
-        assertEquals(BubbleCornerRadii(17, 17, 17, 17), nagramBubbleRadii(self = false, continued = false, continues = false, density = 1f))
-        assertEquals(BubbleCornerRadii(17, 17, 17, 6), nagramBubbleRadii(self = false, continued = false, continues = true, density = 1f))
-        assertEquals(BubbleCornerRadii(6, 17, 17, 6), nagramBubbleRadii(self = false, continued = true, continues = true, density = 1f))
-        assertEquals(BubbleCornerRadii(6, 17, 17, 17), nagramBubbleRadii(self = false, continued = true, continues = false, density = 1f))
-        assertEquals(BubbleCornerRadii(17, 17, 6, 17), nagramBubbleRadii(self = true, continued = false, continues = true, density = 1f))
-        assertEquals(BubbleCornerRadii(17, 6, 6, 17), nagramBubbleRadii(self = true, continued = true, continues = true, density = 1f))
-        assertEquals(BubbleCornerRadii(17, 6, 17, 17), nagramBubbleRadii(self = true, continued = true, continues = false, density = 1f))
+        assertEquals(BubbleCornerRadii(0, 17, 17, 0), nagramBubbleRadii(self = false, continued = false, continues = false, density = 1f))
+        assertEquals(BubbleCornerRadii(0, 17, 6, 0), nagramBubbleRadii(self = false, continued = false, continues = true, density = 1f))
+        assertEquals(BubbleCornerRadii(0, 6, 6, 0), nagramBubbleRadii(self = false, continued = true, continues = true, density = 1f))
+        assertEquals(BubbleCornerRadii(0, 6, 17, 0), nagramBubbleRadii(self = false, continued = true, continues = false, density = 1f))
+        assertEquals(BubbleCornerRadii(0, 17, 6, 0), nagramBubbleRadii(self = true, continued = false, continues = true, density = 1f))
+        assertEquals(BubbleCornerRadii(0, 6, 6, 0), nagramBubbleRadii(self = true, continued = true, continues = true, density = 1f))
+        assertEquals(BubbleCornerRadii(0, 6, 17, 0), nagramBubbleRadii(self = true, continued = true, continues = false, density = 1f))
+        assertEquals(BubbleCornerRadii(0, 0, 0, 0), nagramBubbleRadii(self = false, continued = false, continues = false, density = 1f, cornerPercent = 0))
+        assertEquals(BubbleCornerRadii(0, 0, 0, 0), nagramBubbleRadii(self = true, continued = true, continues = true, density = 1f, cornerPercent = 0))
+        assertEquals(BubbleCornerRadii(0, 12, 12, 0), nagramBubbleRadii(self = false, continued = false, continues = false, density = 1f, cornerPercent = 20, heightPx = 24))
 
         val incoming = nagramRowMargins(self = false, density = 1f)
-        assertEquals(42, incoming.avatarWidth)
-        assertEquals(6, incoming.avatarMarginStart)
-        assertEquals(3, incoming.contentMarginStart)
-        assertEquals(51, incoming.avatarMarginStart + incoming.avatarWidth + incoming.contentMarginStart)
+        assertEquals(36, incoming.avatarWidth)
+        assertEquals(2, incoming.avatarMarginStart)
+        assertEquals(2, incoming.contentMarginStart)
+        assertEquals(4, incoming.contentMarginEnd)
+        assertEquals(40, incoming.avatarMarginStart + incoming.avatarWidth + incoming.contentMarginStart)
 
         val outgoing = nagramRowMargins(self = true, density = 1f)
-        assertEquals(0, outgoing.avatarWidth)
-        assertEquals(0, outgoing.avatarMarginStart)
-        assertEquals(6, outgoing.contentMarginEnd)
+        assertEquals(36, outgoing.avatarWidth)
+        assertEquals(2, outgoing.avatarMarginStart)
+        assertEquals(2, outgoing.contentMarginStart)
+        assertEquals(4, outgoing.contentMarginEnd)
+    }
+
+    @Test fun runAvatarScrollingMergeTakesPrecedenceOverCenteringAndTimeFormatGuideIsComplete() {
+        val tallSingle = runAvatarBounds(groupTop = 10f, groupBottom = 110f, firstCenter = 60f, lastCenter = 60f, height = 36f, merged = false)
+        assertEquals(28f to 92f, tallSingle)
+
+        val mergedRun = runAvatarBounds(groupTop = 10f, groupBottom = 90f, firstCenter = 25f, lastCenter = 75f, height = 36f, merged = true)
+        assertEquals(28f to 72f, mergedRun)
+
+        val shortSingle = runAvatarBounds(groupTop = 10f, groupBottom = 40f, firstCenter = 25f, lastCenter = 25f, height = 36f, merged = false)
+        assertEquals(25f to 25f, shortSingle)
+
+        for (token in listOf("yyyy", "MM", "dd", "E", "HH", "hh", "a", "mm", "ss", "SSS", "左对齐")) {
+            assertTrue(TIME_FORMAT_GUIDE.contains(token))
+        }
     }
 }
