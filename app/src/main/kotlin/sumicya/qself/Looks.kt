@@ -55,6 +55,7 @@ fun looks() {
         if (state == null || source == null) chain.proceed()
         else state.dispatch(source, chain.getArg(0) as MotionEvent) { event -> chain.proceed(arrayOf<Any?>(event)) as Boolean }
     }
+    nativeMessageMenu()
 }
 
 /** 三个输入均处于 badge.parent 的局部坐标；不把窗口像素直接写入 translationX。 */

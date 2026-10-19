@@ -42,11 +42,24 @@ private fun textViews(view: View): Sequence<TextView> = sequence {
     if (view is android.view.ViewGroup) for (i in 0 until view.childCount) yieldAll(textViews(view.getChildAt(i)))
 }
 private const val TEXT_COMPONENT = "com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent"
+private val CONTENT_COMPONENTS = arrayOf(
+    TEXT_COMPONENT,
+    "com.tencent.mobileqq.aio.msglist.holder.component.file.AIOFileContentComponent",
+    "com.tencent.mobileqq.aio.msglist.holder.component.pic.AIOPicContentComponent",
+    "com.tencent.mobileqq.aio.msglist.holder.component.reply.AIOReplyComponent",
+    "com.tencent.mobileqq.aio.msglist.holder.component.mix.AIOMixContentComponent",
+    "com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttContentComponent",
+    "com.tencent.mobileqq.aio.msglist.holder.component.marketface.AIOMarketFaceComponent",
+    "com.tencent.mobileqq.aio.msglist.holder.component.ark.AIOArkContentComponent",
+    "com.tencent.mobileqq.aio.msglist.holder.component.video.AIOVideoContentComponent",
+)
 private fun textBind() = cls(TEXT_COMPONENT).getDeclaredMethod("d1", Integer.TYPE,
     cls("com.tencent.aio.data.msglist.a"), List::class.java)
 private fun textRoot() = cls(TEXT_COMPONENT).getDeclaredMethod("f1")
 
 private val stamps = WeakHashMap<TextView, MessageStamp>()
+private val surfaceStamps = WeakHashMap<View, SurfaceStamp>()
+private val timestampSlots = WeakHashMap<View, Int>()
 private class MessageStamp(view: TextView) : Drawable(), View.OnLayoutChangeListener {
     private val view = WeakReference(view)
     private val padding = intArrayOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
@@ -101,18 +114,98 @@ private class MessageStamp(view: TextView) : Drawable(), View.OnLayoutChangeList
     @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
-/** 仅重绘已核实的普通文字正文；不改消息字符串、复制内容或输入框，不强套图片/卡片布局。 */
+/** 非文本内容容器（图片、文件、语音、表情、卡片、视频）在 overlay 右下角绘制胶囊时间，不改动子 View 树。 */
+private class SurfaceStamp(view: View) : Drawable(), View.OnLayoutChangeListener {
+    private val view = WeakReference(view)
+    private val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private val bgPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private val pill = android.graphics.RectF()
+    var seconds = 0L
+    private var label = ""
+    init { view.addOnLayoutChangeListener(this) }
+    fun restore() {
+        view.get()?.let { it.overlay.remove(this); it.invalidate() }
+    }
+    fun apply() {
+        val v = view.get() ?: return
+        restore()
+        if (!on("消息内时间")) return
+        label = messageTime(seconds, store()?.getString(TIME_PATTERN, "HH:mm") ?: "HH:mm")
+        if (label.isEmpty()) return
+        paint.textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 10f, v.resources.displayMetrics)
+        paint.color = 0xF2FFFFFF.toInt()
+        bgPaint.color = if (night()) 0x80000000.toInt() else 0x66000000
+        setBounds(0, 0, v.width, v.height)
+        v.overlay.add(this); invalidateSelf()
+    }
+    override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
+        setBounds(0, 0, v.width, v.height); invalidateSelf()
+    }
+    override fun draw(canvas: Canvas) {
+        val v = view.get() ?: return
+        if (!on("消息内时间") || label.isEmpty() || v.width <= 0 || v.height <= 0) return
+        val padX = 5f * v.dp; val padY = 2f * v.dp; val insetX = 6f * v.dp; val insetY = 4f * v.dp
+        val maxW = (v.width - 2f * insetX - 2f * padX).coerceAtLeast(0f)
+        val text = TextUtils.ellipsize(label, paint, maxW, TextUtils.TruncateAt.END).toString()
+        if (text.isEmpty()) return
+        val pillW = paint.measureText(text) + 2f * padX
+        val pillH = (paint.descent() - paint.ascent()) + 2f * padY
+        val left = if (v.layoutDirection == View.LAYOUT_DIRECTION_RTL) insetX else (v.width - insetX - pillW).coerceAtLeast(0f)
+        val top = (v.height - insetY - pillH).coerceAtLeast(0f)
+        pill.set(left, top, left + pillW, top + pillH)
+        val r = pillH / 2f
+        canvas.drawRoundRect(pill, r, r, bgPaint)
+        canvas.drawText(text, left + padX, top + padY - paint.ascent(), paint)
+    }
+    fun dispose() { restore(); view.get()?.removeOnLayoutChangeListener(this) }
+    override fun setAlpha(alpha: Int) { paint.alpha = alpha; bgPaint.alpha = alpha; invalidateSelf() }
+    override fun setColorFilter(filter: ColorFilter?) { paint.colorFilter = filter; bgPaint.colorFilter = filter; invalidateSelf() }
+    @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
+}
+
+/** 覆盖文字、图片、文件、引用、混排、语音、表情、卡片、视频的常显时间与顶部时间条折叠。 */
 fun messageTimestamps() {
-    val root = textRoot()
+    val component = cls("com.tencent.mobileqq.aio.msglist.holder.component.c")
+    val root = component.getMethod("f1")
+    val bubble = component.getMethod("h1")
+    val slot = component.getMethod("i1")
+    val msgItem = cls("com.tencent.mobileqq.aio.msglist.holder.component.BaseContentComponent").getMethod("M1")
+    val dataType = cls("com.tencent.aio.data.msglist.a")
     val bound = WeakHashMap<Any, List<WeakReference<TextView>>>()
-    hook(textBind(), gated = false) { chain ->
-        bound.remove(chain.thisObject)?.mapNotNull { it.get() }?.forEach { stamps[it]?.restore() }
+    val boundSurfaces = WeakHashMap<Any, WeakReference<View>>()
+    for (name in CONTENT_COMPONENTS) {
+        val bind = cls(name).getDeclaredMethod("d1", Integer.TYPE, dataType, List::class.java)
+        hook(bind, gated = false) { chain ->
+            bound.remove(chain.thisObject)?.mapNotNull { it.get() }?.forEach { stamps[it]?.restore() }
+            boundSurfaces.remove(chain.thisObject)?.get()?.let { surfaceStamps[it]?.restore() }
+            chain.proceed().also {
+                val body = root.invoke(chain.thisObject) as? View ?: return@also
+                val item = chain.args.getOrNull(1) ?: runCatching { msgItem.invoke(chain.thisObject) }.getOrNull()
+                val time = messageRecord(item)?.get("msgTime") as? Long ?: 0L
+                val views = textViews(body).toList()
+                if (views.isNotEmpty()) {
+                    bound[chain.thisObject] = views.map { WeakReference(it) }
+                    views.forEach { v -> stamps.getOrPut(v) { MessageStamp(v) }.also { it.captureNative(); it.seconds = time; it.apply() } }
+                } else {
+                    val surface = (runCatching { bubble.invoke(chain.thisObject) as? View }.getOrNull()) ?: body
+                    boundSurfaces[chain.thisObject] = WeakReference(surface)
+                    surfaceStamps.getOrPut(surface) { SurfaceStamp(surface) }.also { it.seconds = time; it.apply() }
+                }
+            }
+        }
+    }
+    val topStamp = cls("com.tencent.mobileqq.aio.msglist.holder.component.timestamp.AIOTimestampComponent")
+        .getDeclaredMethod("d1", Integer.TYPE, dataType, List::class.java)
+    hook(topStamp, gated = false) { chain ->
         chain.proceed().also {
-            val body = root.invoke(chain.thisObject) as? View ?: return@also
-            val views = textViews(body).toList()
-            bound[chain.thisObject] = views.map { WeakReference(it) }
-            val time = messageRecord(chain.getArg(1))?.get("msgTime") as? Long ?: 0L
-            views.forEach { v -> stamps.getOrPut(v) { MessageStamp(v) }.also { it.captureNative(); it.seconds = time; it.apply() } }
+            val view = runCatching { slot.invoke(chain.thisObject) as? View }.getOrNull() ?: return@also
+            val saved = timestampSlots.getOrPut(view) { view.visibility }
+            if (on("消息内时间")) {
+                if (view.visibility != View.GONE) timestampSlots[view] = view.visibility
+                view.visibility = View.GONE
+            } else if (view.visibility == View.GONE && saved != View.GONE) {
+                view.visibility = saved
+            }
         }
     }
 }
@@ -245,11 +338,18 @@ fun clickableMentions() {
 
 fun refreshMessageStyle() {
     stamps.values.toList().forEach { it.apply() }
+    surfaceStamps.values.toList().forEach { it.apply() }
+    timestampSlots.entries.toList().forEach { (slot, saved) ->
+        if (!slot.isAttachedToWindow) timestampSlots.remove(slot)
+        else slot.visibility = if (on("消息内时间")) View.GONE else saved
+    }
     corners.values.toList().forEach { it.apply() }
     mentions.keys.toList().forEach(::applyMentions)
 }
 fun resetMessageStyle() {
     stamps.values.toList().forEach { it.dispose() }; stamps.clear()
+    surfaceStamps.values.toList().forEach { it.dispose() }; surfaceStamps.clear()
+    timestampSlots.entries.toList().forEach { (slot, saved) -> slot.visibility = saved }; timestampSlots.clear()
     corners.values.toList().forEach { it.dispose() }; corners.clear()
     mentions.keys.toList().forEach { it.text = clearAtSpans(it) }
     mentions.clear(); mentionDown.clear(); openMention = null

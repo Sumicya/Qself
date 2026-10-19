@@ -64,6 +64,8 @@ RULES = {
 }
 
 FORWARD = 'com.tencent.mobileqq.activity.ForwardRecentActivity'
+MENU = 'com.tencent.qqnt.aio.menu.ui.QQCustomMenuExpandableLayout'
+BASE_CONTENT = 'com.tencent.mobileqq.aio.msglist.holder.component.BaseContentComponent'
 RULES.update({
     (FORWARD, 'getForwardTargetKey', 'java.lang.String java.lang.String,I'): (set(), {'java.lang.StringBuilder#toString'}),
     (FORWARD, 'setSearchSelectedAndJoinedUins', 'V '): (set(), {f'{FORWARD}#getSelectedUins', f'{FORWARD}#getJoinUins'}),
@@ -73,7 +75,34 @@ RULES.update({
     ('com.tencent.qqnt.base.widget.RoundRectImageView', 'setCornerRadiusAndMode', 'V I,I'):
         ({'com.tencent.qqnt.base.widget.RoundRectImageView#mRadius:I', 'com.tencent.qqnt.base.widget.RoundRectImageView#mRoundMode:I'}, set()),
     ('com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent', 'd1',
-     'V I,com.tencent.aio.data.msglist.a,java.util.List'): (set(), set()),
+     'V I,com.tencent.aio.data.msglist.a,java.util.List'): (set(), {f'{BASE_CONTENT}#d1'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.file.AIOFileContentComponent', 'd1',
+     'V I,com.tencent.aio.data.msglist.a,java.util.List'): (set(), {f'{BASE_CONTENT}#d1'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.pic.AIOPicContentComponent', 'd1',
+     'V I,com.tencent.aio.data.msglist.a,java.util.List'): (set(), {f'{BASE_CONTENT}#d1'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.reply.AIOReplyComponent', 'd1',
+     'V I,com.tencent.aio.data.msglist.a,java.util.List'): (set(), {f'{BASE_CONTENT}#d1'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.mix.AIOMixContentComponent', 'd1',
+     'V I,com.tencent.aio.data.msglist.a,java.util.List'): (set(), {f'{BASE_CONTENT}#d1'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttContentComponent', 'd1',
+     'V I,com.tencent.aio.data.msglist.a,java.util.List'): (set(), {f'{BASE_CONTENT}#d1'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.marketface.AIOMarketFaceComponent', 'd1',
+     'V I,com.tencent.aio.data.msglist.a,java.util.List'): (set(), {f'{BASE_CONTENT}#d1'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.ark.AIOArkContentComponent', 'd1',
+     'V I,com.tencent.aio.data.msglist.a,java.util.List'): (set(), {f'{BASE_CONTENT}#d1'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.video.AIOVideoContentComponent', 'd1',
+     'V I,com.tencent.aio.data.msglist.a,java.util.List'): (set(), {f'{BASE_CONTENT}#d1'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.timestamp.AIOTimestampComponent', 'd1',
+     'V I,com.tencent.aio.data.msglist.a,java.util.List'): (
+        set(), {'com.tencent.mobileqq.aio.msglist.holder.component.timestamp.AIOTimestampComponent#u1'}),
+    (MENU, 'p', 'android.view.View I,com.tencent.qqnt.aio.menu.ui.d,Z,[F'): (
+        set(), {'com.tencent.qqnt.aio.menu.ui.d#f', 'android.view.View#setOnClickListener', 'android.widget.TextView#setTextColor'}),
+    (MENU, 'l', 'android.widget.ImageView I'): (
+        set(), {'android.view.View#setOnClickListener', f'{MENU}#B'}),
+    (MENU, 'H', 'V '): (
+        {f'{MENU}#Q:android.widget.ScrollView', f'{MENU}#R:android.widget.LinearLayout'},
+        {f'{MENU}#removeAllViews'}),
+    (MENU, 'G', 'V '): (set(), {f'{MENU}#H'}),
     ('com.tencent.qqnt.aio.widget.SelectableTextView', 'onTouchEvent', 'Z android.view.MotionEvent'): (set(), set()),
 })
 
@@ -116,6 +145,8 @@ def verify(apk):
                     if key not in pending:
                         continue
                     if owner == FORWARD and method != 'setSearchSelectedAndJoinedUins':
+                        assert not flags & 1, (key, "非 public，运行时必须 declared + accessible", flags)
+                    if owner == MENU and method in ('p', 'l', 'H'):
                         assert not flags & 1, (key, "非 public，运行时必须 declared + accessible", flags)
                     if owner == 'com.tencent.qqnt.base.widget.RoundRectImageView' and method == 'checkPathChanged':
                         # 固定 QQ 9.2.10：const/4 v3,1；if-eq v2,v3 跳向四角等半径分支，而非把 mode 当位掩码。

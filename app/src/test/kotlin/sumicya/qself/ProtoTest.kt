@@ -463,6 +463,28 @@ class ProtoTest {
         assertEquals(emptyList<MentionRange>(), mentionRanges("plain", listOf(Triple("@甲", 12L, ""))))
     }
 
+    @Test fun menuTouchHitAndDangerClassificationFollowSingleItemAndOutsideCancel() {
+        val cells = listOf(
+            MenuItemBounds(0f, 0f, 60f, 56f),
+            MenuItemBounds(60f, 0f, 120f, 56f),
+            MenuItemBounds(0f, 56f, 60f, 112f),
+        )
+        assertEquals(0, hitMenuItemIndex(10f, 20f, cells))
+        assertEquals(1, hitMenuItemIndex(60f, 20f, cells))
+        assertEquals(2, hitMenuItemIndex(30f, 80f, cells))
+        assertEquals(-1, hitMenuItemIndex(-1f, 20f, cells))
+        assertEquals(-1, hitMenuItemIndex(120f, 20f, cells))
+        assertEquals(-1, hitMenuItemIndex(90f, 80f, cells))
+        assertEquals(-1, hitMenuItemIndex(Float.NaN, 20f, cells))
+        assertTrue(dangerousMenuItem("DelMenuItem", "复制"))
+        assertTrue(dangerousMenuItem("RevokeMenuItem", "复制"))
+        assertTrue(dangerousMenuItem(null, "删除"))
+        assertTrue(dangerousMenuItem(null, "撤回"))
+        assertTrue(dangerousMenuItem(null, "结束进程"))
+        assertFalse(dangerousMenuItem("CopyMenuItem", "复制"))
+        assertFalse(dangerousMenuItem(null, "恢复默认"))
+    }
+
     private fun varint(v: Long): ByteArray {
         var x = v
         val out = ArrayList<Byte>()

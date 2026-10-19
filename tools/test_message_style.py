@@ -61,6 +61,33 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('edit.putString(TIME_PATTERN, "HH:mm").putInt(AVATAR_RADIUS, 20)', MENU)
         self.assertIn('if (!validTimePattern(value)) format.error', MENU)
 
+    def test_all_message_types_have_timestamps_and_top_timestamp_slot_restores(self):
+        for component in (
+            'AIOTextContentComponent',
+            'AIOFileContentComponent',
+            'AIOPicContentComponent',
+            'AIOReplyComponent',
+            'AIOMixContentComponent',
+            'AIOPttContentComponent',
+            'AIOMarketFaceComponent',
+            'AIOArkContentComponent',
+            'AIOVideoContentComponent',
+            'AIOTimestampComponent',
+        ):
+            self.assertIn(component, STYLE)
+        self.assertIn('SurfaceStamp', STYLE)
+        self.assertIn('surfaceStamps.values.toList().forEach { it.dispose() }', STYLE)
+        self.assertIn('timestampSlots.entries.toList().forEach { (slot, saved) -> slot.visibility = saved }', STYLE)
+
+    def test_native_and_settings_menus_track_single_item_and_style_danger_actions(self):
+        self.assertIn('QQCustomMenuExpandableLayout', MENU)
+        self.assertIn('dangerousMenuItem', MENU)
+        self.assertIn('hitMenuItemIndex', MENU)
+        self.assertIn('active.forEachIndexed { index, view -> view.isPressed = index == hit }', MENU)
+        self.assertIn('if (hit in active.indices) active[hit].performClick()', MENU)
+        self.assertIn('nativeMenus.values.toList().forEach { it.dispose() }; nativeMenus.clear()', MENU)
+        self.assertIn('nativeMessageMenu()', (SRC / 'Looks.kt').read_text())
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -254,11 +254,170 @@ private class Mark(private val dp: Float) : Drawable() {
     @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
-/** 面板内只用轻量状态填色，不逐项重复采样玻璃或叠加水波纹/缩放。 */
-private fun menuPress(dp: Float) = android.graphics.drawable.StateListDrawable().apply {
+/** 面板内只用轻量状态填色，不逐项重复采样玻璃或叠加水波纹/缩放；危险动作使用警示底色。 */
+internal fun dangerousMenuItem(tag: String?, title: String?): Boolean =
+    tag == "DelMenuItem" || tag == "RevokeMenuItem" || title == "删除" || title == "撤回" || title == "结束进程"
+
+internal data class MenuItemBounds(val left: Float, val top: Float, val right: Float, val bottom: Float)
+
+internal fun hitMenuItemIndex(x: Float, y: Float, rects: List<MenuItemBounds>): Int =
+    if (!x.isFinite() || !y.isFinite()) -1
+    else rects.indexOfFirst { x >= it.left && x < it.right && y >= it.top && y < it.bottom }
+
+private fun menuPress(dp: Float, danger: Boolean = false, radii: FloatArray? = null) = android.graphics.drawable.StateListDrawable().apply {
     addState(intArrayOf(android.R.attr.state_pressed), android.graphics.drawable.GradientDrawable().apply {
-        cornerRadius = 12 * dp; setColor(if (night()) 0x18FFFFFF else 0x10000000)
+        if (radii != null && radii.size == 8) cornerRadii = radii else cornerRadius = 12 * dp
+        setColor(if (danger) (if (night()) 0x2EFF453A else 0x22D70015) else (if (night()) 0x18FFFFFF else 0x10000000))
     })
+}
+
+private class MenuTouchTracker(private val root: View, private val canScroll: () -> Boolean = { false }) : View.OnTouchListener {
+    private val tracked = ArrayList<java.lang.ref.WeakReference<View>>()
+    private val active = ArrayList<View>()
+    private val rects = ArrayList<MenuItemBounds>()
+    private val matrix = Matrix()
+    private val point = FloatArray(2)
+    private var downRawX = 0f
+    private var downRawY = 0f
+    private var cancelled = false
+    private var scrolling = false
+
+    fun track(item: View) {
+        if (tracked.none { it.get() === item }) tracked.add(java.lang.ref.WeakReference(item))
+        item.setOnTouchListener(this)
+    }
+
+    fun clearItems() {
+        tracked.mapNotNull { it.get() }.forEach { it.isPressed = false; it.setOnTouchListener(null) }
+        tracked.clear(); active.clear(); rects.clear()
+    }
+
+    fun dispose() {
+        clearItems()
+        root.setOnTouchListener(null)
+    }
+
+    private fun snapshot() {
+        active.clear(); rects.clear()
+        val iterator = tracked.iterator()
+        while (iterator.hasNext()) {
+            val v = iterator.next().get()
+            if (v == null) { iterator.remove(); continue }
+            if (!v.isAttachedToWindow || v.visibility != View.VISIBLE || v.width <= 0 || v.height <= 0) continue
+            matrix.reset(); v.transformMatrixToGlobal(matrix); root.transformMatrixToLocal(matrix)
+            val bounds = RectF(0f, 0f, v.width.toFloat(), v.height.toFloat())
+            matrix.mapRect(bounds)
+            active.add(v); rects.add(MenuItemBounds(bounds.left, bounds.top, bounds.right, bounds.bottom))
+        }
+    }
+
+    private fun localPoint(source: View, event: MotionEvent) {
+        matrix.reset(); source.transformMatrixToGlobal(matrix); root.transformMatrixToLocal(matrix)
+        point[0] = event.x; point[1] = event.y
+        matrix.mapPoints(point)
+    }
+
+    private fun highlight(hit: Int) {
+        active.forEachIndexed { index, view -> view.isPressed = index == hit }
+    }
+
+    override fun onTouch(source: View, event: MotionEvent): Boolean {
+        val slop = android.view.ViewConfiguration.get(source.context).scaledTouchSlop
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downRawX = event.rawX; downRawY = event.rawY
+                cancelled = false; scrolling = false
+                snapshot(); localPoint(source, event)
+                val hit = hitMenuItemIndex(point[0], point[1], rects)
+                highlight(hit)
+                return hit >= 0 || source === root
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                cancelled = true; highlight(-1); return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (event.pointerCount > 1) { cancelled = true; highlight(-1); return true }
+                if (canScroll() && !scrolling && verticalBarDrag(event.rawX - downRawX, event.rawY - downRawY, slop)) {
+                    scrolling = true; highlight(-1)
+                    source.parent?.requestDisallowInterceptTouchEvent(false)
+                    return false
+                }
+                if (!cancelled && !scrolling) {
+                    if (!canScroll()) source.parent?.requestDisallowInterceptTouchEvent(true)
+                    localPoint(source, event)
+                    highlight(hitMenuItemIndex(point[0], point[1], rects))
+                }
+                return !scrolling
+            }
+            MotionEvent.ACTION_UP -> {
+                localPoint(source, event)
+                val hit = if (!cancelled && !scrolling) hitMenuItemIndex(point[0], point[1], rects) else -1
+                highlight(-1)
+                if (hit in active.indices) active[hit].performClick()
+                return true
+            }
+            MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> {
+                cancelled = true; highlight(-1); return true
+            }
+        }
+        return false
+    }
+}
+
+private val nativeMenus = java.util.WeakHashMap<View, MenuTouchTracker>()
+fun nativeMessageMenu() {
+    val menuClass = cls("com.tencent.qqnt.aio.menu.ui.QQCustomMenuExpandableLayout")
+    val itemClass = cls("com.tencent.qqnt.aio.menu.ui.d")
+    val itemType = itemClass.getDeclaredMethod("e").apply { isAccessible = true }
+    val itemTitle = itemClass.getDeclaredMethod("f").apply { isAccessible = true }
+    val expanded = menuClass.getDeclaredField("a0").apply { isAccessible = true }
+    val scrollField = menuClass.getDeclaredField("Q").apply { isAccessible = true }
+    val createItem = menuClass.getDeclaredMethod("p", Integer.TYPE, itemClass, java.lang.Boolean.TYPE, FloatArray::class.java)
+        .apply { isAccessible = true }
+    val createExpand = menuClass.getDeclaredMethod("l", Integer.TYPE).apply { isAccessible = true }
+    val buildMenu = menuClass.getDeclaredMethod("H").apply { isAccessible = true }
+    val showMenu = menuClass.getDeclaredMethod("G")
+    fun trackerFor(menu: View) = nativeMenus.getOrPut(menu) {
+        MenuTouchTracker(menu) { runCatching { expanded.getBoolean(menu) }.getOrDefault(false) }
+    }
+    hook(buildMenu, gated = false) { chain ->
+        (chain.thisObject as? View)?.let { nativeMenus[it]?.clearItems() }
+        chain.proceed()
+    }
+    hook(createItem, gated = false) { chain ->
+        val out = chain.proceed()
+        val menu = chain.thisObject as? View ?: return@hook out
+        val cell = out as? View ?: return@hook out
+        val item = chain.getArg(1)
+        val tag = runCatching { itemType.invoke(item) as? String }.getOrNull()
+        val title = runCatching { itemTitle.invoke(item) as? String }.getOrNull()
+        if (dangerousMenuItem(tag, title)) {
+            val dangerInk = if (night()) 0xFFFF453A.toInt() else 0xFFD70015.toInt()
+            if (cell is ViewGroup) for (i in 0 until cell.childCount) {
+                when (val child = cell.getChildAt(i)) {
+                    is ImageView -> child.imageTintList = android.content.res.ColorStateList.valueOf(dangerInk)
+                    is TextView -> child.setTextColor(dangerInk)
+                }
+            }
+            cell.background = menuPress(cell.dp, danger = true, radii = chain.getArg(3) as? FloatArray)
+        }
+        trackerFor(menu).track(cell)
+        out
+    }
+    hook(createExpand, gated = false) { chain ->
+        val out = chain.proceed()
+        val menu = chain.thisObject as? View ?: return@hook out
+        (out as? View)?.let { trackerFor(menu).track(it) }
+        out
+    }
+    hook(showMenu, gated = false) { chain ->
+        val out = chain.proceed()
+        val menu = chain.thisObject as? View ?: return@hook out
+        val tracker = trackerFor(menu)
+        menu.setOnTouchListener(tracker)
+        (runCatching { scrollField.get(menu) as? View }.getOrNull())?.setOnTouchListener(tracker)
+        out
+    }
 }
 
 private fun sheet(anchor: View) {
@@ -334,7 +493,8 @@ private fun sheet(anchor: View) {
         return cell
     }
     val grid = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-    features.forEach { grid.addView(cell(it), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)) }
+    val sheetTracker = MenuTouchTracker(grid) { true }
+    features.forEach { grid.addView(cell(it).also(sheetTracker::track), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)) }
     val heading = TextView(ctx).apply {
         text = "Qself ${BuildConfig.VERSION_NAME}"; textSize = 15f; gravity = Gravity.CENTER; setTextColor(ink)
         minimumHeight = (40 * dp).toInt()
@@ -349,11 +509,14 @@ private fun sheet(anchor: View) {
     card.addView(ScrollView(ctx).apply { isFillViewport = false; addView(grid) },
         LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     fun button(label: String, body: () -> Unit) = TextView(ctx).apply {
-        text = label; textSize = 13f; gravity = Gravity.CENTER; setTextColor(ink)
+        val danger = dangerousMenuItem(null, label)
+        val dangerInk = if (night()) 0xFFFF453A.toInt() else 0xFFD70015.toInt()
+        text = label; textSize = 13f; gravity = Gravity.CENTER; setTextColor(if (danger) dangerInk else ink)
         minimumHeight = (48 * dp).toInt()
         setPadding((10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt())
-        background = menuPress(dp)
+        background = if (danger) menuPress(dp, danger = true) else menuPress(dp)
         setOnClickListener { body() }
+        sheetTracker.track(this)
     }
     grid.addView(TextView(ctx).apply {
         text = "消息外观"; textSize = 15f; setTextColor(ink)
@@ -463,4 +626,5 @@ fun resetMenus() {
         (view.parent as? ViewGroup)?.removeView(view)
     }
     sheets.clear(); knobs.clear()
+    nativeMenus.values.toList().forEach { it.dispose() }; nativeMenus.clear()
 }
