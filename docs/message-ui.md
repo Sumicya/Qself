@@ -6,9 +6,11 @@
 
 | 项目 | 本轮实现 | 边界 |
 | --- | --- | --- |
-| 图标与菜单 | 图标固有尺寸为 24dp；菜单真实触摸驱动共享玻璃柔光 | 面板不整块按压缩放，正常底栏透镜不变 |
+| 聊天顶栏 | 照 NagramXF `ActionBar.setupGlass` + `ChatAvatarContainer` 三胶囊（`p=6dp`、`s=46dp`、`r=23dp`、中胶囊 `42dp` 圆形会话头像 + 左对齐 `17.5sp`/`13.5sp` 标题副标题），隐藏 `reserve1.blur.f` 通栏模糊 | 头像经 `com.tencent.qqnt.avatar.a` 从 `AIOContact` 异步加载，关闭完整恢复；真机视觉待复验 |
+| 原生菜单与面板 | `QQCustomMenuExpandableLayout` 重排为 12dp 圆角纵向 `ActionBarPopupWindow` 列表（48dp 行高、18dp 左右内边距、20dp 图标 + 16sp 完整文案、6dp 按压圆角），随指单有效项高亮、移出取消、危险项标红 | 面板不整块按压缩放，正常底栏透镜不变；真机手势待复验 |
 | 转发人数 | 私有方法按完整签名 declared + accessible 查找；同步原生搜索勾选 | 真包可访问性不证明服务端无限制 |
-| 消息时间与边距 | 普通文字正文左右 12dp、上下 8dp，另预留时间行；默认 HH:mm、可自定义 | 不改文字数据和复制内容；图片、语音、卡片未重绘 |
+| 消息行、气泡与时间 | 己方隐藏头像并右贴 6dp，对方 42dp 头像（51dp 总缩进）随组浮动；外角 17dp / 连发内角 6dp 气泡与 3dp 竖线引用块；全 9 类内容组件覆盖 `f1()`/`h1()` 绘制正文下部 `MessageStamp` 或右下角 `SurfaceStamp`（最小高 17dp）并折叠顶部 `AIOTimestampComponent` | 不改文字数据和复制内容；关闭/复用恢复；真机视觉待复验 |
+| 输入区 | 接入 `InputEditTextVBDelegate.U`、`AIOInputExpandableVB`、`compat.b`、`BottomBlurVB`、`AIOShortcutBarVB`，22dp 圆角玻璃胶囊并隐藏通栏底部模糊与顶部分割线 | 保留全部原生按钮与层级；真机键盘交互待复验 |
 | At 对象 | 群消息按 TextElement 元素顺序匹配；UIN 或缓存 UID 映射打开资料卡 | 原有点击段优先；保留长按和滑动；无 UID 映射明确报错，不猜 QQ 号 |
 | 头像圆角 | QQ 原生 RoundRectImageView 半径，0～50%，默认 20% | 原图已经裁圆时无法凭空补角；关闭还原原值 |
 | 头像定位 | 无浮绘源时不隐藏原生头像；旧位置限定在可见范围附近 | 不代表全部真实列表回收/滚动问题已经验收 |

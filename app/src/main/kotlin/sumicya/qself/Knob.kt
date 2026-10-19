@@ -370,8 +370,14 @@ fun nativeMessageMenu() {
     val itemClass = cls("com.tencent.qqnt.aio.menu.ui.d")
     val itemType = itemClass.getDeclaredMethod("e").apply { isAccessible = true }
     val itemTitle = itemClass.getDeclaredMethod("f").apply { isAccessible = true }
-    val expanded = menuClass.getDeclaredField("a0").apply { isAccessible = true }
+    val rowHeightField = menuClass.getDeclaredField("C").apply { isAccessible = true }
+    val colCountField = menuClass.getDeclaredField("H").apply { isAccessible = true }
     val scrollField = menuClass.getDeclaredField("Q").apply { isAccessible = true }
+    val listField = menuClass.getDeclaredField("R").apply { isAccessible = true }
+    val blurField = menuClass.getDeclaredField("S").apply { isAccessible = true }
+    val dividerField = menuClass.getDeclaredField("T").apply { isAccessible = true }
+    val radiusField = menuClass.getDeclaredField("W").apply { isAccessible = true }
+    val expanded = menuClass.getDeclaredField("a0").apply { isAccessible = true }
     val createItem = menuClass.getDeclaredMethod("p", Integer.TYPE, itemClass, java.lang.Boolean.TYPE, FloatArray::class.java)
         .apply { isAccessible = true }
     val createExpand = menuClass.getDeclaredMethod("l", Integer.TYPE).apply { isAccessible = true }
@@ -381,26 +387,103 @@ fun nativeMessageMenu() {
         MenuTouchTracker(menu) { runCatching { expanded.getBoolean(menu) }.getOrDefault(false) }
     }
     hook(buildMenu, gated = false) { chain ->
-        (chain.thisObject as? View)?.let { nativeMenus[it]?.clearItems() }
-        chain.proceed()
+        val menu = chain.thisObject as? View
+        menu?.let {
+            nativeMenus[it]?.clearItems()
+            runCatching {
+                colCountField.setInt(it, 24)
+                rowHeightField.setInt(it, (140 * it.dp).roundToInt())
+                radiusField.setFloat(it, 12 * it.dp)
+            }
+        }
+        chain.proceed().also {
+            val host = menu ?: return@also
+            val dp = host.dp
+            runCatching {
+                colCountField.setInt(host, 5)
+                expanded.setBoolean(host, true)
+                (blurField.get(host) as? View)?.let { s -> s.alpha = 0f; s.scaleX = 0f; s.scaleY = 0f; s.visibility = View.GONE }
+                (dividerField.get(host) as? View)?.visibility = View.GONE
+                val scroll = scrollField.get(host) as? ScrollView
+                val list = listField.get(host) as? LinearLayout
+                if (scroll != null && list != null) {
+                    val items = ArrayList<LinearLayout>()
+                    fun collect(group: ViewGroup) {
+                        for (i in 0 until group.childCount) {
+                            when (val ch = group.getChildAt(i)) {
+                                is LinearLayout -> if (ch.getTag(0x51534D4E) == true) items.add(ch) else collect(ch)
+                                is ViewGroup -> collect(ch)
+                            }
+                        }
+                    }
+                    collect(list)
+                    if (items.isNotEmpty()) {
+                        list.removeAllViews()
+                        list.orientation = LinearLayout.VERTICAL
+                        val pad = (4 * dp).roundToInt()
+                        list.setPadding(pad, pad, pad, pad)
+                        list.minimumWidth = (196 * dp).roundToInt()
+                        val rowH = (48 * dp).roundToInt()
+                        for (cell in items) {
+                            (cell.parent as? ViewGroup)?.removeView(cell)
+                            list.addView(cell, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowH))
+                        }
+                    }
+                    scroll.background = Glass(scroll, 12 * dp, kernelSurface = true)
+                    scroll.outlineProvider = capsule(12 * dp)
+                    scroll.clipToOutline = true
+                    (scroll.layoutParams as? android.widget.RelativeLayout.LayoutParams)?.let { lp ->
+                        lp.width = (208 * dp).roundToInt()
+                        scroll.layoutParams = lp
+                    }
+                }
+            }
+        }
     }
     hook(createItem, gated = false) { chain ->
         val out = chain.proceed()
         val menu = chain.thisObject as? View ?: return@hook out
         val cell = out as? View ?: return@hook out
+        val dp = cell.dp
         val item = chain.getArg(1)
         val tag = runCatching { itemType.invoke(item) as? String }.getOrNull()
         val title = runCatching { itemTitle.invoke(item) as? String }.getOrNull()
-        if (dangerousMenuItem(tag, title)) {
-            val dangerInk = if (night()) 0xFFFF453A.toInt() else 0xFFD70015.toInt()
-            if (cell is ViewGroup) for (i in 0 until cell.childCount) {
+        val danger = dangerousMenuItem(tag, title)
+        val ink = if (danger) (if (night()) 0xFFFF453A.toInt() else 0xFFD70015.toInt())
+            else (if (night()) 0xFFF2F2F7.toInt() else 0xFF1C1C1E.toInt())
+        if (cell is LinearLayout) {
+            cell.setTag(0x51534D4E, true)
+            cell.orientation = LinearLayout.HORIZONTAL
+            cell.gravity = Gravity.CENTER_VERTICAL
+            cell.minimumHeight = (48 * dp).roundToInt()
+            cell.minimumWidth = (188 * dp).roundToInt()
+            val padX = (18 * dp).roundToInt()
+            cell.setPadding(padX, 0, padX, 0)
+            for (i in 0 until cell.childCount) {
                 when (val child = cell.getChildAt(i)) {
-                    is ImageView -> child.imageTintList = android.content.res.ColorStateList.valueOf(dangerInk)
-                    is TextView -> child.setTextColor(dangerInk)
+                    is ImageView -> {
+                        child.imageTintList = ColorStateList.valueOf(ink)
+                        val iconSize = (20 * dp).roundToInt()
+                        child.layoutParams = LinearLayout.LayoutParams(iconSize, iconSize).apply {
+                            rightMargin = (12 * dp).roundToInt()
+                            gravity = Gravity.CENTER_VERTICAL
+                        }
+                    }
+                    is TextView -> {
+                        if (!title.isNullOrEmpty()) child.text = title
+                        child.setTextColor(ink)
+                        child.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                        child.maxLines = 1
+                        child.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                        child.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                            gravity = Gravity.CENTER_VERTICAL
+                        }
+                    }
                 }
             }
-            cell.background = menuPress(cell.dp, danger = true, radii = chain.getArg(3) as? FloatArray)
         }
+        val itemRadii = FloatArray(8) { 6 * dp }
+        cell.background = menuPress(dp, danger = danger, radii = itemRadii)
         trackerFor(menu).track(cell)
         out
     }

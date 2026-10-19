@@ -20,6 +20,7 @@ import android.widget.RelativeLayout
 import android.widget.TextView
 import java.util.Collections
 import java.util.WeakHashMap
+import kotlin.math.roundToInt
 
 /**
  * 外观：每个 Activity 一到前台就盯住它的 decor，布局一变在同一帧 pre-draw 套规则，不排 150ms 延时队列。
@@ -55,6 +56,7 @@ fun looks() {
         if (state == null || source == null) chain.proceed()
         else state.dispatch(source, chain.getArg(0) as MotionEvent) { event -> chain.proceed(arrayOf<Any?>(event)) as Boolean }
     }
+    aioHeader()
     nativeMessageMenu()
 }
 
@@ -72,6 +74,7 @@ private var preferenceListener: SharedPreferences.OnSharedPreferenceChangeListen
 
 fun refreshLooks() {
     if (!on("显示具体未读条数")) restoreBadgeLayouts() else refreshNativeBadges?.invoke()
+    refreshAioHeaders()
     refreshInputLayout()
     refreshChatLayout()
     refreshMessageStyle()
@@ -131,6 +134,7 @@ fun resetLooks() {
     hidden.clear()
     restoreClearedDecorations()
     restoreBadgeLayouts()
+    resetAioHeaders()
 }
 
 private fun walk(v: View, inDrawer: Boolean) {
@@ -793,3 +797,442 @@ private fun restoreClearedDecorations() {
 }
 
 private fun View.isAncestorOf(v: View): Boolean = generateSequence(v.parent) { it.parent }.any { it === this }
+
+// ---- 聊天顶栏：照 NagramXF ActionBar.setupGlass + ChatAvatarContainer 三胶囊布局（左返回、中 42dp 头像+左对齐标题副标题、右操作）。
+
+internal data class PillBox(val left: Int, val top: Int, val right: Int, val bottom: Int) {
+    fun width(): Int = right - left
+    fun height(): Int = bottom - top
+    fun centerX(): Int = (left + right) / 2
+    fun centerY(): Int = (top + bottom) / 2
+    fun isEmpty(): Boolean = left >= right || top >= bottom
+    fun toRect(): Rect = Rect(left, top, right, bottom)
+}
+
+internal data class NagramHeaderLayout(
+    val leftPill: PillBox,
+    val centerPill: PillBox,
+    val rightPill: PillBox,
+    val avatarLeft: Int,
+    val avatarTop: Int,
+    val avatarSize: Int,
+    val textLeft: Int,
+    val textRight: Int,
+)
+
+/** NagramXF ActionBar.setupGlass(p=6dp, s=46dp, r=23dp) 与 ChatAvatarContainer.getVisualWidth(+64dp/+30dp)。 */
+internal fun nagramHeaderLayout(
+    width: Int,
+    height: Int,
+    density: Float,
+    unreadWidth: Int,
+    rightCount: Int,
+    titleWidth: Int,
+    subtitleWidth: Int,
+    hasAvatar: Boolean = true,
+): NagramHeaderLayout {
+    val p = (6 * density).roundToInt()
+    val s = (46 * density).roundToInt()
+    val pillTop = ((height - s) / 2).coerceAtLeast(0)
+    val pillBottom = pillTop + s
+    val leftW = if (unreadWidth > 0) maxOf(s, (36 * density).roundToInt() + unreadWidth + (10 * density).roundToInt()) else s
+    val leftPill = PillBox(p, pillTop, (p + leftW).coerceAtMost(width.coerceAtLeast(0)), pillBottom)
+    val rightW = when {
+        rightCount <= 0 -> 0
+        rightCount == 1 -> s
+        else -> (12 * density).roundToInt() + rightCount * (38 * density).roundToInt()
+    }
+    val rightPill = if (rightW > 0) {
+        val rRight = (width - p).coerceAtLeast(0)
+        val rLeft = (rRight - rightW).coerceAtLeast(leftPill.right + p)
+        PillBox(rLeft, pillTop, rRight, pillBottom)
+    } else PillBox(width, pillTop, width, pillBottom)
+    val availLeft = leftPill.right + p
+    val availRight = (if (rightW > 0) rightPill.left else width) - p
+    val availW = (availRight - availLeft).coerceAtLeast(0)
+    val contentW = maxOf(titleWidth, subtitleWidth).coerceAtLeast(0)
+    val extraW = ((if (hasAvatar) 64 else 30) * density).roundToInt()
+    val minW = minOf((132 * density).roundToInt(), availW)
+    val centerW = (contentW + extraW).coerceIn(minW, availW)
+    val centerLeft = availLeft + (availW - centerW) / 2
+    val centerPill = PillBox(centerLeft, pillTop, centerLeft + centerW, pillBottom)
+    val avatarSize = (42 * density).roundToInt()
+    val avatarInset = ((s - avatarSize) / 2).coerceAtLeast(0)
+    val textLeft = centerPill.left + ((if (hasAvatar) 50 else 15) * density).roundToInt()
+    val textRight = (centerPill.right - (14 * density).roundToInt()).coerceAtLeast(textLeft)
+    return NagramHeaderLayout(
+        leftPill = leftPill,
+        centerPill = centerPill,
+        rightPill = rightPill,
+        avatarLeft = centerPill.left + avatarInset,
+        avatarTop = pillTop + avatarInset,
+        avatarSize = avatarSize,
+        textLeft = textLeft,
+        textRight = textRight,
+    )
+}
+
+private class HeaderPillsDrawable(host: View) : android.graphics.drawable.Drawable() {
+    private val backGlass = Glass(host, 23 * host.dp, kernelSurface = true)
+    private val centerGlass = Glass(host, 23 * host.dp, kernelSurface = true)
+    private val rightGlass = Glass(host, 23 * host.dp, kernelSurface = true)
+    var leftRect = Rect()
+    var centerRect = Rect()
+    var rightRect = Rect()
+    fun update(layout: NagramHeaderLayout) {
+        leftRect = layout.leftPill.toRect(); centerRect = layout.centerPill.toRect(); rightRect = layout.rightPill.toRect()
+        backGlass.bounds = leftRect; centerGlass.bounds = centerRect; rightGlass.bounds = rightRect
+        invalidateSelf()
+    }
+    fun sync() {
+        backGlass.sync(); centerGlass.sync(); if (!rightRect.isEmpty) rightGlass.sync()
+    }
+    fun dispose() {
+        backGlass.dispose(); centerGlass.dispose(); rightGlass.dispose()
+    }
+    override fun draw(canvas: Canvas) {
+        if (!leftRect.isEmpty) backGlass.draw(canvas)
+        if (!centerRect.isEmpty) centerGlass.draw(canvas)
+        if (!rightRect.isEmpty) rightGlass.draw(canvas)
+    }
+    override fun setAlpha(alpha: Int) {
+        backGlass.alpha = alpha; centerGlass.alpha = alpha; rightGlass.alpha = alpha
+    }
+    override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {
+        backGlass.colorFilter = colorFilter; centerGlass.colorFilter = colorFilter; rightGlass.colorFilter = colorFilter
+    }
+    @Deprecated("Drawable opacity")
+    override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+}
+
+private class HeaderState(
+    val bar: ViewGroup,
+    val root: View?,
+    val outer: View?,
+    val closeBtn: View?,
+    val leftBtn: View?,
+    val unreadBadge: TextView?,
+    val titleTv: TextView?,
+    val titleTailTv: TextView?,
+    val subIcon: View?,
+    val right1: View?,
+    val right2: View?,
+    val right3: () -> View?,
+    val centerFlipper: () -> View?,
+    val centerSub1: () -> TextView?,
+    val centerSub2: () -> TextView?,
+) {
+    val barBg = bar.background
+    val rootBg = root?.background
+    val outerBg = outer?.background
+    val leftBg = leftBtn?.background
+    val right1Bg = right1?.background
+    val right2Bg = right2?.background
+    val titleSize = titleTv?.textSize
+    val titleGravity = titleTv?.gravity
+    val pills = HeaderPillsDrawable(bar)
+    val avatar = android.widget.ImageView(bar.context).apply {
+        tag = "qself-aio-avatar"
+        scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+        outlineProvider = capsule()
+        clipToOutline = true
+        setOnClickListener { titleTv?.performClick() }
+    }
+    val preDraw = ViewTreeObserver.OnPreDrawListener {
+        if (on("玻璃底栏")) pills.sync()
+        true
+    }
+    init {
+        bar.viewTreeObserver.addOnPreDrawListener(preDraw)
+    }
+    fun applyStyle() {
+        if (!on("玻璃底栏")) { restore(); return }
+        if (avatar.parent == null) {
+            val size = (42 * bar.dp).roundToInt()
+            bar.addView(avatar, RelativeLayout.LayoutParams(size, size))
+        }
+        avatar.visibility = View.VISIBLE
+        if (bar.background !== pills) bar.background = pills
+        root?.background = null
+        outer?.background = null
+        leftBtn?.background = null
+        right1?.background = null
+        right2?.background = null
+        right3()?.background = null
+        titleTv?.let {
+            it.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 17.5f)
+            it.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        }
+        for (sub in listOf(centerSub1(), centerSub2())) sub?.let {
+            it.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13.5f)
+            it.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        }
+        bar.requestLayout(); bar.invalidate()
+    }
+    fun restore() {
+        if (avatar.parent === bar) bar.removeView(avatar)
+        if (bar.background === pills) bar.background = barBg
+        root?.background = rootBg
+        outer?.background = outerBg
+        leftBtn?.background = leftBg
+        right1?.background = right1Bg
+        right2?.background = right2Bg
+        if (titleTv != null && titleSize != null && titleGravity != null) {
+            titleTv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, titleSize)
+            titleTv.gravity = titleGravity
+        }
+        bar.requestLayout(); bar.invalidate()
+    }
+    fun dispose() {
+        if (bar.viewTreeObserver.isAlive) bar.viewTreeObserver.removeOnPreDrawListener(preDraw)
+        restore()
+        pills.dispose()
+    }
+}
+
+private val aioHeaders = WeakHashMap<ViewGroup, HeaderState>()
+private val topBlurs = WeakHashMap<View, Int>()
+
+private fun refreshAioHeaders() {
+    aioHeaders.values.toList().forEach { it.applyStyle() }
+    topBlurs.entries.toList().forEach { (view, vis) ->
+        view.visibility = if (on("玻璃底栏")) View.GONE else vis
+        view.alpha = if (on("玻璃底栏")) 0f else 1f
+    }
+}
+
+private fun resetAioHeaders() {
+    aioHeaders.values.toList().forEach { it.dispose() }
+    aioHeaders.clear()
+    topBlurs.entries.toList().forEach { (view, vis) -> view.visibility = vis; view.alpha = 1f }
+    topBlurs.clear()
+}
+
+private fun aioHeader() {
+    val titleVB = cls("com.tencent.mobileqq.aio.title.AIOTitleVB")
+    val bindingField = titleVB.getDeclaredField("d").apply { isAccessible = true }
+    val right3Field = titleVB.getDeclaredField("h").apply { isAccessible = true }
+    val centerField = titleVB.getDeclaredField("i").apply { isAccessible = true }
+    val bindingClass = cls("sm1.u")
+    val uRoot = bindingClass.getDeclaredField("a").apply { isAccessible = true }
+    val uClose = bindingClass.getDeclaredField("d").apply { isAccessible = true }
+    val uLeft = bindingClass.getDeclaredField("f").apply { isAccessible = true }
+    val uRight1 = bindingClass.getDeclaredField("h").apply { isAccessible = true }
+    val uRight2 = bindingClass.getDeclaredField("i").apply { isAccessible = true }
+    val uSubIcon = bindingClass.getDeclaredField("j").apply { isAccessible = true }
+    val uOuter = bindingClass.getDeclaredField("k").apply { isAccessible = true }
+    val uBar = bindingClass.getDeclaredField("l").apply { isAccessible = true }
+    val uTail = bindingClass.getDeclaredField("n").apply { isAccessible = true }
+    val uTitle = bindingClass.getDeclaredField("o").apply { isAccessible = true }
+    val uUnread = bindingClass.getDeclaredField("p").apply { isAccessible = true }
+    val wClass = cls("sm1.w")
+    val wRight3 = wClass.getDeclaredField("b").apply { isAccessible = true }
+    val centerVB = cls("com.tencent.mobileqq.aio.title.center.CenterVB")
+    val centerFlipper = centerVB.getDeclaredMethod("B1").apply { isAccessible = true }
+    val centerSub1 = centerVB.getDeclaredMethod("C1").apply { isAccessible = true }
+    val centerSub2 = centerVB.getDeclaredMethod("D1").apply { isAccessible = true }
+    val frameworkVB = cls("com.tencent.mvi.mvvm.framework.FrameworkVB")
+    val mviCtxField = frameworkVB.getDeclaredField("mMviContext").apply { isAccessible = true }
+    val aioCtxClass = cls("com.tencent.aio.api.runtime.a")
+    val getParam = aioCtxClass.getDeclaredMethod("g")
+    val paramSession = cls("com.tencent.aio.data.AIOParam").getDeclaredField("d").apply { isAccessible = true }
+    val sessionContact = cls("com.tencent.aio.data.AIOSession").getDeclaredField("d").apply { isAccessible = true }
+    val contactClass = cls("com.tencent.aio.data.AIOContact")
+    val contactType = contactClass.getDeclaredField("d").apply { isAccessible = true }
+    val contactUid = contactClass.getDeclaredField("e").apply { isAccessible = true }
+    val contactNick = contactClass.getDeclaredField("h").apply { isAccessible = true }
+    val avatarApi = cls("com.tencent.qqnt.avatar.a")
+    val avatarCompanion = avatarApi.getDeclaredField("a").get(null)
+    val avatarWithCtx = cls("com.tencent.qqnt.avatar.a\$a").getDeclaredMethod("b", android.content.Context::class.java)
+    val avatarWithView = cls("com.tencent.qqnt.avatar.f").getDeclaredMethod("b", View::class.java)
+    val avatarOptBuilder = cls("com.tencent.qqnt.avatar.b\$a").getDeclaredConstructor()
+    val avatarOptBuild = cls("com.tencent.qqnt.avatar.b\$a").getDeclaredMethod("a")
+    val avatarLoaderClass = cls("com.tencent.qqnt.avatar.e")
+    val avatarApplyOpt = avatarLoaderClass.getDeclaredMethod("e", cls("com.tencent.qqnt.avatar.b"))
+    val avatarDefaults = cls("com.tencent.qqnt.avatar.e\$a")
+    val scopeClass = cls("kotlinx.coroutines.CoroutineScope")
+    val avatarLoadGroup = avatarDefaults.getDeclaredMethod("a", avatarLoaderClass, java.lang.Long.TYPE, scopeClass, Integer.TYPE, Any::class.java)
+    val avatarLoadC2C = avatarDefaults.getDeclaredMethod("b", avatarLoaderClass, String::class.java, java.lang.Long.TYPE, scopeClass, Integer.TYPE, Any::class.java)
+
+    fun loadHeaderAvatar(vb: Any, avatarView: android.widget.ImageView) {
+        runCatching {
+            val ctx = mviCtxField.get(vb) ?: return
+            if (!aioCtxClass.isInstance(ctx)) return
+            val param = getParam.invoke(ctx) ?: return
+            val session = paramSession.get(param) ?: return
+            val contact = sessionContact.get(session) ?: return
+            val chatType = contactType.getInt(contact)
+            val peerUid = contactUid.get(contact) as? String ?: ""
+            val nick = contactNick.get(contact) as? String ?: ""
+            if (avatarView.drawable == null && nick.isNotEmpty()) {
+                val size = (42 * avatarView.dp).roundToInt().coerceAtLeast(1)
+                val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+                val c = Canvas(bmp)
+                val palette = intArrayOf(0xFFE56555.toInt(), 0xFFF28C48.toInt(), 0xFF8E85EE.toInt(), 0xFF76C84D.toInt(), 0xFF5Fbed5.toInt(), 0xFF549CDD.toInt(), 0xFFF2749A.toInt())
+                val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette[(peerUid.hashCode() and 0x7FFFFFFF) % palette.size] }
+                c.drawCircle(size / 2f, size / 2f, size / 2f, p)
+                p.color = -1; p.textAlign = Paint.Align.CENTER; p.textSize = size * 0.44f; p.isFakeBoldText = true
+                val fm = p.fontMetrics
+                c.drawText(nick.take(1), size / 2f, size / 2f - (fm.ascent + fm.descent) / 2f, p)
+                avatarView.setImageBitmap(bmp)
+            }
+            val opt = avatarOptBuild.invoke(avatarOptBuilder.newInstance())
+            val req = avatarWithView.invoke(avatarWithCtx.invoke(avatarCompanion, avatarView.context), avatarView)
+            val loader = avatarApplyOpt.invoke(req, opt)
+            val groupCode = peerUid.toLongOrNull()
+            if (chatType == 2 && groupCode != null) avatarLoadGroup.invoke(null, loader, groupCode, null, 2, null)
+            else if (peerUid.isNotEmpty()) avatarLoadC2C.invoke(null, loader, peerUid, 0L, null, 4, null)
+        }
+    }
+
+    fun bindHeader(vb: Any) {
+        val u = runCatching { bindingField.get(vb) }.getOrNull() ?: return
+        val bar = runCatching { uBar.get(u) as? ViewGroup }.getOrNull() ?: return
+        val state = aioHeaders.getOrPut(bar) {
+            HeaderState(
+                bar = bar,
+                root = runCatching { uRoot.get(u) as? View }.getOrNull(),
+                outer = runCatching { uOuter.get(u) as? View }.getOrNull(),
+                closeBtn = runCatching { uClose.get(u) as? View }.getOrNull(),
+                leftBtn = runCatching { uLeft.get(u) as? View }.getOrNull(),
+                unreadBadge = runCatching { uUnread.get(u) as? TextView }.getOrNull(),
+                titleTv = runCatching { uTitle.get(u) as? TextView }.getOrNull(),
+                titleTailTv = runCatching { uTail.get(u) as? TextView }.getOrNull(),
+                subIcon = runCatching { uSubIcon.get(u) as? View }.getOrNull(),
+                right1 = runCatching { uRight1.get(u) as? View }.getOrNull(),
+                right2 = runCatching { uRight2.get(u) as? View }.getOrNull(),
+                right3 = { runCatching { right3Field.get(vb)?.let { wRight3.get(it) as? View } }.getOrNull() },
+                centerFlipper = { runCatching { centerField.get(vb)?.let { centerFlipper.invoke(it) as? View } }.getOrNull() },
+                centerSub1 = { runCatching { centerField.get(vb)?.let { centerSub1.invoke(it) as? TextView } }.getOrNull() },
+                centerSub2 = { runCatching { centerField.get(vb)?.let { centerSub2.invoke(it) as? TextView } }.getOrNull() },
+            )
+        }
+        state.applyStyle()
+        if (on("玻璃底栏")) loadHeaderAvatar(vb, state.avatar)
+    }
+
+    for (name in listOf("onCreateView", "bindViewAndData", "handleUIState")) {
+        hook(titleVB.getDeclaredMethod(name, *titleVB.declaredMethods.first { it.name == name }.parameterTypes), gated = false) { chain ->
+            chain.proceed().also { if (titleVB.isInstance(chain.thisObject)) bindHeader(chain.thisObject) }
+        }
+    }
+    hook(centerVB.getDeclaredMethod("handleUIState", cls("com.tencent.mvi.base.mvi.MviUIState")), gated = false) { chain ->
+        chain.proceed().also {
+            aioHeaders.values.forEach { state ->
+                if (on("玻璃底栏")) { state.applyStyle(); state.bar.requestLayout() }
+            }
+        }
+    }
+
+    val titleLayout = cls("com.tencent.mobileqq.aio.widget.AIOTitleRelativeLayout")
+    val setMeasured = View::class.java.getDeclaredMethod("setMeasuredDimension", Integer.TYPE, Integer.TYPE).apply { isAccessible = true }
+    hook(titleLayout.getDeclaredMethod("onMeasure", Integer.TYPE, Integer.TYPE), gated = false) { chain ->
+        chain.proceed().also {
+            val bar = chain.thisObject as? ViewGroup ?: return@also
+            if (!on("玻璃底栏") || bar !in aioHeaders) return@also
+            val minH = (58 * bar.dp).roundToInt()
+            if (bar.measuredHeight in 1 until minH) setMeasured.invoke(bar, bar.measuredWidthAndState, minH)
+        }
+    }
+    hook(titleLayout.getDeclaredMethod("onLayout", java.lang.Boolean.TYPE, Integer.TYPE, Integer.TYPE, Integer.TYPE, Integer.TYPE), gated = false) { chain ->
+        chain.proceed().also {
+            val bar = chain.thisObject as? ViewGroup ?: return@also
+            val state = aioHeaders[bar] ?: return@also
+            if (!on("玻璃底栏")) return@also
+            val w = bar.width; val h = bar.height
+            if (w <= 0 || h <= 0) return@also
+            val dp = bar.dp
+            val unread = state.unreadBadge?.takeIf { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() }
+            val unreadW = unread?.measuredWidth ?: 0
+            val rightViews = listOfNotNull(state.right3(), state.right2, state.right1).filter { it.visibility == View.VISIBLE && it.measuredWidth > 0 }
+            val tail = state.titleTailTv?.takeIf { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() }
+            val titleTextW = ((state.titleTv?.paint?.measureText(state.titleTv.text?.toString().orEmpty())?.toInt()) ?: (state.titleTv?.measuredWidth ?: 0)) +
+                (if (tail != null) tail.measuredWidth + (2 * dp).roundToInt() else 0)
+            val flipper = state.centerFlipper()?.takeIf { it.visibility == View.VISIBLE }
+            val subText = listOfNotNull(state.centerSub1(), state.centerSub2()).firstOrNull { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() }
+            val hasSub = flipper != null && subText != null
+            val subIcon = state.subIcon?.takeIf { hasSub && it.visibility == View.VISIBLE }
+            val subW = if (hasSub) ((subText.paint?.measureText(subText.text?.toString().orEmpty())?.toInt()) ?: flipper.measuredWidth) +
+                (if (subIcon != null) subIcon.measuredWidth + (4 * dp).roundToInt() else 0) else 0
+            val geom = nagramHeaderLayout(w, h, dp, unreadW, rightViews.size, titleTextW, subW, hasAvatar = true)
+            state.pills.update(geom)
+
+            // 1. 左返回胶囊：返回箭头 + 未读气泡
+            val backBtn = state.leftBtn?.takeIf { it.visibility == View.VISIBLE } ?: state.closeBtn?.takeIf { it.visibility == View.VISIBLE }
+            if (backBtn != null) {
+                val bw = backBtn.measuredWidth.coerceAtLeast((24 * dp).roundToInt())
+                val bh = backBtn.measuredHeight.coerceAtLeast((24 * dp).roundToInt())
+                val bx = if (unread != null) geom.leftPill.left + (8 * dp).roundToInt() else geom.leftPill.centerX() - bw / 2
+                val by = geom.leftPill.centerY() - bh / 2
+                backBtn.layout(bx, by, bx + bw, by + bh)
+            }
+            if (unread != null) {
+                val uw = unread.measuredWidth; val uh = unread.measuredHeight
+                val ux = (geom.leftPill.right - (10 * dp).roundToInt() - uw).coerceAtLeast(geom.leftPill.left + (28 * dp).roundToInt())
+                val uy = geom.leftPill.centerY() - uh / 2
+                unread.layout(ux, uy, ux + uw, uy + uh)
+            }
+
+            // 2. 中间 ChatAvatarContainer 胶囊：42dp 圆形头像 + 左对齐标题与副标题
+            state.avatar.layout(geom.avatarLeft, geom.avatarTop, geom.avatarLeft + geom.avatarSize, geom.avatarTop + geom.avatarSize)
+            val tailW = tail?.measuredWidth ?: 0
+            val maxTitleW = (geom.textRight - geom.textLeft - tailW).coerceAtLeast(0)
+            state.titleTv?.let { tv ->
+                val tw = minOf(tv.measuredWidth.coerceAtLeast(titleTextW - tailW), maxTitleW)
+                val th = tv.measuredHeight.coerceAtLeast((22 * dp).roundToInt())
+                val ty = if (hasSub) geom.centerPill.top + (4 * dp).roundToInt() else geom.centerPill.centerY() - th / 2
+                tv.layout(geom.textLeft, ty, geom.textLeft + tw, ty + th)
+                tail?.let { tl ->
+                    val tlh = tl.measuredHeight
+                    val tly = ty + (th - tlh) / 2
+                    val gap = (2 * dp).roundToInt()
+                    tl.layout(geom.textLeft + tw + gap, tly, geom.textLeft + tw + gap + tailW, tly + tlh)
+                }
+            }
+            if (hasSub) {
+                var sx = geom.textLeft
+                val sy = geom.centerPill.top + (24 * dp).roundToInt()
+                val sh = (18 * dp).roundToInt()
+                subIcon?.let { ic ->
+                    val iw = ic.measuredWidth; val ih = ic.measuredHeight
+                    val iy = sy + (sh - ih) / 2
+                    ic.layout(sx, iy, sx + iw, iy + ih)
+                    sx += iw + (4 * dp).roundToInt()
+                }
+                flipper.layout(sx, sy, geom.textRight.coerceAtLeast(sx), sy + sh)
+            }
+
+            // 3. 右侧操作胶囊
+            if (rightViews.size == 1) {
+                val rv = rightViews[0]
+                val rw = rv.measuredWidth; val rh = rv.measuredHeight
+                val rx = geom.rightPill.centerX() - rw / 2; val ry = geom.rightPill.centerY() - rh / 2
+                rv.layout(rx, ry, rx + rw, ry + rh)
+            } else if (rightViews.size > 1) {
+                val slotW = (38 * dp).roundToInt()
+                var slotLeft = geom.rightPill.left + (6 * dp).roundToInt()
+                for (rv in rightViews) {
+                    val rw = rv.measuredWidth; val rh = rv.measuredHeight
+                    val rx = slotLeft + (slotW - rw) / 2; val ry = geom.rightPill.centerY() - rh / 2
+                    rv.layout(rx, ry, rx + rw, ry + rh)
+                    slotLeft += slotW
+                }
+            }
+        }
+    }
+
+    val topBlur = cls("com.tencent.mobileqq.aio.reserve1.blur.f")
+    val getTopBlurView = topBlur.getDeclaredMethod("a")
+    fun syncTopBlur(vb: Any) {
+        val blur = runCatching { getTopBlurView.invoke(vb) as? View }.getOrNull() ?: return
+        topBlurs.putIfAbsent(blur, blur.visibility)
+        if (on("玻璃底栏")) { blur.visibility = View.GONE; blur.alpha = 0f }
+        else topBlurs[blur]?.let { blur.visibility = it; blur.alpha = 1f }
+    }
+    for (name in listOf("onCreateView", "handleUIState")) {
+        hook(topBlur.getDeclaredMethod(name, *topBlur.declaredMethods.first { it.name == name }.parameterTypes), gated = false) { chain ->
+            chain.proceed().also { if (topBlur.isInstance(chain.thisObject)) syncTopBlur(chain.thisObject) }
+        }
+    }
+}
+

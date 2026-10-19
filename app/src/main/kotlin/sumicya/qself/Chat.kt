@@ -20,6 +20,7 @@ import org.json.JSONObject
 import java.lang.reflect.Proxy
 import java.util.Collections
 import java.util.WeakHashMap
+import kotlin.math.roundToInt
 
 /** 聊天：会员装饰归零、防撤回、连发合并、转发、「+」面板、昵称行、轻互动、表情雨。 */
 
@@ -226,6 +227,201 @@ internal class RunStarts(val size: Int) {
 internal fun compactMessageTop(original: Int, continued: Boolean, density: Float): Int =
     if (continued && original > 0) minOf(original, (2 * density).toInt()) else original
 
+internal data class BubbleCornerRadii(val topLeft: Int, val topRight: Int, val bottomRight: Int, val bottomLeft: Int)
+
+/** NagramXF MessageDrawable: 外角 17dp，连发内角 6dp，去气泡尾巴。 */
+internal fun nagramBubbleRadii(self: Boolean, continued: Boolean, continues: Boolean, density: Float): BubbleCornerRadii {
+    val outer = (17 * density).roundToInt()
+    val near = (6 * density).roundToInt()
+    return if (self) BubbleCornerRadii(
+        topLeft = outer,
+        topRight = if (continued) near else outer,
+        bottomRight = if (continues) near else outer,
+        bottomLeft = outer,
+    ) else BubbleCornerRadii(
+        topLeft = if (continued) near else outer,
+        topRight = outer,
+        bottomRight = outer,
+        bottomLeft = if (continues) near else outer,
+    )
+}
+
+internal data class NagramRowMargins(
+    val avatarWidth: Int,
+    val avatarMarginStart: Int,
+    val avatarMarginEnd: Int,
+    val contentMarginStart: Int,
+    val contentMarginEnd: Int,
+)
+
+/** NagramXF ChatMessageCell + NekoMessageCell: 己方隐藏头像并右贴 6dp；对方 42dp 头像左距 6dp、气泡间距 3dp（总缩进 51dp）。 */
+internal fun nagramRowMargins(self: Boolean, density: Float): NagramRowMargins =
+    if (self) NagramRowMargins(
+        avatarWidth = 0,
+        avatarMarginStart = 0,
+        avatarMarginEnd = 0,
+        contentMarginStart = (48 * density).roundToInt(),
+        contentMarginEnd = (6 * density).roundToInt(),
+    ) else NagramRowMargins(
+        avatarWidth = (42 * density).roundToInt(),
+        avatarMarginStart = (6 * density).roundToInt(),
+        avatarMarginEnd = 0,
+        contentMarginStart = (3 * density).roundToInt(),
+        contentMarginEnd = (48 * density).roundToInt(),
+    )
+
+private class ReplyQuoteBar(private val dp: Float, private val self: Boolean) : Drawable() {
+    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private val rect = RectF()
+    override fun draw(canvas: Canvas) {
+        val b = bounds
+        if (b.isEmpty) return
+        val night = night()
+        val barColor = if (self) (if (night) 0xFF8AB4F8.toInt() else 0xFF2B7CD3.toInt())
+            else (monet(night, 0xFF) ?: if (night) 0xFF64B5EF.toInt() else 0xFF3390EC.toInt())
+        val bgColor = (barColor and 0x00FFFFFF) or (if (night) 0x24000000 else 0x1A000000)
+        val r = 4 * dp
+        rect.set(b)
+        paint.color = bgColor
+        canvas.drawRoundRect(rect, r, r, paint)
+        val barW = 3 * dp
+        rect.set(b.left.toFloat(), b.top.toFloat(), (b.left + barW).coerceAtMost(b.right.toFloat()), b.bottom.toFloat())
+        paint.color = barColor
+        canvas.drawRoundRect(rect, r, r, paint)
+    }
+    override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+    override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
+    @Deprecated("Drawable opacity") override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+private class BubbleSurface(
+    surface: View,
+    innerClear: View? = null,
+    quote: View? = null,
+) {
+    private val surface = WeakReference(surface)
+    private val innerClear = WeakReference(innerClear)
+    private val quote = WeakReference(quote)
+    private val savedBg = surface.background
+    private val savedInnerBg = innerClear?.background
+    private val savedQuoteBg = quote?.background
+    private val savedQuotePadding = quote?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
+    private var active = false
+    fun apply(self: Boolean, continued: Boolean, continues: Boolean, enabled: Boolean) {
+        val v = surface.get() ?: return
+        if (!enabled) { restore(); return }
+        active = true
+        val dp = v.dp
+        val radii = nagramBubbleRadii(self, continued, continues, dp)
+        val night = night()
+        val fill = if (self) {
+            monet(night, if (night) 0xFF else 0x38) ?: if (night) 0xFF2B5278.toInt() else 0xFFEFFDDE.toInt()
+        } else {
+            if (night) 0xFF182533.toInt() else 0xFFFFFFFF.toInt()
+        }
+        v.background = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+            cornerRadii = floatArrayOf(
+                radii.topLeft.toFloat(), radii.topLeft.toFloat(),
+                radii.topRight.toFloat(), radii.topRight.toFloat(),
+                radii.bottomRight.toFloat(), radii.bottomRight.toFloat(),
+                radii.bottomLeft.toFloat(), radii.bottomLeft.toFloat(),
+            )
+            setColor(fill)
+        }
+        innerClear.get()?.let { if (it !== v && it.background != null) it.background = null }
+        quote.get()?.let { q ->
+            q.background = ReplyQuoteBar(dp, self)
+            val padL = (10 * dp).roundToInt()
+            val padV = (6 * dp).roundToInt()
+            q.setPadding(padL, padV, padL, padV)
+        }
+    }
+    fun restore() {
+        if (!active) return
+        active = false
+        surface.get()?.background = savedBg
+        innerClear.get()?.let { if (it !== surface.get()) it.background = savedInnerBg }
+        quote.get()?.let { q ->
+            q.background = savedQuoteBg
+            savedQuotePadding?.let { q.setPadding(it[0], it[1], it[2], it[3]) }
+        }
+    }
+}
+
+private class RowGeometry(
+    avatarSlot: View?,
+    contentSlot: View?,
+    private val topToTopField: java.lang.reflect.Field?,
+    private val topToBottomField: java.lang.reflect.Field?,
+    private val bottomToBottomField: java.lang.reflect.Field?,
+) {
+    private val avatarSlot = WeakReference(avatarSlot)
+    private val contentSlot = WeakReference(contentSlot)
+    private val avatarLp = avatarSlot?.layoutParams as? ViewGroup.MarginLayoutParams
+    private val contentLp = contentSlot?.layoutParams as? ViewGroup.MarginLayoutParams
+    private val origAvatarW = avatarLp?.width ?: 0
+    private val origAvatarH = avatarLp?.height ?: 0
+    private val origAvatarStart = avatarLp?.marginStart ?: 0
+    private val origAvatarEnd = avatarLp?.marginEnd ?: 0
+    private val origContentStart = contentLp?.marginStart ?: 0
+    private val origContentEnd = contentLp?.marginEnd ?: 0
+    private val origTopToTop = runCatching { avatarLp?.let { topToTopField?.getInt(it) } }.getOrNull()
+    private val origTopToBottom = runCatching { avatarLp?.let { topToBottomField?.getInt(it) } }.getOrNull()
+    private val origBottomToBottom = runCatching { avatarLp?.let { bottomToBottomField?.getInt(it) } }.getOrNull()
+    private var applied = false
+    fun apply(self: Boolean, enabled: Boolean) {
+        if (!enabled) { restore(); return }
+        applied = true
+        val av = avatarSlot.get()
+        val cv = contentSlot.get()
+        val dp = (av ?: cv)?.dp ?: return
+        val m = nagramRowMargins(self, dp)
+        if (av != null && avatarLp != null && av.layoutParams === avatarLp) {
+            avatarLp.width = m.avatarWidth
+            if (!self) avatarLp.height = m.avatarWidth
+            avatarLp.marginStart = m.avatarMarginStart
+            avatarLp.marginEnd = m.avatarMarginEnd
+            if (!self && cv != null && cv.id != View.NO_ID) {
+                runCatching {
+                    topToTopField?.setInt(avatarLp, -1)
+                    topToBottomField?.setInt(avatarLp, -1)
+                    bottomToBottomField?.setInt(avatarLp, cv.id)
+                }
+            }
+            av.layoutParams = avatarLp
+        }
+        if (cv != null && contentLp != null && cv.layoutParams === contentLp) {
+            contentLp.marginStart = m.contentMarginStart
+            contentLp.marginEnd = m.contentMarginEnd
+            cv.layoutParams = contentLp
+        }
+    }
+    fun restore() {
+        if (!applied) return
+        applied = false
+        val av = avatarSlot.get()
+        if (av != null && avatarLp != null && av.layoutParams === avatarLp) {
+            avatarLp.width = origAvatarW
+            avatarLp.height = origAvatarH
+            avatarLp.marginStart = origAvatarStart
+            avatarLp.marginEnd = origAvatarEnd
+            runCatching {
+                if (origTopToTop != null) topToTopField?.setInt(avatarLp, origTopToTop)
+                if (origTopToBottom != null) topToBottomField?.setInt(avatarLp, origTopToBottom)
+                if (origBottomToBottom != null) bottomToBottomField?.setInt(avatarLp, origBottomToBottom)
+            }
+            av.layoutParams = avatarLp
+        }
+        val cv = contentSlot.get()
+        if (cv != null && contentLp != null && cv.layoutParams === contentLp) {
+            contentLp.marginStart = origContentStart
+            contentLp.marginEnd = origContentEnd
+            cv.layoutParams = contentLp
+        }
+    }
+}
+
 private class RunSpacing(view: View) {
     private val view = WeakReference(view)
     private val params = view.layoutParams as? ViewGroup.MarginLayoutParams
@@ -278,7 +474,8 @@ private class RunAvatar(container: View, image: View) {
     fun restore() = visibility.apply(null)
 }
 private class RunLayout(val avatars: List<RunAvatar>, nicks: List<View>, contents: List<View>, slots: List<View>,
-    root: View, avatarSlots: List<View>) {
+    root: View, avatarSlots: List<View>, val bubbles: List<BubbleSurface> = emptyList(),
+    val rowGeometry: RowGeometry? = null, var self: Boolean = false, var continues: Boolean = false) {
     private val root = WeakReference(root)
     val avatarSlots = avatarSlots.map { WeakReference(it) }
     private var compact = false
@@ -287,22 +484,26 @@ private class RunLayout(val avatars: List<RunAvatar>, nicks: List<View>, content
     val contents = contents.map { WeakReference(it) }
     val contentSlots = slots.map { WeakReference(it) }
     fun apply(continued: Boolean, enabled: Boolean) {
-        val next = enabled && continued
+        val next = enabled && (continued || self)
         if (compact != next) { compact = next; root.get()?.requestLayout() }
         spacing.forEach { it.apply(enabled && continued) }
-        if (!enabled) avatars.forEach { it.restore() }
-        nicks.forEach { it.apply(if (enabled && continued) View.GONE else null) }
+        rowGeometry?.apply(self, enabled)
+        bubbles.forEach { it.apply(self, continued, continues, enabled && on("统一气泡")) }
+        if (!enabled) avatars.forEach { it.restore() } else if (self) avatars.forEach { it.hide() }
+        nicks.forEach { it.apply(if (enabled && (continued || self)) View.GONE else null) }
     }
     fun restore() = apply(false, false)
     fun dispose() {
         restore()
+        rowGeometry?.restore()
+        bubbles.forEach { it.restore() }
         avatars.forEach { it.visibility.dispose() }
         nicks.forEach { it.dispose() }
         root.get()?.let { if (runMeasurements[it]?.get()?.layout === this) runMeasurements.remove(it) }
     }
 }
 private class RunBinding(val item: Any, adapter: Any, var index: Int, var group: RunKey,
-    var continued: Boolean, var continues: Boolean, var layout: RunLayout? = null) {
+    var continued: Boolean, var continues: Boolean, var self: Boolean = false, var layout: RunLayout? = null) {
     val adapter = WeakReference(adapter)
     var valid = true
 }
@@ -327,14 +528,22 @@ fun groupRuns() {
         val differAdapters = WeakHashMap<Any, WeakReference<Any>>()
         val vb = cls("com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB")
         val vbRoot = vb.getMethod("s1")
+        val vbTemplate = vb.getDeclaredField("d").apply { isAccessible = true }
+        val templateClass = cls("com.tencent.mobileqq.aio.msglist.holder.template.n")
+        val tplAvatar = templateClass.getDeclaredMethod("a")
+        val tplContent = templateClass.getDeclaredMethod("b")
         val registry = vb.getMethod("o1")
         val components = cls("com.tencent.mobileqq.aio.msglist.holder.g").getMethod("get")
         val component = cls("com.tencent.mobileqq.aio.msglist.holder.component.c")
         val componentRoot = component.getMethod("f1")
+        val componentBubble = component.getMethod("h1")
         val componentSlot = component.getMethod("i1")
         val extras = vb.getDeclaredField("G").apply { isAccessible = true }
         val constraints = cls("androidx.constraintlayout.widget.ConstraintLayout")
         val params = cls("androidx.constraintlayout.widget.ConstraintLayout\$LayoutParams")
+        val topToTopField = params.getDeclaredField("topToTop").apply { isAccessible = true }
+        val topToBottomField = params.getDeclaredField("topToBottom").apply { isAccessible = true }
+        val bottomToBottomField = params.getDeclaredField("bottomToBottom").apply { isAccessible = true }
         val widget = params.getDeclaredMethod("getConstraintWidget")
         val widgetType = cls("androidx.constraintlayout.solver.widgets.ConstraintWidget")
         val widgetY = widgetType.getDeclaredMethod("getY")
@@ -347,6 +556,11 @@ fun groupRuns() {
         val nickType = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2")
         val slotNickType = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickComponentV4")
         val contentType = cls("com.tencent.mobileqq.aio.msglist.holder.component.BaseContentComponent")
+        val mixType = cls("com.tencent.mobileqq.aio.msglist.holder.base.BaseMixContentComponent")
+        val replyType = cls("com.tencent.mobileqq.aio.msglist.holder.component.reply.AIOReplyComponent")
+        val textType = cls("com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent")
+        val pttType = cls("com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttContentComponent")
+        val skinInfoType = cls("com.tencent.mobileqq.aio.msglist.holder.skin.AIOBubbleSkinInfo")
         val bindingVB = ThreadLocal<Boolean>()
         var reported = false
         var warned = false
@@ -377,6 +591,7 @@ fun groupRuns() {
                 val nicks = ArrayList<View>()
                 val contents = ArrayList<View>()
                 val slots = ArrayList<View>()
+                val bubbles = ArrayList<BubbleSurface>()
                 // 主表 + 已激活附加表 G；不是把未创建容器的 f.a 全部拿来猜。
                 for (c in all.filterNotNull().distinct()) {
                     when {
@@ -388,14 +603,26 @@ fun groupRuns() {
                         }
                         (nickType.isInstance(c) || slotNickType.isInstance(c)) -> (componentSlot.invoke(c) as? View)?.let { nicks.add(it) }
                         contentType.isInstance(c) -> {
-                            (componentRoot.invoke(c) as? View)?.let { contents.add(it) }
+                            val rootView = componentRoot.invoke(c) as? View
+                            val bubbleView = runCatching { componentBubble.invoke(c) as? View }.getOrNull()
+                            (rootView ?: bubbleView)?.let { contents.add(it) }
                             // VB.H1 改的是 component.i1().layoutParams.topMargin，不是 VB 根视图。
                             (componentSlot.invoke(c) as? View)?.let { slots.add(it) }
+                            if (mixType.isInstance(c) && rootView != null) {
+                                val quote = if (replyType.isInstance(c) && rootView is ViewGroup && rootView.childCount > 0) rootView.getChildAt(0) else null
+                                bubbles.add(BubbleSurface(rootView, bubbleView, quote))
+                            } else if ((textType.isInstance(c) || pttType.isInstance(c)) && (bubbleView ?: rootView) != null) {
+                                bubbles.add(BubbleSurface((bubbleView ?: rootView)!!))
+                            }
                         }
                     }
                 }
+                val tpl = runCatching { vbTemplate.get(binder) }.getOrNull()
+                val avSlot = runCatching { tpl?.let { tplAvatar.invoke(it) as? View } }.getOrNull() ?: avatarSlots.firstOrNull()
+                val ctSlot = runCatching { tpl?.let { tplContent.invoke(it) as? View } }.getOrNull() ?: slots.firstOrNull()
+                val geom = RowGeometry(avSlot, ctSlot, topToTopField, topToBottomField, bottomToBottomField)
                 RunLayout(avatars, nicks.distinct(), contents.distinct(), slots.distinct(),
-                    vbRoot.invoke(binder) as View, avatarSlots.distinct())
+                    vbRoot.invoke(binder) as View, avatarSlots.distinct(), bubbles, geom, run.self, run.continues)
             }.onFailure { if (!warned) { warned = true; log("TG连发定位：组件读取失败，未改该消息布局", it) } }.getOrNull()
             run.layout?.let { runMeasurements[vbRoot.invoke(binder) as View] = WeakReference(run) }
             run.layout?.apply(run.continued, on("连发合并"))
@@ -455,6 +682,15 @@ fun groupRuns() {
                         row.measuredHeightAndState and View.MEASURED_STATE_MASK))
             }
         }
+        for (skinOwner in listOf(mixType, replyType)) {
+            hook(skinOwner.getDeclaredMethod("C2", skinInfoType)) { chain ->
+                chain.proceed().also {
+                    val rootView = runCatching { componentRoot.invoke(chain.thisObject) as? View }.getOrNull() ?: return@also
+                    val row = generateSequence(rootView) { it.parent as? View }.firstOrNull { pendingRun.containsKey(it) } ?: return@also
+                    pendingRun[row]?.let { run -> run.layout?.apply(run.continued, on("连发合并")) }
+                }
+            }
+        }
         fun regroup(owner: Any, list: List<*>, starts: RunStarts) {
             for ((_, run) in pendingRun) if (run.adapter.get() === owner) {
                 val index = runItemIndex(list, run.item, run.index)
@@ -465,6 +701,8 @@ fun groupRuns() {
                 run.group = RunKey(list[start]!!)
                 run.continued = start < index
                 run.continues = index < list.lastIndex && follows(list[index], list[index + 1])
+                run.self = isSelfMsg(run.item)
+                run.layout?.let { it.self = run.self; it.continues = run.continues }
                 run.layout?.apply(run.continued, on("连发合并"))
             }
             runAvatars.values.mapNotNull { it.get() }.forEach { it.refresh() }
@@ -488,7 +726,7 @@ fun groupRuns() {
                 regroup(chain.thisObject, list, cache.second)
                 val start = cache.second.start(index) { i -> follows(list[i - 1], list[i]) }
                 list[index]?.let { RunBinding(it, chain.thisObject, index, RunKey(list[start]!!), start < index,
-                    index < list.lastIndex && follows(list[index], list[index + 1])) }
+                    index < list.lastIndex && follows(list[index], list[index + 1]), isSelfMsg(it)) }
             } else null
             if (row != null && run != null) pendingRun[row] = run
             val previous = bindingRun.get()
@@ -643,6 +881,10 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
                 }
             }
             val avatars = group.flatMap { it.layout.avatars }
+            if (group.first().run.self) {
+                avatars.forEach { it.hide() }
+                continue
+            }
             // 尽量保留上帧同一个原图源，不能每滚入一行就切到新的头像组件。
             val preferred = pressed?.takeIf { it.group == key }?.target
                 ?: faces.firstOrNull { it.group == key }?.target
@@ -831,6 +1073,9 @@ internal fun continuesMessageRun(sender: String?, previousSender: String?, time:
     time >= previousTime && time - previousTime <= 300 &&
     (time + 8 * 3600) / 86400 == (previousTime + 8 * 3600) / 86400
 
+private fun isSelfMsg(item: Any?): Boolean =
+    runCatching { item?.javaClass?.getMethod("isSelf")?.invoke(item) as? Boolean }.getOrNull() == true
+
 private fun follows(prev: Any?, cur: Any?): Boolean {
     if (prev === cur) return false
     val previousId = msgId(prev)
@@ -839,10 +1084,8 @@ private fun follows(prev: Any?, cur: Any?): Boolean {
     val b = record(cur) ?: return false
     val t0 = a.get("msgTime") as? Long ?: return false
     val t1 = b.get("msgTime") as? Long ?: return false
-    fun self(item: Any?): Boolean =
-        runCatching { item?.javaClass?.getMethod("isSelf")?.invoke(item) as? Boolean }.getOrNull() == true
-    val sender = runSenderPair(b.get("senderUid") as? String, b.get("senderUin") as? Long, self(cur),
-        a.get("senderUid") as? String, a.get("senderUin") as? Long, self(prev))
+    val sender = runSenderPair(b.get("senderUid") as? String, b.get("senderUin") as? Long, isSelfMsg(cur),
+        a.get("senderUid") as? String, a.get("senderUin") as? Long, isSelfMsg(prev))
     return continuesMessageRun(sender.first, sender.second, t1, t0, b.get("msgType") as? Int, a.get("msgType") as? Int)
 }
 

@@ -12,6 +12,7 @@ import java.util.WeakHashMap
 
 /** 不搬移、不隐藏输入或按钮；玻璃只覆盖真实 EditText，不再给整个按钮父框铺底。 */
 private val inputs = WeakHashMap<EditText, WeakReference<NativeInput>>()
+private val inputDecorations = WeakHashMap<View, InputDecoration>()
 
 /** NT 绑定器直接提供真实 EditText；发现钩子始终运行，开关只控制样式，关闭时也能登记。 */
 fun inputLayout() {
@@ -21,6 +22,66 @@ fun inputLayout() {
     hook(prepared, gated = false) { chain -> chain.proceed().also {
         (edit.get(chain.thisObject) as? EditText)?.let { tgInput(it) }
     } }
+    val styleDelegate = cls("com.tencent.mobileqq.aio.input.inputbar.compat.b")
+    val styleBinding = styleDelegate.getDeclaredField("e").apply { isAccessible = true }
+    val mviState = cls("com.tencent.mvi.base.mvi.MviUIState")
+    hook(styleDelegate.getDeclaredMethod("handleUIState", mviState), gated = false) { chain ->
+        chain.proceed().also {
+            refreshInputLayout()
+            runCatching { styleBinding.get(chain.thisObject) }.getOrNull()?.let { adorn ->
+                (runCatching { adorn.get("b") as? EditText }.getOrNull())?.let { tgInput(it) }
+            }
+        }
+    }
+    val expandable = cls("com.tencent.mobileqq.aio.input.AIOInputExpandableVB")
+    val expContainer = expandable.getDeclaredField("e").apply { isAccessible = true }
+    val expDivider = expandable.getDeclaredField("f").apply { isAccessible = true }
+    val helpParam = cls("com.tencent.mvi.api.help.a")
+    fun syncExpandable(vb: Any) {
+        (runCatching { expContainer.get(vb) as? View }.getOrNull())?.let { v ->
+            val dec = inputDecorations.getOrPut(v) { InputDecoration(v, false) }
+            if (on("TG输入栏")) dec.apply() else dec.restore()
+        }
+        (runCatching { expDivider.get(vb) as? View }.getOrNull())?.let { v ->
+            val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
+            if (on("TG输入栏")) dec.apply() else dec.restore()
+        }
+    }
+    hook(expandable.getDeclaredMethod("onCreateView", helpParam), gated = false) { chain ->
+        chain.proceed().also { if (expandable.isInstance(chain.thisObject)) syncExpandable(chain.thisObject) }
+    }
+    hook(expandable.getDeclaredMethod("handleUIState", mviState), gated = false) { chain ->
+        chain.proceed().also { if (expandable.isInstance(chain.thisObject)) syncExpandable(chain.thisObject) }
+    }
+    val bottomBlur = cls("com.tencent.mobileqq.aio.reserve1.blur.BottomBlurVB")
+    val getBottomBlur = bottomBlur.getDeclaredMethod("i1")
+    fun syncBottomBlur(vb: Any) {
+        (runCatching { getBottomBlur.invoke(vb) as? View }.getOrNull())?.let { v ->
+            val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
+            if (on("TG输入栏")) dec.apply() else dec.restore()
+        }
+    }
+    hook(bottomBlur.getDeclaredMethod("onCreateView", helpParam), gated = false) { chain ->
+        chain.proceed().also { if (bottomBlur.isInstance(chain.thisObject)) syncBottomBlur(chain.thisObject) }
+    }
+    hook(bottomBlur.getDeclaredMethod("handleUIState", mviState), gated = false) { chain ->
+        chain.proceed().also { if (bottomBlur.isInstance(chain.thisObject)) syncBottomBlur(chain.thisObject) }
+    }
+    val shortcutBar = cls("com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB")
+    val getShortcutStrip = shortcutBar.getDeclaredMethod("j1")
+    fun syncShortcutBar(vb: Any) {
+        (runCatching { getShortcutStrip.invoke(vb) as? ViewGroup }.getOrNull())?.let { strip ->
+            val dec = inputDecorations.getOrPut(strip) { InputDecoration(strip, false) }
+            if (on("TG输入栏")) dec.apply() else dec.restore()
+            tgInput(strip)
+        }
+    }
+    hook(shortcutBar.getDeclaredMethod("onCreateView", helpParam), gated = false) { chain ->
+        chain.proceed().also { if (shortcutBar.isInstance(chain.thisObject)) syncShortcutBar(chain.thisObject) }
+    }
+    hook(shortcutBar.getDeclaredMethod("handleUIState", mviState), gated = false) { chain ->
+        chain.proceed().also { if (shortcutBar.isInstance(chain.thisObject)) syncShortcutBar(chain.thisObject) }
+    }
 }
 
 /** 兼容旧布局，但不再从任意祖先搜索第一个编辑器，更不强制把用户关闭的开关改回开启。 */
@@ -41,7 +102,11 @@ fun tgInput(edit: EditText, strip: ViewGroup? = null) {
     inputs[edit] = WeakReference(NativeInput(edit, strip).also { it.sync() })
 }
 
-fun refreshInputLayout() { inputs.values.mapNotNull { it.get() }.forEach { it.sync() } }
+fun refreshInputLayout() {
+    val enabled = on("TG输入栏")
+    inputDecorations.values.toList().forEach { if (enabled) it.apply() else it.restore() }
+    inputs.values.mapNotNull { it.get() }.forEach { it.sync() }
+}
 
 /** 只分配现有按钮之外的剩余空隙，不改按钮宽度/weight，不挤掉原生触摸区。 */
 internal fun inputButtonGap(available: Int, occupied: Int, count: Int, desired: Int): Int =
@@ -174,6 +239,8 @@ private class NativeInput(edit: EditText, strip: ViewGroup?) :
 }
 
 fun resetInputLayout() {
+    inputDecorations.values.toList().forEach { it.restore() }
+    inputDecorations.clear()
     inputs.values.mapNotNull { it.get() }.forEach { it.dispose() }
     inputs.clear()
 }

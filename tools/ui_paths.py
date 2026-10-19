@@ -104,6 +104,41 @@ RULES.update({
         {f'{MENU}#removeAllViews'}),
     (MENU, 'G', 'V '): (set(), {f'{MENU}#H'}),
     ('com.tencent.qqnt.aio.widget.SelectableTextView', 'onTouchEvent', 'Z android.view.MotionEvent'): (set(), set()),
+    ('com.tencent.mobileqq.aio.title.AIOTitleVB', 'onCreateView', 'android.view.View com.tencent.mvi.api.help.a'): (
+        {'com.tencent.mobileqq.aio.title.AIOTitleVB#d:sm1.u'}, {'android.view.LayoutInflater#from'}),
+    ('com.tencent.mobileqq.aio.title.AIOTitleVB', 'bindViewAndData', 'V '): (
+        set(), {'com.tencent.mobileqq.aio.title.AIOTitleVB#r1', 'com.tencent.mobileqq.aio.title.AIOTitleVB#u1'}),
+    ('com.tencent.mobileqq.aio.title.AIOTitleVB', 'handleUIState', 'V com.tencent.mvi.base.mvi.MviUIState'): (
+        set(), {'com.tencent.mobileqq.aio.title.AIOTitleVB#C1'}),
+    ('com.tencent.mobileqq.aio.title.center.CenterVB', 'handleUIState', 'V com.tencent.mvi.base.mvi.MviUIState'): (
+        set(), {'com.tencent.mobileqq.aio.title.center.CenterVB#J1'}),
+    ('com.tencent.mobileqq.aio.widget.AIOTitleRelativeLayout', 'onMeasure', 'V I,I'): (
+        set(), {'android.view.View#setMeasuredDimension', 'com.tencent.mobileqq.aio.widget.g#v'}),
+    ('com.tencent.mobileqq.aio.widget.AIOTitleRelativeLayout', 'onLayout', 'V Z,I,I,I,I'): (
+        set(), {'com.tencent.mobileqq.aio.widget.g#u'}),
+    ('com.tencent.mobileqq.aio.reserve1.blur.f', 'onCreateView', 'android.view.View com.tencent.mvi.api.help.a'): (
+        {'com.tencent.mobileqq.aio.reserve1.blur.f#d:sm1.t'}, {'android.view.LayoutInflater#from'}),
+    ('com.tencent.mobileqq.aio.reserve1.blur.f', 'handleUIState', 'V com.tencent.mvi.base.mvi.MviUIState'): (
+        set(), {'com.tencent.mobileqq.aio.reserve1.blur.f#f1'}),
+    ('com.tencent.mobileqq.aio.reserve1.blur.BottomBlurVB', 'onCreateView', 'android.view.View com.tencent.mvi.api.help.a'): (
+        set(), {'com.tencent.mobileqq.aio.reserve1.blur.BottomBlurVB#i1'}),
+    ('com.tencent.mobileqq.aio.reserve1.blur.BottomBlurVB', 'handleUIState', 'V com.tencent.mvi.base.mvi.MviUIState'): (
+        set(), {'com.tencent.mobileqq.aio.reserve1.blur.BottomBlurVB#k1'}),
+    ('com.tencent.mobileqq.aio.input.AIOInputExpandableVB', 'onCreateView', 'android.view.View com.tencent.mvi.api.help.a'): (
+        {'com.tencent.mobileqq.aio.input.AIOInputExpandableVB#e:android.widget.LinearLayout'}, {'android.view.View#setLayoutParams'}),
+    ('com.tencent.mobileqq.aio.input.AIOInputExpandableVB', 'handleUIState', 'V com.tencent.mvi.base.mvi.MviUIState'): (
+        set(), {'com.tencent.mobileqq.aio.input.AIOInputExpandableVB#m1'}),
+    ('com.tencent.mobileqq.aio.input.inputbar.compat.b', 'handleUIState', 'V com.tencent.mvi.base.mvi.MviUIState'): (
+        set(), {'com.tencent.mobileqq.aio.input.inputbar.compat.b#h'}),
+    ('com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB', 'onCreateView', 'android.view.View com.tencent.mvi.api.help.a'): (
+        set(), {'com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB#j1'}),
+    ('com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB', 'handleUIState', 'V com.tencent.mvi.base.mvi.MviUIState'): (
+        set(), {'com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB#o1'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.base.BaseMixContentComponent', 'C2', 'V com.tencent.mobileqq.aio.msglist.holder.skin.AIOBubbleSkinInfo'): (
+        set(), {'com.tencent.mobileqq.aio.msglist.holder.base.BaseMixContentComponent#t2'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.reply.AIOReplyComponent', 'C2', 'V com.tencent.mobileqq.aio.msglist.holder.skin.AIOBubbleSkinInfo'): (
+        {'android.widget.LinearLayout$LayoutParams#leftMargin:I', 'android.widget.LinearLayout$LayoutParams#topMargin:I'},
+        {'android.graphics.drawable.Drawable#mutate'}),
 })
 
 

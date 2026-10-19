@@ -88,6 +88,25 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('nativeMenus.values.toList().forEach { it.dispose() }; nativeMenus.clear()', MENU)
         self.assertIn('nativeMessageMenu()', (SRC / 'Looks.kt').read_text())
 
+    def test_nagramxf_header_bubbles_input_and_vertical_popup_menu_contracts(self):
+        looks = (SRC / 'Looks.kt').read_text()
+        inp = (SRC / 'Input.kt').read_text()
+        self.assertIn('aioHeader()', looks)
+        self.assertIn('nagramHeaderLayout', looks)
+        self.assertIn('com.tencent.mobileqq.aio.title.AIOTitleVB', looks)
+        self.assertIn('com.tencent.mobileqq.aio.widget.AIOTitleRelativeLayout', looks)
+        self.assertIn('com.tencent.qqnt.avatar.a', looks)
+        self.assertIn('nagramBubbleRadii', CHAT)
+        self.assertIn('nagramRowMargins', CHAT)
+        self.assertIn('BaseMixContentComponent', CHAT)
+        self.assertIn('BottomBlurVB', inp)
+        self.assertIn('AIOInputExpandableVB', inp)
+        self.assertIn('AIOShortcutBarVB', inp)
+        self.assertIn('LinearLayout.VERTICAL', MENU)
+        self.assertIn('48 * dp', MENU)
+        self.assertIn('18 * dp', MENU)
+        self.assertIn('17f * v.dp', STYLE)
+
 
 if __name__ == '__main__':
     unittest.main()
