@@ -483,4 +483,32 @@ field com.tencent.mobileqq.aio.msglist.holder.skin.padding.j#a
 field com.tencent.mobileqq.aio.msglist.holder.skin.padding.j#b
 field com.tencent.mobileqq.aio.msglist.holder.skin.padding.j#c
 field com.tencent.mobileqq.aio.msglist.holder.skin.padding.j#d
+member! com.tencent.qqnt.base.widget.RoundRectImageView#draw
+class com.tencent.mobileqq.proavatar.QQProAvatarDrawable
+class com.tencent.qqnt.avatar.layer.d
+member! com.tencent.mobileqq.proavatar.QQProAvatarDrawable#z
+class com.tencent.mobileqq.proavatar.e
+class com.tencent.mobileqq.proavatar.e$a
+member! com.tencent.mobileqq.proavatar.e$a#a
+field com.tencent.mobileqq.proavatar.e#p
+field com.tencent.mobileqq.proavatar.e#d
+field com.tencent.mobileqq.proavatar.e#f
+class kotlin.jvm.functions.Function0
+member! kotlin.jvm.functions.Function0#invoke
+class com.tencent.mobileqq.aio.input.AIOInputSendBtn
+class com.tencent.mobileqq.aio.msglist.holder.component.text.AIOUnsuportContentComponent
+member! com.tencent.mobileqq.aio.msglist.holder.component.text.AIOUnsuportContentComponent#Y1
+class com.tencent.mobileqq.aio.msglist.holder.skin.padding.h
+member! com.tencent.mobileqq.aio.msglist.holder.skin.padding.h#a
+field com.tencent.mobileqq.aio.msglist.holder.skin.padding.h#j
+field com.tencent.mobileqq.aio.msglist.holder.skin.padding.h#k
+field com.tencent.mobileqq.aio.msglist.holder.skin.padding.h#l
+field com.tencent.mobileqq.aio.msglist.holder.skin.padding.h#m
+member! com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB#H1
+member! com.tencent.mobileqq.aio.input.adorn.e#a
+member! com.tencent.mobileqq.aio.input.adorn.e#d
+class com.tencent.qui.smoothcorner.b
+member! com.tencent.qui.smoothcorner.b#e
+member! com.tencent.qui.smoothcorner.b#j
+
 

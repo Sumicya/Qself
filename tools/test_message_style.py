@@ -27,25 +27,22 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('kernelSurface = true', sheet)
 
     def test_timestamp_is_an_overlay_not_appended_to_copyable_message(self):
-        stamp = STYLE.split('private class MessageStamp(', 1)[1].split('fun messageTimestamps()', 1)[0]
-        self.assertIn('v.overlay.add(this)', stamp)
-        self.assertIn('vertical + line', stamp)
-        self.assertIn('side = (6 * v.dp)', stamp)
-        self.assertIn('vertical = (4 * v.dp)', stamp)
-        self.assertIn('v.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL', stamp)
-        self.assertIn('else v.paddingLeft.toFloat()', stamp)
-        self.assertIn('v.height - v.paddingBottom', stamp)
+        stamp = STYLE.split('private class ExternalStamp(', 1)[1].split('fun messageTimestamps()', 1)[0]
+        self.assertIn('container.addView(labelView)', stamp)
+        self.assertIn('container.removeView(labelView)', stamp)
+        self.assertIn('Gravity.END', stamp)
+        self.assertIn('Gravity.START', stamp)
         self.assertNotIn('v.text =', stamp)
-        self.assertIn('it.minimumWidth = minimum', stamp)
-        self.assertIn('removeOnLayoutChangeListener(this)', stamp)
         bind = STYLE.split('fun messageTimestamps()', 1)[1].split('private val inAioAvatarLoad', 1)[0]
-        self.assertLess(bind.index('?.restore()'), bind.index('chain.proceed()'))
+        self.assertIn('AIOBubbleMsgItemVB', bind)
         self.assertIn('gated = false', bind)
 
     def test_avatar_radius_uses_native_roundrect_and_restores_saved_values(self):
         self.assertIn('"setCornerRadiusAndMode", Integer.TYPE, Integer.TYPE', STYLE)
         self.assertIn('com.tencent.qqnt.avatar.meta.b\\$a', STYLE)
         self.assertIn('com.tencent.qqnt.avatar.b\\$a', STYLE)
+        self.assertIn('com.tencent.mobileqq.proavatar.QQProAvatarDrawable', STYLE)
+        self.assertIn('com.tencent.mobileqq.proavatar.e\\$a', STYLE)
         self.assertIn('getCircleFaceBitmap', STYLE)
         self.assertIn('setter.invoke(v, radius, if (radius > 0) 1 else 0)', STYLE)
         self.assertIn('setter.invoke(v, nativeRadius, nativeMode)', STYLE)
@@ -80,8 +77,8 @@ class MessageStyleContractTest(unittest.TestCase):
             'AIOTimestampComponent',
         ):
             self.assertIn(component, STYLE)
-        self.assertIn('SurfaceStamp', STYLE)
-        self.assertIn('surfaceStamps.values.toList().forEach { it.dispose() }', STYLE)
+        self.assertIn('ExternalStamp', STYLE)
+        self.assertIn('externalStamps.values.toList().forEach { it.dispose() }', STYLE)
         self.assertIn('timestampSlots.entries.toList().forEach { (slot, saved) -> slot.visibility = saved }', STYLE)
 
     def test_native_and_settings_menus_track_single_item_and_style_danger_actions(self):
@@ -104,13 +101,15 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('nagramBubbleRadii', CHAT)
         self.assertIn('nagramRowMargins', CHAT)
         self.assertIn('BaseMixContentComponent', CHAT)
+        self.assertIn('AIOUnsuportContentComponent', CHAT)
         self.assertIn('BottomBlurVB', inp)
         self.assertIn('AIOInputExpandableVB', inp)
         self.assertIn('AIOShortcutBarVB', inp)
+        self.assertIn('SendButtonPill', inp)
+        self.assertIn('com.tencent.qui.smoothcorner.b', inp)
         self.assertIn('LinearLayout.VERTICAL', MENU)
         self.assertIn('48 * dp', MENU)
         self.assertIn('18 * dp', MENU)
-        self.assertIn('17f * v.dp', STYLE)
 
 
 if __name__ == '__main__':

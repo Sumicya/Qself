@@ -14,13 +14,23 @@ import java.util.WeakHashMap
 private val inputs = WeakHashMap<EditText, WeakReference<NativeInput>>()
 private val inputDecorations = WeakHashMap<View, InputDecoration>()
 
-/** NT 绑定器直接提供真实 EditText；发现钩子始终运行，开关只控制样式，关闭时也能登记。 */
+/** NT 绑定器直接提供真实 EditText 与发送按钮；发现钩子始终运行，开关只控制样式，关闭时也能登记。 */
 fun inputLayout() {
+    val adornType = cls("com.tencent.mobileqq.aio.input.adorn.e")
+    val adornEdit = adornType.getDeclaredMethod("a")
+    val adornSend = adornType.getDeclaredMethod("d")
+    val smoothType = cls("com.tencent.qui.smoothcorner.b")
+    val smoothGetRadius = smoothType.getDeclaredMethod("e")
+    val smoothSetRadius = smoothType.getDeclaredMethod("j", java.lang.Float.TYPE)
+    SendButtonPill.initSmoothCorner(smoothType, smoothGetRadius, smoothSetRadius)
     val delegate = cls("com.tencent.mobileqq.aio.input.edit.delegate.InputEditTextVBDelegate")
     val edit = delegate.getDeclaredField("e").apply { isAccessible = true }
     val prepared = delegate.getDeclaredMethod("U", cls("com.tencent.mobileqq.aio.input.adorn.e"))
     hook(prepared, gated = false) { chain -> chain.proceed().also {
-        (edit.get(chain.thisObject) as? EditText)?.let { tgInput(it) }
+        val adorn = chain.args.getOrNull(0)
+        val ed = (edit.get(chain.thisObject) as? EditText) ?: runCatching { adorn?.let { adornEdit.invoke(it) as? EditText } }.getOrNull()
+        val send = runCatching { adorn?.let { adornSend.invoke(it) as? View } }.getOrNull()
+        ed?.let { tgInput(it, sendBtn = send) }
     } }
     val styleDelegate = cls("com.tencent.mobileqq.aio.input.inputbar.compat.b")
     val styleBinding = styleDelegate.getDeclaredField("e").apply { isAccessible = true }
@@ -29,7 +39,10 @@ fun inputLayout() {
         chain.proceed().also {
             refreshInputLayout()
             runCatching { styleBinding.get(chain.thisObject) }.getOrNull()?.let { adorn ->
-                (runCatching { adorn.get("b") as? EditText }.getOrNull())?.let { tgInput(it) }
+                val ed = runCatching { adornEdit.invoke(adorn) as? EditText }.getOrNull()
+                    ?: runCatching { adorn.get("b") as? EditText }.getOrNull()
+                val send = runCatching { adornSend.invoke(adorn) as? View }.getOrNull()
+                ed?.let { tgInput(it, sendBtn = send) }
             }
         }
     }
@@ -97,9 +110,13 @@ fun tgInput(strip: ViewGroup) {
     findEdit(row)?.let { tgInput(it, strip) }
 }
 
-fun tgInput(edit: EditText, strip: ViewGroup? = null) {
-    inputs[edit]?.get()?.let { it.sync(); return }
-    inputs[edit] = WeakReference(NativeInput(edit, strip).also { it.sync() })
+fun tgInput(edit: EditText, strip: ViewGroup? = null, sendBtn: View? = null) {
+    inputs[edit]?.get()?.let {
+        if (sendBtn != null) it.attachSendButton(sendBtn)
+        it.sync()
+        return
+    }
+    inputs[edit] = WeakReference(NativeInput(edit, strip, sendBtn).also { it.sync() })
 }
 
 fun refreshInputLayout() {
@@ -124,6 +141,58 @@ private class InputDecoration(view: View, private val hide: Boolean = false) {
     fun restore() { view.get()?.let { it.background = background; it.foreground = foreground; if (hide) it.visibility = visibility } }
 }
 
+private class SendButtonPill(view: View) {
+    private val view = WeakReference(view)
+    private val outline = view.outlineProvider
+    private val clip = view.clipToOutline
+    private val shape = capsule()
+    private val origRadii = WeakHashMap<Any, Float>()
+    fun apply() {
+        val v = view.get() ?: return
+        if (v.outlineProvider !== shape) v.outlineProvider = shape
+        if (!v.clipToOutline) v.clipToOutline = true
+        val targetRadius = if (v.height > 0) v.height / 2f else 18f * v.dp
+        updateSmoothRadii(v.background, targetRadius)
+        v.invalidate()
+    }
+    fun restore() {
+        val v = view.get() ?: return
+        v.outlineProvider = outline
+        v.clipToOutline = clip
+        for ((drawable, orig) in origRadii.entries.toList()) {
+            runCatching { setRadiusMethod?.invoke(drawable, orig) }
+        }
+        origRadii.clear()
+        v.invalidate()
+    }
+    private fun updateSmoothRadii(drawable: android.graphics.drawable.Drawable?, radius: Float) {
+        if (drawable == null) return
+        val cls = smoothClass
+        if (cls != null && cls.isInstance(drawable)) {
+            if (!origRadii.containsKey(drawable)) {
+                val orig = runCatching { (getRadiusMethod?.invoke(drawable) as? Number)?.toFloat() }.getOrNull() ?: (4f * (view.get()?.dp ?: 3f))
+                origRadii[drawable] = orig
+            }
+            runCatching { setRadiusMethod?.invoke(drawable, radius) }
+            return
+        }
+        val state = drawable.constantState as? android.graphics.drawable.DrawableContainer.DrawableContainerState
+        if (state != null) {
+            state.children?.forEach { child -> updateSmoothRadii(child, radius) }
+        }
+    }
+    companion object {
+        private var smoothClass: Class<*>? = null
+        private var getRadiusMethod: java.lang.reflect.Method? = null
+        private var setRadiusMethod: java.lang.reflect.Method? = null
+        fun initSmoothCorner(cls: Class<*>, getter: java.lang.reflect.Method, setter: java.lang.reflect.Method) {
+            smoothClass = cls
+            getRadiusMethod = getter.apply { isAccessible = true }
+            setRadiusMethod = setter.apply { isAccessible = true }
+        }
+    }
+}
+
 private class ButtonMargin(view: View, val params: ViewGroup.MarginLayoutParams) {
     private val view = WeakReference(view)
     private val start = params.marginStart
@@ -138,18 +207,20 @@ private class ButtonMargin(view: View, val params: ViewGroup.MarginLayoutParams)
     } } }
 }
 
-private class NativeInput(edit: EditText, strip: ViewGroup?) :
+private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = null) :
     ViewTreeObserver.OnPreDrawListener, ViewTreeObserver.OnGlobalLayoutListener, View.OnAttachStateChangeListener {
     private val strip = WeakReference(strip)
     private val edit = WeakReference(edit)
     private val background = edit.background
     private val outline = edit.outlineProvider
     private val clip = edit.clipToOutline
+    private val origPadding = intArrayOf(edit.paddingLeft, edit.paddingTop, edit.paddingRight, edit.paddingBottom)
     private val originalTranslationZ = edit.translationZ
-    private val glass = Glass(edit, 22 * edit.dp, kernelSurface = true)
-    private val shape = capsule(22 * edit.dp)
+    private val glass = Glass(edit, Float.MAX_VALUE, kernelSurface = true)
+    private val shape = capsule()
     private val margins = WeakHashMap<View, ButtonMargin>()
     private val decorations = ArrayList<InputDecoration>()
+    private var sendPill: SendButtonPill? = null
     private var applied = false
     private var focused = edit.hasFocus()
     private var focusAnimator: ValueAnimator? = null
@@ -157,8 +228,17 @@ private class NativeInput(edit: EditText, strip: ViewGroup?) :
         // 真包布局 r/i/{ez,k_...}.xml：InputLinearLayout 和图标带各有一层实色背景。
         strip?.let { decorations.add(InputDecoration(it)) }
         // NT dxg.xml：编辑器与发送按钮的 ConstraintLayout 自带不透明背景。
-        if (edit.javaClass.name == "com.tencent.mobileqq.aio.input.edit.AIOEditText")
-            (edit.parent as? ViewGroup)?.let { decorations.add(InputDecoration(it)) }
+        if (edit.javaClass.name == "com.tencent.mobileqq.aio.input.edit.AIOEditText") {
+            (edit.parent as? ViewGroup)?.let { parent ->
+                decorations.add(InputDecoration(parent))
+                if (sendBtn == null) {
+                    (0 until parent.childCount).map(parent::getChildAt)
+                        .firstOrNull { it.javaClass.name == "com.tencent.mobileqq.aio.input.AIOInputSendBtn" || it.id == 0x7f0a61c0 }
+                        ?.let { sendPill = SendButtonPill(it) }
+                }
+            }
+        }
+        if (sendBtn != null) sendPill = SendButtonPill(sendBtn)
         val row = generateSequence(edit.parent as? ViewGroup) { it.parent as? ViewGroup }
             .take(4).firstOrNull { it.javaClass.name.endsWith(".InputLinearLayout") }
         if (row != null) {
@@ -177,6 +257,9 @@ private class NativeInput(edit: EditText, strip: ViewGroup?) :
         edit.viewTreeObserver.addOnGlobalLayoutListener(this)
         edit.addOnAttachStateChangeListener(this)
     }
+    fun attachSendButton(view: View) {
+        if (sendPill == null) sendPill = SendButtonPill(view)
+    }
     fun sync() {
         val edit = edit.get() ?: return
         if (!on("TG输入栏")) { restore(); return }
@@ -184,6 +267,13 @@ private class NativeInput(edit: EditText, strip: ViewGroup?) :
         if (edit.background !== glass) edit.background = glass
         if (edit.outlineProvider !== shape) edit.outlineProvider = shape
         if (!edit.clipToOutline) edit.clipToOutline = true
+        val minPadH = (14 * edit.dp).toInt()
+        val padL = maxOf(origPadding[0], minPadH)
+        val padR = maxOf(origPadding[2], minPadH)
+        if (edit.paddingLeft != padL || edit.paddingRight != padR) {
+            edit.setPadding(padL, origPadding[1], padR, origPadding[3])
+        }
+        sendPill?.apply()
         glass.sync()
         val focus = edit.hasFocus()
         if (!applied || focused != focus) {
@@ -200,6 +290,7 @@ private class NativeInput(edit: EditText, strip: ViewGroup?) :
     }
     override fun onGlobalLayout() {
         if (!on("TG输入栏")) return
+        sendPill?.apply()
         val strip = strip.get() ?: return
         if (strip.width <= 0) return
         val children = (0 until strip.childCount).map(strip::getChildAt).filter { it.visibility == View.VISIBLE }
@@ -217,8 +308,10 @@ private class NativeInput(edit: EditText, strip: ViewGroup?) :
         focusAnimator?.cancel(); focusAnimator = null
         edit.get()?.let {
             it.background = background; it.outlineProvider = outline; it.clipToOutline = clip
+            it.setPadding(origPadding[0], origPadding[1], origPadding[2], origPadding[3])
             it.translationZ = originalTranslationZ
         }
+        sendPill?.restore()
         decorations.forEach { it.restore() }
         margins.values.forEach { it.restore() }; margins.clear()
         applied = false

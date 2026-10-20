@@ -162,6 +162,36 @@ RULES.update({
     ('com.tencent.mobileqq.aio.msglist.holder.template.l', 'q', 'V Z'): (
         {'com.tencent.mobileqq.aio.msglist.holder.template.l#a:sm1.r'},
         {'android.view.ViewGroup$MarginLayoutParams#setMarginEnd'}),
+    ('com.tencent.mobileqq.proavatar.QQProAvatarDrawable', 'z',
+     'V com.tencent.qqnt.avatar.layer.d,android.graphics.Canvas,android.graphics.Rect,android.graphics.Paint,kotlin.jvm.functions.Function0'): (
+        {'com.tencent.mobileqq.proavatar.j#a:com.tencent.mobileqq.proavatar.j'},
+        {'com.tencent.mobileqq.proavatar.QQProAvatarDrawable$maskLayer$1#<init>',
+         'com.tencent.mobileqq.proavatar.j#b'}),
+    ('com.tencent.mobileqq.proavatar.e$a', 'a', 'com.tencent.mobileqq.proavatar.e '): (
+        {'com.tencent.mobileqq.proavatar.e$a#p:Z',
+         'com.tencent.mobileqq.proavatar.e$a#d:Z',
+         'com.tencent.mobileqq.proavatar.e$a#f:Z'},
+        {'com.tencent.mobileqq.proavatar.e#<init>'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.text.AIOUnsuportContentComponent', 'Y1',
+     'android.widget.TextView '): (
+        {'com.tencent.mobileqq.aio.msglist.holder.component.text.AIOUnsuportContentComponent#F:kotlin.Lazy'},
+        {'kotlin.Lazy#getValue'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.skin.padding.h', 'a',
+     'com.tencent.mobileqq.aio.msglist.holder.skin.padding.a com.tencent.mobileqq.aio.msg.AIOMsgItem'): (
+        {'com.tencent.mobileqq.aio.msglist.holder.skin.padding.h#j:I',
+         'com.tencent.mobileqq.aio.msglist.holder.skin.padding.h#k:I',
+         'com.tencent.mobileqq.aio.msglist.holder.skin.padding.h#l:I',
+         'com.tencent.mobileqq.aio.msglist.holder.skin.padding.h#m:I'},
+        {'com.tencent.mobileqq.aio.msglist.holder.skin.padding.j#a'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB', 'H1',
+     'V com.tencent.mobileqq.aio.msg.AIOMsgItem'): (
+        set(),
+        {'com.tencent.mobileqq.aio.msg.AIOMsgItem#A'}),
+    ('com.tencent.qui.smoothcorner.b', 'j', 'V F'): (
+        {'com.tencent.qui.smoothcorner.b#a:com.tencent.qui.smoothcorner.b$b',
+         'com.tencent.qui.smoothcorner.b#k:Z'},
+        {'android.graphics.drawable.Drawable#invalidateSelf',
+         'com.tencent.qui.smoothcorner.b$b#f'}),
 })
 
 

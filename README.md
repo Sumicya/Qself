@@ -7,7 +7,7 @@
 ## 要求
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
-但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，424 条）——换版本先看那张表红哪条，别猜。
+但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，451 条）——换版本先看那张表红哪条，别猜。
 
 ## 功能
 
@@ -17,21 +17,21 @@
 - 底栏角标按真实计数入口展开「99+」；底栏 QUIBadge 在 widget.d.a 转文字之前保留第 3 个参数的真实数量，数字宽度与左右内边距一同调整；底栏纯数字不画红底或边框，用完整矩阵在共同父坐标中校正，并显式居中绘字；上移半个数字字形高度，减少与图标重叠，不再混用窗口坐标与局部宽度（仍待设备验收）
 - **Monet 取色**：玻璃的罩色、选中项、设置短胶囊图标的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色
-- TG 输入栏：接入 NT 的 `InputEditTextVBDelegate.U`、`AIOInputExpandableVB`（容器 `e` 与顶部分割线 `f`）、`compat.b`（皮肤状态重刷）、`BottomBlurVB`（底部通栏模糊隐藏）与 `AIOShortcutBarVB`（`PanelIconLinearLayout` 图标带），按真实 EditText 唯一管理 22dp 圆角玻璃胶囊，保留原输入框、发送、语音、表情和附件按钮；撤掉搬移输入区、镜像按钮、隐藏图标带和压缩兄弟布局的实现。保留用户原有开关选择，切换后立即还原/应用；图标只调整剩余间隙，不改按钮宽度与权重。输入与键盘效果待真机验收。
+- TG 输入栏：接入 NT 的 `InputEditTextVBDelegate.U`（`adorn.e#a` 编辑器与 `adorn.e#d` 发送按钮）、`AIOInputExpandableVB`（容器 `e` 与顶部分割线 `f`）、`compat.b`（皮肤状态重刷）、`BottomBlurVB`（底部通栏模糊隐藏）与 `AIOShortcutBarVB`（`PanelIconLinearLayout` 图标带），将真实 `AIOEditText` 与右侧 `AIOInputSendBtn`（含 `com.tencent.qui.smoothcorner.b#j` 圆角背景）分别独立按 `height / 2` 完全药丸化（`capsule()`），保留原输入框、发送、语音、表情和附件按钮。保留用户原有开关选择，切换后立即还原/应用；图标只调整剩余间隙，不改按钮宽度与权重。输入与键盘效果待真机验收。
 - 藏掉「频道」「动态」「小世界」页签
 - 聊天标题栏去掉一起听 / 一起看 / 群游戏那排；侧栏去掉打卡、天气、等级、会员、装扮、钱包一类的入口（数据源和视图两头都拦）
 - 隐藏好友聊天标题栏那行在线状态（在线 / 手机在线 / WiFi在线 / 忙碌 / 隐身…）
-- 统一气泡、统一字体、去头像挂件；开启统一气泡与连发合并时，消息气泡统一左部无圆角（0dp）、右部按连发首/中/尾与气泡高度灵活圆角（外角 17dp、连发内角 6dp，圆角设为 0% 即 90°直角时不圆角），绘制 3dp 左竖线引用块（4dp 内圆角、8dp 左右内边距），并拦截 `BaseMixContentComponent#C2`、`AIOReplyComponent#C2` 与 `TextMsgContent#H` 防止皮肤覆盖；已移除“昵称只留名字”，保留 QQ 原昵称装饰。
+- 统一气泡、统一字体、去头像挂件；开启统一气泡与连发合并时，单条独立消息恢复四角全圆角（`17dp`），仅在连发多条消息的 T 字形相邻接缝处设为直角（他人消息左侧连发首条左下 0dp、中间左上+左下 0dp、末条左上 0dp；自己消息右侧连发首条右下 0dp、中间右上+右下 0dp、末条右上 0dp），且气泡圆角与头像圆角滑块解耦；绘制 3dp 左竖线引用块（4dp 内圆角、8dp 左右内边距），并覆盖 `BaseMixContentComponent#C2`、`AIOReplyComponent#C2`、`TextMsgContent#H` 与 `AIOUnsuportContentComponent#Y1`；已移除“昵称只留名字”，保留 QQ 原昵称装饰。
 - **屏蔽红点引导**：群红点、王者小队、群头衔、游戏中心红点、乐吧引导气泡、资料卡引导、虚拟形象角标一律不亮
 - **去会员等级**：资料卡上 SVIP / VIP / 大会员 / 大会员年费那排图标不画
 
 聊天
 - 防撤回：私聊、群聊、重连补发的撤回都吞掉，被撤回的那条压成半透明，会话里插一条「xx 尝试撤回一条消息」灰字
-- **消息内时间（左对齐与格式码说明）**：普通文字、引用与混排正文采用 6dp 左右、4dp 上下紧凑内边距并在下部预留左对齐时间行（`MessageStamp`）；图片、文件、语音、表情、卡片、视频同时解析 `f1()` 与 `h1()` 视图并在左下角绘制最小 17dp 高半透明胶囊时间（`SurfaceStamp`），同时折叠会话顶部 `AIOTimestampComponent` 时间分隔槽。默认 `HH:mm`，在菜单「消息外观」输入自定义格式（内附左对齐格式码说明：`yyyy/yy` 年、`MM` 月、`dd` 日、`E` 星期、`HH` 24时、`hh` 12时、`a` 上下午、`mm` 分、`ss` 秒、`SSS` 毫秒，单引号包裹文字）。时间不会混入正文、复制内容或输入框，也不改动非文本消息的子 View 树；关闭、复用与热重载均完整还原。各类型实际边距与视觉效果仍待真机验收。
+- **消息内时间（置于消息容器外部下方以适配全部消息）**：通过 `AIOBubbleMsgItemVB#k1` 与全部内容组件 `d1` 将自定义格式时间（`ExternalStamp`）直接挂载于消息槽容器 `msgContent`（`0x7f0a11b9` `BubbleLayoutCompatPress` 垂直 `LinearLayout`）底部外侧（他人消息左对齐 `START`、自己消息右对齐 `END`），统一适配文字、图片、文件、引用、混排、语音、表情、卡片、视频、合并转发与不支持消息等全部类型，并折叠会话顶部 `AIOTimestampComponent` 时间分隔槽。默认 `HH:mm`，在菜单「消息外观」输入自定义格式（内附左对齐格式码说明：`yyyy/yy` 年、`MM` 月、`dd` 日、`E` 星期、`HH` 24时、`hh` 12时、`a` 上下午、`mm` 分、`ss` 秒、`SSS` 毫秒，单引号包裹文字）。时间不会混入正文、复制内容或输入框，也不破坏气泡与卡片内部子 View 树；关闭、复用与热重载均完整还原。各类型实际视觉效果仍待真机验收。
 - **原生消息菜单纵向列表与设置面板随指高亮**：按 NagramXF `ActionBarPopupWindow` + `ActionBarMenuSubItem` 将 QQ 原生消息长按菜单 `QQCustomMenuExpandableLayout`（`p` / `l` / `H` / `G`）重排为 12dp 圆角玻璃纵向列表（行高 48dp、左右内边距 18dp、20dp 图标 + 12dp 间距 + 16sp 完整不截断文案、6dp 圆角按压高亮，隐藏原生暗色 `S: QQBlurViewWrapper` 与分割线 `T`），并与模块设置面板共用单有效项随指高亮、跨项移动、项外取消且松手不触发动作、展开态纵滑交还 `ScrollView`；「删除」「撤回」「结束进程」统一标记为警示红图文与按压态（待真机手势复验）。
 - **消息显示 At 对象**：点按群消息中的 `@名字` 打开对应资料卡；按元素顺序定位重复名字，保留原链接及正常长按/滑动。UID 无缓存映射时明确提示，`@全体成员` 不当作个人资料卡。
-- **头像圆角（普通聊天与聊天记录同步生效）**：菜单「消息外观」调整 0～50%；0% 为 90°直角（不圆角，同时联动气泡右圆角），50% 为圆形，默认 20%。拦截普通聊天 `AIOAvatarContentComponent#K1` / `D1` 走 `FaceDrawableEngine` 时的 `com.tencent.qqnt.avatar.meta.b$a#b`（切到 `m(false)` 即 `_no_circle` 缓存键跳过 360° 裁圆）、`com.tencent.qqnt.avatar.b$a#i`（半径 < 50% 时跳过预裁圆 VAS 头像）与 `BaseImageUtil#getCircleFaceBitmap`，再统一交给 `RoundRectImageView#setCornerRadiusAndMode` 裁剪；切换或拖动滑块时清空 `m` 缓存重刷，关闭还原原半径与模式。
-- 连发合并（左对齐、缩短边距、滚动合并大于居中）：收发双方消息（`r/i/dxm.xml` 与 `r/i/dye.xml`）统一左对齐并尽量缩短边距（36dp 头像左距 2dp，正文与昵称紧贴头像右侧 2dp、右距 4dp，总左缩进仅 40dp，`horizontalBias = 0f`，并收紧 `skin.padding.j#a` 消除气泡尾巴偏置）；按真实内容组件槽位收紧续条正上间距至最多 2dp；昵称取 `i1()` 外层容器，读取主表和已激活附加表 `G`，同时识别 pit V2 与 slot V4 昵称，固定组首上方、续条折叠。头像定位遵循「滚动合并大于居中」（`runAvatarBounds`）：只要存在连发续接或消息/组高度超过头像，即按整组上下边界 `[groupTop + h/2, groupBottom - h/2]` 粘性滚动合并，仅短单条居中。**用户反馈的跳动、不合并与昵称未折叠尚无设备复验，本次实现与离线检查不等于效果验收。**
+- **头像圆角（普通聊天与聊天记录同步生效）**：菜单「消息外观」调整 0～50%；0% 为 90°直角（不圆角），50% 为圆形，默认 20%（仅控制头像，不联动气泡直角）。同时拦截普通聊天 `RoundRectImageView#draw` 下的 `QQProAvatarDrawable#z`（跳过 `proavatar.j#b` / `proavatar.mask.a#a` 的 360° 圆形 `Path.addArc` 遮罩）、`com.tencent.mobileqq.proavatar.e$a#a`、`com.tencent.qqnt.avatar.meta.b$a#b`、`com.tencent.qqnt.avatar.b$a#i` 与 `BaseImageUtil#getCircleFaceBitmap`，交由 `RoundRectImageView#setCornerRadiusAndMode` 按圆角半径裁剪；切换或拖动滑块时清空 `m` 缓存重刷，关闭还原原半径与模式。
+- 连发合并（他人居左、自己居右、灰字居中、单条顶对齐、连发粘性浮动、紧凑边距）：仅对气泡收发模板（`template.g` / `template.l`）套用行几何，居中灰字提示（`template.m` / `sm1.z`）保持原生居中；他人消息居左（头像左距 8dp、气泡左距 6dp、保留 `WRAP_CONTENT` 与清零 `msgAvatar` 顶内边距防止侵入气泡或下行 `LVxx` 头衔）、自己消息保持原生居右与右侧头像；拦截 `AIOBubbleMsgItemVB#H1`、`skin.padding.j#a`、`skin.padding.h#a` 与 `AIOArkContentComponent#p2` 缩减行间与气泡上下边距；单条独立消息保持原生顶对齐不居中（消除异步高度变化引起的跳动与向下侵入），仅连发多条消息（`>= 2`）在组边界 `[groupTop, groupBottom - h]` 内粘性滚动合并。**尚无本轮设备复验，本次实现与离线检查不等于效果验收。**
 - **回复不@**：回复消息时不再往输入框插「@昵称 」
 - **转发不限人数**：修正私有方法反射访问，转发选人不再卡 9 个；调用 QQ 原生搜索勾选同步及顶部计数刷新。仍需设备验证实际发送端限制。
 - **左滑回复不设限**：卡片 (Ark) 消息也能左滑回复
@@ -71,7 +71,7 @@
 
 ```sh
 git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
-python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 424 条全绿才算数
+python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 451 条全绿才算数
 python3 tools/ui_paths.py qq.apk                                   # 完整签名、字段读写和调用关系；不是设备验收
 python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
 ```

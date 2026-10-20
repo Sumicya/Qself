@@ -227,32 +227,36 @@ internal class RunStarts(val size: Int) {
 }
 
 internal fun compactMessageTop(original: Int, continued: Boolean, density: Float): Int =
-    if (continued && original > 0) minOf(original, (2 * density).toInt()) else original
+    if (original > 0) minOf(original, ((if (continued) 1 else 2) * density).roundToInt()) else original
 
 internal data class BubbleCornerRadii(val topLeft: Int, val topRight: Int, val bottomRight: Int, val bottomLeft: Int)
 
-/** 统一左部无圆角（0dp），右部灵活圆角（随连发首/中/尾、高度与圆角配置自适应；90度即 0% 时不圆角）。 */
+/** 单条消息恢复四角全圆角（17dp）；仅连发消息在 T 字形衔接侧（他人左侧、自己右侧）置 0dp 直角，与头像圆角解耦。 */
 internal fun nagramBubbleRadii(
     self: Boolean,
     continued: Boolean,
     continues: Boolean,
     density: Float,
-    cornerPercent: Int = 20,
     heightPx: Int = 0,
 ): BubbleCornerRadii {
-    if (cornerPercent <= 0 || density <= 0f) return BubbleCornerRadii(0, 0, 0, 0)
-    val scale = (cornerPercent.coerceIn(0, 50) / 20f).coerceIn(0.25f, 1.5f)
-    val outer = (17 * density * scale).roundToInt()
-    val near = (6 * density * scale).roundToInt()
+    if (density <= 0f) return BubbleCornerRadii(0, 0, 0, 0)
     val cap = if (heightPx > 0) (heightPx / 2).coerceAtLeast(0) else Int.MAX_VALUE
-    val topRight = (if (continued) near else outer).coerceAtMost(cap)
-    val bottomRight = (if (continues) near else outer).coerceAtMost(cap)
-    return BubbleCornerRadii(
-        topLeft = 0,
-        topRight = topRight,
-        bottomRight = bottomRight,
-        bottomLeft = 0,
-    )
+    val outer = (17 * density).roundToInt().coerceAtMost(cap)
+    return if (self) {
+        BubbleCornerRadii(
+            topLeft = outer,
+            topRight = if (continued) 0 else outer,
+            bottomRight = if (continues) 0 else outer,
+            bottomLeft = outer,
+        )
+    } else {
+        BubbleCornerRadii(
+            topLeft = if (continued) 0 else outer,
+            topRight = outer,
+            bottomRight = outer,
+            bottomLeft = if (continues) 0 else outer,
+        )
+    }
 }
 
 internal data class NagramRowMargins(
@@ -264,16 +268,27 @@ internal data class NagramRowMargins(
     val topGap: Int = 0,
 )
 
-/** 全员左对齐并尽量缩短边距：头像 36dp 左距 2dp，正文/昵称紧贴头像右侧 2dp、右距 4dp（总左缩进仅 40dp）。 */
+/** 他人消息居左（头像适度右移 8dp，正文与头像留 6dp 防侵入）；自己消息居右保持原侧布局，上下紧凑间距。 */
 internal fun nagramRowMargins(self: Boolean, density: Float, continued: Boolean = false): NagramRowMargins =
-    NagramRowMargins(
-        avatarWidth = (36 * density).roundToInt(),
-        avatarMarginStart = (2 * density).roundToInt(),
-        avatarMarginEnd = 0,
-        contentMarginStart = (2 * density).roundToInt(),
-        contentMarginEnd = (4 * density).roundToInt(),
-        topGap = ((if (continued) 1 else 2) * density).roundToInt(),
-    )
+    if (self) {
+        NagramRowMargins(
+            avatarWidth = (40 * density).roundToInt(),
+            avatarMarginStart = 0,
+            avatarMarginEnd = (8 * density).roundToInt(),
+            contentMarginStart = (12 * density).roundToInt(),
+            contentMarginEnd = (6 * density).roundToInt(),
+            topGap = ((if (continued) 1 else 2) * density).roundToInt(),
+        )
+    } else {
+        NagramRowMargins(
+            avatarWidth = (40 * density).roundToInt(),
+            avatarMarginStart = (8 * density).roundToInt(),
+            avatarMarginEnd = 0,
+            contentMarginStart = (6 * density).roundToInt(),
+            contentMarginEnd = (12 * density).roundToInt(),
+            topGap = ((if (continued) 1 else 2) * density).roundToInt(),
+        )
+    }
 
 private class ReplyQuoteBar(private val dp: Float, private val self: Boolean) : Drawable() {
     private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
@@ -299,12 +314,12 @@ private class ReplyQuoteBar(private val dp: Float, private val self: Boolean) : 
     @Deprecated("Drawable opacity") override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
 
-private class FlexibleRightBubbleDrawable(
+private class NagramBubbleDrawable(
     private val fill: Int,
+    private val self: Boolean,
     private val continued: Boolean,
     private val continues: Boolean,
     private val dp: Float,
-    private val cornerPercent: Int,
 ) : Drawable() {
     private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = fill }
     private val path = android.graphics.Path()
@@ -313,18 +328,20 @@ private class FlexibleRightBubbleDrawable(
         val b = bounds
         if (b.isEmpty) return
         rect.set(b)
-        val radii = nagramBubbleRadii(false, continued, continues, dp, cornerPercent, b.height())
-        val tr = radii.topRight.toFloat().coerceAtMost(b.width().toFloat())
-        val br = radii.bottomRight.toFloat().coerceAtMost(b.width().toFloat())
-        if (tr <= 0.5f && br <= 0.5f) {
-            canvas.drawRect(rect, paint)
+        val radii = nagramBubbleRadii(self, continued, continues, dp, b.height())
+        val maxW = b.width().toFloat()
+        val tl = radii.topLeft.toFloat().coerceAtMost(maxW)
+        val tr = radii.topRight.toFloat().coerceAtMost(maxW)
+        val br = radii.bottomRight.toFloat().coerceAtMost(maxW)
+        val bl = radii.bottomLeft.toFloat().coerceAtMost(maxW)
+        if (tl == tr && tr == br && br == bl) {
+            canvas.drawRoundRect(rect, tl, tl, paint)
             return
         }
         path.reset()
-        // 左上、左下恒为 0f（统一左部无圆角），右上、右下按连发与 90° 设置灵活圆角。
         path.addRoundRect(
             rect,
-            floatArrayOf(0f, 0f, tr, tr, br, br, 0f, 0f),
+            floatArrayOf(tl, tl, tr, tr, br, br, bl, bl),
             android.graphics.Path.Direction.CW,
         )
         canvas.drawPath(path, paint)
@@ -338,11 +355,13 @@ private class BubbleSurface(
     surface: View,
     innerClears: List<View> = emptyList(),
     quote: View? = null,
+    private val compactPadding: Boolean = false,
 ) {
     private val surface = WeakReference(surface)
     private val innerClears = innerClears.filter { it !== surface }.distinct().map { WeakReference(it) to it.background }
     private val quote = WeakReference(quote)
     private val savedBg = surface.background
+    private val savedSurfacePadding = intArrayOf(surface.paddingLeft, surface.paddingTop, surface.paddingRight, surface.paddingBottom)
     private val savedQuoteBg = quote?.background
     private val savedQuotePadding = quote?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
     private var active = false
@@ -351,14 +370,18 @@ private class BubbleSurface(
         if (!enabled) { restore(); return }
         active = true
         val dp = v.dp
-        val cornerPercent = if (on("头像圆角")) (store()?.getInt(AVATAR_RADIUS, 20) ?: 20).coerceIn(0, 50) else 20
         val night = night()
         val fill = if (self) {
             monet(night, if (night) 0xFF else 0x38) ?: if (night) 0xFF2B5278.toInt() else 0xFFEFFDDE.toInt()
         } else {
             if (night) 0xFF182533.toInt() else 0xFFFFFFFF.toInt()
         }
-        v.background = FlexibleRightBubbleDrawable(fill, continued, continues, dp, cornerPercent)
+        v.background = NagramBubbleDrawable(fill, self, continued, continues, dp)
+        if (compactPadding) {
+            val padH = (10 * dp).roundToInt()
+            val padV = (6 * dp).roundToInt()
+            v.setPadding(padH, padV, padH, padV)
+        }
         v.invalidate()
         for ((ref, _) in innerClears) {
             ref.get()?.let { if (it.background != null) it.background = null }
@@ -373,7 +396,10 @@ private class BubbleSurface(
     fun restore() {
         if (!active) return
         active = false
-        surface.get()?.background = savedBg
+        surface.get()?.let {
+            it.background = savedBg
+            if (compactPadding) it.setPadding(savedSurfacePadding[0], savedSurfacePadding[1], savedSurfacePadding[2], savedSurfacePadding[3])
+        }
         for ((ref, bg) in innerClears) {
             ref.get()?.background = bg
         }
@@ -464,6 +490,7 @@ private class RowGeometry(
 ) {
     private val root = WeakReference(root)
     private val origRootPadding = intArrayOf(root.paddingLeft, root.paddingTop, root.paddingRight, root.paddingBottom)
+    private val origAvatarPadding = avatarSlot?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
     private val avatar = SavedConstraint(avatarSlot, f)
     private val content = SavedConstraint(contentSlot, f)
     private val nick = SavedConstraint(nickSlot, f)
@@ -480,13 +507,43 @@ private class RowGeometry(
         val dp = (av ?: cv ?: row)?.dp ?: return
         val m = nagramRowMargins(self, dp, continued)
         row?.setPadding(0, 0, 0, 0)
+        av?.setPadding(0, 0, 0, 0)
+        if (self) {
+            avatar.restore()
+            nick.restore()
+            content.restore()
+            tail.restore()
+            head.restore()
+            if (av != null && avatar.lp != null && av.layoutParams === avatar.lp) {
+                val p = avatar.lp
+                p.leftMargin = 0
+                p.marginStart = 0
+                p.rightMargin = m.avatarMarginEnd
+                p.marginEnd = m.avatarMarginEnd
+                p.topMargin = m.topGap
+                p.bottomMargin = 0
+                av.layoutParams = p
+            }
+            if (cv != null && content.lp != null && cv.layoutParams === content.lp) {
+                val p = content.lp
+                p.leftMargin = m.contentMarginStart
+                p.marginStart = m.contentMarginStart
+                p.rightMargin = m.contentMarginEnd
+                p.marginEnd = m.contentMarginEnd
+                p.topMargin = m.topGap
+                p.bottomMargin = 0
+                if (cv is LinearLayout) cv.gravity = Gravity.END or Gravity.TOP
+                cv.layoutParams = p
+            }
+            return
+        }
         val hasMultiSelect = (row as? ViewGroup)?.findViewById<View>(ID_MULTI_SELECT) != null
         val avId = av?.id?.takeIf { it != View.NO_ID } ?: 0x7f0a3aea
         val cvId = cv?.id?.takeIf { it != View.NO_ID } ?: 0x7f0a11b9
         if (av != null && avatar.lp != null && av.layoutParams === avatar.lp) {
             val p = avatar.lp
-            p.width = m.avatarWidth
-            p.height = m.avatarWidth
+            p.width = avatar.width
+            p.height = avatar.height
             p.leftMargin = m.avatarMarginStart
             p.marginStart = m.avatarMarginStart
             p.rightMargin = m.avatarMarginEnd
@@ -502,11 +559,9 @@ private class RowGeometry(
                 f.endToStart.setInt(p, -1)
                 f.rightToRight.setInt(p, -1)
                 f.rightToLeft.setInt(p, -1)
-                if (cv != null && cv.id != View.NO_ID) {
-                    f.topToTop.setInt(p, -1)
-                    f.topToBottom.setInt(p, -1)
-                    f.bottomToBottom.setInt(p, cv.id)
-                }
+                avatar.topToTop?.let { f.topToTop.setInt(p, it) }
+                avatar.topToBottom?.let { f.topToBottom.setInt(p, it) }
+                f.bottomToBottom.setInt(p, -1)
                 f.validate.invoke(p)
             }
             av.layoutParams = p
@@ -518,7 +573,7 @@ private class RowGeometry(
             p.marginStart = m.contentMarginStart
             p.rightMargin = m.contentMarginEnd
             p.marginEnd = m.contentMarginEnd
-            p.topMargin = 0
+            p.topMargin = m.topGap
             p.bottomMargin = 0
             runCatching {
                 f.startToEnd.setInt(p, avId)
@@ -540,7 +595,7 @@ private class RowGeometry(
             p.marginStart = m.contentMarginStart
             p.rightMargin = m.contentMarginEnd
             p.marginEnd = m.contentMarginEnd
-            p.topMargin = m.topGap
+            p.topMargin = if (!continued && nv != null && nv.visibility == View.VISIBLE) (1 * dp).roundToInt() else m.topGap
             p.bottomMargin = 0
             runCatching {
                 f.startToEnd.setInt(p, avId)
@@ -579,6 +634,9 @@ private class RowGeometry(
         if (!applied) return
         applied = false
         root.get()?.setPadding(origRootPadding[0], origRootPadding[1], origRootPadding[2], origRootPadding[3])
+        avatar.ref.get()?.let { av ->
+            origAvatarPadding?.let { av.setPadding(it[0], it[1], it[2], it[3]) }
+        }
         avatar.restore()
         nick.restore()
         content.restore()
@@ -735,13 +793,22 @@ fun groupRuns() {
         val textViewGetter = textMsgContentType.getDeclaredMethod("l").apply { isAccessible = true }
         val textUpdateBubble = textMsgContentType.getDeclaredMethod("H", cls("com.tencent.mobileqq.aio.msg.ai")).apply { isAccessible = true }
         val pttType = cls("com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttContentComponent")
+        val unsupportType = cls("com.tencent.mobileqq.aio.msglist.holder.component.text.AIOUnsuportContentComponent")
+        val unsupportTextGetter = unsupportType.getDeclaredMethod("Y1").apply { isAccessible = true }
         val skinInfoType = cls("com.tencent.mobileqq.aio.msglist.holder.skin.AIOBubbleSkinInfo")
+        val msgItemClass = cls("com.tencent.mobileqq.aio.msg.AIOMsgItem")
         val paddingType = cls("com.tencent.mobileqq.aio.msglist.holder.skin.padding.j")
-        val paddingCalc = paddingType.getDeclaredMethod("a", cls("com.tencent.mobileqq.aio.msg.AIOMsgItem"))
+        val paddingCalc = paddingType.getDeclaredMethod("a", msgItemClass)
         val padLeft = paddingType.getDeclaredField("a").apply { isAccessible = true }
         val padRight = paddingType.getDeclaredField("b").apply { isAccessible = true }
         val padTop = paddingType.getDeclaredField("c").apply { isAccessible = true }
         val padBottom = paddingType.getDeclaredField("d").apply { isAccessible = true }
+        val richPaddingType = cls("com.tencent.mobileqq.aio.msglist.holder.skin.padding.h")
+        val richPaddingCalc = richPaddingType.getDeclaredMethod("a", msgItemClass)
+        val richPadLeft = richPaddingType.getDeclaredField("j").apply { isAccessible = true }
+        val richPadRight = richPaddingType.getDeclaredField("k").apply { isAccessible = true }
+        val richPadTop = richPaddingType.getDeclaredField("l").apply { isAccessible = true }
+        val richPadBottom = richPaddingType.getDeclaredField("m").apply { isAccessible = true }
         val bindingVB = ThreadLocal<Boolean>()
         var reported = false
         var warned = false
@@ -801,18 +868,26 @@ fun groupRuns() {
                                 bubbles.add(BubbleSurface(surfaceTarget, listOfNotNull(bubbleView, fg, linear, tv)))
                             } else if (pttType.isInstance(c) && (bubbleView ?: rootView) != null) {
                                 bubbles.add(BubbleSurface((bubbleView ?: rootView)!!))
+                            } else if (unsupportType.isInstance(c)) {
+                                (runCatching { unsupportTextGetter.invoke(c) as? View }.getOrNull())?.let { tv ->
+                                    bubbles.add(BubbleSurface(tv, compactPadding = true))
+                                }
                             }
                         }
                     }
                 }
                 val rootView = vbRoot.invoke(binder) as View
                 val tpl = runCatching { vbTemplate.get(binder) }.getOrNull()
+                val isBubbleRow = tpl != null && (tplReceiver.isInstance(tpl) || tplSender.isInstance(tpl))
                 val avSlot = runCatching { tpl?.let { tplAvatar.invoke(it) as? View } }.getOrNull() ?: avatarSlots.firstOrNull()
                 val ctSlot = runCatching { tpl?.let { tplContent.invoke(it) as? View } }.getOrNull() ?: slots.firstOrNull()
                 val nkSlot = runCatching { tpl?.let { tplNick.invoke(it) as? View } }.getOrNull() ?: nicks.firstOrNull()
                 val tlSlot = runCatching { tpl?.let { tplTail.invoke(it) as? View } }.getOrNull()
                 val hdSlot = runCatching { tpl?.let { tplHead.invoke(it) as? View } }.getOrNull()
-                val geom = RowGeometry(rootView, avSlot, ctSlot, nkSlot, tlSlot, hdSlot, constraintFields)
+                // 仅气泡收发模板（template.g / template.l）套用行几何；居中灰字提示（template.m）保持原生居中。
+                val geom = if (isBubbleRow && avSlot != null && ctSlot != null) {
+                    RowGeometry(rootView, avSlot, ctSlot, nkSlot, tlSlot, hdSlot, constraintFields)
+                } else null
                 RunLayout(avatars, nicks.distinct(), contents.distinct(), slots.distinct(),
                     rootView, avatarSlots.distinct(), bubbles, geom, run.self, run.continues)
             }.onFailure { if (!warned) { warned = true; log("TG连发定位：组件读取失败，未改该消息布局", it) } }.getOrNull()
@@ -843,6 +918,12 @@ fun groupRuns() {
             val context = context(chain.thisObject)
             context?.first?.let(::unbind)
             chain.proceed().also { context?.let { (row, run) -> capture(chain.thisObject, row, run) } }
+        }
+        hook(vb.getDeclaredMethod("H1", msgItemClass)) { chain ->
+            chain.proceed().also {
+                if (bindingVB.get() == true) return@also
+                context(chain.thisObject)?.let { (_, run) -> run.layout?.apply(run.continued, on("连发合并")) }
+            }
         }
         hook(View::class.java.getDeclaredMethod("setVisibility", Integer.TYPE)) { chain ->
             val state = runVisibilities[chain.thisObject]
@@ -890,19 +971,36 @@ fun groupRuns() {
                 pendingRun[row]?.let { run -> run.layout?.apply(run.continued, on("连发合并")) }
             }
         }
+        fun compactBubblePadding(target: Any) {
+            if (!on("连发合并")) return
+            val l = padLeft.getInt(target)
+            val r = padRight.getInt(target)
+            val t = padTop.getInt(target)
+            val b = padBottom.getInt(target)
+            val h = minOf(l, r).coerceAtLeast(0)
+            val v = (minOf(t, b) * 2 / 3).coerceAtLeast(0)
+            padLeft.setInt(target, h)
+            padRight.setInt(target, h)
+            padTop.setInt(target, v)
+            padBottom.setInt(target, v)
+        }
         hook(paddingCalc) { chain ->
+            chain.proceed().also { compactBubblePadding(chain.thisObject) }
+        }
+        hook(richPaddingCalc) { chain ->
             chain.proceed().also {
+                compactBubblePadding(chain.thisObject)
                 if (!on("连发合并")) return@also
-                val l = padLeft.getInt(chain.thisObject)
-                val r = padRight.getInt(chain.thisObject)
-                val t = padTop.getInt(chain.thisObject)
-                val b = padBottom.getInt(chain.thisObject)
+                val l = richPadLeft.getInt(chain.thisObject)
+                val r = richPadRight.getInt(chain.thisObject)
+                val t = richPadTop.getInt(chain.thisObject)
+                val b = richPadBottom.getInt(chain.thisObject)
                 val h = minOf(l, r).coerceAtLeast(0)
                 val v = (minOf(t, b) * 2 / 3).coerceAtLeast(0)
-                padLeft.setInt(chain.thisObject, h)
-                padRight.setInt(chain.thisObject, h)
-                padTop.setInt(chain.thisObject, v)
-                padBottom.setInt(chain.thisObject, v)
+                richPadLeft.setInt(chain.thisObject, h)
+                richPadRight.setInt(chain.thisObject, h)
+                richPadTop.setInt(chain.thisObject, v)
+                richPadBottom.setInt(chain.thisObject, v)
             }
         }
         for (tplType in listOf(tplReceiver, tplSender)) {
@@ -1282,7 +1380,7 @@ internal fun runItemIndex(list: List<*>, item: Any, previous: Int): Int {
 internal fun compactRunHeight(nativeHeight: Int, contentBottom: Int, paddingBottom: Int, minimum: Int): Int =
     if (contentBottom <= 0) nativeHeight else minOf(nativeHeight, maxOf(minimum, contentBottom + paddingBottom))
 
-/** 头像定位：滚动合并大于居中。只要组高度超过头像或存在多条/续接消息，即按整组上下边界滚动合并；仅短单条居中。 */
+/** 单条消息保持原生顶对齐（不浮绘居中，避免高度变化跳动与向下侵入）；仅连发多条消息按整组上下边界滚动合并。 */
 internal fun runAvatarBounds(
     groupTop: Float,
     groupBottom: Float,
@@ -1291,13 +1389,11 @@ internal fun runAvatarBounds(
     height: Float,
     merged: Boolean,
 ): Pair<Float, Float>? {
-    if (!groupTop.isFinite() || !groupBottom.isFinite() || !firstCenter.isFinite() || !lastCenter.isFinite() ||
+    if (!merged || !groupTop.isFinite() || !groupBottom.isFinite() || !firstCenter.isFinite() || !lastCenter.isFinite() ||
         !height.isFinite() || height <= 0f || groupTop > groupBottom || firstCenter > lastCenter) return null
-    val span = groupBottom - groupTop
-    if (span > height) return (groupTop + height / 2f) to (groupBottom - height / 2f)
-    if (merged && firstCenter < lastCenter) return minOf(firstCenter, groupTop + height / 2f) to maxOf(lastCenter, groupBottom - height / 2f)
-    val center = (groupTop + groupBottom) / 2f
-    return minOf(firstCenter, center) to maxOf(lastCenter, center)
+    val start = groupTop + height / 2f
+    val end = maxOf(start, groupBottom - height / 2f)
+    return start to end
 }
 
 /** 可见的只有组中间一条时，不能误当成整个组只有一条；起止约束来自消息数据。 */

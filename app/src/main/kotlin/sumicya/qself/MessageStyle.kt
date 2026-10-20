@@ -60,151 +60,104 @@ private fun textBind() = cls(TEXT_COMPONENT).getDeclaredMethod("d1", Integer.TYP
     cls("com.tencent.aio.data.msglist.a"), List::class.java)
 private fun textRoot() = cls(TEXT_COMPONENT).getDeclaredMethod("f1")
 
-private val stamps = WeakHashMap<TextView, MessageStamp>()
-private val surfaceStamps = WeakHashMap<View, SurfaceStamp>()
+private val externalStamps = WeakHashMap<android.view.ViewGroup, ExternalStamp>()
 private val timestampSlots = WeakHashMap<View, Int>()
-private class MessageStamp(view: TextView) : Drawable(), View.OnLayoutChangeListener {
-    private val view = WeakReference(view)
-    private val padding = intArrayOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
-    private var minimum = view.minimumWidth
-    private var origGravity = view.gravity
-    private val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-    var seconds = 0L
-    private var label = ""
-    init { view.addOnLayoutChangeListener(this) }
-    fun captureNative() {
-        view.get()?.let {
-            padding[0] = it.paddingLeft; padding[1] = it.paddingTop; padding[2] = it.paddingRight; padding[3] = it.paddingBottom
-            minimum = it.minimumWidth
-            origGravity = it.gravity
-        }
+
+/** 消息外独立时间标签：挂在 msgContent（BubbleLayoutCompatPress）底部，他人左对齐、自己右对齐，适配全部消息类型。 */
+private class ExternalStamp(host: android.view.ViewGroup) {
+    private val host = WeakReference(host)
+    private val labelView = TextView(host.context).apply {
+        setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f)
+        setSingleLine(true)
+        ellipsize = TextUtils.TruncateAt.END
+        includeFontPadding = false
+        isClickable = false
+        isFocusable = false
     }
+    var seconds = 0L
+    var self = false
     fun restore() {
-        view.get()?.let {
-            it.overlay.remove(this)
-            it.setPadding(padding[0], padding[1], padding[2], padding[3])
-            it.minimumWidth = minimum
-            it.gravity = origGravity
-        }
+        (labelView.parent as? android.view.ViewGroup)?.removeView(labelView)
     }
     fun apply() {
-        val v = view.get() ?: return
-        restore()
-        if (!on("消息内时间")) return
-        label = messageTime(seconds, store()?.getString(TIME_PATTERN, "HH:mm") ?: "HH:mm")
-        if (label.isEmpty()) return
-        paint.textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 11f, v.resources.displayMetrics)
-        paint.color = v.currentTextColor
-        paint.alpha = (android.graphics.Color.alpha(v.currentTextColor) * .7f).toInt()
-        val side = (6 * v.dp).toInt(); val vertical = (4 * v.dp).toInt()
-        val line = kotlin.math.ceil((paint.descent() - paint.ascent()).toDouble()).toInt() + (2 * v.dp).toInt()
-        v.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
-        v.setPadding(side, vertical, side, vertical + line)
-        v.minimumWidth = maxOf(minimum, (paint.measureText(label) + side * 2).toInt())
-        setBounds(0, 0, v.width, v.height)
-        v.overlay.add(this); invalidateSelf()
+        val container = host.get() ?: return
+        if (!on("消息内时间")) {
+            restore()
+            return
+        }
+        val text = messageTime(seconds, store()?.getString(TIME_PATTERN, "HH:mm") ?: "HH:mm")
+        if (text.isEmpty()) {
+            restore()
+            return
+        }
+        val dp = container.dp
+        val align = if (self) android.view.Gravity.END else android.view.Gravity.START
+        labelView.text = text
+        labelView.setTextColor(if (night()) 0x99FFFFFF.toInt() else 0x8A000000.toInt())
+        labelView.gravity = align
+        val lp = (labelView.layoutParams as? android.widget.LinearLayout.LayoutParams)
+            ?: android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
+        lp.gravity = align
+        lp.topMargin = (1 * dp).toInt()
+        lp.bottomMargin = 0
+        lp.leftMargin = (2 * dp).toInt()
+        lp.rightMargin = (2 * dp).toInt()
+        lp.marginStart = lp.leftMargin
+        lp.marginEnd = lp.rightMargin
+        labelView.layoutParams = lp
+        if (labelView.parent !== container) {
+            (labelView.parent as? android.view.ViewGroup)?.removeView(labelView)
+            container.addView(labelView)
+        } else if (container.getChildAt(container.childCount - 1) !== labelView) {
+            container.removeView(labelView)
+            container.addView(labelView)
+        }
+        labelView.visibility = View.VISIBLE
     }
-    override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
-        setBounds(0, 0, v.width, v.height); invalidateSelf()
-    }
-    override fun draw(canvas: Canvas) {
-        val v = view.get() ?: return
-        if (!on("消息内时间") || label.isEmpty()) return
-        val width = (v.width - v.paddingLeft - v.paddingRight).coerceAtLeast(0).toFloat()
-        val text = TextUtils.ellipsize(label, paint, width, TextUtils.TruncateAt.END).toString()
-        val x = if (v.layoutDirection == View.LAYOUT_DIRECTION_RTL)
-            (v.width - v.paddingRight - paint.measureText(text)).coerceAtLeast(0f)
-        else v.paddingLeft.toFloat()
-        canvas.drawText(text, x, v.height - v.paddingBottom + (2 * v.dp).toInt() - paint.ascent(), paint)
-    }
-    fun dispose() { restore(); view.get()?.removeOnLayoutChangeListener(this) }
-    override fun setAlpha(alpha: Int) { paint.alpha = alpha; invalidateSelf() }
-    override fun setColorFilter(filter: ColorFilter?) { paint.colorFilter = filter; invalidateSelf() }
-    @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
+    fun dispose() = restore()
 }
 
-/** 非文本内容容器（图片、文件、语音、表情、卡片、视频）在 overlay 左下角绘制胶囊时间，不改动子 View 树。 */
-private class SurfaceStamp(view: View) : Drawable(), View.OnLayoutChangeListener {
-    private val view = WeakReference(view)
-    private val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-    private val bgPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-    private val pill = android.graphics.RectF()
-    var seconds = 0L
-    private var label = ""
-    init { view.addOnLayoutChangeListener(this) }
-    fun restore() {
-        view.get()?.let { it.overlay.remove(this); it.invalidate() }
-    }
-    fun apply() {
-        val v = view.get() ?: return
-        restore()
-        if (!on("消息内时间")) return
-        label = messageTime(seconds, store()?.getString(TIME_PATTERN, "HH:mm") ?: "HH:mm")
-        if (label.isEmpty()) return
-        paint.textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 11f, v.resources.displayMetrics)
-        paint.color = 0xF2FFFFFF.toInt()
-        bgPaint.color = 0x99000000.toInt()
-        setBounds(0, 0, v.width, v.height)
-        v.overlay.add(this); invalidateSelf()
-    }
-    override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
-        setBounds(0, 0, v.width, v.height); invalidateSelf()
-    }
-    override fun draw(canvas: Canvas) {
-        val v = view.get() ?: return
-        if (!on("消息内时间") || label.isEmpty() || v.width <= 0 || v.height <= 0) return
-        val padX = 5f * v.dp; val insetX = 4f * v.dp; val insetY = 4f * v.dp
-        val maxW = (v.width - 2f * insetX - 2f * padX).coerceAtLeast(0f)
-        val text = TextUtils.ellipsize(label, paint, maxW, TextUtils.TruncateAt.END).toString()
-        if (text.isEmpty()) return
-        val textH = paint.descent() - paint.ascent()
-        val pillW = paint.measureText(text) + 2f * padX
-        val pillH = maxOf(17f * v.dp, textH + 5f * v.dp)
-        val left = if (v.layoutDirection == View.LAYOUT_DIRECTION_RTL)
-            (v.width - insetX - pillW).coerceAtLeast(0f)
-        else insetX.coerceAtMost((v.width - pillW).coerceAtLeast(0f))
-        val top = (v.height - insetY - pillH).coerceAtLeast(0f)
-        pill.set(left, top, left + pillW, top + pillH)
-        val r = pillH / 2f
-        canvas.drawRoundRect(pill, r, r, bgPaint)
-        canvas.drawText(text, left + padX, top + (pillH - textH) / 2f - paint.ascent(), paint)
-    }
-    fun dispose() { restore(); view.get()?.removeOnLayoutChangeListener(this) }
-    override fun setAlpha(alpha: Int) { paint.alpha = alpha; bgPaint.alpha = alpha; invalidateSelf() }
-    override fun setColorFilter(filter: ColorFilter?) { paint.colorFilter = filter; bgPaint.colorFilter = filter; invalidateSelf() }
-    @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
-}
-
-/** 覆盖文字、图片、文件、引用、混排、语音、表情、卡片、视频的常显时间与顶部时间条折叠。 */
+/** 覆盖全部消息类型（文字、图片、文件、引用、混排、语音、表情、卡片、视频、合并转发等）的消息外时间与顶部时间条折叠。 */
 fun messageTimestamps() {
     val component = cls("com.tencent.mobileqq.aio.msglist.holder.component.c")
-    val root = component.getMethod("f1")
-    val bubble = component.getMethod("h1")
     val slot = component.getMethod("i1")
     val msgItem = cls("com.tencent.mobileqq.aio.msglist.holder.component.BaseContentComponent").getMethod("M1")
     val dataType = cls("com.tencent.aio.data.msglist.a")
-    val bound = WeakHashMap<Any, List<WeakReference<TextView>>>()
-    val boundSurfaces = WeakHashMap<Any, WeakReference<View>>()
+    val vb = cls("com.tencent.mobileqq.aio.msglist.holder.AIOBubbleMsgItemVB")
+    val vbTemplate = vb.getDeclaredField("d").apply { isAccessible = true }
+    val templateClass = cls("com.tencent.mobileqq.aio.msglist.holder.template.n")
+    val tplContent = templateClass.getDeclaredMethod("b")
+    val tplReceiver = cls("com.tencent.mobileqq.aio.msglist.holder.template.g")
+    val tplSender = cls("com.tencent.mobileqq.aio.msglist.holder.template.l")
+    fun bindSlot(slotView: android.view.ViewGroup, item: Any?) {
+        val time = messageRecord(item)?.get("msgTime") as? Long ?: 0L
+        val self = runCatching { item?.javaClass?.getMethod("isSelf")?.invoke(item) as? Boolean }.getOrNull() == true
+        externalStamps.getOrPut(slotView) { ExternalStamp(slotView) }.also {
+            it.seconds = time
+            it.self = self
+            it.apply()
+        }
+    }
     for (name in CONTENT_COMPONENTS) {
         val bind = cls(name).getDeclaredMethod("d1", Integer.TYPE, dataType, List::class.java)
         hook(bind, gated = false) { chain ->
-            bound.remove(chain.thisObject)?.mapNotNull { it.get() }?.forEach { stamps[it]?.restore() }
-            boundSurfaces.remove(chain.thisObject)?.get()?.let { surfaceStamps[it]?.restore() }
             chain.proceed().also {
-                val body = (runCatching { root.invoke(chain.thisObject) as? View }.getOrNull())
-                    ?: (runCatching { bubble.invoke(chain.thisObject) as? View }.getOrNull()) ?: return@also
+                val slotView = runCatching { slot.invoke(chain.thisObject) as? android.view.ViewGroup }.getOrNull() ?: return@also
                 val item = chain.args.getOrNull(1) ?: runCatching { msgItem.invoke(chain.thisObject) }.getOrNull()
-                val time = messageRecord(item)?.get("msgTime") as? Long ?: 0L
-                val views = textViews(body).toList()
-                if (views.isNotEmpty()) {
-                    bound[chain.thisObject] = views.map { WeakReference(it) }
-                    views.forEach { v -> stamps.getOrPut(v) { MessageStamp(v) }.also { it.captureNative(); it.seconds = time; it.apply() } }
-                } else {
-                    val surface = (runCatching { bubble.invoke(chain.thisObject) as? View }.getOrNull()) ?: body
-                    boundSurfaces[chain.thisObject] = WeakReference(surface)
-                    surfaceStamps.getOrPut(surface) { SurfaceStamp(surface) }.also { it.seconds = time; it.apply() }
-                }
+                bindSlot(slotView, item)
             }
+        }
+    }
+    hook(vb.method("k1"), gated = false) { chain ->
+        chain.proceed().also {
+            if (!vb.isInstance(chain.thisObject)) return@also
+            val tpl = runCatching { vbTemplate.get(chain.thisObject) }.getOrNull() ?: return@also
+            if (!tplReceiver.isInstance(tpl) && !tplSender.isInstance(tpl)) return@also
+            val slotView = runCatching { tplContent.invoke(tpl) as? android.view.ViewGroup }.getOrNull() ?: return@also
+            bindSlot(slotView, chain.args.getOrNull(1))
         }
     }
     val topStamp = cls("com.tencent.mobileqq.aio.msglist.holder.component.timestamp.AIOTimestampComponent")
@@ -224,6 +177,7 @@ fun messageTimestamps() {
 }
 
 private val inAioAvatarLoad = ThreadLocal<Boolean>()
+private val inAioAvatarDraw = ThreadLocal<Boolean>()
 private class AvatarCorners(
     view: View,
     component: Any,
@@ -282,13 +236,28 @@ fun customAvatarCorners() {
     val defaultFace = type.getDeclaredMethod("D1").apply { isAccessible = true }
     val msgField = type.getDeclaredField("i").apply { isAccessible = true }
     val cacheField = type.getDeclaredField("m").apply { isAccessible = true }
-    val setter = cls("com.tencent.qqnt.base.widget.RoundRectImageView")
-        .getDeclaredMethod("setCornerRadiusAndMode", Integer.TYPE, Integer.TYPE)
+    val roundRectView = cls("com.tencent.qqnt.base.widget.RoundRectImageView")
+    val setter = roundRectView.getDeclaredMethod("setCornerRadiusAndMode", Integer.TYPE, Integer.TYPE)
+    val roundRectDraw = roundRectView.getDeclaredMethod("draw", Canvas::class.java)
     val metaBuilder = cls("com.tencent.qqnt.avatar.meta.b\$a")
     val metaCircle = metaBuilder.getDeclaredMethod("m", java.lang.Boolean.TYPE)
     val metaBuild = metaBuilder.getDeclaredMethod("b")
     val optionBuilder = cls("com.tencent.qqnt.avatar.b\$a")
     val optionVas = optionBuilder.getDeclaredMethod("i", cls("com.tencent.qqnt.avatar.i"))
+    val proParamBuilder = cls("com.tencent.mobileqq.proavatar.e\$a").getDeclaredMethod("a")
+    val proParamType = cls("com.tencent.mobileqq.proavatar.e")
+    val proCircleField = proParamType.getDeclaredField("p").apply { isAccessible = true }
+    val proVasAvatarField = proParamType.getDeclaredField("d").apply { isAccessible = true }
+    val proVasFrameField = proParamType.getDeclaredField("f").apply { isAccessible = true }
+    val proDrawableMask = cls("com.tencent.mobileqq.proavatar.QQProAvatarDrawable").getDeclaredMethod(
+        "z",
+        cls("com.tencent.qqnt.avatar.layer.d"),
+        Canvas::class.java,
+        android.graphics.Rect::class.java,
+        android.graphics.Paint::class.java,
+        cls("kotlin.jvm.functions.Function0"),
+    ).apply { isAccessible = true }
+    val fnInvoke = cls("kotlin.jvm.functions.Function0").getMethod("invoke")
     val circleBitmap = cls("com.tencent.mobileqq.utils.BaseImageUtil").getDeclaredMethod(
         "getCircleFaceBitmap", android.graphics.Bitmap::class.java, Integer.TYPE, Integer.TYPE
     )
@@ -304,12 +273,24 @@ fun customAvatarCorners() {
         ).also { corners[v] = it; v.addOnLayoutChangeListener(it) }
         state.apply(allowReload = false)
     }
-    // 普通聊天（J1=false）K1 走 FaceDrawableEngine 默认裁成 360° 圆形 Bitmap；开启头像圆角时切到 _no_circle 交给 RoundRectImageView 裁剪。
+    // 普通聊天（J1=false）K1 走 FaceDrawableEngine 默认裁成 360° 圆形；开启头像圆角时切到 _no_circle 并跳过 mask.a 360° addArc，交给 RoundRectImageView 裁剪。
     hook(metaBuild, gated = false) { chain ->
         if (inAioAvatarLoad.get() == true && on("头像圆角")) {
             metaCircle.invoke(chain.thisObject, false)
         }
         chain.proceed()
+    }
+    hook(proParamBuilder, gated = false) { chain ->
+        chain.proceed().also { bean ->
+            if (inAioAvatarLoad.get() == true && on("头像圆角") && bean != null) {
+                val pct = (store()?.getInt(AVATAR_RADIUS, 20) ?: 20).coerceIn(0, 50)
+                proCircleField.setBoolean(bean, false)
+                if (pct < 50) {
+                    proVasAvatarField.setBoolean(bean, false)
+                    proVasFrameField.setBoolean(bean, false)
+                }
+            }
+        }
     }
     hook(optionVas, gated = false) { chain ->
         if (inAioAvatarLoad.get() == true && on("头像圆角") && (store()?.getInt(AVATAR_RADIUS, 20) ?: 20) < 50) {
@@ -318,6 +299,22 @@ fun customAvatarCorners() {
     }
     hook(circleBitmap, gated = false) { chain ->
         if (inAioAvatarLoad.get() == true && on("头像圆角")) chain.getArg(0) else chain.proceed()
+    }
+    hook(roundRectDraw, gated = false) { chain ->
+        val state = corners[chain.thisObject]
+        if (state == null) chain.proceed()
+        else {
+            state.apply(allowReload = false)
+            val prev = inAioAvatarDraw.get()
+            inAioAvatarDraw.set(true)
+            try { chain.proceed() } finally { if (prev == null) inAioAvatarDraw.remove() else inAioAvatarDraw.set(prev) }
+        }
+    }
+    hook(proDrawableMask, gated = false) { chain ->
+        if (inAioAvatarDraw.get() == true && on("头像圆角") && (store()?.getInt(AVATAR_RADIUS, 20) ?: 20) < 50) {
+            chain.args.getOrNull(4)?.let { fnInvoke.invoke(it) }
+            null
+        } else chain.proceed()
     }
     hook(defaultFace, gated = false) { chain ->
         val prev = inAioAvatarLoad.get()
@@ -433,8 +430,7 @@ fun clickableMentions() {
 }
 
 fun refreshMessageStyle() {
-    stamps.values.toList().forEach { it.apply() }
-    surfaceStamps.values.toList().forEach { it.apply() }
+    externalStamps.values.toList().forEach { it.apply() }
     timestampSlots.entries.toList().forEach { (slot, saved) ->
         if (!slot.isAttachedToWindow) timestampSlots.remove(slot)
         else slot.visibility = if (on("消息内时间")) View.GONE else saved
@@ -444,10 +440,9 @@ fun refreshMessageStyle() {
     refreshChatLayout()
 }
 fun resetMessageStyle() {
-    stamps.values.toList().forEach { it.dispose() }; stamps.clear()
-    surfaceStamps.values.toList().forEach { it.dispose() }; surfaceStamps.clear()
+    externalStamps.values.toList().forEach { it.dispose() }; externalStamps.clear()
     timestampSlots.entries.toList().forEach { (slot, saved) -> slot.visibility = saved }; timestampSlots.clear()
     corners.values.toList().forEach { it.dispose() }; corners.clear()
     mentions.keys.toList().forEach { it.text = clearAtSpans(it) }
-    mentions.clear(); mentionDown.clear(); openMention = null; inAioAvatarLoad.remove()
+    mentions.clear(); mentionDown.clear(); openMention = null; inAioAvatarLoad.remove(); inAioAvatarDraw.remove()
 }

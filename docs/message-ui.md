@@ -9,11 +9,11 @@
 | 聊天顶栏 | 照 NagramXF `ActionBar.setupGlass` + `ChatAvatarContainer` 三胶囊（`p=6dp`、`s=46dp`、`r=23dp`、中胶囊 `42dp` 圆形会话头像 + 左对齐 `17.5sp`/`13.5sp` 标题副标题），隐藏 `reserve1.blur.f` 通栏模糊 | 头像经 `com.tencent.qqnt.avatar.a` 从 `AIOContact` 异步加载，关闭完整恢复；真机视觉待复验 |
 | 原生菜单与面板 | `QQCustomMenuExpandableLayout` 重排为 12dp 圆角纵向 `ActionBarPopupWindow` 列表（48dp 行高、18dp 左右内边距、20dp 图标 + 16sp 完整文案、6dp 按压圆角），随指单有效项高亮、移出取消、危险项标红 | 面板不整块按压缩放，正常底栏透镜不变；真机手势待复验 |
 | 转发人数 | 私有方法按完整签名 declared + accessible 查找；同步原生搜索勾选 | 真包可访问性不证明服务端无限制 |
-| 消息行、气泡与时间 | 收发双方统一左对齐并尽量缩短边距（36dp 头像左距 2dp、气泡间距 2dp、右距 4dp，总左缩进 40dp，`skin.padding.j` 对称收紧）；消息气泡统一左部无圆角（0dp）、右部灵活圆角（外角 17dp / 连发内角 6dp / 高度半高上限 / 0% 即 90°直角时不圆角）与 3dp 竖线引用块；全 9 类内容组件覆盖 `f1()`/`h1()` 绘制左对齐 `MessageStamp` 或左下角 `SurfaceStamp`（最小高 17dp）并折叠顶部 `AIOTimestampComponent`；面板附带 `DateTimeFormatter` 格式码说明 | 不改文字数据和复制内容；关闭/复用恢复；真机视觉待复验 |
-| 输入区 | 接入 `InputEditTextVBDelegate.U`、`AIOInputExpandableVB`、`compat.b`、`BottomBlurVB`、`AIOShortcutBarVB`，22dp 圆角玻璃胶囊并隐藏通栏底部模糊与顶部分割线 | 保留全部原生按钮与层级；真机键盘交互待复验 |
+| 消息行、气泡与时间 | 仅对气泡收发模板（`template.g` / `template.l`）套用行几何，居中灰字提示（`template.m` / `sm1.z`）保持原生居中；他人消息居左（头像左距 8dp、气泡左距 6dp，保留 `WRAP_CONTENT` 与清零 `msgAvatar` 顶内边距防止侵入气泡或下行 `LVxx` 头衔）、自己消息保持原生居右与右侧头像；单条独立消息恢复四角全圆角（`17dp`），仅在连发多条消息 T 字形相邻接缝处设为直角，同时覆盖 `AIOUnsuportContentComponent#Y1` 提示气泡；自定义格式时间（`ExternalStamp`）统一挂载于 `msgContent`（`0x7f0a11b9`）容器底部外侧（他人左对齐 `START`、自己右对齐 `END`）适配全部消息类型，并折叠顶部 `AIOTimestampComponent`；面板附带 `DateTimeFormatter` 格式码说明 | 不改文字数据和复制内容；气泡圆角与头像圆角滑块解耦；关闭/复用恢复；真机视觉待复验 |
+| 输入区 | 接入 `InputEditTextVBDelegate.U`（`adorn.e#a` 编辑器与 `adorn.e#d` 发送按钮）、`AIOInputExpandableVB`、`compat.b`、`BottomBlurVB`、`AIOShortcutBarVB`，将 `AIOEditText` 与右侧 `AIOInputSendBtn`（含 `com.tencent.qui.smoothcorner.b#j`）分别独立按 `height / 2` 完全药丸化（`capsule()`），并隐藏通栏底部模糊与顶部分割线 | 保留全部原生按钮与层级；真机键盘交互待复验 |
 | At 对象 | 群消息按 TextElement 元素顺序匹配；UIN 或缓存 UID 映射打开资料卡 | 原有点击段优先；保留长按和滑动；无 UID 映射明确报错，不猜 QQ 号 |
-| 头像圆角 | 普通聊天（`K1`/`D1` 切 `meta.b$a#m(false)` 即 `_no_circle`、跳过预裁圆 VAS 与 `BaseImageUtil#getCircleFaceBitmap`）与聊天记录统一走 `RoundRectImageView`，0～50%，默认 20% | 0% 为 90°直角（联动气泡右圆角），50% 为圆形；关闭清空 `m` 缓存重刷并还原原值 |
-| 头像定位 | 滚动合并大于居中（`runAvatarBounds`）：存在连发续接或消息/组高度大于头像时按整组上下边界 `[groupTop + h/2, groupBottom - h/2]` 粘性滚动，仅短单条居中；无浮绘源时不隐藏原生头像 | 不代表全部真实列表回收/滚动问题已经验收 |
+| 头像圆角 | 普通聊天（`RoundRectImageView#draw` 下拦截 `QQProAvatarDrawable#z` 跳过 `proavatar.j#b` / `proavatar.mask.a#a` 的 360° 圆形 `Path.addArc` 遮罩，结合 `proavatar.e$a#a`、`meta.b$a#b`、`b$a#i` 与 `BaseImageUtil#getCircleFaceBitmap`）与聊天记录统一走 `RoundRectImageView`，0～50%，默认 20% | 0% 为 90°直角，50% 为圆形（仅作用于头像，不联动气泡）；关闭清空 `m` 缓存重刷并还原原值 |
+| 头像定位 | 单条独立消息保持原生顶对齐不居中（`runAvatarBounds` 在 `merged == false` 时返回 `null`，避免异步高度变化跳动与向下侵入）；仅连发多条消息（`>= 2`）按组上下边界 `[groupTop + h/2, max(groupTop + h/2, groupBottom - h/2)]` 粘性滚动合并 | 不代表全部真实列表回收/滚动问题已经验收 |
 
 设置入口：菜单内部「消息外观」。自定义格式最长 80 字符、单行；非法格式不写入偏好。恢复默认同时还原时间格式和头像比例。消息内时间、At 对象、头像圆角分别有开关；头像连发浮绘仍由「连发合并」控制。
 

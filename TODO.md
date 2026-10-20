@@ -14,10 +14,10 @@
 
 - [ ] 实机验收聊天顶栏三胶囊布局（`AIOTitleVB` + `AIOTitleRelativeLayout` + `CenterVB` + `com.tencent.qqnt.avatar.a`）：左 46dp 返回胶囊、中 42dp 圆形会话头像 + 左对齐标题/副标题胶囊、右 46dp 操作胶囊及 `com.tencent.mobileqq.aio.reserve1.blur.f` 通栏模糊隐藏；代码与 DEX 落点已接线，待真机视觉与点击复验。
 - [ ] 实机验收 QQ 原生消息长按菜单（`QQCustomMenuExpandableLayout` 纵向 48dp 行高 / 18dp 内边距 / 12dp 圆角 `ActionBarPopupWindow` 列表）与设置面板的逐项随指高亮、跨项移动、项外取消、展开态纵滑交接及危险操作（删除、撤回、结束进程）警示样式；真包落点与接线已完成，待真机手势复验。
-- [ ] 实测头像圆角与连发定位（滚动合并大于居中）：普通聊天与聊天记录同步生效 `RoundRectImageView` + `_no_circle` 头像圆角（0% 为 90°直角，50% 为圆形）；收发双方消息统一左对齐（36dp 头像左距 2dp、气泡间距 2dp、右距 4dp，总左缩进 40dp），只要存在连发续接或消息/组高度超过头像即按整组上下边界滚动合并，仅短单条居中；待真机在快速滚动、异步更新、行复用、分组变化、私聊与群聊中复验。
-- [ ] 实机验收全类型左对齐消息常显时间、统一左部无圆角（0dp）+ 右部灵活圆角（外角 17dp / 连发内角 6dp / 90°即 0% 时不圆角）气泡与 3dp 竖线引用块：文字、引用、混排走正文下部左对齐 `MessageStamp`，图片、文件、语音、表情、卡片、视频同时覆盖 `f1()`/`h1()` 走左下角 `SurfaceStamp` 最小 17dp 胶囊时间，顶部 `AIOTimestampComponent` 槽位随开关折叠/恢复；待真机检验各气泡与卡片边距视觉效果。
+- [ ] 实测普通聊天头像圆角与连发定位（单条顶对齐、连发粘性滚动合并）：普通聊天 `RoundRectImageView#draw` 下拦截 `QQProAvatarDrawable#z`（跳过 `proavatar.j#b` / `proavatar.mask.a#a` 的 360° 圆形 `Path.addArc` 遮罩）并与 `proavatar.e$a#a`、`meta.b$a#b` 同步生效头像圆角（0% 为 90°直角，50% 为圆形，不联动气泡）；仅他人消息居左（头像左距 8dp、气泡左距 6dp，保留 `WRAP_CONTENT` 与清零 `msgAvatar` 顶内边距防止侵入气泡或下行 `LVxx` 头衔）、自己消息保持原生居右与右侧头像、居中灰字提示（`template.m`）保持原生居中；单条独立消息保持顶对齐不居中，仅连发多条消息（`>= 2`）按组上下边界粘性滚动合并；待真机在快速滚动、异步更新、行复用、分组变化、私聊与群聊中复验。
+- [ ] 实机验收全类型外部常显时间（`ExternalStamp`）、T 字形接缝直角气泡与 3dp 竖线引用块：全部消息类型统一在 `msgContent`（`0x7f0a11b9`）容器底部外侧显示自定义格式时间（他人左对齐 `START`、自己右对齐 `END`），顶部 `AIOTimestampComponent` 槽位随开关折叠/恢复；单条独立消息恢复四角全圆角（`17dp`），仅在连发多条消息 T 字形相邻接缝处设为直角，同时覆盖 `AIOUnsuportContentComponent#Y1` 提示气泡；待真机检验各气泡与卡片边距视觉效果。
 - [ ] 核对连续消息昵称折叠与“保留信息”的边界，避免复用恢复错误、装饰丢失和文字遮挡。
-- [ ] 实机验收输入区（`InputEditTextVBDelegate` + `AIOInputExpandableVB` + `compat.b` + `BottomBlurVB` + `AIOShortcutBarVB`）玻璃胶囊、底部分割线与通栏模糊清理、键盘升降与长按操作。
+- [ ] 实机验收输入区（`InputEditTextVBDelegate` + `AIOInputExpandableVB` + `compat.b` + `BottomBlurVB` + `AIOShortcutBarVB`）输入框与右侧发送按钮（`AIOInputSendBtn` + `com.tencent.qui.smoothcorner.b#j`）各自独立 `height / 2` 完全药丸化、底部分割线与通栏模糊清理、键盘升降与长按操作。
 - [ ] 按 NagramXF 的层级与比例检查首页底栏的一致性，保持已确认的透镜、短胶囊及点击/滑动行为。
 - [ ] 验证默认主题明暗模式、大字体、RTL、窄屏、长消息、长时间格式与菜单内部滚动。
 - [ ] 分析玻璃采样、分配及重绘开销，优化算法而不弱化效果；提供实际性能证据，不用静态检查推断流畅性；核查现有失败回退路径，不能把纯色或原生绘制回退当作玻璃验收成功。
