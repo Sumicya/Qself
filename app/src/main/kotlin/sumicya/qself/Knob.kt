@@ -353,7 +353,8 @@ private class MenuTouchTracker(private val root: View, private val canScroll: ()
                 localPoint(source, event)
                 val hit = if (!cancelled && !scrolling) hitMenuItemIndex(point[0], point[1], rects) else -1
                 highlight(-1)
-                if (hit in active.indices) active[hit].performClick()
+                if (hit in active.indices && active[hit].getTag(0x51534447) == true) lastSelfRecallMs = System.currentTimeMillis()
+                runCatching { if (hit in active.indices) active[hit].performClick() }.onFailure { log("菜单项点击失败", it) }
                 return true
             }
             MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_OUTSIDE -> {
@@ -375,7 +376,7 @@ fun nativeMessageMenu() {
     val scrollField = menuClass.getDeclaredField("Q").apply { isAccessible = true }
     val listField = menuClass.getDeclaredField("R").apply { isAccessible = true }
     val blurField = menuClass.getDeclaredField("S").apply { isAccessible = true }
-    val dividerField = menuClass.getDeclaredField("T").apply { isAccessible = true }
+    val sourceField = menuClass.getDeclaredField("T").apply { isAccessible = true }
     val radiusField = menuClass.getDeclaredField("W").apply { isAccessible = true }
     val expanded = menuClass.getDeclaredField("a0").apply { isAccessible = true }
     val createItem = menuClass.getDeclaredMethod("p", Integer.TYPE, itemClass, java.lang.Boolean.TYPE, FloatArray::class.java)
@@ -392,7 +393,7 @@ fun nativeMessageMenu() {
             nativeMenus[it]?.clearItems()
             runCatching {
                 colCountField.setInt(it, 24)
-                rowHeightField.setInt(it, (140 * it.dp).roundToInt())
+                rowHeightField.setInt(it, (220 * it.dp).roundToInt())
                 radiusField.setFloat(it, 12 * it.dp)
             }
         }
@@ -401,9 +402,17 @@ fun nativeMessageMenu() {
             val dp = host.dp
             runCatching {
                 colCountField.setInt(host, 5)
+                rowHeightField.setInt(host, (220 * dp).roundToInt())
                 expanded.setBoolean(host, true)
                 (blurField.get(host) as? View)?.let { s -> s.alpha = 0f; s.scaleX = 0f; s.scaleY = 0f; s.visibility = View.GONE }
-                (dividerField.get(host) as? View)?.visibility = View.GONE
+                // 字段 T 是聊天列表 mSourceView（RecyclerView），严禁设为 GONE，否则关闭菜单后整个聊天空白。
+                (sourceField.get(host) as? View)?.let { src -> if (src.visibility == View.GONE) src.visibility = View.VISIBLE }
+                if (host is ViewGroup) {
+                    for (i in 0 until host.childCount) {
+                        val ch = host.getChildAt(i)
+                        if (ch != null && ch.javaClass == View::class.java) ch.visibility = View.GONE
+                    }
+                }
                 val scroll = scrollField.get(host) as? ScrollView
                 val list = listField.get(host) as? LinearLayout
                 if (scroll != null && list != null) {
@@ -424,8 +433,12 @@ fun nativeMessageMenu() {
                         list.setPadding(pad, pad, pad, pad)
                         list.minimumWidth = (196 * dp).roundToInt()
                         val rowH = (48 * dp).roundToInt()
+                        val padX = (18 * dp).roundToInt()
                         for (cell in items) {
                             (cell.parent as? ViewGroup)?.removeView(cell)
+                            // 原生 q()->r()/s()/t() 会在 p() 返回后覆盖 setPadding(0, D=16dp, 0, D=16dp)，在此归零纵向内边距防止文字下部被截断。
+                            cell.setPadding(padX, 0, padX, 0)
+                            cell.gravity = Gravity.CENTER_VERTICAL
                             list.addView(cell, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowH))
                         }
                     }
@@ -449,10 +462,11 @@ fun nativeMessageMenu() {
         val tag = runCatching { itemType.invoke(item) as? String }.getOrNull()
         val title = runCatching { itemTitle.invoke(item) as? String }.getOrNull()
         val danger = dangerousMenuItem(tag, title)
-        val ink = if (danger) (if (night()) 0xFFFF453A.toInt() else 0xFFD70015.toInt())
-            else (if (night()) 0xFFF2F2F7.toInt() else 0xFF1C1C1E.toInt())
+        val ink = if (danger) (if (night()) 0xFFFF5A4F.toInt() else 0xFFD70015.toInt())
+            else (if (night()) 0xFFF5F7FA.toInt() else 0xFF1C1C1E.toInt())
         if (cell is LinearLayout) {
             cell.setTag(0x51534D4E, true)
+            cell.setTag(0x51534447, danger)
             cell.orientation = LinearLayout.HORIZONTAL
             cell.gravity = Gravity.CENTER_VERTICAL
             cell.minimumHeight = (48 * dp).roundToInt()
@@ -473,6 +487,7 @@ fun nativeMessageMenu() {
                         if (!title.isNullOrEmpty()) child.text = title
                         child.setTextColor(ink)
                         child.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                        child.includeFontPadding = false
                         child.maxLines = 1
                         child.gravity = Gravity.START or Gravity.CENTER_VERTICAL
                         child.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -509,8 +524,8 @@ private fun sheet(anchor: View) {
     val prefs = store() ?: return
     val ctx = anchor.context
     val dp = anchor.dp
-    val ink = if (night()) 0xFFF2F2F7.toInt() else 0xFF1C1C1E.toInt()
-    val sub = if (night()) 0xFF98989E.toInt() else 0xFF6E6E73.toInt()
+    val ink = if (night()) 0xFFF5F7FA.toInt() else 0xFF1C1C1E.toInt()
+    val sub = if (night()) 0xFFB8BEC8.toInt() else 0xFF6E6E73.toInt()
     val dim = FrameLayout(ctx).apply { tag = SHEET; alpha = 0f }
     // 面板只提供玻璃材质；按压反馈由各项自己的状态背景负责，不能驱动整卡高亮。
     val card = LinearLayout(ctx).apply {
@@ -638,11 +653,11 @@ private fun sheet(anchor: View) {
     grid.addView(cornerLabel)
     val radiusSeek = android.widget.SeekBar(ctx).apply {
         max = 50; progress = (prefs.getInt(AVATAR_RADIUS, 20)).coerceIn(0, 50)
-        cornerLabel.text = "头像与右圆角：$progress%（0% 为 90°直角不圆角，50% 为圆形）"
+        cornerLabel.text = "头像圆角：$progress%（0% 为直角，50% 为圆形）"
         contentDescription = "头像圆角百分比"
         setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(bar: android.widget.SeekBar, value: Int, user: Boolean) {
-                cornerLabel.text = "头像与右圆角：$value%（0% 为 90°直角不圆角，50% 为圆形）"
+                cornerLabel.text = "头像圆角：$value%（0% 为直角，50% 为圆形）"
             }
             override fun onStartTrackingTouch(bar: android.widget.SeekBar) = Unit
             override fun onStopTrackingTouch(bar: android.widget.SeekBar) {

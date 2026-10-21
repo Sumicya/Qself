@@ -111,6 +111,17 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('48 * dp', MENU)
         self.assertIn('18 * dp', MENU)
 
+    def test_menu_never_hides_source_view_and_bubble_padding_and_width_contracts(self):
+        hook_src = (SRC / 'Hook.kt').read_text()
+        self.assertIn('SafeChain', hook_src)
+        self.assertIn('sourceField', MENU)
+        self.assertIn('if (src.visibility == View.GONE) src.visibility = View.VISIBLE', MENU)
+        self.assertIn('MATCH_PARENT_RESTORE_TAG', STYLE)
+        self.assertIn('val pad5 = (5 * dp).roundToInt()', CHAT)
+        self.assertIn('nicks.forEach { it.apply(if (enabled && continued) View.GONE else null) }', CHAT)
+        quote = CHAT.split('private class ReplyQuoteBar(', 1)[1].split('private class NagramBubbleDrawable(', 1)[0]
+        self.assertNotIn('barW', quote)
+
 
 if __name__ == '__main__':
     unittest.main()

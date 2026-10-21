@@ -255,9 +255,10 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         try { canvas.translate(x,y); canvas.drawRenderNode(node) } finally { canvas.restoreToCount(save) }
     }
     private fun material(canvas: Canvas, node: RenderNode, rect: RectF, shift: Float) {
+        val dark = night()
         rounded(canvas,rect) {
             drawAt(canvas,node,0f,rect.top)
-            paint.color = if (night()) 0x66121212 else 0x66FAFAFA
+            paint.color = if (dark) 0x7A2A3240 else 0x66FAFAFA
             canvas.drawRect(rect,paint)
             val hp = highlight.value.coerceIn(0f,1f)
             if (hp > 0) {
@@ -278,6 +279,15 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
                 } finally { canvas.restoreToCount(save); paint.shader = null; paint.blendMode = null }
             }
         }
+        val r = kernelRadius(rect.width(), rect.height(), cornerRadius)
+        val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 0.85f * dp
+            color = if (dark) 0x38FFFFFF else 0x52FFFFFF
+        }
+        val inset = stroke.strokeWidth * 0.5f
+        val rim = RectF(rect.left + inset, rect.top + inset, rect.right - inset, rect.bottom - inset)
+        canvas.drawRoundRect(rim, (r - inset).coerceAtLeast(0f), (r - inset).coerceAtLeast(0f), stroke)
     }
     private fun body(canvas: Canvas, w: Int, h: Int, p: Float) {
         val surface = RectF(0f,0f,w.toFloat(),h.toFloat())
@@ -293,9 +303,10 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         scene.setPosition(-pad,-pad,w+pad,h+pad)
         val sc = scene.beginRecording(w+2*pad,h+2*pad)
         try { sc.translate(pad-bounds.left.toFloat()-panel(),pad-bounds.top.toFloat()); behind(sc) } finally { scene.endRecording() }
-        val key = (w.toLong() shl 32) or h.toLong()
+        val dark = night()
+        val key = (w.toLong() shl 32) or (h.toLong() and 0x7FFFFFFFL) or (if (dark) 0x80000000L else 0L)
         if (baseKey != key) {
-            colorControls.setFloatUniform("in_brightness", 0f)
+            colorControls.setFloatUniform("in_brightness", if (dark) 0.08f else 0f)
             colorControls.setFloatUniform("in_contrast", 1f)
             colorControls.setFloatUniform("in_saturation", 1.5f)
             val color = RenderEffect.createRuntimeShaderEffect(colorControls,"child")

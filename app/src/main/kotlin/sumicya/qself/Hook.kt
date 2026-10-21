@@ -40,14 +40,61 @@ fun installFeature(name: String?, body: () -> Any?) {
     } finally { installing = null; feature = previous }
 }
 
+private class SafeChain(private val delegate: Chain) : Chain by delegate {
+    var proceeded = false
+    var outcome: Any? = null
+    var targetFailure: Throwable? = null
+    override fun proceed(): Any? {
+        proceeded = true
+        return try {
+            delegate.proceed().also { outcome = it }
+        } catch (t: Throwable) {
+            targetFailure = t
+            throw t
+        }
+    }
+    override fun proceed(args: Array<out Any?>): Any? {
+        proceeded = true
+        return try {
+            delegate.proceed(args).also { outcome = it }
+        } catch (t: Throwable) {
+            targetFailure = t
+            throw t
+        }
+    }
+    override fun proceedWith(thisObject: Any, args: Array<out Any?>): Any? {
+        proceeded = true
+        return try {
+            delegate.proceedWith(thisObject, args).also { outcome = it }
+        } catch (t: Throwable) {
+            targetFailure = t
+            throw t
+        }
+    }
+}
+
 /**
- * 装钩子。libxposed 默认（PROTECTIVE）异常模式：钩子在 proceed 前抛异常 = 这一次当没装，
- * QQ 原方法照常跑，所以钩子体不必 try/catch。不调用 proceed 就是替换原方法。
+ * 装钩子。libxposed 默认（PROTECTIVE）只兜住 proceed 前抛出的异常；
+ * SafeChain 同时兜住 proceed 后（如 .also 块内）抛出的钩子异常并退回原返回值，防止把异常抛回宿主导致崩溃。
  */
 fun hook(target: Executable, gated: Boolean = true, body: (Chain) -> Any?): XposedInterface.HookHandle {
     val name = if (gated) feature else null
-    return xposed.hook(target).intercept { chain -> if (name == null || on(name)) body(chain) else chain.proceed() }
-        .also { installing?.add(it) }
+    return xposed.hook(target).intercept { chain ->
+        if (name != null && !on(name)) return@intercept chain.proceed()
+        val safe = SafeChain(chain)
+        try {
+            body(safe)
+        } catch (t: Throwable) {
+            if (t === safe.targetFailure) throw t
+            if (!safe.proceeded) {
+                log("钩子前置异常: ${target.declaringClass.simpleName}#${target.name}", t)
+                chain.proceed()
+            } else {
+                log("钩子后置异常: ${target.declaringClass.simpleName}#${target.name}", t)
+                safe.outcome
+            }
+        }
+    }.also { installing?.add(it) }
 }
 
 private var prefs: SharedPreferences? = null

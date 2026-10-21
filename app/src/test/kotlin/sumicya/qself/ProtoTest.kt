@@ -551,13 +551,13 @@ class ProtoTest {
 
     @Test fun nagramBubbleCornersAndRowMarginsFollowDirectionAndRunEdges() {
         assertEquals(BubbleCornerRadii(17, 17, 17, 17), nagramBubbleRadii(self = false, continued = false, continues = false, density = 1f))
-        assertEquals(BubbleCornerRadii(17, 17, 17, 0), nagramBubbleRadii(self = false, continued = false, continues = true, density = 1f))
-        assertEquals(BubbleCornerRadii(0, 17, 17, 0), nagramBubbleRadii(self = false, continued = true, continues = true, density = 1f))
-        assertEquals(BubbleCornerRadii(0, 17, 17, 17), nagramBubbleRadii(self = false, continued = true, continues = false, density = 1f))
+        assertEquals(BubbleCornerRadii(17, 17, 17, 17), nagramBubbleRadii(self = false, continued = false, continues = true, density = 1f))
+        assertEquals(BubbleCornerRadii(17, 17, 17, 17), nagramBubbleRadii(self = false, continued = true, continues = true, density = 1f))
+        assertEquals(BubbleCornerRadii(17, 17, 17, 17), nagramBubbleRadii(self = false, continued = true, continues = false, density = 1f))
         assertEquals(BubbleCornerRadii(17, 17, 17, 17), nagramBubbleRadii(self = true, continued = false, continues = false, density = 1f))
-        assertEquals(BubbleCornerRadii(17, 17, 0, 17), nagramBubbleRadii(self = true, continued = false, continues = true, density = 1f))
-        assertEquals(BubbleCornerRadii(17, 0, 0, 17), nagramBubbleRadii(self = true, continued = true, continues = true, density = 1f))
-        assertEquals(BubbleCornerRadii(17, 0, 17, 17), nagramBubbleRadii(self = true, continued = true, continues = false, density = 1f))
+        assertEquals(BubbleCornerRadii(17, 17, 17, 17), nagramBubbleRadii(self = true, continued = false, continues = true, density = 1f))
+        assertEquals(BubbleCornerRadii(17, 17, 17, 17), nagramBubbleRadii(self = true, continued = true, continues = true, density = 1f))
+        assertEquals(BubbleCornerRadii(17, 17, 17, 17), nagramBubbleRadii(self = true, continued = true, continues = false, density = 1f))
         assertEquals(BubbleCornerRadii(12, 12, 12, 12), nagramBubbleRadii(self = false, continued = false, continues = false, density = 1f, heightPx = 24))
 
         val incoming = nagramRowMargins(self = false, density = 1f)

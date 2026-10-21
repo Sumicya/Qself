@@ -117,8 +117,8 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             if (!drawn) {
                 rect.set(b)
                 paint.shader = null
-                paint.color = monet(night, if (night) 0xA6 else 0xB8)
-                    ?: if (night) 0xA61C1C1E.toInt() else 0xB8F5F5F8.toInt()
+                paint.color = monet(night, if (night) 0xB8 else 0xB8)
+                    ?: if (night) 0xB82A3240.toInt() else 0xB8F5F5F8.toInt()
                 canvas.drawRoundRect(rect, r, r, paint)
             }
             pill(canvas, night)
@@ -134,7 +134,7 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
             val w = b.width() + 2 * pad
             val h = b.height() + 2 * pad
             // Monet 关了或者系统没给动态色时，accent 就等于着色器里那套中性色，混进去等于没混。
-            val accent = monet(night, 0xFF) ?: if (night) 0xFF121212.toInt() else 0xFFFFFFFF.toInt()
+            val accent = monet(night, 0xFF) ?: if (night) 0xFF2A3240.toInt() else 0xFFFFFFFF.toInt()
             val k = (w.toLong() shl 40) or (h.toLong() shl 8) or (if (night) 1L else 0L)
             if (k != key || accent != keyAccent) { node.setRenderEffect(effect(w, h, night, accent)); key = k; keyAccent = accent }
             node.setPosition(b.left - pad, b.top - pad, b.right + pad, b.bottom + pad)
@@ -351,8 +351,8 @@ half4 main(float2 p) {
     half4 col = content.eval(p - n * bend * w * w + n * (press * bend * 0.9) * (1.0 - w));
     half l = dot(col.rgb, half3(0.299, 0.587, 0.114));
     col.rgb = mix(half3(l), col.rgb, half(1.25));
-    half3 tint = mix(mix(half3(1.0), half3(0.07), half(night)), half3(accent), half(0.22));
-    col.rgb = mix(col.rgb, tint, mix(half(0.28), half(0.34), half(night)));
+    half3 tint = mix(mix(half3(1.0), half3(0.18, 0.21, 0.27), half(night)), half3(accent), half(0.22));
+    col.rgb = mix(col.rgb, tint, mix(half(0.28), half(0.42), half(night))) + half3(0.03 * night);
     col.rgb += half3(press * mix(0.14, 0.08, night) * (1.0 - 0.55 * w)); // 按压高光：整面柔光，中心最亮
     col.a = 1.0;
     return col;

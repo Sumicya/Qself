@@ -39,7 +39,7 @@ internal fun messageTime(seconds: Long, pattern: String, zone: ZoneId = ZoneId.s
 internal fun avatarCorner(size: Int, percent: Int): Int =
     (size.coerceAtLeast(0) * percent.coerceIn(0, 50) / 100f).toInt()
 
-private fun messageRecord(item: Any?): Any? = item?.javaClass?.getMethod("getMsgRecord")?.invoke(item)
+private fun messageRecord(item: Any?): Any? = runCatching { item?.javaClass?.getMethod("getMsgRecord")?.invoke(item) }.getOrNull()
 private fun textViews(view: View): Sequence<TextView> = sequence {
     if (view is TextView && view.javaClass.name == "com.tencent.qqnt.aio.widget.AIOMsgTextView") yield(view)
     if (view is android.view.ViewGroup) for (i in 0 until view.childCount) yieldAll(textViews(view.getChildAt(i)))
@@ -62,6 +62,7 @@ private fun textRoot() = cls(TEXT_COMPONENT).getDeclaredMethod("f1")
 
 private val externalStamps = WeakHashMap<android.view.ViewGroup, ExternalStamp>()
 private val timestampSlots = WeakHashMap<View, Int>()
+private const val MATCH_PARENT_RESTORE_TAG = 0x51534D50
 
 /** 消息外独立时间标签：挂在 msgContent（BubbleLayoutCompatPress）底部，他人左对齐、自己右对齐，适配全部消息类型。 */
 private class ExternalStamp(host: android.view.ViewGroup) {
@@ -77,6 +78,20 @@ private class ExternalStamp(host: android.view.ViewGroup) {
     var seconds = 0L
     var self = false
     fun restore() {
+        val container = host.get()
+        if (container != null) {
+            for (i in 0 until container.childCount) {
+                val ch = container.getChildAt(i) ?: continue
+                if (ch === labelView) continue
+                if (ch.getTag(MATCH_PARENT_RESTORE_TAG) == true) {
+                    ch.setTag(MATCH_PARENT_RESTORE_TAG, null)
+                    ch.layoutParams?.let { lp ->
+                        lp.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                        ch.layoutParams = lp
+                    }
+                }
+            }
+        }
         (labelView.parent as? android.view.ViewGroup)?.removeView(labelView)
     }
     fun apply() {
@@ -92,8 +107,30 @@ private class ExternalStamp(host: android.view.ViewGroup) {
         }
         val dp = container.dp
         val align = if (self) android.view.Gravity.END else android.view.Gravity.START
+        // BaseContentComponent.d1 调用 msgContent.addView(componentRoot) 时未传 LayoutParams，
+        // LinearLayout 默认生成 width=MATCH_PARENT；一旦同容器加入 WRAP_CONTENT 的时间标签，
+        // LinearLayout.measureVertical 的 allFillParent 变 false 并触发 forceUniformWidth，把图片/表情/卡片/短文本压成时间宽度。
+        // 因此把兄弟内容根的 MATCH_PARENT 改为 WRAP_CONTENT 并按发送方向对齐。
+        for (i in 0 until container.childCount) {
+            val ch = container.getChildAt(i) ?: continue
+            if (ch === labelView) continue
+            val chLp = ch.layoutParams
+            if (chLp != null) {
+                var changed = false
+                if (chLp.width == android.view.ViewGroup.LayoutParams.MATCH_PARENT) {
+                    ch.setTag(MATCH_PARENT_RESTORE_TAG, true)
+                    chLp.width = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                    changed = true
+                }
+                if (chLp is android.widget.LinearLayout.LayoutParams && chLp.gravity != align) {
+                    chLp.gravity = align
+                    changed = true
+                }
+                if (changed) ch.layoutParams = chLp
+            }
+        }
         labelView.text = text
-        labelView.setTextColor(if (night()) 0x99FFFFFF.toInt() else 0x8A000000.toInt())
+        labelView.setTextColor(if (night()) 0xCCDFE5F0.toInt() else 0x993C3C43.toInt())
         labelView.gravity = align
         val lp = (labelView.layoutParams as? android.widget.LinearLayout.LayoutParams)
             ?: android.widget.LinearLayout.LayoutParams(
@@ -101,7 +138,7 @@ private class ExternalStamp(host: android.view.ViewGroup) {
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
             )
         lp.gravity = align
-        lp.topMargin = (1 * dp).toInt()
+        lp.topMargin = (2 * dp).toInt()
         lp.bottomMargin = 0
         lp.leftMargin = (2 * dp).toInt()
         lp.rightMargin = (2 * dp).toInt()

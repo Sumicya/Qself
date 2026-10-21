@@ -930,6 +930,11 @@ private class HeaderState(
     val right2Bg = right2?.background
     val titleSize = titleTv?.textSize
     val titleGravity = titleTv?.gravity
+    val origTitleColor = titleTv?.currentTextColor
+    val origTailColor = titleTailTv?.currentTextColor
+    private val savedIconTints = WeakHashMap<android.widget.ImageView, android.content.res.ColorStateList?>()
+    private val recordedIconTints = WeakHashMap<android.widget.ImageView, Boolean>()
+    private val savedSubColors = WeakHashMap<TextView, Int>()
     val pills = HeaderPillsDrawable(bar)
     val avatar = android.widget.ImageView(bar.context).apply {
         tag = "qself-aio-avatar"
@@ -945,6 +950,24 @@ private class HeaderState(
     init {
         bar.viewTreeObserver.addOnPreDrawListener(preDraw)
     }
+    private fun tintIcons(view: View?, dark: Boolean) {
+        if (view == null || view === avatar) return
+        val bright = android.content.res.ColorStateList.valueOf(0xFFF2F5FA.toInt())
+        if (view is android.widget.ImageView) {
+            if (recordedIconTints[view] != true) {
+                savedIconTints[view] = view.imageTintList
+                recordedIconTints[view] = true
+            }
+            if (dark) {
+                if (view.imageTintList != bright) view.imageTintList = bright
+            } else {
+                val orig = savedIconTints[view]
+                if (view.imageTintList != orig) view.imageTintList = orig
+            }
+        } else if (view is ViewGroup) {
+            for (i in 0 until view.childCount) tintIcons(view.getChildAt(i), dark)
+        }
+    }
     fun applyStyle() {
         if (!on("玻璃底栏")) { restore(); return }
         if (avatar.parent == null) {
@@ -959,13 +982,21 @@ private class HeaderState(
         right1?.background = null
         right2?.background = null
         right3()?.background = null
+        val dark = night()
+        for (btn in listOf(closeBtn, leftBtn, right1, right2, right3())) tintIcons(btn, dark)
         titleTv?.let {
             it.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 17.5f)
             it.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            if (dark) it.setTextColor(0xFFF5F7FA.toInt()) else origTitleColor?.let(it::setTextColor)
+        }
+        titleTailTv?.let {
+            if (dark) it.setTextColor(0xFFD5DCE8.toInt()) else origTailColor?.let(it::setTextColor)
         }
         for (sub in listOf(centerSub1(), centerSub2())) sub?.let {
+            if (!savedSubColors.containsKey(it)) savedSubColors[it] = it.currentTextColor
             it.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13.5f)
             it.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            if (dark) it.setTextColor(0xFFB8C2D0.toInt()) else savedSubColors[it]?.let(it::setTextColor)
         }
         bar.requestLayout(); bar.invalidate()
     }
@@ -977,10 +1008,18 @@ private class HeaderState(
         leftBtn?.background = leftBg
         right1?.background = right1Bg
         right2?.background = right2Bg
+        for ((iv, _) in recordedIconTints) {
+            iv.imageTintList = savedIconTints[iv]
+        }
+        savedIconTints.clear(); recordedIconTints.clear()
         if (titleTv != null && titleSize != null && titleGravity != null) {
             titleTv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, titleSize)
             titleTv.gravity = titleGravity
+            origTitleColor?.let(titleTv::setTextColor)
         }
+        if (titleTailTv != null && origTailColor != null) titleTailTv.setTextColor(origTailColor)
+        for ((sub, col) in savedSubColors) sub.setTextColor(col)
+        savedSubColors.clear()
         bar.requestLayout(); bar.invalidate()
     }
     fun dispose() {

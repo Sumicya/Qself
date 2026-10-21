@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-10-21 — 修复长按菜单空白/截断与撤回崩溃、恢复四角全圆角与统一 5dp 内边距、修复图片/表情压窄、恢复己方组首 ID 与去掉引用竖条、夜间模式全局提亮及安全区重定位
+
+- 修复长按菜单空白、文字下部截断与点击撤回崩溃（全仓审查）：查明 `QQCustomMenuExpandableLayout#T` 在 QQ 9.2.10 中是聊天列表 `mSourceView`（`RecyclerView`）而非分割线，移除对 `T` 的 `View.GONE` 并确保其 `VISIBLE`，仅隐藏 `host` 直接子级 `1px` 分割线 `View`；在 `H()` 后置阶段清零原生 `q()->r()/s()/t()` 覆写的 `D = 16dp` 上下内边距并关闭 `includeFontPadding`，保持 `C = 220dp` 防止 `onMeasure`（`2 * C`）裁切纵向菜单；`Hook.kt` 引入 `SafeChain` 兜住 `chain.proceed()` 后置异常，防撤回跳过本机主动触发的撤回推送并以 `runCatching` 保护 JNI 动态代理回调，撤回变灰字（`template.m` / `msgType = 5`）时立即解绑 `RunLayout` 与 `RunAvatars`。
+- 气泡四角全圆角、统一 5dp 内边距、去掉引用左竖条与恢复己方组首 ID：取消连发气泡直角切割，全部消息保持 `17dp` 四角全圆角（`nagramBubbleRadii`）；气泡四边内边距统一设为 `5dp`（`BubbleSurface` + `skin.padding.j#a` / `h#a`），清零内层包装视图冗余内边距与 `57dp × 65dp` 最小宽高锁；`ReplyQuoteBar` 去掉左侧 `3dp` 竖条，仅保留圆角半透明底块；移除 `RunLayout.apply()` 中对 `self` 昵称的强制 `View.GONE` 并在 `RowGeometry` 定位己方 `msgNick`，使自己消息在连发组首同样右对齐显示头衔+昵称 ID、续条折叠。
+- 修复外部时间导致图片/表情/卡片/短文本水平压窄：`BaseContentComponent#d1` 向垂直 `BubbleLayoutCompatPress`（`WRAP_CONTENT`）添加内容根时默认赋 `width = MATCH_PARENT`，加入 `WRAP_CONTENT` 的 `ExternalStamp` 后触发 `LinearLayout.measureVertical` 的 `allFillParent = false` 与 `forceUniformWidth`，将内容根压窄至时间戳宽度；现将同容器兄弟内容根的 `MATCH_PARENT` 转为 `WRAP_CONTENT` 并按收发方向（他人 `START`、自己 `END`）对齐，关闭或复用时完整还原。
+- 安全区组件重定位与夜间模式全局提亮：去除顶/底实色安全区背景后将聊天 `RecyclerView` 设为 `clipToPadding = false` 并为输入区补齐安全边距；提亮夜间模式玻璃材质底色与描边（`KernelBar` / `Glass` `0x7A2A3240` + `in_brightness = 0.08f`），并主动提亮顶栏按钮/标题（`HeaderState`）、输入栏与底部快捷图标（`NativeInput` + `AIOShortcutBarVB`）、气泡描边、外部时间及菜单图文对比度；仓库新增渲染预览图 [`docs/preview-realigned-layout.png`](docs/preview-realigned-layout.png)。
+
 ## 2026-10-20 — 灰字恢复居中、仅他人居左自己居右、单条头像顶对齐防侵入、T字接缝直角、消息外部时间与输入栏药丸化
 
 - 行对齐与头像防侵入：仅对收发气泡模板（`template.g` / `template.l`）套用 `RowGeometry`，居中灰字提示模板（`template.m` / `sm1.z`）保持原生居中；仅他人消息居左（头像左距 8dp、气泡左距 6dp，保持 `msgAvatar` 宽高 `WRAP_CONTENT` 并清零其顶内边距防止侵入气泡或下行 `LVxx` 头衔）、自己消息保持原生居右与右侧头像；单条独立消息保持原生顶对齐不居中（`runAvatarBounds` 在 `merged == false` 时返回 `null`），仅连发多条消息（`>= 2`）按组上下边界粘性滚动合并。
@@ -14,26 +21,3 @@
 - 收发双方消息（`r/i/dxm.xml` 与 `r/i/dye.xml`）统一左对齐并尽量缩短边距：头像 36dp 左距 2dp，正文与昵称紧贴头像右侧 2dp、右距 4dp（总左缩进 40dp，`horizontalBias = 0f`），拦截 `template.g#q` / `template.l#q` 与 `skin.padding.j#a` 消除气泡尾巴非对称内边距。
 - 时间格式与时间戳左对齐：设置面板「消息外观」补充左对齐格式码说明（`yyyy/yy`、`MM`、`dd`、`E`、`HH`、`hh`、`a`、`mm`、`ss`、`SSS` 与单引号转义），文本 `MessageStamp` 与非文本胶囊 `SurfaceStamp` 统一改为左对齐绘制。
 - 头像定位遵循「滚动合并大于居中」（`runAvatarBounds`）：只要存在连发续接或消息/组高度超过头像，即按整组上下边界 `[groupTop + h/2, groupBottom - h/2]` 粘性滚动合并，仅短单条居中；`tools/symbols.txt` 增至 424 条符号零不匹配，本地 56 项 Kotlin、50 项工具/源码契约、10 项清理脚本测试全部通过（待真机视觉与滚动复验）。
-
-## 2026-10-19 — 按 NagramXF 重做聊天顶栏、消息行、气泡、输入栏与纵向菜单布局
-
-- 对照 `Keeperorowner/NagramXF`（`30dcd6ce7b5b0279fa86f302ca61cd272bfa3068`）的 `ActionBar.setupGlass` 与 `ChatAvatarContainer`，接入 `AIOTitleVB`（`sm1.u` / `sm1.w` / `CenterVB`）与 `AIOTitleRelativeLayout`：绘制左 46dp 返回胶囊、中 42dp 圆形会话头像 + 左对齐 17.5sp 标题 / 13.5sp 副标题胶囊（`getVisualWidth` +64dp，经 `com.tencent.qqnt.avatar.a` 从 `AIOContact` 异步加载头像）、右 46dp 操作胶囊（`p = 6dp`、`r = 23dp`），并隐藏 `com.tencent.mobileqq.aio.reserve1.blur.f` 通栏模糊。
-- 对照 `ChatMessageCell`、`MessageDrawable` 与 `NekoMessageCell`：己方消息（`isSelf`）隐藏右侧头像并折叠头像槽宽度、气泡右贴 6dp 外边距且隐藏自发昵称；对方消息使用 42dp 头像（左距 6dp、气泡间距 3dp、总缩进 51dp，底对齐正文槽）；统一气泡与连发合并下绘制外角 17dp / 连发内角 6dp 无尾巴气泡与 3dp 左竖线引用块（4dp 内圆角、10dp 左右内边距），拦截 `BaseMixContentComponent#C2` / `AIOReplyComponent#C2` 防止皮肤覆盖；非文本消息时间 `SurfaceStamp` 升级为最小 17dp 高半透明胶囊并同时覆盖 `f1()` 与 `h1()`。
-- 对照 `ChatInputViewsContainer` 与 `ActionBarPopupWindow` / `ActionBarMenuSubItem`：输入区接入 `AIOInputExpandableVB`、`compat.b`、`BottomBlurVB` 与 `AIOShortcutBarVB` 隐藏底部分割线与通栏模糊；原生消息长按菜单 `QQCustomMenuExpandableLayout` 重排为 12dp 圆角玻璃纵向列表（48dp 行高、18dp 左右内边距、20dp 图标 + 12dp 间距 + 16sp 完整文案、6dp 按压圆角，隐藏暗色 `S: QQBlurViewWrapper` 与分割线 `T`）。
-- `tools/symbols.txt` 增至 383 条符号零不匹配，`tools/ui_paths.py` 新增顶栏、输入栏、底部模糊、快捷栏与气泡/引用皮肤落点校验；本地类型检查与 55 项 Kotlin、50 项工具/源码契约、10 项清理脚本测试全部通过（尚无本轮真机视觉与手势复验）。
-
-## 2026-10-19 — 继承旁支、补齐原生消息菜单随指高亮与全类型消息时间
-
-- 继承 `arena/e207d38d-qself`（`73c622e5`）与 `session/norm-utc8`（`bb5bbb14`，内容已由 `c0077d5e` 合入现代树）到当前分支，消除分叉并保持单一主线。
-- 核对 QQ 9.2.10 原生消息长按菜单 `QQCustomMenuExpandableLayout`（`p` / `l` / `H` / `G` 与 `d#e` / `d#f`），实现原生消息菜单与设置面板的逐项随指高亮、跨项移动、移出边界取消且松手不触发动作，并在展开态（`a0 == true`）纵向拖动超阈值时交还 `ScrollView`；「删除」「撤回」「结束进程」统一应用警示红图文与按压背景。
-- 消息内时间扩展至全部 9 类内容组件（文字、文件、图片、引用、混排、语音、表情、卡片、视频）：含 `AIOMsgTextView` 的组件走正文下部 `MessageStamp`，非文本组件在容器 overlay 右下角绘制胶囊时间 `SurfaceStamp`（不改动子 View 树），并联动折叠/恢复顶部 `AIOTimestampComponent` 时间槽。
-- `tools/symbols.txt` 增至 283 条符号零不匹配，`tools/ui_paths.py` 新增原生菜单与全类型消息组件完整签名/访问标记核验；本地类型检查与 53 项 Kotlin、49 项工具/源码契约、10 项清理脚本测试全部通过（尚无本轮真机手势与视觉复验）。
-
-## 2026-10-19 — 紧凑文字间距与头像绑定防护
-
-- 普通文字内边距收紧至左右 10dp、上下 6dp；时间基线从实际预留行计算，不覆盖正文，不压缩点击区域。
-- 浮动头像帧、绘制与触摸核对原绑定、消息组和挂载状态；失效手势取消，不能只凭复用 View 继续派发。异步回退也拒绝过期绑定。
-- 设置面板取消整卡触摸驱动玻璃按压，保留各项状态反馈及玻璃材质；不是 QQ 原生撤回菜单随指高亮的完整实现。
-- 将已确认设计与尚未完成的全类型消息、原生菜单、头像设备复验及性能优化记入 TODO.md，明确局部修正不等于整体完成。
-- 本地类型检查与 52 项 Kotlin、47 项工具/源码契约通过；没有本轮 QQ/GPU 设备验收。
-

@@ -106,12 +106,21 @@ fun tgInput(strip: ViewGroup) {
     }
     val parent = strip.parent as? ViewGroup ?: return
     val row = (0 until parent.childCount).map(parent::getChildAt)
-        .firstOrNull { it.javaClass.name.endsWith(".InputLinearLayout") } ?: return
-    findEdit(row)?.let { tgInput(it, strip) }
+        .firstOrNull { it.javaClass.name.endsWith(".InputLinearLayout") }
+    if (row != null) {
+        findEdit(row)?.let { tgInput(it, strip) }
+        return
+    }
+    // QQNT 的 AIOShortcutBarVB 与 AIOInputExpandableVB 同属底部输入容器：直接挂入当前活动的 NativeInput。
+    inputs.values.mapNotNull { it.get() }.firstOrNull()?.let {
+        it.attachStrip(strip)
+        it.sync()
+    }
 }
 
 fun tgInput(edit: EditText, strip: ViewGroup? = null, sendBtn: View? = null) {
     inputs[edit]?.get()?.let {
+        if (strip != null) it.attachStrip(strip)
         if (sendBtn != null) it.attachSendButton(sendBtn)
         it.sync()
         return
@@ -145,6 +154,7 @@ private class SendButtonPill(view: View) {
     private val view = WeakReference(view)
     private val outline = view.outlineProvider
     private val clip = view.clipToOutline
+    private val origTextColor = (view as? android.widget.TextView)?.currentTextColor
     private val shape = capsule()
     private val origRadii = WeakHashMap<Any, Float>()
     fun apply() {
@@ -153,12 +163,16 @@ private class SendButtonPill(view: View) {
         if (!v.clipToOutline) v.clipToOutline = true
         val targetRadius = if (v.height > 0) v.height / 2f else 18f * v.dp
         updateSmoothRadii(v.background, targetRadius)
+        if (v is android.widget.TextView && night()) {
+            if (v.currentTextColor != 0xFFFFFFFF.toInt()) v.setTextColor(0xFFFFFFFF.toInt())
+        }
         v.invalidate()
     }
     fun restore() {
         val v = view.get() ?: return
         v.outlineProvider = outline
         v.clipToOutline = clip
+        if (v is android.widget.TextView && origTextColor != null) v.setTextColor(origTextColor)
         for ((drawable, orig) in origRadii.entries.toList()) {
             runCatching { setRadiusMethod?.invoke(drawable, orig) }
         }
@@ -209,16 +223,22 @@ private class ButtonMargin(view: View, val params: ViewGroup.MarginLayoutParams)
 
 private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = null) :
     ViewTreeObserver.OnPreDrawListener, ViewTreeObserver.OnGlobalLayoutListener, View.OnAttachStateChangeListener {
-    private val strip = WeakReference(strip)
+    private var strip = WeakReference(strip)
     private val edit = WeakReference(edit)
     private val background = edit.background
     private val outline = edit.outlineProvider
     private val clip = edit.clipToOutline
     private val origPadding = intArrayOf(edit.paddingLeft, edit.paddingTop, edit.paddingRight, edit.paddingBottom)
+    private val origParentPadding = (edit.parent as? View)?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
+    private val origTextColor = edit.currentTextColor
+    private val origHintColor = edit.currentHintTextColor
     private val originalTranslationZ = edit.translationZ
     private val glass = Glass(edit, Float.MAX_VALUE, kernelSurface = true)
     private val shape = capsule()
     private val margins = WeakHashMap<View, ButtonMargin>()
+    private val savedIconTints = WeakHashMap<android.widget.ImageView, android.content.res.ColorStateList?>()
+    private val recordedIconTints = WeakHashMap<android.widget.ImageView, Boolean>()
+    private val savedRecyclerClips = WeakHashMap<ViewGroup, Boolean>()
     private val decorations = ArrayList<InputDecoration>()
     private var sendPill: SendButtonPill? = null
     private var applied = false
@@ -257,8 +277,64 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
         edit.viewTreeObserver.addOnGlobalLayoutListener(this)
         edit.addOnAttachStateChangeListener(this)
     }
+    fun attachStrip(view: ViewGroup) {
+        if (strip.get() !== view) {
+            strip = WeakReference(view)
+            decorations.add(InputDecoration(view))
+        }
+    }
     fun attachSendButton(view: View) {
         if (sendPill == null) sendPill = SendButtonPill(view)
+    }
+    private fun brightenIconsIn(group: ViewGroup?, dark: Boolean) {
+        if (group == null) return
+        val brightTint = android.content.res.ColorStateList.valueOf(0xFFE8EEF7.toInt())
+        fun walk(v: View) {
+            if (v is android.widget.ImageView) {
+                if (recordedIconTints[v] != true) {
+                    savedIconTints[v] = v.imageTintList
+                    recordedIconTints[v] = true
+                }
+                if (dark) {
+                    if (v.imageTintList != brightTint) v.imageTintList = brightTint
+                } else if (recordedIconTints[v] == true) {
+                    val orig = savedIconTints[v]
+                    if (v.imageTintList != orig) v.imageTintList = orig
+                }
+            } else if (v is ViewGroup && (v as View) !== edit.get()) {
+                for (i in 0 until v.childCount) v.getChildAt(i)?.let(::walk)
+            }
+        }
+        walk(group)
+    }
+    private fun repositionSafeArea(edit: EditText) {
+        val dp = edit.dp
+        // 去掉底部实色安全区背景后重定位输入行与聊天列表，使胶囊输入框、发送按钮和底部快捷栏留出安全间距。
+        (edit.parent as? ViewGroup)?.let { parent ->
+            val padH = (8 * dp).toInt()
+            val padV = (4 * dp).toInt()
+            val pl = maxOf(origParentPadding?.get(0) ?: 0, padH)
+            val pt = maxOf(origParentPadding?.get(1) ?: 0, padV)
+            val pr = maxOf(origParentPadding?.get(2) ?: 0, padH)
+            val pb = maxOf(origParentPadding?.get(3) ?: 0, padV)
+            if (parent.paddingLeft != pl || parent.paddingTop != pt || parent.paddingRight != pr || parent.paddingBottom != pb) {
+                parent.setPadding(pl, pt, pr, pb)
+            }
+        }
+        val root = edit.rootView as? ViewGroup ?: return
+        fun findRecyclers(v: View) {
+            if (v is ViewGroup) {
+                val isRv = generateSequence<Class<*>>(v.javaClass) { it.superclass }
+                    .any { it.name == "androidx.recyclerview.widget.RecyclerView" }
+                if (isRv) {
+                    if (!savedRecyclerClips.containsKey(v)) savedRecyclerClips[v] = v.clipToPadding
+                    if (v.clipToPadding) v.clipToPadding = false
+                } else {
+                    for (i in 0 until v.childCount) v.getChildAt(i)?.let(::findRecyclers)
+                }
+            }
+        }
+        findRecyclers(root)
     }
     fun sync() {
         val edit = edit.get() ?: return
@@ -273,6 +349,16 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
         if (edit.paddingLeft != padL || edit.paddingRight != padR) {
             edit.setPadding(padL, origPadding[1], padR, origPadding[3])
         }
+        val dark = night()
+        if (dark) {
+            val wantText = 0xFFF5F7FA.toInt()
+            val wantHint = 0xFFA6B0C0.toInt()
+            if (edit.currentTextColor != wantText) edit.setTextColor(wantText)
+            if (edit.currentHintTextColor != wantHint) edit.setHintTextColor(wantHint)
+        }
+        brightenIconsIn(edit.parent as? ViewGroup, dark)
+        brightenIconsIn(strip.get(), dark)
+        repositionSafeArea(edit)
         sendPill?.apply()
         glass.sync()
         val focus = edit.hasFocus()
@@ -309,8 +395,21 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
         edit.get()?.let {
             it.background = background; it.outlineProvider = outline; it.clipToOutline = clip
             it.setPadding(origPadding[0], origPadding[1], origPadding[2], origPadding[3])
+            it.setTextColor(origTextColor)
+            it.setHintTextColor(origHintColor)
             it.translationZ = originalTranslationZ
+            (it.parent as? View)?.let { p ->
+                origParentPadding?.let { pad -> p.setPadding(pad[0], pad[1], pad[2], pad[3]) }
+            }
         }
+        for ((iv, _) in recordedIconTints) {
+            iv.imageTintList = savedIconTints[iv]
+        }
+        savedIconTints.clear(); recordedIconTints.clear()
+        for ((rv, clipPad) in savedRecyclerClips) {
+            rv.clipToPadding = clipPad
+        }
+        savedRecyclerClips.clear()
         sendPill?.restore()
         decorations.forEach { it.restore() }
         margins.values.forEach { it.restore() }; margins.clear()
