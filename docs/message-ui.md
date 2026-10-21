@@ -6,18 +6,20 @@
 
 | 项目 | 本轮实现 | 边界 |
 | --- | --- | --- |
-| 聊天顶栏 | 照 NagramXF `ActionBar.setupGlass` + `ChatAvatarContainer` 三胶囊（`p=6dp`、`s=46dp`、`r=23dp`、中胶囊 `42dp` 圆形会话头像 + 左对齐 `17.5sp`/`13.5sp` 标题副标题），隐藏 `reserve1.blur.f` 通栏模糊并在夜间模式主动提亮按钮与标题 | 头像经 `com.tencent.qqnt.avatar.a` 从 `AIOContact` 异步加载，关闭完整恢复；真机视觉待复验 |
+| 聊天顶栏与二级页导航栏 | 照 NagramXF `ActionBar.setupGlass` + `ChatAvatarContainer` 三胶囊（`p=6dp`、`s=46dp`、`r=23dp`、中胶囊 `42dp` 圆形会话头像 + 左对齐 `17.5sp`/`13.5sp` 标题副标题 + 内联听筒图标 `0x7f0a1630`），隐藏 `reserve1.blur.f` 通栏模糊与 `sm1.u#d`（`0x7f0a14ea` `1px` 底边线），保留 `sm1.u#f`（`0x7f0a2ec2` `TextView`）返回箭头背景并在夜间模式提亮（`backgroundTintList = #F2F5FA`），移除失效的旧 `TouchDelegate` 并在 `ViewGroup#dispatchTouchEvent` 按三枚胶囊命中区精确转发点击；同时适配二级页导航栏 `QUISecNavBar`（`SecNavBarState`）与搜索栏 `QUISearchBar`（`SearchBarState`） | 头像经 `com.tencent.qqnt.avatar.a` 从 `AIOContact` 异步加载，关闭完整恢复；真机视觉待复验 |
 | 原生菜单与面板 | `QQCustomMenuExpandableLayout` 重排为 12dp 圆角纵向 `ActionBarPopupWindow` 列表（48dp 行高、18dp 左右内边距、0dp 上下内边距、20dp 图标 + 16sp 完整文案、6dp 按压圆角，保持聊天列表 `T: mSourceView` 可见且 `C = 220dp` 不裁高），随指单有效项高亮、移出取消、危险项标红 | 面板不整块按压缩放，正常底栏透镜不变；真机手势待复验 |
 | 转发人数 | 私有方法按完整签名 declared + accessible 查找；同步原生搜索勾选 | 真包可访问性不证明服务端无限制 |
-| 消息行、气泡与时间 | 仅对气泡收发模板（`template.g` / `template.l`）套用行几何，居中灰字提示（`template.m` / `sm1.z`）保持原生居中且撤回变灰字时自动解绑连发；他人消息居左（头像左距 8dp、气泡左距 6dp，保留 `WRAP_CONTENT` 与清零 `msgAvatar` 顶内边距防止侵入气泡或下行 `LVxx` 头衔）、自己消息保持原生居右与右侧头像并在连发组首右对齐显示头衔+昵称 ID（续条折叠）；全部消息气泡保持四角全圆角（`17dp`，不切直角）、四边内边距统一 `5dp`（清零内层冗余内边距与 `57dp × 65dp` 最小宽高锁），引用块去掉左部竖条（`ReplyQuoteBar`）；自定义格式时间（`ExternalStamp`）统一挂载于 `msgContent`（`0x7f0a11b9`）容器底部外侧（他人左对齐 `START`、自己右对齐 `END`）并将同容器兄弟内容根的 `MATCH_PARENT` 宽度转为 `WRAP_CONTENT` 防止压窄图片/表情/卡片/短文本，同时折叠顶部 `AIOTimestampComponent`；面板附带 `DateTimeFormatter` 格式码说明 | 不改文字数据和复制内容；气泡圆角与头像圆角滑块解耦；关闭/复用恢复；真机视觉待复验 |
-| 输入区 | 接入 `InputEditTextVBDelegate.U`（`adorn.e#a` 编辑器与 `adorn.e#d` 发送按钮）、`AIOInputExpandableVB`、`compat.b`、`BottomBlurVB`、`AIOShortcutBarVB`，将 `AIOEditText` 与右侧 `AIOInputSendBtn`（含 `com.tencent.qui.smoothcorner.b#j`）分别独立按 `height / 2` 完全药丸化（`capsule()`），去除实色安全区背景后重定位输入区与聊天列表（`RecyclerView` `clipToPadding = false`），并在夜间模式主动提亮玻璃材质、文字与全部快捷操作图标 | 保留全部原生按钮与层级；真机键盘交互待复验 |
+| 消息行、气泡与时间 | 仅对气泡收发模板（`template.g` / `template.l`）套用行几何，居中灰字提示（`template.m` / `sm1.z`）保持原生居中且撤回变灰字时自动解绑连发；他人消息居左（头像左距 8dp、气泡左距 6dp，保留 `WRAP_CONTENT` 与清零 `msgAvatar` 顶内边距防止侵入气泡或下行 `LVxx` 头衔）、自己消息保持原生居右与右侧头像并在连发组首右对齐显示头衔+昵称 ID（续条折叠）；全部消息气泡保持四角全圆角（`17dp`，不切直角）、四向内边距严格统一 `5dp`（归零 `skin.padding.j` `a,b,c,d=0` 与 `skin.padding.h` `j,k,l,n,o=0, m=4dp`，递归清零 `f3()`/`G2()`/`0x7f0a5c31`/`0x7f0a5c11`/`j2()`/`m2()`/`l2()` 内边距、四向 `margin` 与 `57dp × 65dp` 最小宽高锁，并关闭 `TextView` 与 `FasterTextView#mIncludePad` 的 `includeFontPadding`）；被回复消息彻底清除 `0x7f0a5c31` 外框与左竖条，与回复正文融为单一外层玻璃气泡；自定义格式时间（`ExternalStamp`）统一挂载于 `msgContent`（`0x7f0a11b9`）容器底部外侧（他人左对齐 `START`、自己右对齐 `END`）并将同容器兄弟内容根的 `MATCH_PARENT` 宽度转为 `WRAP_CONTENT` 防止压窄图片/表情/卡片/短文本，同时折叠顶部 `AIOTimestampComponent`；面板附带 `DateTimeFormatter` 格式码说明 | 不改文字数据和复制内容；气泡圆角与头像圆角滑块解耦；关闭/复用恢复；真机视觉待复验 |
+| 输入区 | 接入 `InputEditTextVBDelegate.U`（`adorn.e#a` 编辑器与 `adorn.e#d` 发送按钮）、`AIOInputExpandableVB`、`compat.b`（`handleUIState`/`e`/`g`/`i`/`n` 全路径防回退）、`compat.e$b#f`（发送按钮原生半高胶囊圆角）、`BottomBlurVB`、`AIOShortcutBarVB`（`onCreateView`/`handleUIState`/`x1`/`y1`/`s1` 拦截异步背景回写）与 `PanelIconLinearLayout#f`，将 `AIOEditText` 与右侧 `AIOInputSendBtn`（含 `com.tencent.qui.smoothcorner.b#j`）分别独立按 `height / 2` 完全药丸化（`capsule()`），去除实色安全区背景后重定位输入区与聊天列表（`RecyclerView` `clipToPadding = false`），并在夜间模式主动提亮玻璃材质、文字与全部快捷操作图标 | 保留全部原生按钮与层级；真机键盘交互待复验 |
 | At 对象 | 群消息按 TextElement 元素顺序匹配；UIN 或缓存 UID 映射打开资料卡 | 原有点击段优先；保留长按和滑动；无 UID 映射明确报错，不猜 QQ 号 |
 | 头像圆角 | 普通聊天（`RoundRectImageView#draw` 下拦截 `QQProAvatarDrawable#z` 跳过 `proavatar.j#b` / `proavatar.mask.a#a` 的 360° 圆形 `Path.addArc` 遮罩，结合 `proavatar.e$a#a`、`meta.b$a#b`、`b$a#i` 与 `BaseImageUtil#getCircleFaceBitmap`）与聊天记录统一走 `RoundRectImageView`，0～50%，默认 20% | 0% 为直角，50% 为圆形（仅作用于头像，不联动气泡）；关闭清空 `m` 缓存重刷并还原原值 |
 | 头像定位 | 单条独立消息保持原生顶对齐不居中（`runAvatarBounds` 在 `merged == false` 时返回 `null`，避免异步高度变化跳动与向下侵入）；仅连发多条消息（`>= 2`）按组上下边界 `[groupTop + h/2, max(groupTop + h/2, groupBottom - h/2)]` 粘性滚动合并 | 不代表全部真实列表回收/滚动问题已经验收 |
 
 ## 需求对齐渲染预览图
 
-![需求对齐 UI 渲染预览图](preview-realigned-layout.png)
+![四向严格 5dp 边距、回复无外框、顶栏返回箭头与触控重定向、输入栏及二级页架构总览图](preview-uniform-5dp-and-architecture.png)
+
+![上一轮布局重对齐预览图（保留旧图）](preview-realigned-layout.png)
 
 设置入口：菜单内部「消息外观」。自定义格式最长 80 字符、单行；非法格式不写入偏好。恢复默认同时还原时间格式和头像比例。消息内时间、At 对象、头像圆角分别有开关；头像连发浮绘仍由「连发合并」控制。
 

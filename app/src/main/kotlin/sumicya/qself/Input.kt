@@ -35,15 +35,31 @@ fun inputLayout() {
     val styleDelegate = cls("com.tencent.mobileqq.aio.input.inputbar.compat.b")
     val styleBinding = styleDelegate.getDeclaredField("e").apply { isAccessible = true }
     val mviState = cls("com.tencent.mvi.base.mvi.MviUIState")
-    hook(styleDelegate.getDeclaredMethod("handleUIState", mviState), gated = false) { chain ->
-        chain.proceed().also {
-            refreshInputLayout()
-            runCatching { styleBinding.get(chain.thisObject) }.getOrNull()?.let { adorn ->
-                val ed = runCatching { adornEdit.invoke(adorn) as? EditText }.getOrNull()
-                    ?: runCatching { adorn.get("b") as? EditText }.getOrNull()
-                val send = runCatching { adornSend.invoke(adorn) as? View }.getOrNull()
-                ed?.let { tgInput(it, sendBtn = send) }
-            }
+    fun syncCompatDelegate(delegateObj: Any?) {
+        refreshInputLayout()
+        runCatching { delegateObj?.let { styleBinding.get(it) } }.getOrNull()?.let { adorn ->
+            val ed = runCatching { adornEdit.invoke(adorn) as? EditText }.getOrNull()
+                ?: runCatching { adorn.get("b") as? EditText }.getOrNull()
+            val send = runCatching { adornSend.invoke(adorn) as? View }.getOrNull()
+            ed?.let { tgInput(it, sendBtn = send) }
+        }
+    }
+    for (name in listOf("handleUIState", "e", "g", "i", "n")) {
+        val m = styleDelegate.declaredMethods.firstOrNull { it.name == name } ?: continue
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
+            chain.proceed().also { syncCompatDelegate(chain.thisObject) }
+        }
+    }
+    val sendRadiusCompanion = cls("com.tencent.mobileqq.aio.input.inputbar.compat.e\$b")
+    hook(sendRadiusCompanion.getDeclaredMethod("f", android.content.Context::class.java, Integer.TYPE, Integer.TYPE), gated = false) { chain ->
+        val orig = chain.proceed()
+        if (!on("TG输入栏")) orig
+        else {
+            val ctx = chain.args.getOrNull(0) as? android.content.Context
+            val h = (chain.args.getOrNull(2) as? Number)?.toInt() ?: 0
+            if (h > 0) h / 2
+            else if (ctx != null) (18f * ctx.resources.displayMetrics.density).toInt()
+            else orig
         }
     }
     val expandable = cls("com.tencent.mobileqq.aio.input.AIOInputExpandableVB")
@@ -82,18 +98,39 @@ fun inputLayout() {
     }
     val shortcutBar = cls("com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB")
     val getShortcutStrip = shortcutBar.getDeclaredMethod("j1")
-    fun syncShortcutBar(vb: Any) {
-        (runCatching { getShortcutStrip.invoke(vb) as? ViewGroup }.getOrNull())?.let { strip ->
+    fun syncShortcutBar(vb: Any?) {
+        val target = vb ?: return
+        (runCatching { getShortcutStrip.invoke(target) as? ViewGroup }.getOrNull())?.let { strip ->
             val dec = inputDecorations.getOrPut(strip) { InputDecoration(strip, false) }
             if (on("TG输入栏")) dec.apply() else dec.restore()
             tgInput(strip)
         }
     }
-    hook(shortcutBar.getDeclaredMethod("onCreateView", helpParam), gated = false) { chain ->
-        chain.proceed().also { if (shortcutBar.isInstance(chain.thisObject)) syncShortcutBar(chain.thisObject) }
+    for (name in listOf("onCreateView", "handleUIState", "x1", "s1")) {
+        val m = shortcutBar.declaredMethods.firstOrNull { it.name == name } ?: continue
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
+            chain.proceed().also { if (shortcutBar.isInstance(chain.thisObject)) syncShortcutBar(chain.thisObject) }
+        }
     }
-    hook(shortcutBar.getDeclaredMethod("handleUIState", mviState), gated = false) { chain ->
-        chain.proceed().also { if (shortcutBar.isInstance(chain.thisObject)) syncShortcutBar(chain.thisObject) }
+    shortcutBar.declaredMethods.firstOrNull { it.name == "y1" }?.let { m ->
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
+            chain.proceed().also {
+                val vb = chain.args.getOrNull(0)?.takeIf { shortcutBar.isInstance(it) } ?: chain.thisObject?.takeIf { shortcutBar.isInstance(it) }
+                syncShortcutBar(vb)
+            }
+        }
+    }
+    val panelStrip = cls("com.tencent.qqnt.aio.shortcutbar.PanelIconLinearLayout")
+    panelStrip.declaredMethods.firstOrNull { it.name == "f" }?.let { m ->
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
+            chain.proceed().also {
+                (chain.thisObject as? ViewGroup)?.let { strip ->
+                    val dec = inputDecorations.getOrPut(strip) { InputDecoration(strip, false) }
+                    if (on("TG输入栏")) dec.apply() else dec.restore()
+                    tgInput(strip)
+                }
+            }
+        }
     }
 }
 

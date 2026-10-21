@@ -113,14 +113,23 @@ class MessageStyleContractTest(unittest.TestCase):
 
     def test_menu_never_hides_source_view_and_bubble_padding_and_width_contracts(self):
         hook_src = (SRC / 'Hook.kt').read_text()
+        looks_src = (SRC / 'Looks.kt').read_text()
+        inp_src = (SRC / 'Input.kt').read_text()
         self.assertIn('SafeChain', hook_src)
         self.assertIn('sourceField', MENU)
         self.assertIn('if (src.visibility == View.GONE) src.visibility = View.VISIBLE', MENU)
         self.assertIn('MATCH_PARENT_RESTORE_TAG', STYLE)
         self.assertIn('val pad5 = (5 * dp).roundToInt()', CHAT)
+        self.assertIn('android.widget.FasterTextView', CHAT)
+        self.assertIn('setIncludeFontPadding', CHAT)
+        self.assertIn('cleanQuoteTree(q)', CHAT)
+        self.assertIn('if (q.background != null) q.background = null', CHAT)
         self.assertIn('nicks.forEach { it.apply(if (enabled && continued) View.GONE else null) }', CHAT)
-        quote = CHAT.split('private class ReplyQuoteBar(', 1)[1].split('private class NagramBubbleDrawable(', 1)[0]
-        self.assertNotIn('barW', quote)
+        self.assertIn('dispatchPillTouch', looks_src)
+        self.assertIn('SecNavBarState', looks_src)
+        self.assertIn('SearchBarState', looks_src)
+        self.assertIn('com.tencent.mobileqq.aio.input.inputbar.compat.e\\$b', inp_src)
+        self.assertIn('com.tencent.qqnt.aio.shortcutbar.PanelIconLinearLayout', inp_src)
 
 
 if __name__ == '__main__':

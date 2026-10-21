@@ -285,27 +285,6 @@ internal fun nagramRowMargins(self: Boolean, density: Float, continued: Boolean 
         )
     }
 
-/** 引用回复块背景：去掉左部竖条，仅保留圆角半透明底块。 */
-private class ReplyQuoteBar(private val dp: Float, private val self: Boolean) : Drawable() {
-    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-    private val rect = RectF()
-    override fun draw(canvas: Canvas) {
-        val b = bounds
-        if (b.isEmpty) return
-        val night = night()
-        val tint = if (self) (if (night) 0xFF8AB4F8.toInt() else 0xFF2B7CD3.toInt())
-            else (monet(night, 0xFF) ?: if (night) 0xFF64B5EF.toInt() else 0xFF3390EC.toInt())
-        val bgColor = (tint and 0x00FFFFFF) or (if (night) 0x33000000 else 0x1A000000)
-        val r = 6 * dp
-        rect.set(b)
-        paint.color = bgColor
-        canvas.drawRoundRect(rect, r, r, paint)
-    }
-    override fun setAlpha(alpha: Int) { paint.alpha = alpha }
-    override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
-    @Deprecated("Drawable opacity") override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-}
-
 private class NagramBubbleDrawable(
     private val fill: Int,
     private val self: Boolean,
@@ -342,6 +321,11 @@ private class InnerClearState(view: View) {
     val pad = intArrayOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
     val minW = view.minimumWidth
     val minH = view.minimumHeight
+    val margins = (view.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+        intArrayOf(it.leftMargin, it.topMargin, it.rightMargin, it.bottomMargin, it.marginStart, it.marginEnd)
+    }
+    val textIncludePad = (view as? android.widget.TextView)?.includeFontPadding
+    val fasterIncludePad = BubbleSurface.getFasterIncludePad(view)
 }
 
 private class BubbleSurface(
@@ -356,12 +340,15 @@ private class BubbleSurface(
     private val savedBg = surface.background
     private val savedSurfacePadding = intArrayOf(surface.paddingLeft, surface.paddingTop, surface.paddingRight, surface.paddingBottom)
     private val savedSurfaceMin = intArrayOf(surface.minimumWidth, surface.minimumHeight)
+    private val savedSurfaceIncludePad = (surface as? android.widget.TextView)?.includeFontPadding
+    private val savedSurfaceFasterPad = getFasterIncludePad(surface)
     private val savedQuoteBg = quote?.background
     private val savedQuotePadding = quote?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
     private val savedQuoteMargins = (quote?.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
         intArrayOf(it.leftMargin, it.topMargin, it.rightMargin, it.bottomMargin, it.marginStart, it.marginEnd)
     }
     private val hiddenQuoteBars = ArrayList<Pair<WeakReference<View>, Int>>()
+    private val savedQuoteMsgMargins = WeakHashMap<View, IntArray>()
     private var active = false
     fun apply(self: Boolean, continued: Boolean, continues: Boolean, enabled: Boolean) {
         val v = surface.get() ?: return
@@ -379,36 +366,70 @@ private class BubbleSurface(
         v.setPadding(pad5, pad5, pad5, pad5)
         v.minimumWidth = 0
         v.minimumHeight = 0
+        if (v is android.widget.TextView && v.includeFontPadding) v.includeFontPadding = false
+        setFasterIncludePad(v, false)
         v.invalidate()
+        val qView = quote.get()
         for (state in innerClears) {
             state.ref.get()?.let { inner ->
                 if (inner.background != null) inner.background = null
                 inner.setPadding(0, 0, 0, 0)
                 inner.minimumWidth = 0
                 inner.minimumHeight = 0
-            }
-        }
-        quote.get()?.let { q ->
-            q.background = ReplyQuoteBar(dp, self)
-            val padH = (6 * dp).roundToInt()
-            val padV = (4 * dp).roundToInt()
-            q.setPadding(padH, padV, padH, padV)
-            (q.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
-                lp.leftMargin = 0; lp.rightMargin = 0; lp.topMargin = 0
-                lp.marginStart = 0; lp.marginEnd = 0
-                q.layoutParams = lp
-            }
-            if (q is ViewGroup) {
-                for (i in 0 until q.childCount) {
-                    val ch = q.getChildAt(i) ?: continue
-                    if (ch.javaClass == View::class.java || ch.id == 0x7f0a480f) {
-                        if (hiddenQuoteBars.none { it.first.get() === ch }) {
-                            hiddenQuoteBars.add(WeakReference(ch) to ch.visibility)
+                if (inner is android.widget.TextView && inner.includeFontPadding) inner.includeFontPadding = false
+                setFasterIncludePad(inner, false)
+                if (inner !== qView && inner.id != 0x7f0a64bc) {
+                    (inner.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                        if (lp.leftMargin != 0 || lp.rightMargin != 0 || lp.topMargin != 0 || lp.bottomMargin != 0 ||
+                            lp.marginStart != 0 || lp.marginEnd != 0) {
+                            lp.leftMargin = 0; lp.topMargin = 0; lp.rightMargin = 0; lp.bottomMargin = 0
+                            lp.marginStart = 0; lp.marginEnd = 0
+                            inner.layoutParams = lp
                         }
-                        ch.visibility = View.GONE
                     }
                 }
             }
+        }
+        // 被回复消息（0x7f0a5c31 ReplyTextRelativeLayout）去掉独立外框与左竖条，与外层气泡共用统一的 5dp 内边距。
+        qView?.let { q ->
+            if (q.background != null) q.background = null
+            q.setPadding(0, 0, 0, 0)
+            val gap4 = (4 * dp).roundToInt()
+            (q.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                if (lp.leftMargin != 0 || lp.topMargin != 0 || lp.rightMargin != 0 || lp.bottomMargin != gap4 ||
+                    lp.marginStart != 0 || lp.marginEnd != 0) {
+                    lp.leftMargin = 0; lp.topMargin = 0; lp.rightMargin = 0; lp.bottomMargin = gap4
+                    lp.marginStart = 0; lp.marginEnd = 0
+                    q.layoutParams = lp
+                }
+            }
+            fun cleanQuoteTree(node: View) {
+                if (node is android.widget.TextView && node.includeFontPadding) node.includeFontPadding = false
+                setFasterIncludePad(node, false)
+                if (node.id == 0x7f0a126a || node.id == 0x7f0a1395 || node.id == 0x7f0a480f || node.javaClass == View::class.java) {
+                    if (hiddenQuoteBars.none { it.first.get() === node }) {
+                        hiddenQuoteBars.add(WeakReference(node) to node.visibility)
+                    }
+                    node.visibility = View.GONE
+                    return
+                }
+                if (node.id == 0x7f0a64bc) {
+                    (node.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                        if (!savedQuoteMsgMargins.containsKey(node)) {
+                            savedQuoteMsgMargins[node] = intArrayOf(lp.leftMargin, lp.topMargin, lp.rightMargin, lp.bottomMargin)
+                        }
+                        val gap2 = (2 * dp).roundToInt()
+                        if (lp.topMargin != gap2) {
+                            lp.topMargin = gap2
+                            node.layoutParams = lp
+                        }
+                    }
+                }
+                if (node is ViewGroup) {
+                    for (i in 0 until node.childCount) node.getChildAt(i)?.let(::cleanQuoteTree)
+                }
+            }
+            cleanQuoteTree(q)
         }
     }
     fun restore() {
@@ -419,6 +440,8 @@ private class BubbleSurface(
             it.setPadding(savedSurfacePadding[0], savedSurfacePadding[1], savedSurfacePadding[2], savedSurfacePadding[3])
             it.minimumWidth = savedSurfaceMin[0]
             it.minimumHeight = savedSurfaceMin[1]
+            if (it is android.widget.TextView && savedSurfaceIncludePad != null) it.includeFontPadding = savedSurfaceIncludePad
+            savedSurfaceFasterPad?.let { pad -> setFasterIncludePad(it, pad) }
         }
         for (state in innerClears) {
             state.ref.get()?.let { inner ->
@@ -426,6 +449,15 @@ private class BubbleSurface(
                 inner.setPadding(state.pad[0], state.pad[1], state.pad[2], state.pad[3])
                 inner.minimumWidth = state.minW
                 inner.minimumHeight = state.minH
+                if (inner is android.widget.TextView && state.textIncludePad != null) inner.includeFontPadding = state.textIncludePad
+                state.fasterIncludePad?.let { pad -> setFasterIncludePad(inner, pad) }
+                state.margins?.let { m ->
+                    (inner.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                        lp.leftMargin = m[0]; lp.topMargin = m[1]; lp.rightMargin = m[2]; lp.bottomMargin = m[3]
+                        lp.marginStart = m[4]; lp.marginEnd = m[5]
+                        inner.layoutParams = lp
+                    }
+                }
             }
         }
         quote.get()?.let { q ->
@@ -439,10 +471,41 @@ private class BubbleSurface(
                 }
             }
         }
+        for ((view, m) in savedQuoteMsgMargins) {
+            (view.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                lp.leftMargin = m[0]; lp.topMargin = m[1]; lp.rightMargin = m[2]; lp.bottomMargin = m[3]
+                view.layoutParams = lp
+            }
+        }
+        savedQuoteMsgMargins.clear()
         for ((ref, vis) in hiddenQuoteBars) {
             ref.get()?.visibility = vis
         }
         hiddenQuoteBars.clear()
+    }
+    companion object {
+        private var fasterCls: Class<*>? = null
+        private var fasterPadField: java.lang.reflect.Field? = null
+        private var fasterPadSetter: java.lang.reflect.Method? = null
+        fun initFasterTextView(cls: Class<*>, field: java.lang.reflect.Field, setter: java.lang.reflect.Method) {
+            fasterCls = cls
+            fasterPadField = field.apply { isAccessible = true }
+            fasterPadSetter = setter.apply { isAccessible = true }
+        }
+        fun getFasterIncludePad(view: View?): Boolean? {
+            val c = fasterCls ?: return null
+            if (view == null || !c.isInstance(view)) return null
+            return runCatching { fasterPadField?.getBoolean(view) }.getOrNull()
+        }
+        fun setFasterIncludePad(view: View?, include: Boolean) {
+            val c = fasterCls ?: return
+            if (view == null || !c.isInstance(view)) return
+            runCatching {
+                if (fasterPadField?.getBoolean(view) != include) {
+                    fasterPadSetter?.invoke(view, include)
+                }
+            }
+        }
     }
 }
 
@@ -761,7 +824,7 @@ private class RunLayout(val avatars: List<RunAvatar>, nicks: List<View>, content
         // 先更新昵称可见性，使 RowGeometry.apply() 能依据当前是否显示组首 ID 计算正文上边距；自己与他人在组首均显示 ID。
         nicks.forEach { it.apply(if (enabled && continued) View.GONE else null) }
         rowGeometry?.apply(self, continued, enabled)
-        bubbles.forEach { it.apply(self, continued, continues, enabled && on("统一气泡")) }
+        bubbles.forEach { it.apply(self, continued, continues, on("统一气泡")) }
         if (!enabled) avatars.forEach { it.restore() }
     }
     fun restore() = apply(false, false)
@@ -790,6 +853,12 @@ fun groupRuns() {
     val owner = feature
     feature = null
     try {
+        val fasterViewType = cls("android.widget.FasterTextView")
+        BubbleSurface.initFasterTextView(
+            fasterViewType,
+            fasterViewType.getDeclaredField("mIncludePad"),
+            fasterViewType.getDeclaredMethod("setIncludeFontPadding", java.lang.Boolean.TYPE),
+        )
         val adapter = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a")
         val data = adapter.getMethod("d0")
         val head = adapter.getMethod("i0")
@@ -832,7 +901,14 @@ fun groupRuns() {
         val slotNickType = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickComponentV4")
         val contentType = cls("com.tencent.mobileqq.aio.msglist.holder.component.BaseContentComponent")
         val mixType = cls("com.tencent.mobileqq.aio.msglist.holder.base.BaseMixContentComponent")
+        val mixFgGetter = mixType.getDeclaredMethod("j2").apply { isAccessible = true }
+        val mixImagesGetter = mixType.getDeclaredMethod("l2").apply { isAccessible = true }
+        val mixTextsGetter = mixType.getDeclaredMethod("m2").apply { isAccessible = true }
+        val fasterWrapperView = cls("com.tencent.fastertextview.wrapper.a").getDeclaredMethod("g").apply { isAccessible = true }
+        val aioMixType = cls("com.tencent.mobileqq.aio.msglist.holder.component.mix.AIOMixContentComponent")
+        val aioMixContainerGetter = aioMixType.getDeclaredMethod("G2").apply { isAccessible = true }
         val replyType = cls("com.tencent.mobileqq.aio.msglist.holder.component.reply.AIOReplyComponent")
+        val replyContainerGetter = replyType.getDeclaredMethod("f3").apply { isAccessible = true }
         val textType = cls("com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent")
         val textContentGetter = textType.getDeclaredMethod("k2").apply { isAccessible = true }
         val textMsgContentType = cls("com.tencent.mobileqq.aio.msg.TextMsgContent")
@@ -857,6 +933,8 @@ fun groupRuns() {
         val richPadRight = richPaddingType.getDeclaredField("k").apply { isAccessible = true }
         val richPadTop = richPaddingType.getDeclaredField("l").apply { isAccessible = true }
         val richPadBottom = richPaddingType.getDeclaredField("m").apply { isAccessible = true }
+        val richReplyTextTop = richPaddingType.getDeclaredField("n").apply { isAccessible = true }
+        val richQuoteInnerPad = richPaddingType.getDeclaredField("o").apply { isAccessible = true }
         val bindingVB = ThreadLocal<Boolean>()
         var reported = false
         var warned = false
@@ -905,8 +983,30 @@ fun groupRuns() {
                             // VB.H1 改的是 component.i1().layoutParams.topMargin，不是 VB 根视图。
                             (componentSlot.invoke(c) as? View)?.let { slots.add(it) }
                             if (mixType.isInstance(c) && rootView != null) {
-                                val quote = if (replyType.isInstance(c) && rootView is ViewGroup && rootView.childCount > 0) rootView.getChildAt(0) else null
-                                bubbles.add(BubbleSurface(rootView, listOfNotNull(bubbleView), quote))
+                                val inners = ArrayList<View>()
+                                bubbleView?.let(inners::add)
+                                (runCatching { mixFgGetter.invoke(c) as? View }.getOrNull())?.let(inners::add)
+                                if (aioMixType.isInstance(c)) {
+                                    (runCatching { aioMixContainerGetter.invoke(c) as? View }.getOrNull())?.let(inners::add)
+                                }
+                                if (rootView is ViewGroup && rootView.childCount > 0) {
+                                    rootView.getChildAt(0)?.let(inners::add)
+                                }
+                                (runCatching { mixTextsGetter.invoke(c) as? Iterable<*> }.getOrNull())?.forEach { w ->
+                                    (runCatching { w?.let { fasterWrapperView.invoke(it) as? View } }.getOrNull())?.let(inners::add)
+                                }
+                                (runCatching { mixImagesGetter.invoke(c) as? Iterable<*> }.getOrNull())?.forEach { iv ->
+                                    (iv as? View)?.let(inners::add)
+                                }
+                                val quote = if (replyType.isInstance(c)) {
+                                    val replyBox = (runCatching { replyContainerGetter.invoke(c) as? ViewGroup }.getOrNull())
+                                        ?: (rootView as? ViewGroup)?.getChildAt(0) as? ViewGroup
+                                    replyBox?.let(inners::add)
+                                    val q = replyBox?.findViewById<View>(0x7f0a5c31) ?: replyBox?.getChildAt(0)
+                                    (q as? ViewGroup)?.findViewById<View>(0x7f0a5c11)?.let(inners::add)
+                                    q
+                                } else null
+                                bubbles.add(BubbleSurface(rootView, inners, quote))
                             } else if (textType.isInstance(c) && (rootView ?: bubbleView) != null) {
                                 val tmc = runCatching { textContentGetter.invoke(c) }.getOrNull()
                                 val fg = runCatching { tmc?.let { textFgField.get(it) as? View } }.getOrNull()
@@ -915,7 +1015,9 @@ fun groupRuns() {
                                 val surfaceTarget = rootView ?: bubbleView!!
                                 bubbles.add(BubbleSurface(surfaceTarget, listOfNotNull(bubbleView, fg, linear, tv)))
                             } else if (pttType.isInstance(c) && (bubbleView ?: rootView) != null) {
-                                bubbles.add(BubbleSurface((bubbleView ?: rootView)!!))
+                                val surfaceTarget = rootView ?: bubbleView!!
+                                val inners = if (rootView != null && bubbleView != null && rootView !== bubbleView) listOf(bubbleView) else emptyList()
+                                bubbles.add(BubbleSurface(surfaceTarget, inners))
                             } else if (unsupportType.isInstance(c)) {
                                 (runCatching { unsupportTextGetter.invoke(c) as? View }.getOrNull())?.let { tv ->
                                     bubbles.add(BubbleSurface(tv, compactPadding = true))
@@ -1008,13 +1110,27 @@ fun groupRuns() {
                         row.measuredHeightAndState and View.MEASURED_STATE_MASK))
             }
         }
-        for (skinOwner in listOf(mixType, replyType)) {
+        fun restyleComponent(comp: Any?) {
+            val rootView = runCatching { comp?.let { componentRoot.invoke(it) as? View } }.getOrNull() ?: return
+            val row = generateSequence(rootView) { it.parent as? View }.firstOrNull { pendingRun.containsKey(it) } ?: return
+            pendingRun[row]?.let { run -> run.layout?.apply(run.continued, on("连发合并")) }
+        }
+        for (skinOwner in listOf(mixType, aioMixType, replyType)) {
             hook(skinOwner.getDeclaredMethod("C2", skinInfoType)) { chain ->
-                chain.proceed().also {
-                    val rootView = runCatching { componentRoot.invoke(chain.thisObject) as? View }.getOrNull() ?: return@also
-                    val row = generateSequence(rootView) { it.parent as? View }.firstOrNull { pendingRun.containsKey(it) } ?: return@also
-                    pendingRun[row]?.let { run -> run.layout?.apply(run.continued, on("连发合并")) }
-                }
+                chain.proceed().also { restyleComponent(chain.thisObject) }
+            }
+            hook(skinOwner.getDeclaredMethod("s2", Drawable::class.java, Integer.TYPE, Integer.TYPE)) { chain ->
+                chain.proceed().also { restyleComponent(chain.thisObject) }
+            }
+        }
+        for (replyPadMethod in listOf("K3", "L3")) {
+            hook(replyType.getDeclaredMethod(replyPadMethod, richPaddingType)) { chain ->
+                chain.proceed().also { restyleComponent(chain.thisObject) }
+            }
+        }
+        for (textPostMethod in listOf("Z1", "n2")) {
+            hook(textType.getDeclaredMethod(textPostMethod, List::class.java)) { chain ->
+                chain.proceed().also { restyleComponent(chain.thisObject) }
             }
         }
         hook(textUpdateBubble) { chain ->
@@ -1025,7 +1141,16 @@ fun groupRuns() {
             }
         }
         fun compactBubblePadding(target: Any) {
-            if (!on("连发合并")) return
+            val unified = on("统一气泡")
+            if (!unified && !on("连发合并")) return
+            if (unified) {
+                // 外层 BubbleSurface 已设置统一的四周 5dp 内边距，内层 skin.padding 必须置 0 防止双重叠加。
+                padLeft.setInt(target, 0)
+                padRight.setInt(target, 0)
+                padTop.setInt(target, 0)
+                padBottom.setInt(target, 0)
+                return
+            }
             val pad5 = (5 * android.content.res.Resources.getSystem().displayMetrics.density).roundToInt()
             val l = padLeft.getInt(target)
             val r = padRight.getInt(target)
@@ -1042,8 +1167,19 @@ fun groupRuns() {
         hook(richPaddingCalc) { chain ->
             chain.proceed().also {
                 compactBubblePadding(chain.thisObject)
-                if (!on("连发合并")) return@also
-                val pad5 = (5 * android.content.res.Resources.getSystem().displayMetrics.density).roundToInt()
+                val unified = on("统一气泡")
+                if (!unified && !on("连发合并")) return@also
+                val density = android.content.res.Resources.getSystem().displayMetrics.density
+                if (unified) {
+                    richPadLeft.setInt(chain.thisObject, 0)
+                    richPadRight.setInt(chain.thisObject, 0)
+                    richPadTop.setInt(chain.thisObject, 0)
+                    richPadBottom.setInt(chain.thisObject, (4 * density).roundToInt())
+                    richReplyTextTop.setInt(chain.thisObject, 0)
+                    richQuoteInnerPad.setInt(chain.thisObject, 0)
+                    return@also
+                }
+                val pad5 = (5 * density).roundToInt()
                 val l = richPadLeft.getInt(chain.thisObject)
                 val r = richPadRight.getInt(chain.thisObject)
                 val t = richPadTop.getInt(chain.thisObject)

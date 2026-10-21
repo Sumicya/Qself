@@ -51,6 +51,14 @@ fun looks() {
     }
     hook(ViewGroup::class.java.getDeclaredMethod("dispatchTouchEvent", MotionEvent::class.java)) { chain ->
         val source = chain.thisObject as? ViewGroup
+        if (source != null && on("玻璃底栏")) {
+            aioHeaders[source]?.let { header ->
+                if (header.dispatchPillTouch(chain.getArg(0) as MotionEvent)) return@hook true
+            }
+            secNavBars[source]?.let { sec ->
+                if (sec.dispatchPillTouch(chain.getArg(0) as MotionEvent)) return@hook true
+            }
+        }
         val bar = source?.let { barTouchHosts[it]?.get() ?: it }
         val state = floatStates[bar]?.touch
         if (state == null || source == null) chain.proceed()
@@ -75,6 +83,8 @@ private var preferenceListener: SharedPreferences.OnSharedPreferenceChangeListen
 fun refreshLooks() {
     if (!on("显示具体未读条数")) restoreBadgeLayouts() else refreshNativeBadges?.invoke()
     refreshAioHeaders()
+    refreshSecNavBars()
+    refreshSearchBars()
     refreshInputLayout()
     refreshChatLayout()
     refreshMessageStyle()
@@ -135,12 +145,16 @@ fun resetLooks() {
     restoreClearedDecorations()
     restoreBadgeLayouts()
     resetAioHeaders()
+    resetSecNavBars()
+    resetSearchBars()
 }
 
 private fun walk(v: View, inDrawer: Boolean) {
     val name = v.javaClass.name
     when {
         name.endsWith(".QQTabLayout") -> { homeBar(v as ViewGroup); return }
+        name == "com.tencent.biz.qui.quisecnavbar.QUISecNavBar" && v is ViewGroup -> { secNavBar(v); return }
+        name == "com.tencent.mobileqq.widget.search.QUISearchBar" && v is ViewGroup -> { searchBar(v); return }
         name.endsWith(".PanelIconLinearLayout") -> { tgInput(v as ViewGroup); return }
         name == "com.tencent.mobileqq.aio.input.edit.AIOEditText" && v is android.widget.EditText -> { tgInput(v); return }
         else -> trim(v, inDrawer)
@@ -909,7 +923,7 @@ private class HeaderState(
     val bar: ViewGroup,
     val root: View?,
     val outer: View?,
-    val closeBtn: View?,
+    val dividerLine: View?,
     val leftBtn: View?,
     val unreadBadge: TextView?,
     val titleTv: TextView?,
@@ -921,20 +935,28 @@ private class HeaderState(
     val centerFlipper: () -> View?,
     val centerSub1: () -> TextView?,
     val centerSub2: () -> TextView?,
+    val multiSelectRoot: () -> View?,
 ) {
     val barBg = bar.background
     val rootBg = root?.background
     val outerBg = outer?.background
-    val leftBg = leftBtn?.background
+    val dividerVis = dividerLine?.visibility
     val right1Bg = right1?.background
     val right2Bg = right2?.background
+    val origTouchDelegate = bar.touchDelegate
     val titleSize = titleTv?.textSize
     val titleGravity = titleTv?.gravity
     val origTitleColor = titleTv?.currentTextColor
     val origTailColor = titleTailTv?.currentTextColor
     private val savedIconTints = WeakHashMap<android.widget.ImageView, android.content.res.ColorStateList?>()
     private val recordedIconTints = WeakHashMap<android.widget.ImageView, Boolean>()
+    private val savedBgTints = WeakHashMap<View, android.content.res.ColorStateList?>()
+    private val recordedBgTints = WeakHashMap<View, Boolean>()
     private val savedSubColors = WeakHashMap<TextView, Int>()
+    private val collapsedBadges = WeakHashMap<View, Int>()
+    var lastGeom: NagramHeaderLayout? = null
+    var lastRightViews: List<View> = emptyList()
+    private var activeTouchTarget: View? = null
     val pills = HeaderPillsDrawable(bar)
     val avatar = android.widget.ImageView(bar.context).apply {
         tag = "qself-aio-avatar"
@@ -964,9 +986,63 @@ private class HeaderState(
                 val orig = savedIconTints[view]
                 if (view.imageTintList != orig) view.imageTintList = orig
             }
+        } else if (view is TextView) {
+            // sm1.u#f (0x7f0a2ec2 ivTitleBtnLeft) 是 TextView，返回箭头图标设在其 background 上，不能置空其 background！
+            if (recordedBgTints[view] != true) {
+                savedBgTints[view] = view.backgroundTintList
+                recordedBgTints[view] = true
+            }
+            if (!savedSubColors.containsKey(view)) savedSubColors[view] = view.currentTextColor
+            if (dark) {
+                if (view.backgroundTintList != bright) view.backgroundTintList = bright
+                view.compoundDrawableTintList = bright
+                view.setTextColor(0xFFF2F5FA.toInt())
+            } else {
+                val orig = savedBgTints[view]
+                if (view.backgroundTintList != orig) view.backgroundTintList = orig
+                view.compoundDrawableTintList = null
+                savedSubColors[view]?.let(view::setTextColor)
+            }
         } else if (view is ViewGroup) {
             for (i in 0 until view.childCount) tintIcons(view.getChildAt(i), dark)
         }
+    }
+    fun dispatchPillTouch(event: MotionEvent): Boolean {
+        val geom = lastGeom ?: return false
+        if (bar.visibility != View.VISIBLE) return false
+        val action = event.actionMasked
+        if (action == MotionEvent.ACTION_DOWN) {
+            activeTouchTarget = null
+            val x = event.x.toInt()
+            val y = event.y.toInt()
+            val target: View? = when {
+                !geom.leftPill.isEmpty() && x in geom.leftPill.left..geom.leftPill.right && y in geom.leftPill.top..geom.leftPill.bottom -> {
+                    val unread = unreadBadge?.takeIf { it.visibility == View.VISIBLE && it.isClickable }
+                    if (unread != null && x >= unread.left) unread
+                    else leftBtn?.takeIf { it.visibility == View.VISIBLE }
+                }
+                !geom.centerPill.isEmpty() && x in geom.centerPill.left..geom.centerPill.right && y in geom.centerPill.top..geom.centerPill.bottom -> {
+                    val flip = centerFlipper()?.takeIf { it.visibility == View.VISIBLE && it.isClickable }
+                    if (flip != null && y >= flip.top) flip else titleTv?.takeIf { it.visibility == View.VISIBLE }
+                }
+                !geom.rightPill.isEmpty() && x in geom.rightPill.left..geom.rightPill.right && y in geom.rightPill.top..geom.rightPill.bottom -> {
+                    if (lastRightViews.size == 1) lastRightViews[0]
+                    else if (lastRightViews.isNotEmpty()) {
+                        val slotW = (geom.rightPill.width().toFloat() / lastRightViews.size).coerceAtLeast(1f)
+                        val idx = ((x - geom.rightPill.left) / slotW).toInt().coerceIn(0, lastRightViews.lastIndex)
+                        lastRightViews[idx]
+                    } else null
+                }
+                else -> null
+            }
+            if (target != null) activeTouchTarget = target
+        }
+        val target = activeTouchTarget ?: return false
+        val copy = MotionEvent.obtain(event)
+        copy.setLocation(target.width / 2f, target.height / 2f)
+        val handled = try { target.dispatchTouchEvent(copy) } finally { copy.recycle() }
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) activeTouchTarget = null
+        return handled
     }
     fun applyStyle() {
         if (!on("玻璃底栏")) { restore(); return }
@@ -976,14 +1052,16 @@ private class HeaderState(
         }
         avatar.visibility = View.VISIBLE
         if (bar.background !== pills) bar.background = pills
+        // 清除 ViewUtils.d 按旧坐标挂载的 TouchDelegate，交由 dispatchPillTouch 精确按胶囊命中转发。
+        if (bar.touchDelegate != null) bar.touchDelegate = null
         root?.background = null
         outer?.background = null
-        leftBtn?.background = null
+        dividerLine?.visibility = View.GONE
         right1?.background = null
         right2?.background = null
         right3()?.background = null
         val dark = night()
-        for (btn in listOf(closeBtn, leftBtn, right1, right2, right3())) tintIcons(btn, dark)
+        for (btn in listOf(leftBtn, right1, right2, right3(), bar.findViewById(0x7f0a1630), multiSelectRoot())) tintIcons(btn, dark)
         titleTv?.let {
             it.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 17.5f)
             it.gravity = Gravity.START or Gravity.CENTER_VERTICAL
@@ -1001,17 +1079,28 @@ private class HeaderState(
         bar.requestLayout(); bar.invalidate()
     }
     fun restore() {
+        activeTouchTarget = null
+        lastGeom = null
+        lastRightViews = emptyList()
         if (avatar.parent === bar) bar.removeView(avatar)
         if (bar.background === pills) bar.background = barBg
+        bar.touchDelegate = origTouchDelegate
         root?.background = rootBg
         outer?.background = outerBg
-        leftBtn?.background = leftBg
+        if (dividerLine != null && dividerVis != null) dividerLine.visibility = dividerVis
         right1?.background = right1Bg
         right2?.background = right2Bg
         for ((iv, _) in recordedIconTints) {
             iv.imageTintList = savedIconTints[iv]
         }
         savedIconTints.clear(); recordedIconTints.clear()
+        for ((v, _) in recordedBgTints) {
+            v.backgroundTintList = savedBgTints[v]
+            if (v is TextView) v.compoundDrawableTintList = null
+        }
+        savedBgTints.clear(); recordedBgTints.clear()
+        for ((v, vis) in collapsedBadges) v.visibility = vis
+        collapsedBadges.clear()
         if (titleTv != null && titleSize != null && titleGravity != null) {
             titleTv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, titleSize)
             titleTv.gravity = titleGravity
@@ -1021,6 +1110,14 @@ private class HeaderState(
         for ((sub, col) in savedSubColors) sub.setTextColor(col)
         savedSubColors.clear()
         bar.requestLayout(); bar.invalidate()
+    }
+    fun collapseBadge(v: View, hide: Boolean) {
+        if (hide) {
+            collapsedBadges.putIfAbsent(v, v.visibility)
+            if (v.visibility != View.GONE) v.visibility = View.GONE
+        } else {
+            collapsedBadges.remove(v)?.let { if (v.visibility != it) v.visibility = it }
+        }
     }
     fun dispose() {
         if (bar.viewTreeObserver.isAlive) bar.viewTreeObserver.removeOnPreDrawListener(preDraw)
@@ -1050,11 +1147,12 @@ private fun resetAioHeaders() {
 private fun aioHeader() {
     val titleVB = cls("com.tencent.mobileqq.aio.title.AIOTitleVB")
     val bindingField = titleVB.getDeclaredField("d").apply { isAccessible = true }
+    val multiSelectField = titleVB.getDeclaredField("e").apply { isAccessible = true }
     val right3Field = titleVB.getDeclaredField("h").apply { isAccessible = true }
     val centerField = titleVB.getDeclaredField("i").apply { isAccessible = true }
     val bindingClass = cls("sm1.u")
     val uRoot = bindingClass.getDeclaredField("a").apply { isAccessible = true }
-    val uClose = bindingClass.getDeclaredField("d").apply { isAccessible = true }
+    val uDivider = bindingClass.getDeclaredField("d").apply { isAccessible = true }
     val uLeft = bindingClass.getDeclaredField("f").apply { isAccessible = true }
     val uRight1 = bindingClass.getDeclaredField("h").apply { isAccessible = true }
     val uRight2 = bindingClass.getDeclaredField("i").apply { isAccessible = true }
@@ -1064,6 +1162,8 @@ private fun aioHeader() {
     val uTail = bindingClass.getDeclaredField("n").apply { isAccessible = true }
     val uTitle = bindingClass.getDeclaredField("o").apply { isAccessible = true }
     val uUnread = bindingClass.getDeclaredField("p").apply { isAccessible = true }
+    val vClass = cls("sm1.v")
+    val vRoot = vClass.getDeclaredMethod("f").apply { isAccessible = true }
     val wClass = cls("sm1.w")
     val wRight3 = wClass.getDeclaredField("b").apply { isAccessible = true }
     val centerVB = cls("com.tencent.mobileqq.aio.title.center.CenterVB")
@@ -1132,7 +1232,7 @@ private fun aioHeader() {
                 bar = bar,
                 root = runCatching { uRoot.get(u) as? View }.getOrNull(),
                 outer = runCatching { uOuter.get(u) as? View }.getOrNull(),
-                closeBtn = runCatching { uClose.get(u) as? View }.getOrNull(),
+                dividerLine = runCatching { uDivider.get(u) as? View }.getOrNull(),
                 leftBtn = runCatching { uLeft.get(u) as? View }.getOrNull(),
                 unreadBadge = runCatching { uUnread.get(u) as? TextView }.getOrNull(),
                 titleTv = runCatching { uTitle.get(u) as? TextView }.getOrNull(),
@@ -1144,14 +1244,16 @@ private fun aioHeader() {
                 centerFlipper = { runCatching { centerField.get(vb)?.let { centerFlipper.invoke(it) as? View } }.getOrNull() },
                 centerSub1 = { runCatching { centerField.get(vb)?.let { centerSub1.invoke(it) as? TextView } }.getOrNull() },
                 centerSub2 = { runCatching { centerField.get(vb)?.let { centerSub2.invoke(it) as? TextView } }.getOrNull() },
+                multiSelectRoot = { runCatching { multiSelectField.get(vb)?.let { vRoot.invoke(it) as? View } }.getOrNull() },
             )
         }
         state.applyStyle()
         if (on("玻璃底栏")) loadHeaderAvatar(vb, state.avatar)
     }
 
-    for (name in listOf("onCreateView", "bindViewAndData", "handleUIState")) {
-        hook(titleVB.getDeclaredMethod(name, *titleVB.declaredMethods.first { it.name == name }.parameterTypes), gated = false) { chain ->
+    for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "Z1", "D1")) {
+        val m = titleVB.declaredMethods.firstOrNull { it.name == name } ?: continue
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
             chain.proceed().also { if (titleVB.isInstance(chain.thisObject)) bindHeader(chain.thisObject) }
         }
     }
@@ -1181,12 +1283,19 @@ private fun aioHeader() {
             val w = bar.width; val h = bar.height
             if (w <= 0 || h <= 0) return@also
             val dp = bar.dp
+            if (bar.touchDelegate != null) bar.touchDelegate = null
+            // 清理或收纳标题栏内动态 inflate 的铭牌/火花/VIP 装饰，保留功能性的听筒图标（0x7f0a1630）。
+            for (id in intArrayOf(0x7f0a7836, 0x7f0a7831, 0x7f0a0d74, 0x7f0a0d75)) {
+                bar.findViewById<View>(id)?.let { state.collapseBadge(it, on("标题栏侧栏精简")) }
+            }
+            val earIcon = bar.findViewById<View>(0x7f0a1630)?.takeIf { it.visibility == View.VISIBLE && it.measuredWidth > 0 }
+            val earW = if (earIcon != null) earIcon.measuredWidth + (4 * dp).roundToInt() else 0
             val unread = state.unreadBadge?.takeIf { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() }
             val unreadW = unread?.measuredWidth ?: 0
             val rightViews = listOfNotNull(state.right3(), state.right2, state.right1).filter { it.visibility == View.VISIBLE && it.measuredWidth > 0 }
             val tail = state.titleTailTv?.takeIf { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() }
             val titleTextW = ((state.titleTv?.paint?.measureText(state.titleTv.text?.toString().orEmpty())?.toInt()) ?: (state.titleTv?.measuredWidth ?: 0)) +
-                (if (tail != null) tail.measuredWidth + (2 * dp).roundToInt() else 0)
+                (if (tail != null) tail.measuredWidth + (2 * dp).roundToInt() else 0) + earW
             val flipper = state.centerFlipper()?.takeIf { it.visibility == View.VISIBLE }
             val subText = listOfNotNull(state.centerSub1(), state.centerSub2()).firstOrNull { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() }
             val hasSub = flipper != null && subText != null
@@ -1194,10 +1303,12 @@ private fun aioHeader() {
             val subW = if (hasSub) ((subText.paint?.measureText(subText.text?.toString().orEmpty())?.toInt()) ?: flipper.measuredWidth) +
                 (if (subIcon != null) subIcon.measuredWidth + (4 * dp).roundToInt() else 0) else 0
             val geom = nagramHeaderLayout(w, h, dp, unreadW, rightViews.size, titleTextW, subW, hasAvatar = true)
+            state.lastGeom = geom
+            state.lastRightViews = rightViews
             state.pills.update(geom)
 
-            // 1. 左返回胶囊：返回箭头 + 未读气泡
-            val backBtn = state.leftBtn?.takeIf { it.visibility == View.VISIBLE } ?: state.closeBtn?.takeIf { it.visibility == View.VISIBLE }
+            // 1. 左返回胶囊：返回箭头（sm1.u#f 0x7f0a2ec2） + 未读气泡
+            val backBtn = state.leftBtn?.takeIf { it.visibility == View.VISIBLE }
             if (backBtn != null) {
                 val bw = backBtn.measuredWidth.coerceAtLeast((24 * dp).roundToInt())
                 val bh = backBtn.measuredHeight.coerceAtLeast((24 * dp).roundToInt())
@@ -1215,17 +1326,26 @@ private fun aioHeader() {
             // 2. 中间 ChatAvatarContainer 胶囊：42dp 圆形头像 + 左对齐标题与副标题
             state.avatar.layout(geom.avatarLeft, geom.avatarTop, geom.avatarLeft + geom.avatarSize, geom.avatarTop + geom.avatarSize)
             val tailW = tail?.measuredWidth ?: 0
-            val maxTitleW = (geom.textRight - geom.textLeft - tailW).coerceAtLeast(0)
+            val maxTitleW = (geom.textRight - geom.textLeft - tailW - earW).coerceAtLeast(0)
             state.titleTv?.let { tv ->
-                val tw = minOf(tv.measuredWidth.coerceAtLeast(titleTextW - tailW), maxTitleW)
+                val rawTitleW = (titleTextW - tailW - earW).coerceAtLeast(0)
+                val tw = minOf(tv.measuredWidth.coerceAtLeast(rawTitleW), maxTitleW)
                 val th = tv.measuredHeight.coerceAtLeast((22 * dp).roundToInt())
                 val ty = if (hasSub) geom.centerPill.top + (4 * dp).roundToInt() else geom.centerPill.centerY() - th / 2
                 tv.layout(geom.textLeft, ty, geom.textLeft + tw, ty + th)
+                var curRight = geom.textLeft + tw
                 tail?.let { tl ->
                     val tlh = tl.measuredHeight
                     val tly = ty + (th - tlh) / 2
                     val gap = (2 * dp).roundToInt()
-                    tl.layout(geom.textLeft + tw + gap, tly, geom.textLeft + tw + gap + tailW, tly + tlh)
+                    tl.layout(curRight + gap, tly, curRight + gap + tailW, tly + tlh)
+                    curRight += gap + tailW
+                }
+                earIcon?.let { ear ->
+                    val ew = ear.measuredWidth; val eh = ear.measuredHeight
+                    val ey = ty + (th - eh) / 2
+                    val gap = (4 * dp).roundToInt()
+                    ear.layout(curRight + gap, ey, curRight + gap + ew, ey + eh)
                 }
             }
             if (hasSub) {
@@ -1273,5 +1393,218 @@ private fun aioHeader() {
             chain.proceed().also { if (topBlur.isInstance(chain.thisObject)) syncTopBlur(chain.thisObject) }
         }
     }
+}
+
+// ---- 二级页顶栏（QUISecNavBar：聊天设置、聊天记录、转发、通用设置）与搜索栏（QUISearchBar）：延续玻璃胶囊与夜间提亮。
+
+private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawListener, View.OnLayoutChangeListener {
+    private val getBlur = runCatching { nav.javaClass.getDeclaredMethod("k").apply { isAccessible = true } }.getOrNull()
+    private val getBorder = runCatching { nav.javaClass.getDeclaredMethod("l").apply { isAccessible = true } }.getOrNull()
+    private val getCenter = runCatching { nav.javaClass.getDeclaredMethod("n").apply { isAccessible = true } }.getOrNull()
+    private val getLeftIcon = runCatching { nav.javaClass.getDeclaredMethod("p").apply { isAccessible = true } }.getOrNull()
+    private val getLeftText = runCatching { nav.javaClass.getDeclaredMethod("s").apply { isAccessible = true } }.getOrNull()
+    private val getRightLayout = runCatching { nav.javaClass.getDeclaredMethod("t").apply { isAccessible = true } }.getOrNull()
+    private val getRightText = runCatching { nav.javaClass.getDeclaredMethod("w").apply { isAccessible = true } }.getOrNull()
+    private val getTitleBg = runCatching { nav.javaClass.getDeclaredMethod("y").apply { isAccessible = true } }.getOrNull()
+    private val getTitleRoot = runCatching { nav.javaClass.getDeclaredMethod("z").apply { isAccessible = true } }.getOrNull()
+    val titleRoot: ViewGroup = (runCatching { getTitleRoot?.invoke(nav) as? ViewGroup }.getOrNull()) ?: nav
+    private val origNavBg = nav.background
+    private val origTitleRootBg = titleRoot.background
+    private val titleBgView = runCatching { getTitleBg?.invoke(nav) as? View }.getOrNull()
+    private val blurView = runCatching { getBlur?.invoke(nav) as? View }.getOrNull()
+    private val borderView = runCatching { getBorder?.invoke(nav) as? View }.getOrNull()
+    private val origTitleBgVis = titleBgView?.visibility
+    private val origBlurVis = blurView?.visibility
+    private val origBorderVis = borderView?.visibility
+    private val savedIconTints = WeakHashMap<android.widget.ImageView, android.content.res.ColorStateList?>()
+    private val recordedIconTints = WeakHashMap<android.widget.ImageView, Boolean>()
+    private val savedTextColors = WeakHashMap<TextView, Int>()
+    val pills = HeaderPillsDrawable(titleRoot)
+    var lastGeom: NagramHeaderLayout? = null
+    private var activeTarget: View? = null
+    init {
+        titleRoot.viewTreeObserver.addOnPreDrawListener(this)
+        titleRoot.addOnLayoutChangeListener(this)
+    }
+    private fun tintTree(v: View?, dark: Boolean) {
+        if (v == null) return
+        val bright = android.content.res.ColorStateList.valueOf(0xFFF2F5FA.toInt())
+        if (v is android.widget.ImageView) {
+            if (recordedIconTints[v] != true) {
+                savedIconTints[v] = v.imageTintList
+                recordedIconTints[v] = true
+            }
+            if (dark) {
+                if (v.imageTintList != bright) v.imageTintList = bright
+            } else {
+                val orig = savedIconTints[v]
+                if (v.imageTintList != orig) v.imageTintList = orig
+            }
+        } else if (v is TextView) {
+            if (!savedTextColors.containsKey(v)) savedTextColors[v] = v.currentTextColor
+            if (dark) v.setTextColor(0xFFF5F7FA.toInt()) else savedTextColors[v]?.let(v::setTextColor)
+        } else if (v is ViewGroup) {
+            for (i in 0 until v.childCount) tintTree(v.getChildAt(i), dark)
+        }
+    }
+    private fun updateGeometry() {
+        val w = titleRoot.width; val h = titleRoot.height
+        if (w <= 0 || h <= 0) return
+        val dp = titleRoot.dp
+        val centerTv = runCatching { getCenter?.invoke(nav) as? TextView }.getOrNull()
+        val titleW = (centerTv?.paint?.measureText(centerTv.text?.toString().orEmpty())?.toInt())
+            ?: (centerTv?.measuredWidth ?: (80 * dp).roundToInt())
+        val rightLayout = runCatching { getRightLayout?.invoke(nav) as? ViewGroup }.getOrNull()
+        val rightTv = runCatching { getRightText?.invoke(nav) as? TextView }.getOrNull()
+        val rightCount = (if (rightLayout != null && rightLayout.visibility == View.VISIBLE) {
+            (0 until rightLayout.childCount).count { rightLayout.getChildAt(it).visibility == View.VISIBLE }
+        } else 0) + (if (rightTv != null && rightTv.visibility == View.VISIBLE && !rightTv.text.isNullOrEmpty()) 1 else 0)
+        val geom = nagramHeaderLayout(w, h, dp, 0, rightCount, titleW, 0, hasAvatar = false)
+        lastGeom = geom
+        pills.update(geom)
+    }
+    fun dispatchPillTouch(event: MotionEvent): Boolean {
+        val geom = lastGeom ?: return false
+        val action = event.actionMasked
+        if (action == MotionEvent.ACTION_DOWN) {
+            activeTarget = null
+            val x = event.x.toInt(); val y = event.y.toInt()
+            if (!geom.leftPill.isEmpty() && x in geom.leftPill.left..geom.leftPill.right && y in geom.leftPill.top..geom.leftPill.bottom) {
+                activeTarget = (runCatching { getLeftIcon?.invoke(nav) as? View }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
+                    ?: (runCatching { getLeftText?.invoke(nav) as? View }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
+            }
+        }
+        val target = activeTarget ?: return false
+        val copy = MotionEvent.obtain(event)
+        copy.setLocation(target.width / 2f, target.height / 2f)
+        val handled = try { target.dispatchTouchEvent(copy) } finally { copy.recycle() }
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) activeTarget = null
+        return handled
+    }
+    fun applyStyle() {
+        if (!on("玻璃底栏")) { restore(); return }
+        nav.background = null
+        if (titleRoot.background !== pills) titleRoot.background = pills
+        titleBgView?.visibility = View.GONE
+        blurView?.visibility = View.GONE
+        borderView?.visibility = View.GONE
+        val dark = night()
+        tintTree(titleRoot, dark)
+        updateGeometry()
+        pills.sync()
+    }
+    fun restore() {
+        activeTarget = null
+        lastGeom = null
+        nav.background = origNavBg
+        if (titleRoot.background === pills) titleRoot.background = origTitleRootBg
+        if (titleBgView != null && origTitleBgVis != null) titleBgView.visibility = origTitleBgVis
+        if (blurView != null && origBlurVis != null) blurView.visibility = origBlurVis
+        if (borderView != null && origBorderVis != null) borderView.visibility = origBorderVis
+        for ((iv, _) in recordedIconTints) iv.imageTintList = savedIconTints[iv]
+        savedIconTints.clear(); recordedIconTints.clear()
+        for ((tv, col) in savedTextColors) tv.setTextColor(col)
+        savedTextColors.clear()
+        titleRoot.invalidate()
+    }
+    override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
+        if (on("玻璃底栏")) updateGeometry()
+    }
+    override fun onPreDraw(): Boolean {
+        if (on("玻璃底栏")) pills.sync()
+        return true
+    }
+    fun dispose() {
+        if (titleRoot.viewTreeObserver.isAlive) titleRoot.viewTreeObserver.removeOnPreDrawListener(this)
+        titleRoot.removeOnLayoutChangeListener(this)
+        restore()
+        pills.dispose()
+    }
+}
+
+private val secNavBars = WeakHashMap<ViewGroup, SecNavBarState>()
+
+private fun secNavBar(nav: ViewGroup) {
+    val state = secNavBars.getOrPut(nav) {
+        SecNavBarState(nav).also { secNavBars[it.titleRoot] = it }
+    }
+    state.applyStyle()
+}
+
+private fun refreshSecNavBars() {
+    secNavBars.values.distinct().forEach { it.applyStyle() }
+}
+
+private fun resetSecNavBars() {
+    secNavBars.values.distinct().forEach { it.dispose() }
+    secNavBars.clear()
+}
+
+private class SearchBarState(val bar: ViewGroup) {
+    private val getInputBg = runCatching { bar.javaClass.getDeclaredMethod("getInputBg").apply { isAccessible = true } }.getOrNull()
+    private val inputBg = runCatching { getInputBg?.invoke(bar) as? View }.getOrNull()
+    private val origBarBg = bar.background
+    private val origInputOutline = inputBg?.outlineProvider
+    private val origInputClip = inputBg?.clipToOutline ?: false
+    private val shape = capsule()
+    private val savedIconTints = WeakHashMap<android.widget.ImageView, android.content.res.ColorStateList?>()
+    private val recordedIconTints = WeakHashMap<android.widget.ImageView, Boolean>()
+    private val savedTextColors = WeakHashMap<TextView, Int>()
+    private fun tintTree(v: View?, dark: Boolean) {
+        if (v == null) return
+        val bright = android.content.res.ColorStateList.valueOf(0xFFE8EEF7.toInt())
+        if (v is android.widget.ImageView) {
+            if (recordedIconTints[v] != true) {
+                savedIconTints[v] = v.imageTintList
+                recordedIconTints[v] = true
+            }
+            if (dark) {
+                if (v.imageTintList != bright) v.imageTintList = bright
+            } else {
+                val orig = savedIconTints[v]
+                if (v.imageTintList != orig) v.imageTintList = orig
+            }
+        } else if (v is TextView) {
+            if (!savedTextColors.containsKey(v)) savedTextColors[v] = v.currentTextColor
+            if (dark) v.setTextColor(0xFFE8EEF7.toInt()) else savedTextColors[v]?.let(v::setTextColor)
+        } else if (v is ViewGroup) {
+            for (i in 0 until v.childCount) tintTree(v.getChildAt(i), dark)
+        }
+    }
+    fun applyStyle() {
+        if (!on("玻璃底栏") && !on("TG输入栏")) { restore(); return }
+        bar.background = null
+        inputBg?.let {
+            if (it.outlineProvider !== shape) it.outlineProvider = shape
+            if (!it.clipToOutline) it.clipToOutline = true
+        }
+        tintTree(bar, night())
+    }
+    fun restore() {
+        bar.background = origBarBg
+        inputBg?.let {
+            it.outlineProvider = origInputOutline
+            it.clipToOutline = origInputClip
+        }
+        for ((iv, _) in recordedIconTints) iv.imageTintList = savedIconTints[iv]
+        savedIconTints.clear(); recordedIconTints.clear()
+        for ((tv, col) in savedTextColors) tv.setTextColor(col)
+        savedTextColors.clear()
+    }
+}
+
+private val searchBars = WeakHashMap<ViewGroup, SearchBarState>()
+
+private fun searchBar(bar: ViewGroup) {
+    searchBars.getOrPut(bar) { SearchBarState(bar) }.applyStyle()
+}
+
+private fun refreshSearchBars() {
+    searchBars.values.toList().forEach { it.applyStyle() }
+}
+
+private fun resetSearchBars() {
+    searchBars.values.toList().forEach { it.restore() }
+    searchBars.clear()
 }
 

@@ -7,21 +7,21 @@
 ## 要求
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
-但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，451 条）——换版本先看那张表红哪条，别猜。
+但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，496 条）——换版本先看那张表红哪条，别猜。
 
 ## 功能
 
 外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
 - 首页底栏按 [KernelSU 固定源码](https://github.com/tiann/KernelSU/tree/3186a2fe2107f7170e06dab7aa157eb10ae7759f/manager/app/src/main/java/me/weishu/kernelsu/ui/component) 移植到原生 View：64dp 栏 / 最小 76dp 页签 / 56dp 指示器、2dp 模糊折射、按压色散、无边线材质和解析弹簧。普通内容与强调色缩放副本分层，前景透镜在 QQ 内容之后从组合背景取样；普通内容统一中性色，强调色副本不再被前景额外 40% 罩色压暗。参考 [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass/tree/65ab177e90e5c1d8c62e70cf7755841982da65f6) 调整，保留用户确认正常的透镜形变；材质动画不再缩放真实 QQ View。设置短胶囊与静止底栏同高，可见边缘间距 12dp，共享材质/按压，放不下时置于右上方，菜单在入口附近展开，共享玻璃材质并保持阅读区域稳定；不增加 APK 依赖。横拖释放后选真实页签，纵滑仍交给背后原生内容页。**未获本轮设备复验，不宣称一比一验收完成**；差异与证据见 [移植记录](docs/kernel-port.md)。
-- **聊天顶栏三胶囊布局**：照 NagramXF `ActionBar.setupGlass` + `ChatAvatarContainer`（`p = 6dp`、`s = 46dp`、`r = 23dp`）接入 `AIOTitleVB`（`sm1.u` / `sm1.w` / `CenterVB`）与 `AIOTitleRelativeLayout`：左侧 46dp 返回胶囊（含未读数自适应加宽）、中间 42dp 圆形会话头像 + 左对齐 17.5sp 标题 / 13.5sp 副标题胶囊（`getVisualWidth` +64dp，点击头像触发原生标题打开资料卡，由 `AIOContact` 经 `com.tencent.qqnt.avatar.a` 异步加载并带首字底图）、右侧 46dp 操作胶囊，同时隐藏 `com.tencent.mobileqq.aio.reserve1.blur.f` 通栏模糊背景；关闭或重置完整还原（待真机验收）。
+- **聊天顶栏与二级页三胶囊布局**：照 NagramXF `ActionBar.setupGlass` + `ChatAvatarContainer`（`p = 6dp`、`s = 46dp`、`r = 23dp`）接入 `AIOTitleVB`（`sm1.u` / `sm1.v` / `sm1.w` / `CenterVB`）与 `AIOTitleRelativeLayout`：左侧 46dp 返回胶囊（保留 `sm1.u#f` `0x7f0a2ec2` `TextView` 返回箭头背景并在夜间模式提亮 `#F2F5FA`，含未读数自适应加宽）、中间 42dp 圆形会话头像 + 左对齐 17.5sp 标题 / 13.5sp 副标题 + 内联听筒图标（`0x7f0a1630`）胶囊（`getVisualWidth` +64dp，点击头像触发原生标题打开资料卡，由 `AIOContact` 经 `com.tencent.qqnt.avatar.a` 异步加载并带首字底图）、右侧 46dp 操作胶囊，隐藏 `com.tencent.mobileqq.aio.reserve1.blur.f` 通栏模糊与 `sm1.u#d`（`0x7f0a14ea` 1px 底部分割线），清空旧 `TouchDelegate` 并在 `ViewGroup#dispatchTouchEvent` 按左/中/右三胶囊命中区精确转发点击；同时适配二级页导航栏 `QUISecNavBar`（`SecNavBarState`）与搜索栏 `QUISearchBar`（`SearchBarState`），关闭或重置完整还原（待真机验收）。
 - 底栏角标按真实计数入口展开「99+」；底栏 QUIBadge 在 widget.d.a 转文字之前保留第 3 个参数的真实数量，数字宽度与左右内边距一同调整；底栏纯数字不画红底或边框，用完整矩阵在共同父坐标中校正，并显式居中绘字；上移半个数字字形高度，减少与图标重叠，不再混用窗口坐标与局部宽度（仍待设备验收）
 - **Monet 取色**：玻璃的罩色、选中项、设置短胶囊图标的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色
-- TG 输入栏：接入 NT 的 `InputEditTextVBDelegate.U`（`adorn.e#a` 编辑器与 `adorn.e#d` 发送按钮）、`AIOInputExpandableVB`（容器 `e` 与顶部分割线 `f`）、`compat.b`（皮肤状态重刷）、`BottomBlurVB`（底部通栏模糊隐藏）与 `AIOShortcutBarVB`（`PanelIconLinearLayout` 图标带），将真实 `AIOEditText` 与右侧 `AIOInputSendBtn`（含 `com.tencent.qui.smoothcorner.b#j` 圆角背景）分别独立按 `height / 2` 完全药丸化（`capsule()`），去除安全区实色背景后重定位输入区与聊天列表（`RecyclerView` `clipToPadding = false`），并在夜间模式主动提亮玻璃材质、输入框文字与全部快捷操作图标，保留原输入框、发送、语音、表情和附件按钮。保留用户原有开关选择，切换后立即还原/应用；图标只调整剩余间隙，不改按钮宽度与权重。输入与键盘效果待真机验收。
+- TG 输入栏：接入 NT 的 `InputEditTextVBDelegate.U`（`adorn.e#a` 编辑器与 `adorn.e#d` 发送按钮）、`AIOInputExpandableVB`（容器 `e` 与顶部分割线 `f`）、`compat.b`（`handleUIState` / `e` / `g` / `i` / `n` 全路径防回退）、`compat.e$b#f`（发送按钮原生半高圆角）、`BottomBlurVB`（底部通栏模糊隐藏）、`AIOShortcutBarVB`（`onCreateView` / `handleUIState` / `x1` / `y1` / `s1` 拦截异步背景回写）与 `PanelIconLinearLayout#f`（图标带重建同步），将真实 `AIOEditText` 与右侧 `AIOInputSendBtn`（含 `com.tencent.qui.smoothcorner.b#j` 圆角背景）分别独立按 `height / 2` 完全药丸化（`capsule()`），去除安全区实色背景后重定位输入区与聊天列表（`RecyclerView` `clipToPadding = false`），并在夜间模式主动提亮玻璃材质、输入框文字与全部快捷操作图标，保留原输入框、发送、语音、表情和附件按钮。保留用户原有开关选择，切换后立即还原/应用；图标只调整剩余间隙，不改按钮宽度与权重。输入与键盘效果待真机验收。
 - 藏掉「频道」「动态」「小世界」页签
 - 聊天标题栏去掉一起听 / 一起看 / 群游戏那排；侧栏去掉打卡、天气、等级、会员、装扮、钱包一类的入口（数据源和视图两头都拦）
 - 隐藏好友聊天标题栏那行在线状态（在线 / 手机在线 / WiFi在线 / 忙碌 / 隐身…）
-- 统一气泡、统一字体、去头像挂件；开启统一气泡与连发合并时，全部消息气泡保持四角全圆角（`17dp`，不切直角，与头像圆角滑块解耦），气泡四边内边距统一为 `5dp`（清零内层冗余内边距与 `57dp × 65dp` 最小宽高锁）；绘制无左部竖条的圆角半透明引用块（`ReplyQuoteBar`，`6dp` 内圆角），并覆盖 `BaseMixContentComponent#C2`、`AIOReplyComponent#C2`、`TextMsgContent#H` 与 `AIOUnsuportContentComponent#Y1`；已移除“昵称只留名字”，保留 QQ 原昵称装饰。
+- 统一气泡、统一字体、去头像挂件；开启统一气泡时，全部消息气泡保持四角全圆角（`17dp`，不切直角，与头像圆角滑块解耦），气泡四边内边距严格统一为 `5dp`（归零 `skin.padding.j` `a,b,c,d=0` 与 `skin.padding.h` `j,k,l,n,o=0, m=4dp`，递归清零内层包装视图冗余内边距、四向 `margin` 与 `57dp × 65dp` 最小宽高锁，并关闭 `TextView` 与 `FasterTextView#mIncludePad` 的 `includeFontPadding`）；被回复消息彻底清除 `0x7f0a5c31` 外框与左部竖条，与回复正文融为单一外层玻璃气泡，覆盖 `BaseMixContentComponent#C2`/`s2`、`AIOReplyComponent#C2`/`s2`/`K3`/`L3`、`AIOTextContentComponent#Z1`/`n2`、`TextMsgContent#H` 与 `AIOUnsuportContentComponent#Y1`；已移除“昵称只留名字”，保留 QQ 原昵称装饰。
 - **屏蔽红点引导**：群红点、王者小队、群头衔、游戏中心红点、乐吧引导气泡、资料卡引导、虚拟形象角标一律不亮
 - **去会员等级**：资料卡上 SVIP / VIP / 大会员 / 大会员年费那排图标不画
 

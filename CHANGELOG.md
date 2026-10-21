@@ -1,11 +1,20 @@
 # CHANGELOG
 
-## 2026-10-21 — 修复长按菜单空白/截断与撤回崩溃、恢复四角全圆角与统一 5dp 内边距、修复图片/表情压窄、恢复己方组首 ID 与去掉引用竖条、夜间模式全局提亮及安全区重定位
+## 2026-10-21 — 四向严格 5dp 气泡边距与被回复消息去外框、顶栏返回箭头恢复与三胶囊触控重定向、输入栏异步防回退、二级页与搜索栏适配及长按菜单/撤回修复
 
-- 修复长按菜单空白、文字下部截断与点击撤回崩溃（全仓审查）：查明 `QQCustomMenuExpandableLayout#T` 在 QQ 9.2.10 中是聊天列表 `mSourceView`（`RecyclerView`）而非分割线，移除对 `T` 的 `View.GONE` 并确保其 `VISIBLE`，仅隐藏 `host` 直接子级 `1px` 分割线 `View`；在 `H()` 后置阶段清零原生 `q()->r()/s()/t()` 覆写的 `D = 16dp` 上下内边距并关闭 `includeFontPadding`，保持 `C = 220dp` 防止 `onMeasure`（`2 * C`）裁切纵向菜单；`Hook.kt` 引入 `SafeChain` 兜住 `chain.proceed()` 后置异常，防撤回跳过本机主动触发的撤回推送并以 `runCatching` 保护 JNI 动态代理回调，撤回变灰字（`template.m` / `msgType = 5`）时立即解绑 `RunLayout` 与 `RunAvatars`。
-- 气泡四角全圆角、统一 5dp 内边距、去掉引用左竖条与恢复己方组首 ID：取消连发气泡直角切割，全部消息保持 `17dp` 四角全圆角（`nagramBubbleRadii`）；气泡四边内边距统一设为 `5dp`（`BubbleSurface` + `skin.padding.j#a` / `h#a`），清零内层包装视图冗余内边距与 `57dp × 65dp` 最小宽高锁；`ReplyQuoteBar` 去掉左侧 `3dp` 竖条，仅保留圆角半透明底块；移除 `RunLayout.apply()` 中对 `self` 昵称的强制 `View.GONE` 并在 `RowGeometry` 定位己方 `msgNick`，使自己消息在连发组首同样右对齐显示头衔+昵称 ID、续条折叠。
-- 修复外部时间导致图片/表情/卡片/短文本水平压窄：`BaseContentComponent#d1` 向垂直 `BubbleLayoutCompatPress`（`WRAP_CONTENT`）添加内容根时默认赋 `width = MATCH_PARENT`，加入 `WRAP_CONTENT` 的 `ExternalStamp` 后触发 `LinearLayout.measureVertical` 的 `allFillParent = false` 与 `forceUniformWidth`，将内容根压窄至时间戳宽度；现将同容器兄弟内容根的 `MATCH_PARENT` 转为 `WRAP_CONTENT` 并按收发方向（他人 `START`、自己 `END`）对齐，关闭或复用时完整还原。
-- 安全区组件重定位与夜间模式全局提亮：去除顶/底实色安全区背景后将聊天 `RecyclerView` 设为 `clipToPadding = false` 并为输入区补齐安全边距；提亮夜间模式玻璃材质底色与描边（`KernelBar` / `Glass` `0x7A2A3240` + `in_brightness = 0.08f`），并主动提亮顶栏按钮/标题（`HeaderState`）、输入栏与底部快捷图标（`NativeInput` + `AIOShortcutBarVB`）、气泡描边、外部时间及菜单图文对比度；仓库新增渲染预览图 [`docs/preview-realigned-layout.png`](docs/preview-realigned-layout.png)。
+- 气泡四向严格 `5dp` 内边距与被回复消息彻底去除内层外框（`Chat.kt`）：
+  - 根因定位：QQ 原生 `skin.padding.j#a` / `h#a`、`TextMsgContent#H`、`AIOTextContentComponent#Z1`/`n2` 与 `AIOReplyComponent#C2`/`s2`/`K3`/`L3` 会在内层子视图（`f3()` `AIOReplyLinearLayout`、`G2()` `AIOMixLinearLayout`、`0x7f0a5c31` `ReplyTextRelativeLayout`、`0x7f0a5c11`、`j2()`、`m2()`/`l2()`）上反复重设内边距、四向 `margin` 与引用背景框 `@0x7f0803b8`，且 `android.widget.FasterTextView#mIncludePad` 默认额外增加上下约 `2.5dp` 字体留白，`RunLayout.apply()` 此前又仅在 `连发合并` 开启时才向 `BubbleSurface` 传 `true`。
+  - 修复方案：当 `统一气泡` 开启时，将 `skin.padding.j`（`a,b,c,d = 0`）与 `skin.padding.h`（`j,k,l,n,o = 0`，`m = 4dp`）全部归零，仅由最外层 `BubbleSurface` 在 `rootView` 上施加唯一一层 `5dp` 四向内边距与四角 `17dp` 全圆角（连发不切直角）；`InnerClearState` 递归清零并可逆保存内层子视图 `background`、`padding`、`minimumWidth`/`Height`、四向 `MarginLayoutParams`、`TextView.includeFontPadding` 与 `FasterTextView#setIncludeFontPadding(false)`，彻底清除被回复消息 `0x7f0a5c31` 外框与左侧竖条，使被回复块与回复正文融为单一外层玻璃气泡。
+- 顶栏安全区按钮重定位、返回箭头恢复与夜间提亮（`Looks.kt`）：
+  - 查明 `r/i/dyp.xml` 中 `sm1.u#f`（`0x7f0a2ec2` `ivTitleBtnLeft`）是 `TextView`，其返回箭头图标由 `AIOTitleVB#Z1` 设在 `view.background`（`@0x7f0835a1`）上，而 `sm1.u#d`（`0x7f0a14ea`）是 `1px` 底部分割线而非关闭按钮；现保留 `leftBtn.background` 并隐藏 `1px` 分割线 `u.d`，在夜间模式对 `TextView` 施加 `backgroundTintList = #F2F5FA`、对 `ImageView` 施加 `imageTintList = #F2F5FA`。
+  - 清空 `AIOTitleVB#u1` 按旧全宽坐标挂载的 `ViewUtils$a` `TouchDelegate`，在 `ViewGroup#dispatchTouchEvent` 中按 `lastGeom` 的左、中、右三枚悬浮胶囊命中区将触摸事件精确转发给 `leftBtn`/`unreadBadge`、`titleTv`/`centerFlipper` 及右侧操作槽位；将听筒图标（`0x7f0a1630`）内联排入中间胶囊标题右侧，并在 `标题栏侧栏精简` 开启时自动折叠动态挂入的 VIP/火花铭牌。
+- 输入栏与底部快捷栏防异步回写及全胶囊化（`Input.kt`）：
+  - 对 `com.tencent.mobileqq.aio.input.inputbar.compat.b` 的 `handleUIState`、`e(boolean)`、`g()`、`i(adorn.e)`、`n(boolean, boolean)` 全路径挂钩，防止状态切换与多行展开时冲掉 `AIOEditText` 的 `Glass` 胶囊与透明底栏容器；
+  - 挂钩 `com.tencent.mobileqq.aio.input.inputbar.compat.e$b#f(Context, int, int)`，使 `AIOInputSendBtn`（`QUIButton`）在原生圆角计算阶段即返回 `height / 2`（未测量时 `18dp`），配合 `capsule()` 轮廓与 `SmoothCorner` 实现完整药丸形；
+  - 挂钩 `com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB` 的 `onCreateView`、`handleUIState`、`x1`、`y1`、`s1` 及 `PanelIconLinearLayout#f`，拦截 `x1` 异步 `post` 的 `d1 -> y1` Runnable 将底部快捷栏刷回实色背景，并在夜间模式下提亮全部输入栏与快捷栏图标（`#E8EEF7`）。
+- 二级页面导航栏（`QUISecNavBar`）、搜索栏（`QUISearchBar`）及长按菜单/撤回修复：
+  - 新增 `SecNavBarState`（适配聊天设置、聊天记录、转发、通用设置等二级页顶栏 `QUISecNavBar`）与 `SearchBarState`（适配 `QUISearchBar`），延续三胶囊玻璃顶栏、左返回胶囊触控重定向、搜索框全胶囊化与夜间高对比度提亮；
+  - 保持长按菜单 `mSourceView`（`QQCustomMenuExpandableLayout#T`）可见、清零菜单项 `16dp` 上下内边距、恢复己方连发组首 ID、修复外部时间对兄弟视图宽度的压缩，并用 `SafeChain` 与本机撤回过滤兜住防撤回路径；新增设计准则 [`docs/design-principles.md`](docs/design-principles.md) 与架构预览图 [`docs/preview-uniform-5dp-and-architecture.png`](docs/preview-uniform-5dp-and-architecture.png)（保留旧图 [`docs/preview-realigned-layout.png`](docs/preview-realigned-layout.png)）。
 
 ## 2026-10-20 — 灰字恢复居中、仅他人居左自己居右、单条头像顶对齐防侵入、T字接缝直角、消息外部时间与输入栏药丸化
 
