@@ -608,3 +608,26 @@ member! com.tencent.mobileqq.qui.b#g
 class com.tencent.richframework.compat.immersive.RFWNavigationBarImmersiveHelper
 member! com.tencent.richframework.compat.immersive.RFWNavigationBarImmersiveHelper#fillNavigationBarBackgroundView
 member! com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB#d1
+member! com.tencent.fastertextview.wrapper.a#j
+member! com.tencent.fastertextview.wrapper.a#k
+class com.tencent.mobileqq.aio.msglist.holder.skin.AIOBubbleSkinInfo$BackgroundImageInfo
+member! com.tencent.mobileqq.aio.msglist.holder.skin.AIOBubbleSkinInfo$BackgroundImageInfo#f
+member! com.tencent.mobileqq.aio.msglist.holder.skin.AIOBubbleSkinInfo$BackgroundImageInfo#g
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#Y1
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#z1
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#A1
+class com.tencent.mobileqq.aio.title.AIODefaultTitleContainerVB
+field com.tencent.mobileqq.aio.title.AIODefaultTitleContainerVB#d
+member! com.tencent.mobileqq.aio.title.AIODefaultTitleContainerVB#onCreateView
+member! com.tencent.mobileqq.aio.title.AIODefaultTitleContainerVB#handleUIState
+class com.tencent.widget.immersive.ImmersiveTitleBar2
+member! com.tencent.widget.immersive.ImmersiveTitleBar2#initUI
+member! com.tencent.widget.immersive.ImmersiveTitleBar2#resetBkColor
+member! com.tencent.widget.immersive.ImmersiveTitleBar2#onMeasure
+class com.tencent.mobileqq.qqui.widget.ImmersiveTitleBar
+member! com.tencent.mobileqq.qqui.widget.ImmersiveTitleBar#a
+member! com.tencent.mobileqq.qqui.widget.ImmersiveTitleBar#onMeasure
+class com.tencent.qqnt.base.widget.NTImmersiveTitleBar
+member! com.tencent.qqnt.base.widget.NTImmersiveTitleBar#a
+member! com.tencent.qqnt.base.widget.NTImmersiveTitleBar#onMeasure
+

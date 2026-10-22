@@ -28,13 +28,15 @@ class KernelPortTest(unittest.TestCase):
         self.assertIn('assets.srcDir(rootProject.file("third_party"))', gradle)
 
     def test_reduced_blur_keeps_lens_and_dispersion_without_edge_stroke(self):
-        for operation in ('RenderEffect.createBlurEffect(2*dp,2*dp', '24*dp,24*dp,false',
+        for operation in ('val blurRadius = (glassBlurDp()*dp).coerceAtLeast(.1f)',
+                          'RenderEffect.createBlurEffect(blurRadius,blurRadius', '24*dp,24*dp,false',
                           '10*dp*p,14*dp*p,true', '"chromaticAberration",.5f',
                           '"in_saturation", 1.5f', '8*dp*p'):
             self.assertIn(operation, KERNEL)
         self.assertIn('Glass(bar, kernelBar = true)', LOOKS)
         self.assertNotIn('shine(canvas',KERNEL)
         self.assertNotIn('RuntimeShader(BLOOM_STROKE_SHADER_DUAL)',KERNEL)
+        self.assertNotIn('Paint.Style.STROKE', KERNEL)
 
     def test_frame_and_tracker_lifecycles_are_balanced(self):
         for operation in ('frameClock.removeFrameCallback(frame)', 'combined.discardDisplayList()',
@@ -140,12 +142,14 @@ class KernelPortTest(unittest.TestCase):
         self.assertIn('state.restoreBadgeClips()',restore)
         self.assertIn('layout.restorePosition(view)',restore)
 
-    def test_android_liquid_glass_default_highlight_shader_and_additive_blend(self):
-        self.assertIn('DEFAULT_HIGHLIGHT_SHADER', KERNEL)
-        self.assertIn('gradSdRoundedRect', KERNEL)
+    def test_interactive_radial_highlight_and_no_border_stroke(self):
+        self.assertNotIn('DEFAULT_HIGHLIGHT_SHADER', KERNEL)
+        self.assertNotIn('Paint.Style.STROKE', KERNEL)
+        self.assertIn('INTERACTIVE_HIGHLIGHT_SHADER', KERNEL)
         self.assertIn('BlendMode.PLUS', KERNEL)
-        self.assertIn('val blur = 0.25f * dp', KERNEL)
-        self.assertIn('BlurMaskFilter(blur, BlurMaskFilter.Blur.NORMAL)', KERNEL)
-        self.assertIn('ceil(0.5f * dp) * 2f', KERNEL)
+        self.assertIn('(.08f*hp*255).toInt()', KERNEL)
+        self.assertIn('(.15f*hp*255).toInt()', KERNEL)
+        self.assertIn('min(rect.width(),rect.height())*1.5f', KERNEL)
+        self.assertIn('glassBlurDp()', KERNEL)
         self.assertIn('0x66121212', KERNEL)
         self.assertIn('0x66FAFAFA', KERNEL)

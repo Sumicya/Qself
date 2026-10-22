@@ -12,7 +12,8 @@
 
 ## 未完成与待验收
 
-- [ ] 实机验收聊天顶栏三胶囊布局（`AIOTitleVB` + `AIOTitleRelativeLayout` + `CenterVB` + `com.tencent.qqnt.avatar.a`）：左 46dp 返回胶囊、中 42dp 圆形会话头像 + 左对齐标题/副标题胶囊、右 46dp 操作胶囊及 `com.tencent.mobileqq.aio.reserve1.blur.f` 通栏模糊隐藏；代码与 DEX 落点已接线，待真机视觉与点击复验。
+- [ ] 实机验收聊天顶栏三胶囊布局（`AIOTitleVB` + `AIODefaultTitleContainerVB` + `AIOTitleRelativeLayout` + `CenterVB` + `ImmersiveTitleBar2`/`ImmersiveTitleBar`/`NTImmersiveTitleBar`）：剥离顶部安全区实色背景、上移三段胶囊缩小上部距离（`topOffsetDp = 1dp`）、点击胶囊任意位置稳定触发菜单并驱动 `INTERACTIVE_HIGHLIGHT_SHADER` 径向高光；代码与 DEX 落点已接线，待真机视觉与点击复验。
+- [ ] 实机验收无描边长按底栏径向高光（全仓 `0` 处 `Paint.Style.STROKE`）、`1dp` 默认玻璃模糊与 `0~15dp` 滑条、Qself 按钮点击秒开/秒关设置面板（已移除 `knob` 每帧 `onPreDraw` `bringToFront` 死循环与 `350ms` 防抖）以及原生页面/弹窗原地展开菜单与列表向下展开动效（`页面动画`）。
 - [ ] 实机验收 QQ 原生消息长按菜单（`QQCustomMenuExpandableLayout` 纵向 48dp 行高 / 18dp 左右内边距 / 0dp 上下内边距 / 12dp 圆角 `ActionBarPopupWindow` 列表，严禁将聊天列表 `T: mSourceView` 置 `GONE`）与设置面板的逐项随指高亮、跨项移动、项外取消、展开态纵滑交接、撤回与危险操作（删除、撤回、结束进程）稳定性；真包落点与接线已完成，待真机手势复验。
 - [ ] 实测普通聊天头像圆角、连发定位与己方组首 ID（单条顶对齐、连发粘性滚动合并）：普通聊天 `RoundRectImageView#draw` 下拦截 `QQProAvatarDrawable#z`（跳过 `proavatar.j#b` / `proavatar.mask.a#a` 的 360° 圆形 `Path.addArc` 遮罩）并与 `proavatar.e$a#a`、`meta.b$a#b` 同步生效头像圆角（0% 为直角，50% 为圆形，不联动气泡）；仅他人消息居左（头像左距 8dp、气泡左距 6dp，保留 `WRAP_CONTENT` 与清零 `msgAvatar` 顶内边距防止侵入气泡或下行 `LVxx` 头衔）、自己消息保持原生居右与右侧头像并在连发组首同样右对齐显示头衔+昵称 ID（续条折叠）、居中灰字提示（`template.m`）保持原生居中且撤回变灰字时自动解绑连发；单条独立消息保持顶对齐不居中，仅连发多条消息（`>= 2`）按组上下边界粘性滚动合并；待真机在快速滚动、异步更新、行复用、分组变化、私聊与群聊中复验。
 - [ ] 实机验收全类型外部常显时间（`ExternalStamp` 转换同容器兄弟 `MATCH_PARENT` 为 `WRAP_CONTENT` 防止压窄图片/表情/卡片/短文本）、四角全圆角（`17dp`，不切直角）、四边统一 `5dp` 气泡内边距与无左竖条圆角引用块（`ReplyQuoteBar`）：全部消息类型统一在 `msgContent`（`0x7f0a11b9`）容器底部外侧显示自定义格式时间（他人左对齐 `START`、自己右对齐 `END`），顶部 `AIOTimestampComponent` 槽位随开关折叠/恢复；待真机检验各气泡与卡片边距视觉效果。

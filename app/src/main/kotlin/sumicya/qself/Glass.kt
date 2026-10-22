@@ -361,6 +361,9 @@ half4 main(float2 p) {
     }
 }
 
+internal const val GLASS_BLUR = "glass_blur_dp"
+internal fun glassBlurDp(): Float = (store()?.getInt(GLASS_BLUR, 1) ?: 1).coerceAtLeast(0).toFloat()
+
 /** 圆角上限为 [max] 的胶囊轮廓（不传就是全圆），配合 clipToOutline 用。 */
 fun capsule(max: Float = Float.MAX_VALUE) = object : ViewOutlineProvider() {
     override fun getOutline(view: View, o: Outline) = o.setRoundRect(0, 0, view.width, view.height, min(max, view.height / 2f))

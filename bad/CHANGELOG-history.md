@@ -1,3 +1,9 @@
+## 2026-10-21 — 四向严格 5dp 气泡边距与被回复消息去外框、顶栏返回箭头恢复与三胶囊触控重定向、输入栏异步防回退、二级页与搜索栏适配及长按菜单/撤回修复
+
+- 气泡四向严格 `5dp` 内边距与被回复消息彻底去除内层外框（`Chat.kt`）：当 `统一气泡` 开启时将 `skin.padding.j` 与 `skin.padding.h` 归零，由最外层 `BubbleSurface` 施加 `5dp` 四向内边距与四角 `17dp` 全圆角，彻底清除被回复消息 `0x7f0a5c31` 外框与左侧竖条。
+- 顶栏安全区按钮重定位、返回箭头恢复与夜间提亮（`Looks.kt`）：保留 `sm1.u#f` `TextView` 返回箭头背景并隐藏 `1px` 分割线 `u.d`，在 `ViewGroup#dispatchTouchEvent` 中按左、中、右三枚悬浮胶囊命中区转发点击。
+- 输入栏与底部快捷栏防异步回写及全胶囊化（`Input.kt`）：对 `compat.b`、`compat.e$b#f`、`AIOShortcutBarVB` 与 `PanelIconLinearLayout#f` 全路径挂钩，并适配二级页顶栏 `QUISecNavBar` 与搜索栏 `QUISearchBar`（预览见 [`docs/preview-interactive-highlight-and-unclamped-layout.png`](../docs/preview-interactive-highlight-and-unclamped-layout.png)）。
+
 ## 2026-10-20 — 灰字恢复居中、仅他人居左自己居右、单条头像顶对齐防侵入、T字接缝直角、消息外部时间与输入栏药丸化
 
 - 行对齐与头像防侵入：仅对收发气泡模板（`template.g` / `template.l`）套用 `RowGeometry`，居中灰字提示模板（`template.m` / `sm1.z`）保持原生居中；仅他人消息居左（头像左距 8dp、气泡左距 6dp，保持 `msgAvatar` 宽高 `WRAP_CONTENT` 并清零其顶内边距防止侵入气泡或下行 `LVxx` 头衔）、自己消息保持原生居右与右侧头像；单条独立消息保持原生顶对齐不居中（`runAvatarBounds` 在 `merged == false` 时返回 `null`），仅连发多条消息（`>= 2`）按组上下边界粘性滚动合并。

@@ -28,16 +28,16 @@ internal const val TIME_PATTERN = "message_time_pattern"
 internal const val AVATAR_RADIUS = "avatar_radius_percent"
 internal const val TIME_FORMAT_GUIDE =
     "格式码（左对齐显示）：yyyy/yy 年 · MM/M 月 · dd/d 日 · E 星期 · HH/H 0-23时 · kk/k 1-24时 · hh/h 1-12时 · KK/K 0-11时 · a 上下午 · mm/m 分 · ss/s 秒 · SSS/S 毫秒；文字用单引号包裹"
-internal fun validTimePattern(pattern: String): Boolean = pattern.length in 1..80 && pattern.none { it.isISOControl() } && runCatching {
+internal fun validTimePattern(pattern: String): Boolean = pattern.isNotEmpty() && pattern.none { it.isISOControl() } && runCatching {
     DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(Instant.EPOCH.atZone(ZoneId.systemDefault()))
 }.isSuccess
 internal fun messageTime(seconds: Long, pattern: String, zone: ZoneId = ZoneId.systemDefault()): String =
     if (seconds <= 0) "" else runCatching {
         val fmt = if (validTimePattern(pattern)) pattern else "HH:mm"
-        DateTimeFormatter.ofPattern(fmt, Locale.getDefault()).format(Instant.ofEpochSecond(seconds).atZone(zone)).take(120)
+        DateTimeFormatter.ofPattern(fmt, Locale.getDefault()).format(Instant.ofEpochSecond(seconds).atZone(zone))
     }.getOrDefault("")
 internal fun avatarCorner(size: Int, percent: Int): Int =
-    (size.coerceAtLeast(0) * percent.coerceIn(0, 50) / 100f).toInt()
+    (size.coerceAtLeast(0) * percent.coerceAtLeast(0) / 100f).toInt()
 
 private fun messageRecord(item: Any?): Any? = runCatching { item?.javaClass?.getMethod("getMsgRecord")?.invoke(item) }.getOrNull()
 private fun textViews(view: View): Sequence<TextView> = sequence {

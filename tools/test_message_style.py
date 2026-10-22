@@ -142,6 +142,13 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('aioAvatarOptions', STYLE)
         self.assertIn('aioProDrawables', STYLE)
         self.assertIn('kk/k 1-24时', STYLE)
+        self.assertNotIn('Paint.Style.STROKE', CHAT)
+        self.assertIn('AIOBubbleSkinInfo\\$BackgroundImageInfo', CHAT)
+        self.assertIn('setWrapperMinSize', CHAT)
+        self.assertIn('GLASS_BLUR', MENU)
+        self.assertIn('pageAnimations()', looks_src)
+        self.assertIn('AIODefaultTitleContainerVB', looks_src)
+        self.assertIn('ImmersiveTitleBar2', looks_src)
 
 
 if __name__ == '__main__':

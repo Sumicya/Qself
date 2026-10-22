@@ -52,44 +52,6 @@ internal fun kernelTabWidth(density: Float, badgeWidth: Int): Int =
 internal fun kernelRadius(width: Float, height: Float, limit: Float): Float =
     min(limit, min(width, height) / 2).coerceAtLeast(0f)
 
-/** Kyant0/AndroidLiquidGlass Shaders.kt DefaultHighlightShaderString 的纯函数几何求值（供 JVM 单元测试验证）。 */
-internal fun liquidHighlightIntensity(
-    x: Float,
-    y: Float,
-    width: Float,
-    height: Float,
-    cornerRadius: Float,
-    angleRad: Float = (PI / 4.0).toFloat(),
-    falloff: Float = 1f,
-): Float {
-    val hx = width * 0.5f
-    val hy = height * 0.5f
-    if (hx <= 0f || hy <= 0f) return 0f
-    val cx = x - hx
-    val cy = y - hy
-    val r = kernelRadius(width, height, cornerRadius)
-    val gradRadius = min(r * 1.5f, min(hx, hy))
-    val cornerX = abs(cx) - (hx - gradRadius)
-    val cornerY = abs(cy) - (hy - gradRadius)
-    val sx = if (cx > 0f) 1f else if (cx < 0f) -1f else 0f
-    val sy = if (cy > 0f) 1f else if (cy < 0f) -1f else 0f
-    val gx: Float
-    val gy: Float
-    if (cornerX >= 0f || cornerY >= 0f) {
-        val mx = max(cornerX, 0f)
-        val my = max(cornerY, 0f)
-        val len = hypot(mx, my)
-        gx = if (len > 1e-6f) sx * (mx / len) else 0f
-        gy = if (len > 1e-6f) sy * (my / len) else 0f
-    } else {
-        val stepX = if (cornerX >= cornerY) 1f else 0f
-        gx = sx * stepX
-        gy = sy * (1f - stepX)
-    }
-    val d = gx * cos(angleRad) + gy * sin(angleRad)
-    return abs(d).pow(falloff).coerceIn(0f, 1f)
-}
-
 /** QQ 仍持有真实页签、点击及无障碍；这里只接管底栏背景、按压和横向选择。 */
 internal class KernelBar(private val host: View, private val behind: (Canvas) -> Unit,
     private val invalidate: () -> Unit, val standalone: Boolean = false, private val cornerRadius: Float = Float.MAX_VALUE, private val deformBody: Boolean = true) {
@@ -111,14 +73,6 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     private val colorControls = RuntimeShader(COLOR_CONTROLS_SHADER)
     private val dispersion = RuntimeShader(ROUNDED_RECT_REFRACTION_WITH_DISPERSION_SHADER)
     private val interactive = RuntimeShader(INTERACTIVE_HIGHLIGHT_SHADER)
-    private val defaultHighlight = RuntimeShader(DEFAULT_HIGHLIGHT_SHADER)
-    private val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = ceil(0.5f * dp) * 2f
-        val blur = 0.25f * dp
-        if (blur > 0f) maskFilter = BlurMaskFilter(blur, BlurMaskFilter.Blur.NORMAL)
-        blendMode = BlendMode.PLUS
-    }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
     private val value = KernelSpring(1f, 1000f)
@@ -301,7 +255,6 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         try { canvas.translate(x,y); canvas.drawRenderNode(node) } finally { canvas.restoreToCount(save) }
     }
     private fun material(canvas: Canvas, node: RenderNode, rect: RectF, shift: Float) {
-        val r = kernelRadius(rect.width(), rect.height(), cornerRadius)
         rounded(canvas,rect) {
             drawAt(canvas,node,0f,rect.top)
             paint.color = if (night()) 0x66121212 else 0x66FAFAFA
@@ -309,37 +262,20 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
             val hp = highlight.value.coerceIn(0f,1f)
             if (hp > 0) {
                 paint.blendMode = BlendMode.PLUS
-                paint.color = Color.argb((.06f*hp*255).toInt(),255,255,255)
+                paint.color = Color.argb((.08f*hp*255).toInt(),255,255,255)
                 canvas.drawRect(rect,paint)
                 val tabWidth = (rect.width()-8*dp)/tabs().size.coerceAtLeast(1)
                 val logical = (value.value+.5f)*tabWidth
                 val hx = if (standalone) touchX.coerceIn(0f, rect.width()) else if (host.layoutDirection == View.LAYOUT_DIRECTION_RTL) rect.width()-logical else logical
                 interactive.setFloatUniform("size", rect.width(), rect.height())
-                interactive.setColorUniform("color", Color.argb((.12f*hp*255).toInt(),255,255,255))
-                interactive.setFloatUniform("radius", min(rect.width(),rect.height())*1.2f)
+                interactive.setColorUniform("color", Color.argb((.15f*hp*255).toInt(),255,255,255))
+                interactive.setFloatUniform("radius", min(rect.width(),rect.height())*1.5f)
                 interactive.setFloatUniform("position", (hx+shift).coerceIn(0f,rect.width()), if (standalone) touchY.coerceIn(0f, rect.height()) else rect.height()/2)
                 val save = canvas.save()
                 try {
                     canvas.translate(rect.left,rect.top); paint.shader = interactive
                     canvas.drawRect(0f,0f,rect.width(),rect.height(),paint)
                 } finally { canvas.restoreToCount(save); paint.shader = null; paint.blendMode = null }
-            }
-            // Kyant0/AndroidLiquidGlass Highlight.Default + HighlightStyle.Default:
-            // width = 0.5dp (strokeWidth = ceil(0.5dp)*2 clipped to outline), blurRadius = 0.25dp,
-            // color = White(alpha=0.5f), angle = 45deg, falloff = 1f, blendMode = BlendMode.Plus.
-            defaultHighlight.setColorUniform("color", 0x80FFFFFF.toInt())
-            defaultHighlight.setFloatUniform("radius", r)
-            defaultHighlight.setFloatUniform("size", rect.width(), rect.height())
-            defaultHighlight.setFloatUniform("angle", (PI / 4.0).toFloat())
-            defaultHighlight.setFloatUniform("falloff", 1f)
-            val save = canvas.save()
-            try {
-                canvas.translate(rect.left, rect.top)
-                highlightPaint.shader = defaultHighlight
-                canvas.drawRoundRect(0f, 0f, rect.width(), rect.height(), r, r, highlightPaint)
-            } finally {
-                highlightPaint.shader = null
-                canvas.restoreToCount(save)
             }
         }
     }
@@ -357,13 +293,14 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         scene.setPosition(-pad,-pad,w+pad,h+pad)
         val sc = scene.beginRecording(w+2*pad,h+2*pad)
         try { sc.translate(pad-bounds.left.toFloat()-panel(),pad-bounds.top.toFloat()); behind(sc) } finally { scene.endRecording() }
-        val key = (w.toLong() shl 32) or h.toLong()
+        val blurRadius = (glassBlurDp()*dp).coerceAtLeast(.1f)
+        val key = (w.toLong() shl 32) or (h.toLong() and 0xFFFFL) or ((blurRadius * 100f).toLong() shl 16)
         if (baseKey != key) {
             colorControls.setFloatUniform("in_brightness", 0f)
             colorControls.setFloatUniform("in_contrast", 1f)
             colorControls.setFloatUniform("in_saturation", 1.5f)
             val color = RenderEffect.createRuntimeShaderEffect(colorControls,"child")
-            val blur = RenderEffect.createBlurEffect(2*dp,2*dp,color,Shader.TileMode.CLAMP)
+            val blur = RenderEffect.createBlurEffect(blurRadius,blurRadius,color,Shader.TileMode.CLAMP)
             configure(lens,w.toFloat(),h.toFloat(),pad.toFloat(),24*dp,24*dp,false)
             base.setRenderEffect(RenderEffect.createChainEffect(RenderEffect.createRuntimeShaderEffect(lens,"content"),blur))
             if (!standalone) {
@@ -783,24 +720,3 @@ private const val INTERACTIVE_HIGHLIGHT_SHADER = """
         return color * intensity;
     }"""
 
-// Kyant0/AndroidLiquidGlass 65ab177e Shaders.kt DefaultHighlightShaderString
-private const val DEFAULT_HIGHLIGHT_SHADER = """
-    layout(color) uniform half4 color;
-    uniform float radius;
-    uniform float2 size;
-    uniform float angle;
-    uniform float falloff;
-
-    $ROUNDED_RECT_SDF
-
-    half4 main(float2 coord) {
-        float2 halfSize = size * 0.5;
-        float2 centeredCoord = coord - halfSize;
-        float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));
-        float2 grad = gradSdRoundedRect(centeredCoord, halfSize, gradRadius);
-        float2 normal = float2(cos(angle), sin(angle));
-        float d = dot(grad, normal);
-        float intensity = pow(abs(d), falloff);
-        return color * intensity;
-    }
-"""

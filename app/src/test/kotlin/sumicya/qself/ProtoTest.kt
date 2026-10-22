@@ -443,7 +443,7 @@ class ProtoTest {
         assertFalse(validTimePattern(""))
         assertFalse(validTimePattern("invalid["))
         assertFalse(validTimePattern("HH:mm\nss"))
-        assertFalse(validTimePattern("x".repeat(81)))
+        assertTrue(validTimePattern("'" + "x".repeat(90) + "'"))
         assertTrue(validTimePattern("MM-dd HH:mm:ss"))
     }
 
@@ -451,7 +451,7 @@ class ProtoTest {
         assertEquals(0, avatarCorner(48, 0))
         assertEquals(9, avatarCorner(48, 20))
         assertEquals(24, avatarCorner(48, 50))
-        assertEquals(24, avatarCorner(48, 100))
+        assertEquals(48, avatarCorner(48, 100))
         assertEquals(0, avatarCorner(48, -1))
         assertEquals(0, avatarCorner(-1, 50))
     }
@@ -558,7 +558,7 @@ class ProtoTest {
         assertEquals(BubbleCornerRadii(17, 17, 17, 17), nagramBubbleRadii(self = true, continued = false, continues = true, density = 1f))
         assertEquals(BubbleCornerRadii(17, 17, 17, 17), nagramBubbleRadii(self = true, continued = true, continues = true, density = 1f))
         assertEquals(BubbleCornerRadii(17, 17, 17, 17), nagramBubbleRadii(self = true, continued = true, continues = false, density = 1f))
-        assertEquals(BubbleCornerRadii(12, 12, 12, 12), nagramBubbleRadii(self = false, continued = false, continues = false, density = 1f, heightPx = 24))
+        assertEquals(BubbleCornerRadii(17, 17, 17, 17), nagramBubbleRadii(self = false, continued = false, continues = false, density = 1f, heightPx = 24))
 
         val incoming = nagramRowMargins(self = false, density = 1f)
         assertEquals(40, incoming.avatarWidth)
@@ -593,15 +593,12 @@ class ProtoTest {
         assertEquals("0:00", messageTime(1700006400L, "K:mm", utc))
     }
 
-    @Test fun liquidGlassHighlightFollows45DegreeRoundedRectSdfGradient() {
-        val topLeft = liquidHighlightIntensity(0f, 0f, 200f, 56f, 28f)
-        val bottomRight = liquidHighlightIntensity(200f, 56f, 200f, 56f, 28f)
-        val topRight = liquidHighlightIntensity(200f, 0f, 200f, 56f, 28f)
-        val bottomLeft = liquidHighlightIntensity(0f, 56f, 200f, 56f, 28f)
-        assertTrue(topLeft > 0.99f)
-        assertTrue(bottomRight > 0.99f)
-        assertTrue(topRight < 0.01f)
-        assertTrue(bottomLeft < 0.01f)
-        assertEquals(0f, liquidHighlightIntensity(0f, 0f, 0f, 0f, 28f))
+    @Test fun topSafeAreaOffsetAndUnclampedRunGapAndDefaultBlurWorkDeterministically() {
+        val shifted = nagramHeaderLayout(360, 50, 1f, unreadWidth = 0, rightCount = 1, titleWidth = 80, subtitleWidth = 50, hasAvatar = true, topOffsetDp = 1f)
+        assertEquals(PillBox(6, 1, 52, 47), shifted.leftPill)
+        assertEquals(PillBox(308, 1, 354, 47), shifted.rightPill)
+        assertEquals(3, shifted.avatarTop)
+        assertTrue(continuesMessageRun("a", "a", 3600, 1000, 2, 2, maxGapSeconds = Long.MAX_VALUE))
+        assertEquals(1f, glassBlurDp())
     }
 }

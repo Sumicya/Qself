@@ -43,7 +43,8 @@ private class MsgListUnderScroll(val group: ViewGroup, val recycler: ViewGroup) 
         }
         if (recycler.clipToPadding) recycler.clipToPadding = false
         if (recycler.background != null) recycler.background = null
-        val targetTop = if (on("玻璃底栏")) savedGroupTop else origRecyclerTop
+        val topReduction = (10 * group.dp).toInt()
+        val targetTop = if (on("玻璃底栏")) (savedGroupTop - topReduction).coerceAtLeast(0) else origRecyclerTop
         val targetBottom = if (on("TG输入栏")) savedGroupBottom else origRecyclerBottom
         if (recycler.paddingTop != targetTop || recycler.paddingBottom != targetBottom) {
             recycler.setPadding(recycler.paddingLeft, targetTop, recycler.paddingRight, targetBottom)

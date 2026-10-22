@@ -235,7 +235,7 @@ internal fun compactMessageTop(original: Int, continued: Boolean, density: Float
 
 internal data class BubbleCornerRadii(val topLeft: Int, val topRight: Int, val bottomRight: Int, val bottomLeft: Int)
 
-/** 全部消息保持四角全圆角（17dp，随高度自适应上限），不切直角，与头像圆角解耦。 */
+/** 全部消息保持四角全圆角（17dp），不切直角、不强限圆角半径，与头像圆角解耦。 */
 internal fun nagramBubbleRadii(
     self: Boolean,
     continued: Boolean,
@@ -244,8 +244,7 @@ internal fun nagramBubbleRadii(
     heightPx: Int = 0,
 ): BubbleCornerRadii {
     if (density <= 0f) return BubbleCornerRadii(0, 0, 0, 0)
-    val cap = if (heightPx > 0) (heightPx / 2).coerceAtLeast(0) else Int.MAX_VALUE
-    val outer = (17 * density).roundToInt().coerceAtMost(cap)
+    val outer = (17 * density).roundToInt()
     return BubbleCornerRadii(
         topLeft = outer,
         topRight = outer,
@@ -293,25 +292,17 @@ private class NagramBubbleDrawable(
     private val dp: Float,
 ) : Drawable() {
     private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = fill }
-    private val stroke = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.STROKE
-        strokeWidth = 0.75f * dp
-        color = if (night()) 0x24FFFFFF else 0x10000000
-    }
     private val rect = RectF()
     override fun draw(canvas: Canvas) {
         val b = bounds
         if (b.isEmpty) return
         rect.set(b)
         val radii = nagramBubbleRadii(self, continued, continues, dp, b.height())
-        val r = radii.topLeft.toFloat().coerceAtMost(b.width() / 2f)
+        val r = radii.topLeft.toFloat()
         canvas.drawRoundRect(rect, r, r, paint)
-        val inset = stroke.strokeWidth * 0.5f
-        rect.inset(inset, inset)
-        canvas.drawRoundRect(rect, (r - inset).coerceAtLeast(0f), (r - inset).coerceAtLeast(0f), stroke)
     }
-    override fun setAlpha(alpha: Int) { paint.alpha = alpha; stroke.alpha = alpha }
-    override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter; stroke.colorFilter = colorFilter }
+    override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+    override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
     @Deprecated("Drawable opacity") override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
 
@@ -391,7 +382,10 @@ private class BubbleSurface(
         for (dyn in collectBubbleInners(v, qView, emptyList())) {
             if (innerClears.none { it.ref.get() === dyn }) innerClears.add(InnerClearState(dyn))
         }
-        for (w in fasterWrappers) setWrapperPadding(w, 0, 0, 0, 0)
+        for (w in fasterWrappers) {
+            setWrapperPadding(w, 0, 0, 0, 0)
+            setWrapperMinSize(w, 0, 0)
+        }
         for (state in innerClears) {
             state.ref.get()?.let { inner ->
                 if (inner.background != null) inner.background = null
@@ -402,16 +396,6 @@ private class BubbleSurface(
                 inner.minimumHeight = 0
                 if (inner is android.widget.TextView && inner.includeFontPadding) inner.includeFontPadding = false
                 setFasterIncludePad(inner, false)
-                if (inner !== qView && inner.id != 0x7f0a64bc) {
-                    (inner.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
-                        if (lp.leftMargin != 0 || lp.rightMargin != 0 || lp.topMargin != 0 || lp.bottomMargin != 0 ||
-                            lp.marginStart != 0 || lp.marginEnd != 0) {
-                            lp.leftMargin = 0; lp.topMargin = 0; lp.rightMargin = 0; lp.bottomMargin = 0
-                            lp.marginStart = 0; lp.marginEnd = 0
-                            inner.layoutParams = lp
-                        }
-                    }
-                }
             }
         }
         // 被回复消息（0x7f0a5c31 ReplyTextRelativeLayout）去掉独立外框与左竖条，与外层气泡共用统一的 5dp 内边距。
@@ -515,20 +499,33 @@ private class BubbleSurface(
         private var fasterPadField: java.lang.reflect.Field? = null
         private var fasterPadSetter: java.lang.reflect.Method? = null
         private var wrapperPadSetter: java.lang.reflect.Method? = null
+        private var wrapperMinHSetter: java.lang.reflect.Method? = null
+        private var wrapperMinWSetter: java.lang.reflect.Method? = null
         fun initFasterTextView(
             cls: Class<*>,
             field: java.lang.reflect.Field,
             setter: java.lang.reflect.Method,
             wrapperSetter: java.lang.reflect.Method? = null,
+            minHSetter: java.lang.reflect.Method? = null,
+            minWSetter: java.lang.reflect.Method? = null,
         ) {
             fasterCls = cls
             fasterPadField = field.apply { isAccessible = true }
             fasterPadSetter = setter.apply { isAccessible = true }
             wrapperPadSetter = wrapperSetter?.apply { isAccessible = true }
+            wrapperMinHSetter = minHSetter?.apply { isAccessible = true }
+            wrapperMinWSetter = minWSetter?.apply { isAccessible = true }
         }
         fun setWrapperPadding(wrapper: Any?, l: Int, t: Int, r: Int, b: Int) {
             if (wrapper == null) return
             runCatching { wrapperPadSetter?.invoke(wrapper, l, t, r, b) }
+        }
+        fun setWrapperMinSize(wrapper: Any?, minW: Int, minH: Int) {
+            if (wrapper == null) return
+            runCatching {
+                wrapperMinHSetter?.invoke(wrapper, minH)
+                wrapperMinWSetter?.invoke(wrapper, minW)
+            }
         }
         fun getFasterIncludePad(view: View?): Boolean? {
             val c = fasterCls ?: return null
@@ -948,6 +945,7 @@ private class RunLayout(val avatars: List<RunAvatar>, nicks: List<View>, content
         rowGeometry?.apply(self, continued, enabled)
         bubbles.forEach { it.apply(self, continued, continues, on("统一气泡")) }
         if (!enabled) avatars.forEach { it.restore() }
+        else if (continued) avatars.forEach { it.hide() }
     }
     fun restore() = apply(false, false)
     fun dispose() {
@@ -979,11 +977,15 @@ fun groupRuns() {
         val fasterWrapperClass = cls("com.tencent.fastertextview.wrapper.a")
         val fasterWrapperView = fasterWrapperClass.getDeclaredMethod("g").apply { isAccessible = true }
         val fasterWrapperSetPad = fasterWrapperClass.getDeclaredMethod("l", Integer.TYPE, Integer.TYPE, Integer.TYPE, Integer.TYPE).apply { isAccessible = true }
+        val fasterWrapperSetMinH = fasterWrapperClass.getDeclaredMethod("j", Integer.TYPE).apply { isAccessible = true }
+        val fasterWrapperSetMinW = fasterWrapperClass.getDeclaredMethod("k", Integer.TYPE).apply { isAccessible = true }
         BubbleSurface.initFasterTextView(
             fasterViewType,
             fasterViewType.getDeclaredField("mIncludePad"),
             fasterViewType.getDeclaredMethod("setIncludeFontPadding", java.lang.Boolean.TYPE),
             fasterWrapperSetPad,
+            fasterWrapperSetMinH,
+            fasterWrapperSetMinW,
         )
         val adapter = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a")
         val data = adapter.getMethod("d0")
@@ -1296,6 +1298,12 @@ fun groupRuns() {
                 chain.proceed().also { restyleTextMsgContent(chain.thisObject) }
             }
         }
+        val skinBgInfoClass = cls("com.tencent.mobileqq.aio.msglist.holder.skin.AIOBubbleSkinInfo\$BackgroundImageInfo")
+        for (minGetter in listOf("f", "g")) {
+            hook(skinBgInfoClass.getDeclaredMethod(minGetter)) { chain ->
+                if (on("统一气泡")) 0 else chain.proceed()
+            }
+        }
         for (getterName in listOf("a", "b", "c", "d")) {
             hook(holderMarginClass.getDeclaredMethod(getterName)) { chain ->
                 if (on("连发合并") || on("统一气泡")) 0 else chain.proceed()
@@ -1315,25 +1323,12 @@ fun groupRuns() {
             if (on("统一气泡")) (4 * android.content.res.Resources.getSystem().displayMetrics.density).roundToInt() else chain.proceed()
         }
         fun compactBubblePadding(target: Any) {
-            val unified = on("统一气泡")
-            if (!unified && !on("连发合并")) return
-            if (unified) {
-                // 外层 BubbleSurface 已设置统一的四周 5dp 内边距，内层 skin.padding 必须置 0 防止双重叠加。
-                padLeft.setInt(target, 0)
-                padRight.setInt(target, 0)
-                padTop.setInt(target, 0)
-                padBottom.setInt(target, 0)
-                return
-            }
-            val pad5 = (5 * android.content.res.Resources.getSystem().displayMetrics.density).roundToInt()
-            val l = padLeft.getInt(target)
-            val r = padRight.getInt(target)
-            val t = padTop.getInt(target)
-            val b = padBottom.getInt(target)
-            padLeft.setInt(target, minOf(l, pad5).coerceAtLeast(0))
-            padRight.setInt(target, minOf(r, pad5).coerceAtLeast(0))
-            padTop.setInt(target, minOf(t, pad5).coerceAtLeast(0))
-            padBottom.setInt(target, minOf(b, pad5).coerceAtLeast(0))
+            if (!on("统一气泡")) return
+            // 外层 BubbleSurface 已设置统一的四周 5dp 内边距，内层 skin.padding 必须置 0 防止双重叠加。
+            padLeft.setInt(target, 0)
+            padRight.setInt(target, 0)
+            padTop.setInt(target, 0)
+            padBottom.setInt(target, 0)
         }
         hook(paddingCalc) { chain ->
             chain.proceed().also { compactBubblePadding(chain.thisObject) }
@@ -1341,27 +1336,14 @@ fun groupRuns() {
         hook(richPaddingCalc) { chain ->
             chain.proceed().also {
                 compactBubblePadding(chain.thisObject)
-                val unified = on("统一气泡")
-                if (!unified && !on("连发合并")) return@also
+                if (!on("统一气泡")) return@also
                 val density = android.content.res.Resources.getSystem().displayMetrics.density
-                if (unified) {
-                    richPadLeft.setInt(chain.thisObject, 0)
-                    richPadRight.setInt(chain.thisObject, 0)
-                    richPadTop.setInt(chain.thisObject, 0)
-                    richPadBottom.setInt(chain.thisObject, (4 * density).roundToInt())
-                    richReplyTextTop.setInt(chain.thisObject, 0)
-                    richQuoteInnerPad.setInt(chain.thisObject, 0)
-                    return@also
-                }
-                val pad5 = (5 * density).roundToInt()
-                val l = richPadLeft.getInt(chain.thisObject)
-                val r = richPadRight.getInt(chain.thisObject)
-                val t = richPadTop.getInt(chain.thisObject)
-                val b = richPadBottom.getInt(chain.thisObject)
-                richPadLeft.setInt(chain.thisObject, minOf(l, pad5).coerceAtLeast(0))
-                richPadRight.setInt(chain.thisObject, minOf(r, pad5).coerceAtLeast(0))
-                richPadTop.setInt(chain.thisObject, minOf(t, pad5).coerceAtLeast(0))
-                richPadBottom.setInt(chain.thisObject, minOf(b, pad5).coerceAtLeast(0))
+                richPadLeft.setInt(chain.thisObject, 0)
+                richPadRight.setInt(chain.thisObject, 0)
+                richPadTop.setInt(chain.thisObject, 0)
+                richPadBottom.setInt(chain.thisObject, (4 * density).roundToInt())
+                richReplyTextTop.setInt(chain.thisObject, 0)
+                richQuoteInnerPad.setInt(chain.thisObject, 0)
             }
         }
         for (tplType in listOf(tplReceiver, tplSender)) {
@@ -1421,6 +1403,11 @@ fun groupRuns() {
                 chain.proceed().also {
                     if (row != null && run != null) {
                         pendingRun[row] = run
+                        if (list != null) {
+                            val cache = runIndexes[chain.thisObject]?.takeIf { it.first.get() === list && it.second.size == list.size }
+                                ?: (WeakReference(list) to RunStarts(list.size)).also { runIndexes[chain.thisObject] = it }
+                            regroup(chain.thisObject, list, cache.second)
+                        }
                         if (row.isAttachedToWindow) register(row, run) else if (!pendingAttachments.containsKey(row)) {
                             // 同步接入首次 attach，在这一帧 pre-draw 前定位，不排主线程 post 队列。
                             val listener = object : View.OnAttachStateChangeListener {
@@ -1530,12 +1517,14 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
             commitFrame(emptyList(), clip)
             return true
         }
-        if (host.clipToPadding || host.paddingTop > 0 || host.paddingBottom > 0) {
+        if (host.clipToPadding) {
             clip.left = maxOf(clip.left, host.paddingLeft)
             clip.top = maxOf(clip.top, host.paddingTop)
             clip.right = minOf(clip.right, host.width - host.paddingRight)
             clip.bottom = minOf(clip.bottom, host.height - host.paddingBottom)
         }
+        val safeTop = maxOf(clip.top, host.paddingTop).toFloat()
+        val safeBottom = maxOf(safeTop + 1f, minOf(clip.bottom, host.height - host.paddingBottom).toFloat())
         val global = Matrix()
         host.transformMatrixToGlobal(global)
         if (clip.isEmpty || !global.invert(toHost)) { commitFrame(emptyList(), clip); return true }
@@ -1555,11 +1544,11 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
             for (state in group) {
                 var top = Float.POSITIVE_INFINITY
                 var bottom = Float.NEGATIVE_INFINITY
-                // 异步正文根被替换/暂时隐藏时仍取稳定的原生正文槽，不能退回行顶头像。
-                val roots = state.layout.contents.mapNotNull { it.get() }.filter {
+                // 优先取气泡外层槽 contentSlots，确保文本/混排/表情/图片统一按真实气泡边界计算整组上下界。
+                val slots = state.layout.contentSlots.mapNotNull { it.get() }.filter {
                     it.isAttachedToWindow && it.visibility != View.GONE && it.width > 0 && it.height > 0
                 }
-                val geometry = roots.ifEmpty { state.layout.contentSlots.mapNotNull { it.get() } }
+                val geometry = slots.ifEmpty { state.layout.contents.mapNotNull { it.get() } }
                 for (content in geometry) {
                     if (!content.isAttachedToWindow || content.visibility == View.GONE) continue
                     val rect = rectangle(content, inHost(content)) ?: continue
@@ -1588,8 +1577,11 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
                 val matrix = inHost(image)
                 val rect = rectangle(image, matrix) ?: continue
                 val bounds = runAvatarBounds(groupTop, groupBottom, firstCenter, lastCenter, rect.height(), merged) ?: continue
-                val y = floatingRunAvatarTop(bounds.first, bounds.second, clip.top.toFloat(), clip.bottom.toFloat(),
-                    rect.height(), 2 * host.dp, hasStart, hasEnd) ?: continue
+                val y = floatingRunAvatarTop(bounds.first, bounds.second, safeTop, safeBottom,
+                    rect.height(), 2 * host.dp, hasStart, hasEnd)
+                    ?: floatingRunAvatarTop(bounds.first, bounds.second, clip.top.toFloat(), clip.bottom.toFloat(),
+                        rect.height(), 2 * host.dp, hasStart, hasEnd)
+                    ?: continue
                 val delta = y - rect.top
                 matrix.postTranslate(0f, delta)
                 val targetMatrix = inHost(container).apply { postTranslate(0f, delta) }
@@ -1622,8 +1614,9 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
                     }
                 }
             }
-            // 没有可绘制源时不能把原生头像也隐藏，否则异步绑定期间整组头像消失。
+            // 单条消息恢复原生顶对齐头像；连发组若暂时没有浮绘源，只保留组首原生头像，绝不把续条重复头像亮出来。
             if (face != null) { avatars.forEach { it.hide() }; next.add(face) }
+            else if (merged) group.forEach { if (it.run.continued) it.layout.avatars.forEach { a -> a.hide() } else it.layout.avatars.forEach { a -> a.restore() } }
             else avatars.forEach { it.restore() }
         }
         commitFrame(next, clip)
@@ -1639,7 +1632,7 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
     private val clipPath = android.graphics.Path()
     override fun draw(canvas: Canvas) {
         val roundOn = on("头像圆角")
-        val pct = (store()?.getInt(AVATAR_RADIUS, 20) ?: 20).coerceIn(0, 50)
+        val pct = (store()?.getInt(AVATAR_RADIUS, 20) ?: 20).coerceAtLeast(0)
         for (face in faces) {
             if (!isCurrent(face)) continue
             val save = canvas.save()
@@ -1788,11 +1781,11 @@ internal fun floatingRunAvatarTop(first: Float, last: Float, top: Float, bottom:
         if (hasEnd) last else maxOf(last, bottom + height), top, bottom, height, gap)
 }
 
-/** 跨日、倒序、不同发送者和系统消息均断组；连续消息只合并五分钟内的。 */
+/** 跨日、倒序、不同发送者和系统消息均断组；默认五分钟或按调用方上限合并同发送者连续消息。 */
 internal fun continuesMessageRun(sender: String?, previousSender: String?, time: Long, previousTime: Long,
-    type: Int?, previousType: Int?): Boolean = !sender.isNullOrEmpty() && sender == previousSender &&
+    type: Int?, previousType: Int?, maxGapSeconds: Long = 300L): Boolean = !sender.isNullOrEmpty() && sender == previousSender &&
     type != null && previousType != null && type !in setOf(5, 29) && previousType !in setOf(5, 29) &&
-    time >= previousTime && time - previousTime <= 300 &&
+    time >= previousTime && time - previousTime <= maxGapSeconds &&
     (time + 8 * 3600) / 86400 == (previousTime + 8 * 3600) / 86400
 
 private fun isSelfMsg(item: Any?): Boolean =
@@ -1804,11 +1797,13 @@ private fun follows(prev: Any?, cur: Any?): Boolean {
     if (previousId != null && previousId != 0L && previousId == msgId(cur)) return false
     val a = record(prev) ?: return false
     val b = record(cur) ?: return false
-    val t0 = a.get("msgTime") as? Long ?: return false
-    val t1 = b.get("msgTime") as? Long ?: return false
+    val rawT0 = a.get("msgTime") as? Long ?: return false
+    val rawT1 = b.get("msgTime") as? Long ?: return false
+    val t0 = if (rawT0 > 0L) rawT0 else rawT1
+    val t1 = if (rawT1 > 0L) rawT1 else rawT0
     val sender = runSenderPair(b.get("senderUid") as? String, b.get("senderUin") as? Long, isSelfMsg(cur),
         a.get("senderUid") as? String, a.get("senderUin") as? Long, isSelfMsg(prev))
-    return continuesMessageRun(sender.first, sender.second, t1, t0, b.get("msgType") as? Int, a.get("msgType") as? Int)
+    return continuesMessageRun(sender.first, sender.second, maxOf(t0, t1), minOf(t0, t1), b.get("msgType") as? Int, a.get("msgType") as? Int, maxGapSeconds = Long.MAX_VALUE)
 }
 
 private fun record(item: Any?): Any? = item?.let { runCatching { it.javaClass.getMethod("getMsgRecord").invoke(it) }.getOrNull() }

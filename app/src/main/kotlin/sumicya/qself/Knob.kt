@@ -42,7 +42,6 @@ import kotlin.math.min
 private const val KNOB = "qself-knob"
 private const val SHEET = "qself-sheet"
 private const val TAG_SHEET_CLOSE = 0x5153434C
-private var lastSheetCloseMs = 0L
 private val knobs: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 private val sheets: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 private fun easing() = PathInterpolator(0.2f, 0f, 0f, 1f)
@@ -53,7 +52,7 @@ fun motionDuration(milliseconds: Long): Long = if (ValueAnimator.areAnimatorsEna
 private fun View.pressMotion(kernel: Glass? = null) {
     setOnTouchListener { view, event ->
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> if (kernel != null) kernel.kernelTouchDown(event.x) else view.animate().scaleX(0.96f).scaleY(0.96f)
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> if (kernel != null) kernel.kernelTouchDown(event.x, event.y) else if (event.actionMasked == MotionEvent.ACTION_DOWN) view.animate().scaleX(0.96f).scaleY(0.96f)
                 .setDuration(motionDuration(80)).setInterpolator(easing()).start()
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (kernel != null) kernel.kernelTouchEnd() else view.animate().scaleX(1f).scaleY(1f)
                 .setDuration(motionDuration(150)).setInterpolator(easing()).start()
@@ -111,7 +110,6 @@ fun knob(bar: View) {
             lp.width = width; lp.height = height; lp.bottomMargin = bottom; lp.marginEnd = end
             old.layoutParams = lp
         }
-        if (decor.findViewWithTag<View>(SHEET) != null) old.bringToFront()
         return
     }
     val button = ImageView(bar.context).apply {
@@ -130,7 +128,7 @@ fun knob(bar: View) {
                 outline.setRoundRect(inset,inset,view.width-inset,view.height-inset,32*dp)
             }
         }
-        clipToOutline = false; elevation = 6 * dp
+        clipToOutline = false; elevation = 16 * dp
         val glass = Glass(this, kernelButton = true)
         background = InsetDrawable(glass,inset)
         setOnClickListener { sheet(it) }
@@ -525,13 +523,11 @@ private fun sheet(anchor: View) {
     val decor = anchor.rootView as? ViewGroup ?: return
     val existing = decor.findViewWithTag<View>(SHEET)
     if (existing != null) {
-        lastSheetCloseMs = android.os.SystemClock.uptimeMillis()
         @Suppress("UNCHECKED_CAST")
         val closeFn = existing.getTag(TAG_SHEET_CLOSE) as? (() -> Unit)
         if (closeFn != null) closeFn() else (existing.parent as? ViewGroup)?.removeView(existing)
         return
     }
-    if (android.os.SystemClock.uptimeMillis() - lastSheetCloseMs < 350L) return
     val prefs = store() ?: return
     val ctx = anchor.context
     val dp = anchor.dp
@@ -551,7 +547,6 @@ private fun sheet(anchor: View) {
     fun close() {
         if (closing) return
         closing = true
-        lastSheetCloseMs = android.os.SystemClock.uptimeMillis()
         dim.tag = null
         card.animate().cancel(); dim.animate().cancel()
         card.animate().scaleX(0.94f).scaleY(0.94f)
@@ -642,7 +637,6 @@ private fun sheet(anchor: View) {
         gravity = Gravity.START or Gravity.CENTER_VERTICAL
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
         setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
-        filters = arrayOf(android.text.InputFilter.LengthFilter(80))
         contentDescription = "消息内时间格式"
     }
     grid.addView(format)
@@ -680,13 +674,36 @@ private fun sheet(anchor: View) {
         })
     }
     grid.addView(radiusSeek)
+    val blurLabel = TextView(ctx).apply {
+        textSize = 13f; setTextColor(ink)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+    }
+    grid.addView(blurLabel)
+    val blurSeek = android.widget.SeekBar(ctx).apply {
+        max = 15; progress = (prefs.getInt(GLASS_BLUR, 1)).coerceIn(0, 15)
+        blurLabel.text = "玻璃模糊：${progress}dp（默认 1dp）"
+        contentDescription = "玻璃模糊半径"
+        setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: android.widget.SeekBar, value: Int, user: Boolean) {
+                blurLabel.text = "玻璃模糊：${value}dp（默认 1dp）"
+            }
+            override fun onStartTrackingTouch(bar: android.widget.SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: android.widget.SeekBar) {
+                prefs.edit().putInt(GLASS_BLUR, bar.progress).apply()
+                refreshLooks(); card.invalidate()
+            }
+        })
+    }
+    grid.addView(blurSeek)
     grid.addView(LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.END
         addView(button("恢复默认") {
             val edit = prefs.edit()
             features.forEach { edit.putBoolean(it.name, it.default) }
-            edit.putString(TIME_PATTERN, "HH:mm").putInt(AVATAR_RADIUS, 20)
-            edit.apply(); format.setText("HH:mm"); radiusSeek.progress = 20
+            edit.putString(TIME_PATTERN, "HH:mm").putInt(AVATAR_RADIUS, 20).putInt(GLASS_BLUR, 1)
+            edit.apply(); format.setText("HH:mm"); radiusSeek.progress = 20; blurSeek.progress = 1
             paints.forEach { it() }; refreshLooks(); card.invalidate()
         })
         addView(button("结束进程") {

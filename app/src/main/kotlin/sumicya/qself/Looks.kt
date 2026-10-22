@@ -105,6 +105,7 @@ private class AppearanceObserver(decor: View) : ViewTreeObserver.OnGlobalLayoutL
     ViewTreeObserver.OnPreDrawListener, View.OnAttachStateChangeListener {
     private val root = WeakReference(decor)
     private var dirty = true
+    private var cancelledOnce = false
     init {
         decor.viewTreeObserver.addOnGlobalLayoutListener(this)
         decor.viewTreeObserver.addOnPreDrawListener(this)
@@ -115,10 +116,17 @@ private class AppearanceObserver(decor: View) : ViewTreeObserver.OnGlobalLayoutL
     override fun onGlobalLayout() { dirty = true }
     override fun onPreDraw(): Boolean {
         val decor = root.get() ?: return true
-        if (!dirty) return true
+        if (!dirty) { cancelledOnce = false; return true }
         dirty = false
+        val wasRequested = decor.isLayoutRequested
         walk(decor, false)
-        return !decor.isLayoutRequested
+        if (on("页面动画")) bindDownwardListExpand(decor)
+        if (!wasRequested && decor.isLayoutRequested && !cancelledOnce) {
+            cancelledOnce = true
+            return false
+        }
+        cancelledOnce = false
+        return true
     }
     fun dispose() {
         root.get()?.let { decor ->
@@ -147,6 +155,9 @@ fun resetLooks() {
     resetAioHeaders()
     resetSecNavBars()
     resetSearchBars()
+    animatedPages.clear()
+    animatedLists.clear()
+    animatedListItems.clear()
 }
 
 private fun walk(v: View, inDrawer: Boolean) {
@@ -844,10 +855,12 @@ internal fun nagramHeaderLayout(
     titleWidth: Int,
     subtitleWidth: Int,
     hasAvatar: Boolean = true,
+    topOffsetDp: Float = Float.NaN,
 ): NagramHeaderLayout {
     val p = (6 * density).roundToInt()
     val s = (46 * density).roundToInt()
-    val pillTop = ((height - s) / 2).coerceAtLeast(0)
+    val pillTop = if (topOffsetDp.isFinite()) (topOffsetDp * density).roundToInt().coerceIn(0, (height - s).coerceAtLeast(0))
+        else ((height - s) / 2).coerceAtLeast(0)
     val pillBottom = pillTop + s
     val leftW = if (unreadWidth > 0) maxOf(s, (36 * density).roundToInt() + unreadWidth + (10 * density).roundToInt()) else s
     val leftPill = PillBox(p, pillTop, (p + leftW).coerceAtMost(width.coerceAtLeast(0)), pillBottom)
@@ -898,6 +911,34 @@ private class HeaderPillsDrawable(host: View) : android.graphics.drawable.Drawab
         backGlass.bounds = leftRect; centerGlass.bounds = centerRect; rightGlass.bounds = rightRect
         invalidateSelf()
     }
+    fun onTouch(event: MotionEvent, layout: NagramHeaderLayout) {
+        val x = event.x; val y = event.y
+        val xi = x.toInt(); val yi = y.toInt()
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                when {
+                    !layout.leftPill.isEmpty() && xi in layout.leftPill.left..layout.leftPill.right && yi in layout.leftPill.top..layout.leftPill.bottom -> {
+                        backGlass.kernelTouchDown(x - layout.leftPill.left, y - layout.leftPill.top)
+                        centerGlass.kernelTouchEnd(); rightGlass.kernelTouchEnd()
+                    }
+                    !layout.centerPill.isEmpty() && xi in layout.centerPill.left..layout.centerPill.right && yi in layout.centerPill.top..layout.centerPill.bottom -> {
+                        centerGlass.kernelTouchDown(x - layout.centerPill.left, y - layout.centerPill.top)
+                        backGlass.kernelTouchEnd(); rightGlass.kernelTouchEnd()
+                    }
+                    !layout.rightPill.isEmpty() && xi in layout.rightPill.left..layout.rightPill.right && yi in layout.rightPill.top..layout.rightPill.bottom -> {
+                        rightGlass.kernelTouchDown(x - layout.rightPill.left, y - layout.rightPill.top)
+                        backGlass.kernelTouchEnd(); centerGlass.kernelTouchEnd()
+                    }
+                    else -> {
+                        backGlass.kernelTouchEnd(); centerGlass.kernelTouchEnd(); rightGlass.kernelTouchEnd()
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                backGlass.kernelTouchEnd(); centerGlass.kernelTouchEnd(); rightGlass.kernelTouchEnd()
+            }
+        }
+    }
     fun sync() {
         backGlass.sync(); centerGlass.sync(); if (!rightRect.isEmpty) rightGlass.sync()
     }
@@ -940,6 +981,9 @@ private class HeaderState(
     val barBg = bar.background
     val rootBg = root?.background
     val outerBg = outer?.background
+    val parentBg = (root?.parent as? View)?.background
+    val origOuterPad = outer?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
+    val origRootPad = root?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
     val dividerVis = dividerLine?.visibility
     val right1Bg = right1?.background
     val right2Bg = right2?.background
@@ -957,6 +1001,8 @@ private class HeaderState(
     var lastGeom: NagramHeaderLayout? = null
     var lastRightViews: List<View> = emptyList()
     private var activeTouchTarget: View? = null
+    private var downX = 0f
+    private var downY = 0f
     val pills = HeaderPillsDrawable(bar)
     val avatar = android.widget.ImageView(bar.context).apply {
         tag = "qself-aio-avatar"
@@ -1007,22 +1053,32 @@ private class HeaderState(
             for (i in 0 until view.childCount) tintIcons(view.getChildAt(i), dark)
         }
     }
+    private fun findClickableTarget(view: View?): View? {
+        var cur = view
+        while (cur != null && cur !== bar) {
+            if (cur.hasOnClickListeners() || cur.isClickable) return cur
+            cur = cur.parent as? View
+        }
+        return view
+    }
     fun dispatchPillTouch(event: MotionEvent): Boolean {
         val geom = lastGeom ?: return false
         if (bar.visibility != View.VISIBLE) return false
+        pills.onTouch(event, geom)
         val action = event.actionMasked
         if (action == MotionEvent.ACTION_DOWN) {
             activeTouchTarget = null
+            downX = event.x; downY = event.y
             val x = event.x.toInt()
             val y = event.y.toInt()
-            val target: View? = when {
+            val rawTarget: View? = when {
                 !geom.leftPill.isEmpty() && x in geom.leftPill.left..geom.leftPill.right && y in geom.leftPill.top..geom.leftPill.bottom -> {
-                    val unread = unreadBadge?.takeIf { it.visibility == View.VISIBLE && it.isClickable }
+                    val unread = unreadBadge?.takeIf { it.visibility == View.VISIBLE && (it.hasOnClickListeners() || it.isClickable) }
                     if (unread != null && x >= unread.left) unread
                     else leftBtn?.takeIf { it.visibility == View.VISIBLE }
                 }
                 !geom.centerPill.isEmpty() && x in geom.centerPill.left..geom.centerPill.right && y in geom.centerPill.top..geom.centerPill.bottom -> {
-                    val flip = centerFlipper()?.takeIf { it.visibility == View.VISIBLE && it.isClickable }
+                    val flip = centerFlipper()?.takeIf { it.visibility == View.VISIBLE && (it.hasOnClickListeners() || it.isClickable) }
                     if (flip != null && y >= flip.top) flip else titleTv?.takeIf { it.visibility == View.VISIBLE }
                 }
                 !geom.rightPill.isEmpty() && x in geom.rightPill.left..geom.rightPill.right && y in geom.rightPill.top..geom.rightPill.bottom -> {
@@ -1035,17 +1091,22 @@ private class HeaderState(
                 }
                 else -> null
             }
-            // 若点击已直接落在已重定位的原生子视图 bounds 内，交由 ViewGroup.dispatchTouchEvent 原生派发，仅对胶囊边缘留白区做命中转发。
-            if (target != null && !(x in target.left..target.right && y in target.top..target.bottom)) {
-                activeTouchTarget = target
-            }
+            activeTouchTarget = findClickableTarget(rawTarget)
         }
         val target = activeTouchTarget ?: return false
         val copy = MotionEvent.obtain(event)
         copy.setLocation(target.width / 2f, target.height / 2f)
         val handled = try { target.dispatchTouchEvent(copy) } finally { copy.recycle() }
-        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) activeTouchTarget = null
-        return handled
+        if (action == MotionEvent.ACTION_UP) {
+            val slop = android.view.ViewConfiguration.get(bar.context).scaledTouchSlop
+            if (!handled && kotlin.math.abs(event.x - downX) <= slop && kotlin.math.abs(event.y - downY) <= slop) {
+                target.performClick()
+            }
+            activeTouchTarget = null
+        } else if (action == MotionEvent.ACTION_CANCEL) {
+            activeTouchTarget = null
+        }
+        return true
     }
     fun applyStyle() {
         if (!on("玻璃底栏")) { restore(); return }
@@ -1059,6 +1120,22 @@ private class HeaderState(
         if (bar.touchDelegate != null) bar.touchDelegate = null
         root?.background = null
         outer?.background = null
+        (root?.parent as? View)?.background = null
+        // 缩小顶部安全区按钮与屏幕顶部的距离，使三段玻璃胶囊上移贴合顶部安全区。
+        outer?.let { o ->
+            val orig = origOuterPad ?: intArrayOf(o.paddingLeft, o.paddingTop, o.paddingRight, o.paddingBottom)
+            if (orig[1] > 0) {
+                val reducedTop = (orig[1] - (10 * bar.dp).roundToInt()).coerceAtLeast((6 * bar.dp).roundToInt())
+                if (o.paddingTop != reducedTop) o.setPadding(orig[0], reducedTop, orig[2], 0)
+            }
+        }
+        root?.let { r ->
+            val orig = origRootPad ?: intArrayOf(r.paddingLeft, r.paddingTop, r.paddingRight, r.paddingBottom)
+            if (orig[1] > 0) {
+                val reducedTop = (orig[1] - (8 * bar.dp).roundToInt()).coerceAtLeast(0)
+                if (r.paddingTop != reducedTop) r.setPadding(orig[0], reducedTop, orig[2], 0)
+            }
+        }
         dividerLine?.visibility = View.GONE
         right1?.background = null
         right2?.background = null
@@ -1090,6 +1167,9 @@ private class HeaderState(
         bar.touchDelegate = origTouchDelegate
         root?.background = rootBg
         outer?.background = outerBg
+        (root?.parent as? View)?.background = parentBg
+        outer?.let { o -> origOuterPad?.let { o.setPadding(it[0], it[1], it[2], it[3]) } }
+        root?.let { r -> origRootPad?.let { r.setPadding(it[0], it[1], it[2], it[3]) } }
         if (dividerLine != null && dividerVis != null) dividerLine.visibility = dividerVis
         right1?.background = right1Bg
         right2?.background = right2Bg
@@ -1254,10 +1334,42 @@ private fun aioHeader() {
         if (on("玻璃底栏")) loadHeaderAvatar(vb, state.avatar)
     }
 
-    for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "Z1", "D1")) {
+    for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "Z1", "Y1", "z1", "A1", "D1")) {
         val m = titleVB.declaredMethods.firstOrNull { it.name == name } ?: continue
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
             chain.proceed().also { if (titleVB.isInstance(chain.thisObject)) bindHeader(chain.thisObject) }
+        }
+    }
+    val titleContainerVB = cls("com.tencent.mobileqq.aio.title.AIODefaultTitleContainerVB")
+    val titleContainerField = titleContainerVB.getDeclaredField("d").apply { isAccessible = true }
+    for (name in listOf("onCreateView", "handleUIState")) {
+        val m = titleContainerVB.declaredMethods.firstOrNull { it.name == name } ?: continue
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
+            chain.proceed().also {
+                if (titleContainerVB.isInstance(chain.thisObject) && on("玻璃底栏")) {
+                    (runCatching { titleContainerField.get(chain.thisObject) as? View }.getOrNull())?.background = null
+                }
+            }
+        }
+    }
+    for (immersiveName in listOf(
+        "com.tencent.widget.immersive.ImmersiveTitleBar2",
+        "com.tencent.mobileqq.qqui.widget.ImmersiveTitleBar",
+        "com.tencent.qqnt.base.widget.NTImmersiveTitleBar",
+    )) {
+        val immCls = cls(immersiveName)
+        for (mName in listOf("a", "initUI", "resetBkColor", "onMeasure")) {
+            immCls.declaredMethods.filter { it.name == mName }.forEach { m ->
+                hook(m.apply { isAccessible = true }, gated = false) { chain ->
+                    chain.proceed().also {
+                        if (on("玻璃底栏") && chain.thisObject is View) {
+                            val v = chain.thisObject as View
+                            v.background = null
+                            v.alpha = 0f
+                        }
+                    }
+                }
+            }
         }
     }
     hook(centerVB.getDeclaredMethod("handleUIState", cls("com.tencent.mvi.base.mvi.MviUIState")), gated = false) { chain ->
@@ -1274,7 +1386,7 @@ private fun aioHeader() {
         chain.proceed().also {
             val bar = chain.thisObject as? ViewGroup ?: return@also
             if (!on("玻璃底栏") || bar !in aioHeaders) return@also
-            val minH = (58 * bar.dp).roundToInt()
+            val minH = (50 * bar.dp).roundToInt()
             if (bar.measuredHeight in 1 until minH) setMeasured.invoke(bar, bar.measuredWidthAndState, minH)
         }
     }
@@ -1320,7 +1432,7 @@ private fun aioHeader() {
                     }
                 }
             }
-            val geom = nagramHeaderLayout(w, h, dp, unreadW, rightViews.size, titleTextW, subW, hasAvatar = true)
+            val geom = nagramHeaderLayout(w, h, dp, unreadW, rightViews.size, titleTextW, subW, hasAvatar = true, topOffsetDp = 1f)
             state.lastGeom = geom
             state.lastRightViews = rightViews
             state.pills.update(geom)
@@ -1453,6 +1565,8 @@ private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawLis
     val titleRoot: ViewGroup = (runCatching { getTitleRoot?.invoke(nav) as? ViewGroup }.getOrNull()) ?: nav
     private val origNavBg = nav.background
     private val origTitleRootBg = titleRoot.background
+    private val origNavPad = intArrayOf(nav.paddingLeft, nav.paddingTop, nav.paddingRight, nav.paddingBottom)
+    private val origTitleRootPad = intArrayOf(titleRoot.paddingLeft, titleRoot.paddingTop, titleRoot.paddingRight, titleRoot.paddingBottom)
     private val titleBgView = runCatching { getTitleBg?.invoke(nav) as? View }.getOrNull()
     private val blurView = runCatching { getBlur?.invoke(nav) as? View }.getOrNull()
     private val borderView = runCatching { getBorder?.invoke(nav) as? View }.getOrNull()
@@ -1504,7 +1618,7 @@ private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawLis
         val rightCount = (if (rightLayout != null && rightLayout.visibility == View.VISIBLE) {
             (0 until rightLayout.childCount).count { rightLayout.getChildAt(it).visibility == View.VISIBLE }
         } else 0) + (if (rightTv != null && rightTv.visibility == View.VISIBLE && !rightTv.text.isNullOrEmpty()) 1 else 0)
-        val geom = nagramHeaderLayout(w, h, dp, 0, rightCount, titleW, 0, hasAvatar = false)
+        val geom = nagramHeaderLayout(w, h, dp, 0, rightCount, titleW, 0, hasAvatar = false, topOffsetDp = 1f)
         lastGeom = geom
         pills.update(geom)
         // 同步重定位 QUISecNavBar 内部左返回按钮、居中标题与右侧按钮到三段玻璃胶囊中心，消除自绘胶囊与原生按钮位置错位。
@@ -1538,38 +1652,65 @@ private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawLis
             }
         }
     }
+    private var downX = 0f
+    private var downY = 0f
     fun dispatchPillTouch(event: MotionEvent): Boolean {
         val geom = lastGeom ?: return false
+        pills.onTouch(event, geom)
         val action = event.actionMasked
         if (action == MotionEvent.ACTION_DOWN) {
             activeTarget = null
+            downX = event.x; downY = event.y
             val x = event.x.toInt(); val y = event.y.toInt()
-            val candidate = when {
+            activeTarget = when {
                 !geom.leftPill.isEmpty() && x in geom.leftPill.left..geom.leftPill.right && y in geom.leftPill.top..geom.leftPill.bottom -> {
                     (runCatching { getLeftIcon?.invoke(nav) as? View }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
                         ?: (runCatching { getLeftText?.invoke(nav) as? View }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
                 }
                 !geom.rightPill.isEmpty() && x in geom.rightPill.left..geom.rightPill.right && y in geom.rightPill.top..geom.rightPill.bottom -> {
-                    (runCatching { getRightLayout?.invoke(nav) as? View }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
-                        ?: (runCatching { getRightText?.invoke(nav) as? View }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
+                    val rl = (runCatching { getRightLayout?.invoke(nav) as? ViewGroup }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
+                    val rt = (runCatching { getRightText?.invoke(nav) as? View }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
+                    if (rl != null && rl.childCount > 0) {
+                        val visibleChildren = (0 until rl.childCount).map(rl::getChildAt).filter { it.visibility == View.VISIBLE }
+                        if (visibleChildren.size == 1) visibleChildren[0]
+                        else if (visibleChildren.isNotEmpty()) {
+                            val slotW = (geom.rightPill.width().toFloat() / visibleChildren.size).coerceAtLeast(1f)
+                            val idx = ((x - geom.rightPill.left) / slotW).toInt().coerceIn(0, visibleChildren.lastIndex)
+                            visibleChildren[idx]
+                        } else rl
+                    } else rt ?: rl
                 }
                 else -> null
-            }
-            if (candidate != null && !(x in candidate.left..candidate.right && y in candidate.top..candidate.bottom)) {
-                activeTarget = candidate
             }
         }
         val target = activeTarget ?: return false
         val copy = MotionEvent.obtain(event)
         copy.setLocation(target.width / 2f, target.height / 2f)
         val handled = try { target.dispatchTouchEvent(copy) } finally { copy.recycle() }
-        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) activeTarget = null
-        return handled
+        if (action == MotionEvent.ACTION_UP) {
+            val slop = android.view.ViewConfiguration.get(nav.context).scaledTouchSlop
+            if (!handled && kotlin.math.abs(event.x - downX) <= slop && kotlin.math.abs(event.y - downY) <= slop) {
+                target.performClick()
+            }
+            activeTarget = null
+        } else if (action == MotionEvent.ACTION_CANCEL) {
+            activeTarget = null
+        }
+        return true
     }
     fun applyStyle() {
         if (!on("玻璃底栏")) { restore(); return }
         nav.background = null
+        (nav.parent as? View)?.background = null
         if (titleRoot.background !== pills) titleRoot.background = pills
+        if (origNavPad[1] > 0) {
+            val reduced = (origNavPad[1] - (10 * nav.dp).roundToInt()).coerceAtLeast((6 * nav.dp).roundToInt())
+            if (nav.paddingTop != reduced) nav.setPadding(origNavPad[0], reduced, origNavPad[2], 0)
+        }
+        if (origTitleRootPad[1] > 0) {
+            val reduced = (origTitleRootPad[1] - (10 * titleRoot.dp).roundToInt()).coerceAtLeast((6 * titleRoot.dp).roundToInt())
+            if (titleRoot.paddingTop != reduced) titleRoot.setPadding(origTitleRootPad[0], reduced, origTitleRootPad[2], 0)
+        }
         titleBgView?.visibility = View.GONE
         blurView?.visibility = View.GONE
         borderView?.visibility = View.GONE
@@ -1582,7 +1723,9 @@ private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawLis
         activeTarget = null
         lastGeom = null
         nav.background = origNavBg
+        nav.setPadding(origNavPad[0], origNavPad[1], origNavPad[2], origNavPad[3])
         if (titleRoot.background === pills) titleRoot.background = origTitleRootBg
+        titleRoot.setPadding(origTitleRootPad[0], origTitleRootPad[1], origTitleRootPad[2], origTitleRootPad[3])
         if (titleBgView != null && origTitleBgVis != null) titleBgView.visibility = origTitleBgVis
         if (blurView != null && origBlurVis != null) blurView.visibility = origBlurVis
         if (borderView != null && origBorderVis != null) borderView.visibility = origBorderVis
@@ -1692,4 +1835,118 @@ private fun resetSearchBars() {
     searchBars.values.toList().forEach { it.restore() }
     searchBars.clear()
 }
+
+// ---- 原生页面动画重绘：全部页面与弹窗切换为原地展开菜单，列表项挂载为向下展开列表。
+
+private val animatedPages: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
+private val animatedLists: MutableSet<ViewGroup> = Collections.newSetFromMap(WeakHashMap())
+private val animatedListItems: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
+private fun expandInterpolator() = android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f)
+
+private fun animateInPlaceMenuExpand(target: View) {
+    if (! android.animation.ValueAnimator.areAnimatorsEnabled()) return
+    target.animate().cancel()
+    if (target.width > 0) target.pivotX = target.width / 2f
+    target.pivotY = 0f
+    target.scaleX = 0.92f
+    target.scaleY = 0.92f
+    target.alpha = 0f
+    target.animate()
+        .scaleX(1f)
+        .scaleY(1f)
+        .alpha(1f)
+        .setDuration(motionDuration(220))
+        .setInterpolator(expandInterpolator())
+        .start()
+}
+
+private fun animateDownwardListItem(item: View) {
+    if (!on("页面动画") || !android.animation.ValueAnimator.areAnimatorsEnabled()) return
+    if (!animatedListItems.add(item)) return
+    val dp = item.dp
+    item.animate().cancel()
+    item.pivotY = 0f
+    item.translationY = -16f * dp
+    item.scaleY = 0.92f
+    item.alpha = 0f
+    item.animate()
+        .translationY(0f)
+        .scaleY(1f)
+        .alpha(1f)
+        .setDuration(motionDuration(190))
+        .setInterpolator(expandInterpolator())
+        .start()
+}
+
+private fun bindDownwardListExpand(root: View) {
+    if (root !is ViewGroup) return
+    val isList = root is android.widget.AbsListView ||
+        generateSequence<Class<*>>(root.javaClass) { it.superclass }.any { it.name == "androidx.recyclerview.widget.RecyclerView" }
+    if (isList && animatedLists.add(root)) {
+        root.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
+            override fun onChildViewAdded(parent: View?, child: View?) {
+                if (child != null) animateDownwardListItem(child)
+            }
+            override fun onChildViewRemoved(parent: View?, child: View?) {
+                if (child != null) animatedListItems.remove(child)
+            }
+        })
+        for (i in 0 until root.childCount) {
+            root.getChildAt(i)?.let(::animateDownwardListItem)
+        }
+        return
+    }
+    for (i in 0 until root.childCount) {
+        root.getChildAt(i)?.let(::bindDownwardListExpand)
+    }
+}
+
+@Suppress("DEPRECATION")
+fun pageAnimations() {
+    hook(Activity::class.java.getMethod("overridePendingTransition", Integer.TYPE, Integer.TYPE), gated = false) { chain ->
+        if (on("页面动画")) chain.proceed(arrayOf<Any?>(0, 0)) else chain.proceed()
+    }
+    hook(Instrumentation::class.java.getMethod("callActivityOnStart", Activity::class.java), gated = false) { chain ->
+        chain.proceed().also {
+            if (!on("页面动画")) return@also
+            val act = chain.getArg(0) as? Activity ?: return@also
+            act.overridePendingTransition(0, 0)
+            val decor = act.window?.decorView ?: return@also
+            val content = decor.findViewById<View>(android.R.id.content) ?: decor
+            if (animatedPages.add(content)) {
+                animateInPlaceMenuExpand(content)
+            }
+            bindDownwardListExpand(content)
+        }
+    }
+    hook(Activity::class.java.getMethod("finish"), gated = false) { chain ->
+        chain.proceed().also {
+            if (on("页面动画")) (chain.thisObject as? Activity)?.overridePendingTransition(0, 0)
+        }
+    }
+    hook(android.app.Dialog::class.java.getMethod("show"), gated = false) { chain ->
+        chain.proceed().also {
+            if (!on("页面动画")) return@also
+            val dlg = chain.thisObject as? android.app.Dialog ?: return@also
+            val decor = dlg.window?.decorView ?: return@also
+            val content = decor.findViewById<View>(android.R.id.content) ?: decor
+            animateInPlaceMenuExpand(content)
+            bindDownwardListExpand(content)
+        }
+    }
+    for (m in android.widget.PopupWindow::class.java.declaredMethods.filter {
+        it.name == "showAtLocation" || it.name == "showAsDropDown"
+    }) {
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
+            chain.proceed().also {
+                if (!on("页面动画")) return@also
+                val pop = chain.thisObject as? android.widget.PopupWindow ?: return@also
+                val content = pop.contentView ?: return@also
+                animateInPlaceMenuExpand(content)
+                bindDownwardListExpand(content)
+            }
+        }
+    }
+}
+
 
