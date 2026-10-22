@@ -139,3 +139,13 @@ class KernelPortTest(unittest.TestCase):
         restore = LOOKS.split('private fun restoreBar(',1)[1].split('private fun homeBar(',1)[0]
         self.assertIn('state.restoreBadgeClips()',restore)
         self.assertIn('layout.restorePosition(view)',restore)
+
+    def test_android_liquid_glass_default_highlight_shader_and_additive_blend(self):
+        self.assertIn('DEFAULT_HIGHLIGHT_SHADER', KERNEL)
+        self.assertIn('gradSdRoundedRect', KERNEL)
+        self.assertIn('BlendMode.PLUS', KERNEL)
+        self.assertIn('val blur = 0.25f * dp', KERNEL)
+        self.assertIn('BlurMaskFilter(blur, BlurMaskFilter.Blur.NORMAL)', KERNEL)
+        self.assertIn('ceil(0.5f * dp) * 2f', KERNEL)
+        self.assertIn('0x66121212', KERNEL)
+        self.assertIn('0x66FAFAFA', KERNEL)

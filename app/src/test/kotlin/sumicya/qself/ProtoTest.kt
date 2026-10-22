@@ -585,8 +585,23 @@ class ProtoTest {
         val shortSingle = runAvatarBounds(groupTop = 10f, groupBottom = 40f, firstCenter = 25f, lastCenter = 25f, height = 36f, merged = false)
         assertEquals(null, shortSingle)
 
-        for (token in listOf("yyyy", "MM", "dd", "E", "HH", "hh", "a", "mm", "ss", "SSS", "左对齐")) {
+        for (token in listOf("yyyy/yy", "MM/M", "dd/d", "E", "HH/H", "kk/k 1-24时", "hh/h", "KK/K 0-11时", "a", "mm/m", "ss/s", "SSS/S", "左对齐")) {
             assertTrue(TIME_FORMAT_GUIDE.contains(token))
         }
+        val utc = java.time.ZoneOffset.UTC
+        assertEquals("24:00", messageTime(1700006400L, "kk:mm", utc))
+        assertEquals("0:00", messageTime(1700006400L, "K:mm", utc))
+    }
+
+    @Test fun liquidGlassHighlightFollows45DegreeRoundedRectSdfGradient() {
+        val topLeft = liquidHighlightIntensity(0f, 0f, 200f, 56f, 28f)
+        val bottomRight = liquidHighlightIntensity(200f, 56f, 200f, 56f, 28f)
+        val topRight = liquidHighlightIntensity(200f, 0f, 200f, 56f, 28f)
+        val bottomLeft = liquidHighlightIntensity(0f, 56f, 200f, 56f, 28f)
+        assertTrue(topLeft > 0.99f)
+        assertTrue(bottomRight > 0.99f)
+        assertTrue(topRight < 0.01f)
+        assertTrue(bottomLeft < 0.01f)
+        assertEquals(0f, liquidHighlightIntensity(0f, 0f, 0f, 0f, 28f))
     }
 }

@@ -17,9 +17,7 @@
 
 ## 需求对齐渲染预览图
 
-![四向严格 5dp 边距、回复无外框、顶栏返回箭头与触控重定向、输入栏及二级页架构总览图](preview-uniform-5dp-and-architecture.png)
-
-![上一轮布局重对齐预览图（保留旧图）](preview-realigned-layout.png)
+![AndroidLiquidGlass SDF 高光、连发合并头像、悬浮输入栏与安全区、51dp/54dp 统一对齐及四向严格 5dp 气泡架构总览图](preview-liquid-glass-and-unified-layout.png)
 
 设置入口：菜单内部「消息外观」。自定义格式最长 80 字符、单行；非法格式不写入偏好。恢复默认同时还原时间格式和头像比例。消息内时间、At 对象、头像圆角分别有开关；头像连发浮绘仍由「连发合并」控制。
 

@@ -1035,7 +1035,10 @@ private class HeaderState(
                 }
                 else -> null
             }
-            if (target != null) activeTouchTarget = target
+            // 若点击已直接落在已重定位的原生子视图 bounds 内，交由 ViewGroup.dispatchTouchEvent 原生派发，仅对胶囊边缘留白区做命中转发。
+            if (target != null && !(x in target.left..target.right && y in target.top..target.bottom)) {
+                activeTouchTarget = target
+            }
         }
         val target = activeTouchTarget ?: return false
         val copy = MotionEvent.obtain(event)
@@ -1297,11 +1300,26 @@ private fun aioHeader() {
             val titleTextW = ((state.titleTv?.paint?.measureText(state.titleTv.text?.toString().orEmpty())?.toInt()) ?: (state.titleTv?.measuredWidth ?: 0)) +
                 (if (tail != null) tail.measuredWidth + (2 * dp).roundToInt() else 0) + earW
             val flipper = state.centerFlipper()?.takeIf { it.visibility == View.VISIBLE }
-            val subText = listOfNotNull(state.centerSub1(), state.centerSub2()).firstOrNull { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() }
+            val sub1 = state.centerSub1()
+            val sub2 = state.centerSub2()
+            val subText = listOfNotNull(sub1, sub2).firstOrNull { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() }
             val hasSub = flipper != null && subText != null
             val subIcon = state.subIcon?.takeIf { hasSub && it.visibility == View.VISIBLE }
             val subW = if (hasSub) ((subText.paint?.measureText(subText.text?.toString().orEmpty())?.toInt()) ?: flipper.measuredWidth) +
                 (if (subIcon != null) subIcon.measuredWidth + (4 * dp).roundToInt() else 0) else 0
+            val multiRoot = state.multiSelectRoot()
+            val knownChildren = setOfNotNull(
+                state.avatar, state.leftBtn, state.unreadBadge, state.titleTv, state.titleTailTv,
+                earIcon, state.subIcon, flipper, sub1, sub2, state.right1, state.right2, state.right3(), multiRoot
+            )
+            if (multiRoot?.visibility != View.VISIBLE) {
+                for (i in 0 until bar.childCount) {
+                    val ch = bar.getChildAt(i)
+                    if (ch !in knownChildren && !knownChildren.any { k -> (k as? ViewGroup)?.indexOfChild(ch) ?: -1 >= 0 }) {
+                        state.collapseBadge(ch, true)
+                    }
+                }
+            }
             val geom = nagramHeaderLayout(w, h, dp, unreadW, rightViews.size, titleTextW, subW, hasAvatar = true)
             state.lastGeom = geom
             state.lastRightViews = rightViews
@@ -1323,19 +1341,30 @@ private fun aioHeader() {
                 unread.layout(ux, uy, ux + uw, uy + uh)
             }
 
-            // 2. 中间 ChatAvatarContainer 胶囊：42dp 圆形头像 + 左对齐标题与副标题
+            // 2. 中间 ChatAvatarContainer 胶囊：42dp 圆形头像 + 左对齐标题与副标题（先按目标宽度重测 TextView 再 layout，使内部 Layout 与自绘胶囊一致）
+            val avSpec = View.MeasureSpec.makeMeasureSpec(geom.avatarSize, View.MeasureSpec.EXACTLY)
+            state.avatar.measure(avSpec, avSpec)
             state.avatar.layout(geom.avatarLeft, geom.avatarTop, geom.avatarLeft + geom.avatarSize, geom.avatarTop + geom.avatarSize)
             val tailW = tail?.measuredWidth ?: 0
             val maxTitleW = (geom.textRight - geom.textLeft - tailW - earW).coerceAtLeast(0)
             state.titleTv?.let { tv ->
-                val rawTitleW = (titleTextW - tailW - earW).coerceAtLeast(0)
-                val tw = minOf(tv.measuredWidth.coerceAtLeast(rawTitleW), maxTitleW)
+                val rawTitleW = (titleTextW - tailW - earW + (2 * dp).roundToInt()).coerceAtLeast(0)
+                val tw = minOf(maxOf(tv.measuredWidth, rawTitleW), maxTitleW)
                 val th = tv.measuredHeight.coerceAtLeast((22 * dp).roundToInt())
+                tv.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                tv.measure(
+                    View.MeasureSpec.makeMeasureSpec(tw, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(th, View.MeasureSpec.EXACTLY),
+                )
                 val ty = if (hasSub) geom.centerPill.top + (4 * dp).roundToInt() else geom.centerPill.centerY() - th / 2
                 tv.layout(geom.textLeft, ty, geom.textLeft + tw, ty + th)
                 var curRight = geom.textLeft + tw
                 tail?.let { tl ->
-                    val tlh = tl.measuredHeight
+                    val tlh = tl.measuredHeight.coerceAtLeast((18 * dp).roundToInt())
+                    tl.measure(
+                        View.MeasureSpec.makeMeasureSpec(tailW, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(tlh, View.MeasureSpec.EXACTLY),
+                    )
                     val tly = ty + (th - tlh) / 2
                     val gap = (2 * dp).roundToInt()
                     tl.layout(curRight + gap, tly, curRight + gap + tailW, tly + tlh)
@@ -1358,7 +1387,21 @@ private fun aioHeader() {
                     ic.layout(sx, iy, sx + iw, iy + ih)
                     sx += iw + (4 * dp).roundToInt()
                 }
-                flipper.layout(sx, sy, geom.textRight.coerceAtLeast(sx), sy + sh)
+                val fw = (geom.textRight - sx).coerceAtLeast(0)
+                for (sub in listOfNotNull(sub1, sub2)) {
+                    sub.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    (sub.layoutParams as? FrameLayout.LayoutParams)?.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    sub.measure(
+                        View.MeasureSpec.makeMeasureSpec(fw, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(sh, View.MeasureSpec.EXACTLY),
+                    )
+                }
+                flipper.measure(
+                    View.MeasureSpec.makeMeasureSpec(fw, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(sh, View.MeasureSpec.EXACTLY),
+                )
+                flipper.layout(sx, sy, sx + fw, sy + sh)
+                for (sub in listOfNotNull(sub1, sub2)) sub.layout(0, 0, fw, sh)
             }
 
             // 3. 右侧操作胶囊
@@ -1451,6 +1494,8 @@ private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawLis
         val w = titleRoot.width; val h = titleRoot.height
         if (w <= 0 || h <= 0) return
         val dp = titleRoot.dp
+        val leftIcon = runCatching { getLeftIcon?.invoke(nav) as? View }.getOrNull()?.takeIf { it.visibility == View.VISIBLE }
+        val leftText = runCatching { getLeftText?.invoke(nav) as? View }.getOrNull()?.takeIf { it.visibility == View.VISIBLE }
         val centerTv = runCatching { getCenter?.invoke(nav) as? TextView }.getOrNull()
         val titleW = (centerTv?.paint?.measureText(centerTv.text?.toString().orEmpty())?.toInt())
             ?: (centerTv?.measuredWidth ?: (80 * dp).roundToInt())
@@ -1462,6 +1507,36 @@ private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawLis
         val geom = nagramHeaderLayout(w, h, dp, 0, rightCount, titleW, 0, hasAvatar = false)
         lastGeom = geom
         pills.update(geom)
+        // 同步重定位 QUISecNavBar 内部左返回按钮、居中标题与右侧按钮到三段玻璃胶囊中心，消除自绘胶囊与原生按钮位置错位。
+        (leftIcon ?: leftText)?.let { lb ->
+            val lw = lb.measuredWidth.takeIf { it > 0 } ?: lb.width.takeIf { it > 0 } ?: (24 * dp).roundToInt()
+            val lh = lb.measuredHeight.takeIf { it > 0 } ?: lb.height.takeIf { it > 0 } ?: (24 * dp).roundToInt()
+            val lx = geom.leftPill.centerX() - lw / 2
+            val ly = geom.leftPill.centerY() - lh / 2
+            lb.layout(lx, ly, lx + lw, ly + lh)
+        }
+        centerTv?.takeIf { it.visibility == View.VISIBLE }?.let { tv ->
+            val cw = (geom.textRight - geom.textLeft).coerceAtLeast(0)
+            val ch = tv.measuredHeight.takeIf { it > 0 } ?: tv.height.takeIf { it > 0 } ?: (24 * dp).roundToInt()
+            val cy = geom.centerPill.centerY() - ch / 2
+            tv.gravity = Gravity.CENTER
+            tv.measure(
+                View.MeasureSpec.makeMeasureSpec(cw, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(ch, View.MeasureSpec.EXACTLY),
+            )
+            tv.layout(geom.textLeft, cy, geom.textLeft + cw, cy + ch)
+        }
+        if (!geom.rightPill.isEmpty()) {
+            val rv = rightLayout?.takeIf { it.visibility == View.VISIBLE && it.width > 0 }
+                ?: rightTv?.takeIf { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() }
+            rv?.let {
+                val rw = it.measuredWidth.takeIf { v -> v > 0 } ?: it.width.takeIf { v -> v > 0 } ?: geom.rightPill.width()
+                val rh = it.measuredHeight.takeIf { v -> v > 0 } ?: it.height.takeIf { v -> v > 0 } ?: (24 * dp).roundToInt()
+                val rx = geom.rightPill.centerX() - rw / 2
+                val ry = geom.rightPill.centerY() - rh / 2
+                it.layout(rx, ry, rx + rw, ry + rh)
+            }
+        }
     }
     fun dispatchPillTouch(event: MotionEvent): Boolean {
         val geom = lastGeom ?: return false
@@ -1469,9 +1544,19 @@ private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawLis
         if (action == MotionEvent.ACTION_DOWN) {
             activeTarget = null
             val x = event.x.toInt(); val y = event.y.toInt()
-            if (!geom.leftPill.isEmpty() && x in geom.leftPill.left..geom.leftPill.right && y in geom.leftPill.top..geom.leftPill.bottom) {
-                activeTarget = (runCatching { getLeftIcon?.invoke(nav) as? View }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
-                    ?: (runCatching { getLeftText?.invoke(nav) as? View }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
+            val candidate = when {
+                !geom.leftPill.isEmpty() && x in geom.leftPill.left..geom.leftPill.right && y in geom.leftPill.top..geom.leftPill.bottom -> {
+                    (runCatching { getLeftIcon?.invoke(nav) as? View }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
+                        ?: (runCatching { getLeftText?.invoke(nav) as? View }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
+                }
+                !geom.rightPill.isEmpty() && x in geom.rightPill.left..geom.rightPill.right && y in geom.rightPill.top..geom.rightPill.bottom -> {
+                    (runCatching { getRightLayout?.invoke(nav) as? View }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
+                        ?: (runCatching { getRightText?.invoke(nav) as? View }.getOrNull())?.takeIf { it.visibility == View.VISIBLE }
+                }
+                else -> null
+            }
+            if (candidate != null && !(x in candidate.left..candidate.right && y in candidate.top..candidate.bottom)) {
+                activeTarget = candidate
             }
         }
         val target = activeTarget ?: return false

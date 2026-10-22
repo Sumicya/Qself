@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-10-22 — AndroidLiquidGlass 真实 SDF 边缘高光、连发合并头像恢复与圆角同步、输入栏真正悬浮与沉浸安全区重做、Qself 按钮单/双击退菜单、时间格式码补全与结束进程无弹窗、跨协程头像圆角、四向严格 5dp 边距及原生/自绘 51dp/54dp 统一对齐
+
+- 移植 `Kyant0/AndroidLiquidGlass`（`65ab177e`）真实 `DefaultHighlightShaderString` AGSL 边缘高光（`KernelBar.kt`）：
+  - 移除背离上游的实色底色+描边做法，恢复 `LiquidBottomTabs` `40%` 液态玻璃基底（夜间 `0x66121212` / 日间 `0x66FAFAFA`，`in_brightness = 0f`，`in_saturation = 1.5f`）；
+  - 精确移植 `Shaders.kt` `DefaultHighlightShaderString`（`gradSdRoundedRect` 圆角矩形 SDF 梯度、`angle = 45°` 法线点积、`falloff = 1f`、`Color.White.copy(alpha = 0.5f)`）与 `Highlight.Default`（`width = 0.5dp`，在 `rounded` 裁切路径内以 `strokeWidth = ceil(0.5dp) * 2f`、`BlurMaskFilter(0.25dp, NORMAL)`、`BlendMode.PLUS` 加色绘制），并新增纯函数 `liquidHighlightIntensity` 供 JVM 单元测试校验。
+- 修复连发合并头像失效与消除浮绘/原生分裂（`Chat.kt`）：
+  - `capture(binder, row, run)` 首行先调用 `run.layout?.dispose()` 释放旧 `RunLayout`，且 `RunVisibility(view)` 优先继承 `runVisibilities[view]?.native ?: view.visibility`，根除重绑或二次 `capture` 把已被隐藏的 `View.INVISIBLE` 误存成 `native` 导致连发组找不到 `visibility.native == VISIBLE` 头像源而整组消失的问题；
+  - `RunAvatars.onPreDraw()` 在 `host.clipToPadding == false` 时仍强制按 `host.paddingTop .. host.height - host.paddingBottom` 裁切粘性区间，`RunAvatars.draw()` 在开启 `头像圆角` 时按 `avatarCorner` 圆角路径裁切 `canvas`，并通过 `notifyChatAvatarsUpdated()` 在异步头像加载完成时立即刷新浮绘层。
+- 实现输入栏真正悬浮与底部安全区重做（`Input.kt`）：
+  - 查明 `AIOMsgListVB#K3`/`#L3` 将顶栏与底栏高度设为父容器 `AIOMsgListGroup`（`M2()`）的 `paddingTop`/`paddingBottom` 导致 `AIORecycleView`（`S2()`）被硬截断在输入栏上方；现挂钩 `AIOMsgListVB` 的 `U0`、`v0`、`K3`、`L3`，将 `M2()` 的上下内边距迁移至 `S2()`（`AIORecycleView.clipToPadding = false`、`M2().setPadding(left, 0, right, 0)`），使聊天消息真正滚入悬浮顶栏与悬浮输入栏玻璃下层；
+  - 挂钩 `AIOInputExpandableVB`（`onCreateView`、`handleUIState`、`o1`、`p1`、`f1`）、`BottomBlurVB`（`onCreateView`、`handleUIState`、`h1`、`i1`、`k1`）、`AIOShortcutBarVB`（`onCreateView`、`handleUIState`、`x1`、`y1`、`d1`、`s1`）以及沉浸式安全区 `AIOChatBackgroundApiImpl#setImmersiveBottomDrawable`、`com.tencent.mobileqq.qui.b#g`、`RFWNavigationBarImmersiveHelper#fillNavigationBarBackgroundView`，清除底部实色背景条并按导航手势安全区重定位悬浮胶囊。
+- 修复双击/点按 Qself 按钮退不出菜单、补全时间格式码（含 `k`/`K`）并移除结束进程确认弹窗（`Knob.kt`、`MessageStyle.kt`）：
+  - 在 `sheet(anchor)` 与 `knob(bar)` 中调用 `anchor.bringToFront()` 使 Qself 按钮始终位于全屏 `dim` 遮罩之上，挂载 `TAG_SHEET_CLOSE` 与 `350ms` 防抖，单击或双击按钮均直接收起面板；
+  - `TIME_FORMAT_GUIDE` 完整列出 `yyyy/yy 年 · MM/M 月 · dd/d 日 · E 星期 · HH/H 0-23时 · kk/k 1-24时 · hh/h 1-12时 · KK/K 0-11时 · a 上下午 · mm/m 分 · ss/s 秒 · SSS/S 毫秒`；
+  - 移除「结束进程」多余的 `AlertDialog` 确认弹窗，点击直接执行 `Process.killProcess(Process.myPid())`，并在面板说明中写明 `（结束进程只结束当前进程）`。
+- 修复普通聊天头像圆角、四向严格 `5dp` 气泡内边距及顶栏/聊天全组件 `51dp`/`54dp` 统一对齐（`MessageStyle.kt`、`Chat.kt`、`Looks.kt`）：
+  - 用同步 `WeakHashMap` 集合 `aioAvatarOptions` 与 `aioProDrawables` 跨 `com.tencent.qqnt.avatar.impl.engine.a#c`/`#d` 协程线程与 `QQProAvatarDrawable#onUpdate`/`#C`/`#x` 传递聊天头像上下文，拦截 `meta.b$a#a` 剥离 `"vas_special_shape_mask"`，重置 `RoundRectImageView#mLastRadius = -1` 并附加 `capsule(radius)` 轮廓裁剪；
+  - 查明 `TextMsgContent#e(ai)` 在 `H(ai)` 之后还会调 `F -> r/s` 用 `a$c`（`16dp`/`12dp`）覆写 `d: LinearLayout` 与 `e: wrapper.a`；现递归清零气泡全部内层子视图与 `wrapper.a#l(0,0,0,0)`，全量挂钩 `TextMsgContent#e`/`#H`/`#r`/`#s`/`#A`/`#F`、`padding.j#a..e`、`padding.h#a`/`#j..o`，确保四向内边距严格为 `5dp`；
+  - 在 `AIOTitleRelativeLayout.onLayout` 中对 `titleTv`/`tail`/`flipper`/`sub1`/`sub2` 先执行 `MeasureSpec.EXACTLY` 重测再 `layout` 并折叠未映射装饰视图，在 `SecNavBarState` 中将 `QUISecNavBar` 原生左/中/右控件重定位到三段胶囊中心；拦截 `holder.c#a/b/c/d -> 0` 并在 `RowGeometry` 清零 `nickSlot`、`MainNickNameBlock`、`contentSlot` 与 `ExternalStamp` 水平偏移，使昵称、气泡、引用、图片、卡片与时间戳严格共线于 `x = 51dp`（左）/ `right - 54dp`（右）；同步删除旧图并生成架构预览图 [`docs/preview-liquid-glass-and-unified-layout.png`](docs/preview-liquid-glass-and-unified-layout.png)。
+
 ## 2026-10-21 — 四向严格 5dp 气泡边距与被回复消息去外框、顶栏返回箭头恢复与三胶囊触控重定向、输入栏异步防回退、二级页与搜索栏适配及长按菜单/撤回修复
 
 - 气泡四向严格 `5dp` 内边距与被回复消息彻底去除内层外框（`Chat.kt`）：
@@ -14,19 +34,5 @@
   - 挂钩 `com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB` 的 `onCreateView`、`handleUIState`、`x1`、`y1`、`s1` 及 `PanelIconLinearLayout#f`，拦截 `x1` 异步 `post` 的 `d1 -> y1` Runnable 将底部快捷栏刷回实色背景，并在夜间模式下提亮全部输入栏与快捷栏图标（`#E8EEF7`）。
 - 二级页面导航栏（`QUISecNavBar`）、搜索栏（`QUISearchBar`）及长按菜单/撤回修复：
   - 新增 `SecNavBarState`（适配聊天设置、聊天记录、转发、通用设置等二级页顶栏 `QUISecNavBar`）与 `SearchBarState`（适配 `QUISearchBar`），延续三胶囊玻璃顶栏、左返回胶囊触控重定向、搜索框全胶囊化与夜间高对比度提亮；
-  - 保持长按菜单 `mSourceView`（`QQCustomMenuExpandableLayout#T`）可见、清零菜单项 `16dp` 上下内边距、恢复己方连发组首 ID、修复外部时间对兄弟视图宽度的压缩，并用 `SafeChain` 与本机撤回过滤兜住防撤回路径；新增设计准则 [`docs/design-principles.md`](docs/design-principles.md) 与架构预览图 [`docs/preview-uniform-5dp-and-architecture.png`](docs/preview-uniform-5dp-and-architecture.png)（保留旧图 [`docs/preview-realigned-layout.png`](docs/preview-realigned-layout.png)）。
+  - 保持长按菜单 `mSourceView`（`QQCustomMenuExpandableLayout#T`）可见、清零菜单项 `16dp` 上下内边距、恢复己方连发组首 ID、修复外部时间对兄弟视图宽度的压缩，并用 `SafeChain` 与本机撤回过滤兜住防撤回路径；新增设计准则 [`docs/design-principles.md`](docs/design-principles.md) 与架构预览图 [`docs/preview-liquid-glass-and-unified-layout.png`](docs/preview-liquid-glass-and-unified-layout.png)。
 
-## 2026-10-20 — 灰字恢复居中、仅他人居左自己居右、单条头像顶对齐防侵入、T字接缝直角、消息外部时间与输入栏药丸化
-
-- 行对齐与头像防侵入：仅对收发气泡模板（`template.g` / `template.l`）套用 `RowGeometry`，居中灰字提示模板（`template.m` / `sm1.z`）保持原生居中；仅他人消息居左（头像左距 8dp、气泡左距 6dp，保持 `msgAvatar` 宽高 `WRAP_CONTENT` 并清零其顶内边距防止侵入气泡或下行 `LVxx` 头衔）、自己消息保持原生居右与右侧头像；单条独立消息保持原生顶对齐不居中（`runAvatarBounds` 在 `merged == false` 时返回 `null`），仅连发多条消息（`>= 2`）按组上下边界粘性滚动合并。
-- 普通聊天头像圆角与气泡 T 字形接缝直角：拦截 `RoundRectImageView#draw` 下的 `QQProAvatarDrawable#z`（跳过 `proavatar.j#b` / `proavatar.mask.a#a` 的 360° 圆形 `Path.addArc` 遮罩）并配合 `proavatar.e$a#a` 实现普通聊天头像圆角；单条独立气泡恢复四角全圆角（`17dp`），仅在连发多条消息 T 字形相邻接缝处设为直角，且气泡圆角与头像圆角滑块解耦，同时覆盖 `AIOUnsuportContentComponent#Y1` 提示气泡。
-- 消息外部时间与紧凑纵向间距：将自定义格式时间（`ExternalStamp`）直接挂载于 `msgContent`（`0x7f0a11b9` `BubbleLayoutCompatPress`）容器底部外侧（他人左对齐 `START`、自己右对齐 `END`）以适配全部消息类型；拦截 `AIOBubbleMsgItemVB#H1`、`skin.padding.j#a`、`skin.padding.h#a` 与 `AIOArkContentComponent#p2` 缩减行间与气泡上下边距。
-- 输入栏与发送按钮独立药丸化：`InputEditTextVBDelegate#U` 与 `compat.b#handleUIState` 同时绑定 `adorn.e#a`（`AIOEditText`）与 `adorn.e#d`（`AIOInputSendBtn`），将输入框与发送按钮（含 `com.tencent.qui.smoothcorner.b#j`）各自按 `height / 2` 完全药丸化（`capsule()`）；`tools/symbols.txt` 增至 451 条符号零不匹配，本地 56 项 Kotlin、50 项工具/源码契约、10 项清理脚本测试全部通过（待真机复验）。
-
-## 2026-10-19 — 普通聊天头像圆角生效、左对齐紧凑消息与右部灵活圆角、左对齐时间与格式码说明、头像滚动合并优先于居中
-
-- 修复普通聊天头像圆角不生效：普通聊天 `AIOAvatarContentComponent#K1` / `D1` 默认经 `FaceDrawableEngine` 将头像预裁成 360° 圆形 Bitmap 且非空 `payloads` 在 `d1` 提前返回；现拦截 `com.tencent.qqnt.avatar.meta.b$a#b` 调 `m(false)`（切至 `_no_circle` 缓存键跳过 `CircleAvatarTransform`）、半径 `< 50%` 时跳过 `com.tencent.qqnt.avatar.b$a#i` 预裁圆 VAS 头像并直通 `BaseImageUtil#getCircleFaceBitmap`，在 `K1` 与 `d1` 双落点同步 `RoundRectImageView#setCornerRadiusAndMode`（0% 即 90°直角时不圆角），调节时清空 `m` 缓存重刷。
-- 消息气泡统一左部无圆角（`topLeft = 0, bottomLeft = 0`）、右部灵活圆角（外角 17dp、连发内角 6dp，按气泡半高自适应上限并与圆角滑块联动，0% 即 90°直角时 `topRight = 0, bottomRight = 0` 不圆角），同时覆盖 `BaseMixContentComponent#C2`、`AIOReplyComponent#C2` 与 `TextMsgContent#H`（清理 `b` / `d` / `l()` 内层气泡背景）。
-- 收发双方消息（`r/i/dxm.xml` 与 `r/i/dye.xml`）统一左对齐并尽量缩短边距：头像 36dp 左距 2dp，正文与昵称紧贴头像右侧 2dp、右距 4dp（总左缩进 40dp，`horizontalBias = 0f`），拦截 `template.g#q` / `template.l#q` 与 `skin.padding.j#a` 消除气泡尾巴非对称内边距。
-- 时间格式与时间戳左对齐：设置面板「消息外观」补充左对齐格式码说明（`yyyy/yy`、`MM`、`dd`、`E`、`HH`、`hh`、`a`、`mm`、`ss`、`SSS` 与单引号转义），文本 `MessageStamp` 与非文本胶囊 `SurfaceStamp` 统一改为左对齐绘制。
-- 头像定位遵循「滚动合并大于居中」（`runAvatarBounds`）：只要存在连发续接或消息/组高度超过头像，即按整组上下边界 `[groupTop + h/2, groupBottom - h/2]` 粘性滚动合并，仅短单条居中；`tools/symbols.txt` 增至 424 条符号零不匹配，本地 56 项 Kotlin、50 项工具/源码契约、10 项清理脚本测试全部通过（待真机视觉与滚动复验）。

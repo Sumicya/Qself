@@ -1,3 +1,18 @@
+## 2026-10-20 — 灰字恢复居中、仅他人居左自己居右、单条头像顶对齐防侵入、T字接缝直角、消息外部时间与输入栏药丸化
+
+- 行对齐与头像防侵入：仅对收发气泡模板（`template.g` / `template.l`）套用 `RowGeometry`，居中灰字提示模板（`template.m` / `sm1.z`）保持原生居中；仅他人消息居左（头像左距 8dp、气泡左距 6dp，保持 `msgAvatar` 宽高 `WRAP_CONTENT` 并清零其顶内边距防止侵入气泡或下行 `LVxx` 头衔）、自己消息保持原生居右与右侧头像；单条独立消息保持原生顶对齐不居中（`runAvatarBounds` 在 `merged == false` 时返回 `null`），仅连发多条消息（`>= 2`）按组上下边界粘性滚动合并。
+- 普通聊天头像圆角与气泡 T 字形接缝直角：拦截 `RoundRectImageView#draw` 下的 `QQProAvatarDrawable#z`（跳过 `proavatar.j#b` / `proavatar.mask.a#a` 的 360° 圆形 `Path.addArc` 遮罩）并配合 `proavatar.e$a#a` 实现普通聊天头像圆角；单条独立气泡恢复四角全圆角（`17dp`），仅在连发多条消息 T 字形相邻接缝处设为直角，且气泡圆角与头像圆角滑块解耦，同时覆盖 `AIOUnsuportContentComponent#Y1` 提示气泡。
+- 消息外部时间与紧凑纵向间距：将自定义格式时间（`ExternalStamp`）直接挂载于 `msgContent`（`0x7f0a11b9` `BubbleLayoutCompatPress`）容器底部外侧（他人左对齐 `START`、自己右对齐 `END`）以适配全部消息类型；拦截 `AIOBubbleMsgItemVB#H1`、`skin.padding.j#a`、`skin.padding.h#a` 与 `AIOArkContentComponent#p2` 缩减行间与气泡上下边距。
+- 输入栏与发送按钮独立药丸化：`InputEditTextVBDelegate#U` 与 `compat.b#handleUIState` 同时绑定 `adorn.e#a`（`AIOEditText`）与 `adorn.e#d`（`AIOInputSendBtn`），将输入框与发送按钮（含 `com.tencent.qui.smoothcorner.b#j`）各自按 `height / 2` 完全药丸化（`capsule()`）；`tools/symbols.txt` 增至 451 条符号零不匹配，本地 56 项 Kotlin、50 项工具/源码契约、10 项清理脚本测试全部通过（待真机复验）。
+
+## 2026-10-19 — 普通聊天头像圆角生效、左对齐紧凑消息与右部灵活圆角、左对齐时间与格式码说明、头像滚动合并优先于居中
+
+- 修复普通聊天头像圆角不生效：普通聊天 `AIOAvatarContentComponent#K1` / `D1` 默认经 `FaceDrawableEngine` 将头像预裁成 360° 圆形 Bitmap 且非空 `payloads` 在 `d1` 提前返回；现拦截 `com.tencent.qqnt.avatar.meta.b$a#b` 调 `m(false)`（切至 `_no_circle` 缓存键跳过 `CircleAvatarTransform`）、半径 `< 50%` 时跳过 `com.tencent.qqnt.avatar.b$a#i` 预裁圆 VAS 头像并直通 `BaseImageUtil#getCircleFaceBitmap`，在 `K1` 与 `d1` 双落点同步 `RoundRectImageView#setCornerRadiusAndMode`（0% 即 90°直角时不圆角），调节时清空 `m` 缓存重刷。
+- 消息气泡统一左部无圆角（`topLeft = 0, bottomLeft = 0`）、右部灵活圆角（外角 17dp、连发内角 6dp，按气泡半高自适应上限并与圆角滑块联动，0% 即 90°直角时 `topRight = 0, bottomRight = 0` 不圆角），同时覆盖 `BaseMixContentComponent#C2`、`AIOReplyComponent#C2` 与 `TextMsgContent#H`（清理 `b` / `d` / `l()` 内层气泡背景）。
+- 收发双方消息（`r/i/dxm.xml` 与 `r/i/dye.xml`）统一左对齐并尽量缩短边距：头像 36dp 左距 2dp，正文与昵称紧贴头像右侧 2dp、右距 4dp（总左缩进 40dp，`horizontalBias = 0f`），拦截 `template.g#q` / `template.l#q` 与 `skin.padding.j#a` 消除气泡尾巴非对称内边距。
+- 时间格式与时间戳左对齐：设置面板「消息外观」补充左对齐格式码说明（`yyyy/yy`、`MM`、`dd`、`E`、`HH`、`hh`、`a`、`mm`、`ss`、`SSS` 与单引号转义），文本 `MessageStamp` 与非文本胶囊 `SurfaceStamp` 统一改为左对齐绘制。
+- 头像定位遵循「滚动合并大于居中」（`runAvatarBounds`）：只要存在连发续接或消息/组高度超过头像，即按整组上下边界 `[groupTop + h/2, groupBottom - h/2]` 粘性滚动合并，仅短单条居中；`tools/symbols.txt` 增至 424 条符号零不匹配，本地 56 项 Kotlin、50 项工具/源码契约、10 项清理脚本测试全部通过（待真机视觉与滚动复验）。
+
 ## 2026-10-19 — 按 NagramXF 重做聊天顶栏、消息行、气泡、输入栏与纵向菜单布局
 
 - 对照 `Keeperorowner/NagramXF`（`30dcd6ce7b5b0279fa86f302ca61cd272bfa3068`）的 `ActionBar.setupGlass` 与 `ChatAvatarContainer`，接入 `AIOTitleVB`（`sm1.u` / `sm1.w` / `CenterVB`）与 `AIOTitleRelativeLayout`：绘制左 46dp 返回胶囊、中 42dp 圆形会话头像 + 左对齐 17.5sp 标题 / 13.5sp 副标题胶囊（`getVisualWidth` +64dp，经 `com.tencent.qqnt.avatar.a` 从 `AIOContact` 异步加载头像）、右 46dp 操作胶囊（`p = 6dp`、`r = 23dp`），并隐藏 `com.tencent.mobileqq.aio.reserve1.blur.f` 通栏模糊。

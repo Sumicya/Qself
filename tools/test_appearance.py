@@ -92,9 +92,15 @@ class AppearanceContractTest(unittest.TestCase):
 
     def test_menus_do_not_implement_the_background_drag_request(self):
         menu = (SRC / 'Knob.kt').read_text()
+        sheet_body = menu.split('private fun sheet(', 1)[1]
+        kill_body = sheet_body.split('addView(button("结束进程")', 1)[1].split('addView(button("好"', 1)[0]
         self.assertNotIn('dim.setOnTouchListener', menu)
         self.assertNotIn('heading.setOnTouchListener', menu)
         self.assertIn('dim.setOnClickListener { close() }', menu)
+        self.assertIn('TAG_SHEET_CLOSE', menu)
+        self.assertIn('anchor.bringToFront()', menu)
+        self.assertNotIn('AlertDialog', kill_body)
+        self.assertIn('android.os.Process.killProcess(android.os.Process.myPid())', kill_body)
 
 
 if __name__ == '__main__':

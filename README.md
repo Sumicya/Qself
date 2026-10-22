@@ -2,12 +2,12 @@
 
 给 NT QQ 的一个 LSPosed 模块：**自由、简单、现代、原生**。功能默认开启，实际生效受 QQ 版本与对象生命周期限制；不联网、没有第三方库、没有一个 `.so`。
 开关位于 QQ 主页底栏旁独立的 76×64dp 玻璃三线设置短胶囊中。菜单在入口附近展开，宽不超过 360dp、高不超过 520dp；自动避让系统栏和键盘，空间不足时缩小并在安全区内定位。单列列表、状态说明与操作按钮都可在面板内部滚动。
-菜单、输入区与底栏共享模糊、折射和罩色路径，按用途保留不同圆角，不把阅读面板做成大胶囊。勾选只表示配置已开启，✗ 表示当前进程记录了安装失败，不表示效果已经验证。部分功能需要重进页面或重启 QQ；恢复默认同样受此限制。“结束进程”经确认后只结束当前进程，不保证 QQ 其他进程退出。偏好存进 QQ 自己的 SharedPreferences。
+菜单、输入区与底栏共享模糊、折射和罩色路径，按用途保留不同圆角，不把阅读面板做成大胶囊。勾选只表示配置已开启，✗ 表示当前进程记录了安装失败，不表示效果已经验证。部分功能需要重进页面或重启 QQ；恢复默认同样受此限制。“结束进程”直接结束当前进程，不保证 QQ 其他进程退出。偏好存进 QQ 自己的 SharedPreferences。
 
 ## 要求
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
-但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，496 条）——换版本先看那张表红哪条，别猜。
+但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，549 条）——换版本先看那张表红哪条，别猜。
 
 ## 功能
 
@@ -31,7 +31,7 @@
 - **原生消息菜单纵向列表与设置面板随指高亮**：按 NagramXF `ActionBarPopupWindow` + `ActionBarMenuSubItem` 将 QQ 原生消息长按菜单 `QQCustomMenuExpandableLayout`（`p` / `l` / `H` / `G`）重排为 12dp 圆角玻璃纵向列表（行高 48dp、左右内边距 18dp、上下内边距清零、20dp 图标 + 12dp 间距 + 16sp 完整不截断文案、6dp 圆角按压高亮，隐藏原生暗色 `S: QQBlurViewWrapper` 与直接子级分割线 `View`，保持聊天列表 `T: mSourceView` 可见且 `C = 220dp` 不裁高），并与模块设置面板共用单有效项随指高亮、跨项移动、项外取消且松手不触发动作、展开态纵滑交还 `ScrollView`；「删除」「撤回」「结束进程」统一标记为警示红图文与按压态（待真机手势复验）。
 - **消息显示 At 对象**：点按群消息中的 `@名字` 打开对应资料卡；按元素顺序定位重复名字，保留原链接及正常长按/滑动。UID 无缓存映射时明确提示，`@全体成员` 不当作个人资料卡。
 - **头像圆角（普通聊天与聊天记录同步生效）**：菜单「消息外观」调整 0～50%；0% 为直角，50% 为圆形，默认 20%（仅控制头像，不联动气泡圆角）。同时拦截普通聊天 `RoundRectImageView#draw` 下的 `QQProAvatarDrawable#z`（跳过 `proavatar.j#b` / `proavatar.mask.a#a` 的 360° 圆形 `Path.addArc` 遮罩）、`com.tencent.mobileqq.proavatar.e$a#a`、`com.tencent.qqnt.avatar.meta.b$a#b`、`com.tencent.qqnt.avatar.b$a#i` 与 `BaseImageUtil#getCircleFaceBitmap`，交由 `RoundRectImageView#setCornerRadiusAndMode` 按圆角半径裁剪；切换或拖动滑块时清空 `m` 缓存重刷，关闭还原原半径与模式。
-- 连发合并（他人居左、自己居右含组首 ID、灰字居中、单条顶对齐、连发粘性浮动、紧凑边距）：仅对气泡收发模板（`template.g` / `template.l`）套用行几何，居中灰字提示（`template.m` / `sm1.z`）保持原生居中且撤回变灰字时自动解绑；他人消息居左（头像左距 8dp、气泡左距 6dp、保留 `WRAP_CONTENT` 与清零 `msgAvatar` 顶内边距防止侵入气泡或下行 `LVxx` 头衔）、自己消息保持原生居右与右侧头像并在每组连发首条右对齐显示头衔+昵称 ID（续条折叠）；拦截 `AIOBubbleMsgItemVB#H1`、`skin.padding.j#a`、`skin.padding.h#a` 与 `AIOArkContentComponent#p2` 缩减行间与气泡边距；单条独立消息保持原生顶对齐不居中（消除异步高度变化引起的跳动与向下侵入），仅连发多条消息（`>= 2`）在组边界 `[groupTop, groupBottom - h]` 内粘性滚动合并。**尚无本轮设备复验，本次实现与离线检查不等于效果验收。**（渲染预览见 [`docs/preview-realigned-layout.png`](docs/preview-realigned-layout.png)）
+- 连发合并（他人居左、自己居右含组首 ID、灰字居中、单条顶对齐、连发粘性浮动、紧凑边距）：仅对气泡收发模板（`template.g` / `template.l`）套用行几何，居中灰字提示（`template.m` / `sm1.z`）保持原生居中且撤回变灰字时自动解绑；他人消息居左（头像左距 8dp、气泡左距 6dp、清零 `holder.c` / `nickSlot` / `MainNickNameBlock` / `contentSlot` 水平内边距使全类型组件共线于 `51dp`）、自己消息保持原生居右与右侧头像并在每组连发首条右对齐显示头衔+昵称 ID（续条折叠，全类型共线于 `right - 54dp`）；`capture()` 先释放旧 `RunLayout` 避免将 `INVISIBLE` 误存为 `native`；单条独立消息保持原生顶对齐不居中，仅连发多条消息（`>= 2`）在组边界与列表 `paddingTop`/`paddingBottom` 可视区 `[clip.top, clip.bottom]` 内粘性滚动合并并同步裁剪头像圆角。**尚无本轮设备复验，本次实现与离线检查不等于效果验收。**（渲染预览见 [`docs/preview-liquid-glass-and-unified-layout.png`](docs/preview-liquid-glass-and-unified-layout.png)）
 - **回复不@**：回复消息时不再往输入框插「@昵称 」
 - **转发不限人数**：修正私有方法反射访问，转发选人不再卡 9 个；调用 QQ 原生搜索勾选同步及顶部计数刷新。仍需设备验证实际发送端限制。
 - **左滑回复不设限**：卡片 (Ark) 消息也能左滑回复

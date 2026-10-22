@@ -27,7 +27,7 @@ import java.util.WeakHashMap
 internal const val TIME_PATTERN = "message_time_pattern"
 internal const val AVATAR_RADIUS = "avatar_radius_percent"
 internal const val TIME_FORMAT_GUIDE =
-    "格式码（左对齐显示）：yyyy/yy 年 · MM 月 · dd 日 · E 星期 · HH 24时 · hh 12时 · a 上下午 · mm 分 · ss 秒 · SSS 毫秒；文字用单引号包裹"
+    "格式码（左对齐显示）：yyyy/yy 年 · MM/M 月 · dd/d 日 · E 星期 · HH/H 0-23时 · kk/k 1-24时 · hh/h 1-12时 · KK/K 0-11时 · a 上下午 · mm/m 分 · ss/s 秒 · SSS/S 毫秒；文字用单引号包裹"
 internal fun validTimePattern(pattern: String): Boolean = pattern.length in 1..80 && pattern.none { it.isISOControl() } && runCatching {
     DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(Instant.EPOCH.atZone(ZoneId.systemDefault()))
 }.isSuccess
@@ -140,10 +140,10 @@ private class ExternalStamp(host: android.view.ViewGroup) {
         lp.gravity = align
         lp.topMargin = (2 * dp).toInt()
         lp.bottomMargin = 0
-        lp.leftMargin = (2 * dp).toInt()
-        lp.rightMargin = (2 * dp).toInt()
-        lp.marginStart = lp.leftMargin
-        lp.marginEnd = lp.rightMargin
+        lp.leftMargin = 0
+        lp.rightMargin = 0
+        lp.marginStart = 0
+        lp.marginEnd = 0
         labelView.layoutParams = lp
         if (labelView.parent !== container) {
             (labelView.parent as? android.view.ViewGroup)?.removeView(labelView)
@@ -215,20 +215,29 @@ fun messageTimestamps() {
 
 private val inAioAvatarLoad = ThreadLocal<Boolean>()
 private val inAioAvatarDraw = ThreadLocal<Boolean>()
+private val aioAvatarOptions: MutableSet<Any> = java.util.Collections.synchronizedSet(
+    java.util.Collections.newSetFromMap(WeakHashMap())
+)
+private val aioProDrawables: MutableSet<Any> = java.util.Collections.synchronizedSet(
+    java.util.Collections.newSetFromMap(WeakHashMap())
+)
 private class AvatarCorners(
     view: View,
     component: Any,
     val nativeRadius: Int,
     val nativeMode: Int,
     private val setter: java.lang.reflect.Method,
+    private val lastRadiusField: java.lang.reflect.Field?,
     private val loadAvatar: java.lang.reflect.Method,
     private val msgField: java.lang.reflect.Field,
     private val cacheField: java.lang.reflect.Field,
 ) : View.OnLayoutChangeListener {
     private val view = WeakReference(view)
     private val component = WeakReference(component)
-    var loadedNoCircle = on("头像圆角")
-    var loadedSkipVas = loadedNoCircle && (store()?.getInt(AVATAR_RADIUS, 20) ?: 20) < 50
+    private val origOutline = view.outlineProvider
+    private val origClip = view.clipToOutline
+    var loadedNoCircle = false
+    var loadedSkipVas = false
     fun apply(enabled: Boolean = on("头像圆角"), allowReload: Boolean = true) {
         val v = view.get() ?: return
         val percent = (store()?.getInt(AVATAR_RADIUS, 20) ?: 20).coerceIn(0, 50)
@@ -243,21 +252,38 @@ private class AvatarCorners(
                         loadedNoCircle = wantNoCircle
                         loadedSkipVas = wantSkipVas
                         loadAvatar.invoke(comp, v.context, item)
+                        cacheField.get(comp)?.let { aioAvatarOptions.add(it) }
                     }
                 }
             }
         }
-        val size = minOf(v.width, v.height)
+        val size = minOf(v.width, v.height).takeIf { it > 0 }
+            ?: minOf(v.measuredWidth, v.measuredHeight).takeIf { it > 0 }
+            ?: v.layoutParams?.let { minOf(it.width, it.height) }?.takeIf { it > 0 }
+            ?: (37f * v.dp).toInt()
         val radius = avatarCorner(size, percent)
+        runCatching { lastRadiusField?.setInt(v, -1) }
         // 真包 checkPathChanged 的 mode=1 分支调用四角等半径 addRoundRect；0%（90°直角）时置 0。
         if (enabled) {
             setter.invoke(v, radius, if (radius > 0) 1 else 0)
+            if (radius > 0) {
+                v.outlineProvider = capsule(radius.toFloat())
+                v.clipToOutline = true
+            } else {
+                v.outlineProvider = origOutline
+                v.clipToOutline = false
+            }
         } else if (nativeMode == 0 && loadedNoCircle && size > 0) {
             setter.invoke(v, size / 2, 1)
+            v.outlineProvider = origOutline
+            v.clipToOutline = origClip
         } else {
             setter.invoke(v, nativeRadius, nativeMode)
+            v.outlineProvider = origOutline
+            v.clipToOutline = origClip
         }
         v.invalidate()
+        notifyChatAvatarsUpdated()
     }
     override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
         apply(allowReload = false)
@@ -275,18 +301,27 @@ fun customAvatarCorners() {
     val cacheField = type.getDeclaredField("m").apply { isAccessible = true }
     val roundRectView = cls("com.tencent.qqnt.base.widget.RoundRectImageView")
     val setter = roundRectView.getDeclaredMethod("setCornerRadiusAndMode", Integer.TYPE, Integer.TYPE)
+    val lastRadiusField = runCatching { roundRectView.getDeclaredField("mLastRadius").apply { isAccessible = true } }.getOrNull()
     val roundRectDraw = roundRectView.getDeclaredMethod("draw", Canvas::class.java)
     val metaBuilder = cls("com.tencent.qqnt.avatar.meta.b\$a")
     val metaCircle = metaBuilder.getDeclaredMethod("m", java.lang.Boolean.TYPE)
+    val metaPutExtra = metaBuilder.getDeclaredMethod("a", String::class.java, Any::class.java)
+    val metaExtras = runCatching { metaBuilder.getDeclaredMethod("e").apply { isAccessible = true } }.getOrNull()
     val metaBuild = metaBuilder.getDeclaredMethod("b")
     val optionBuilder = cls("com.tencent.qqnt.avatar.b\$a")
+    val optionBuild = optionBuilder.getDeclaredMethod("a")
     val optionVas = optionBuilder.getDeclaredMethod("i", cls("com.tencent.qqnt.avatar.i"))
+    val engineClass = cls("com.tencent.qqnt.avatar.impl.engine.a")
+    val engineOptionField = engineClass.getDeclaredField("a").apply { isAccessible = true }
+    val engineLoadC = engineClass.getDeclaredMethod("c", String::class.java, android.content.Context::class.java)
+    val engineLoadD = engineClass.getDeclaredMethod("d", String::class.java, android.content.Context::class.java)
     val proParamBuilder = cls("com.tencent.mobileqq.proavatar.e\$a").getDeclaredMethod("a")
     val proParamType = cls("com.tencent.mobileqq.proavatar.e")
     val proCircleField = proParamType.getDeclaredField("p").apply { isAccessible = true }
     val proVasAvatarField = proParamType.getDeclaredField("d").apply { isAccessible = true }
     val proVasFrameField = proParamType.getDeclaredField("f").apply { isAccessible = true }
-    val proDrawableMask = cls("com.tencent.mobileqq.proavatar.QQProAvatarDrawable").getDeclaredMethod(
+    val proDrawableClass = cls("com.tencent.mobileqq.proavatar.QQProAvatarDrawable")
+    val proDrawableMask = proDrawableClass.getDeclaredMethod(
         "z",
         cls("com.tencent.qqnt.avatar.layer.d"),
         Canvas::class.java,
@@ -299,21 +334,81 @@ fun customAvatarCorners() {
         "getCircleFaceBitmap", android.graphics.Bitmap::class.java, Integer.TYPE, Integer.TYPE
     )
     fun syncView(comp: Any) {
+        runCatching { cacheField.get(comp) }.getOrNull()?.let { aioAvatarOptions.add(it) }
         val v = image.invoke(comp) as? View ?: return
+        (v as? android.widget.ImageView)?.drawable?.let { aioProDrawables.add(it) }
         val existing = corners[v]
+        val isFirst = existing == null
         val state = if (existing != null) existing.also {
-            it.loadedNoCircle = on("头像圆角")
-            it.loadedSkipVas = it.loadedNoCircle && (store()?.getInt(AVATAR_RADIUS, 20) ?: 20) < 50
+            if (inAioAvatarLoad.get() == true) {
+                it.loadedNoCircle = on("头像圆角")
+                it.loadedSkipVas = it.loadedNoCircle && (store()?.getInt(AVATAR_RADIUS, 20) ?: 20) < 50
+            }
         } else AvatarCorners(
             v, comp, v.get("mRadius") as Int, v.get("mRoundMode") as Int,
-            setter, loadAvatar, msgField, cacheField,
-        ).also { corners[v] = it; v.addOnLayoutChangeListener(it) }
-        state.apply(allowReload = false)
+            setter, lastRadiusField, loadAvatar, msgField, cacheField,
+        ).also {
+            if (inAioAvatarLoad.get() == true) {
+                it.loadedNoCircle = on("头像圆角")
+                it.loadedSkipVas = it.loadedNoCircle && (store()?.getInt(AVATAR_RADIUS, 20) ?: 20) < 50
+            }
+            corners[v] = it
+            v.addOnLayoutChangeListener(it)
+        }
+        state.apply(allowReload = isFirst && inAioAvatarLoad.get() != true)
     }
-    // 普通聊天（J1=false）K1 走 FaceDrawableEngine 默认裁成 360° 圆形；开启头像圆角时切到 _no_circle 并跳过 mask.a 360° addArc，交给 RoundRectImageView 裁剪。
+    hook(optionBuild, gated = false) { chain ->
+        chain.proceed().also { opt ->
+            if (inAioAvatarLoad.get() == true && opt != null) aioAvatarOptions.add(opt)
+        }
+    }
+    for (m in listOf(engineLoadC, engineLoadD)) {
+        hook(m, gated = false) { chain ->
+            val opt = runCatching { engineOptionField.get(chain.thisObject) }.getOrNull()
+            val isAio = inAioAvatarLoad.get() == true || (opt != null && opt in aioAvatarOptions)
+            if (!isAio) chain.proceed()
+            else {
+                val prev = inAioAvatarLoad.get()
+                inAioAvatarLoad.set(true)
+                try {
+                    chain.proceed().also { d -> if (d != null) aioProDrawables.add(d) }
+                } finally {
+                    if (prev == null) inAioAvatarLoad.remove() else inAioAvatarLoad.set(prev)
+                }
+            }
+        }
+    }
+    for (name in listOf("onUpdate", "C", "x")) {
+        proDrawableClass.declaredMethods.filter { it.name == name }.forEach { m ->
+            hook(m.apply { isAccessible = true }, gated = false) { chain ->
+                val isAio = inAioAvatarLoad.get() == true || (chain.thisObject != null && chain.thisObject in aioProDrawables)
+                if (!isAio) chain.proceed()
+                else {
+                    val prev = inAioAvatarLoad.get()
+                    inAioAvatarLoad.set(true)
+                    try {
+                        chain.proceed().also {
+                            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) notifyChatAvatarsUpdated()
+                        }
+                    } finally { if (prev == null) inAioAvatarLoad.remove() else inAioAvatarLoad.set(prev) }
+                }
+            }
+        }
+    }
+    hook(metaPutExtra, gated = false) { chain ->
+        if (inAioAvatarLoad.get() == true && on("头像圆角") &&
+            (store()?.getInt(AVATAR_RADIUS, 20) ?: 20) < 50 &&
+            chain.args.getOrNull(0) == "vas_special_shape_mask"
+        ) chain.thisObject else chain.proceed()
+    }
+    // 普通聊天（J1=false）K1 走 FaceDrawableEngine（协程工作线程）默认裁成 360° 圆形；开启头像圆角时切到 _no_circle 并清除 vas_special_shape_mask，交给 RoundRectImageView 裁剪。
     hook(metaBuild, gated = false) { chain ->
         if (inAioAvatarLoad.get() == true && on("头像圆角")) {
             metaCircle.invoke(chain.thisObject, false)
+            if ((store()?.getInt(AVATAR_RADIUS, 20) ?: 20) < 50) {
+                (runCatching { metaExtras?.invoke(chain.thisObject) as? MutableMap<*, *> }.getOrNull())
+                    ?.remove("vas_special_shape_mask")
+            }
         }
         chain.proceed()
     }
@@ -482,4 +577,5 @@ fun resetMessageStyle() {
     corners.values.toList().forEach { it.dispose() }; corners.clear()
     mentions.keys.toList().forEach { it.text = clearAtSpans(it) }
     mentions.clear(); mentionDown.clear(); openMention = null; inAioAvatarLoad.remove(); inAioAvatarDraw.remove()
+    aioAvatarOptions.clear(); aioProDrawables.clear()
 }

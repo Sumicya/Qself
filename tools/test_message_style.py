@@ -130,6 +130,18 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('SearchBarState', looks_src)
         self.assertIn('com.tencent.mobileqq.aio.input.inputbar.compat.e\\$b', inp_src)
         self.assertIn('com.tencent.qqnt.aio.shortcutbar.PanelIconLinearLayout', inp_src)
+        self.assertIn('MsgListUnderScroll', inp_src)
+        self.assertIn('com.tencent.mobileqq.aio.msglist.AIOMsgListVB', inp_src)
+        self.assertIn('com.tencent.qqnt.aio.adapter.api.impl.AIOChatBackgroundApiImpl', inp_src)
+        self.assertIn('com.tencent.richframework.compat.immersive.RFWNavigationBarImmersiveHelper', inp_src)
+        self.assertIn('collectBubbleInners', CHAT)
+        self.assertIn('setWrapperPadding', CHAT)
+        self.assertIn('zeroHorizontalInsets', CHAT)
+        self.assertIn('run.layout?.dispose()', CHAT)
+        self.assertIn('com.tencent.qqnt.avatar.impl.engine.a', STYLE)
+        self.assertIn('aioAvatarOptions', STYLE)
+        self.assertIn('aioProDrawables', STYLE)
+        self.assertIn('kk/k 1-24时', STYLE)
 
 
 if __name__ == '__main__':

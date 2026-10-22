@@ -41,6 +41,8 @@ import kotlin.math.min
 
 private const val KNOB = "qself-knob"
 private const val SHEET = "qself-sheet"
+private const val TAG_SHEET_CLOSE = 0x5153434C
+private var lastSheetCloseMs = 0L
 private val knobs: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 private val sheets: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 private fun easing() = PathInterpolator(0.2f, 0f, 0f, 1f)
@@ -109,6 +111,7 @@ fun knob(bar: View) {
             lp.width = width; lp.height = height; lp.bottomMargin = bottom; lp.marginEnd = end
             old.layoutParams = lp
         }
+        if (decor.findViewWithTag<View>(SHEET) != null) old.bringToFront()
         return
     }
     val button = ImageView(bar.context).apply {
@@ -520,7 +523,15 @@ fun nativeMessageMenu() {
 
 private fun sheet(anchor: View) {
     val decor = anchor.rootView as? ViewGroup ?: return
-    if (decor.findViewWithTag<View>(SHEET) != null) return
+    val existing = decor.findViewWithTag<View>(SHEET)
+    if (existing != null) {
+        lastSheetCloseMs = android.os.SystemClock.uptimeMillis()
+        @Suppress("UNCHECKED_CAST")
+        val closeFn = existing.getTag(TAG_SHEET_CLOSE) as? (() -> Unit)
+        if (closeFn != null) closeFn() else (existing.parent as? ViewGroup)?.removeView(existing)
+        return
+    }
+    if (android.os.SystemClock.uptimeMillis() - lastSheetCloseMs < 350L) return
     val prefs = store() ?: return
     val ctx = anchor.context
     val dp = anchor.dp
@@ -540,6 +551,8 @@ private fun sheet(anchor: View) {
     fun close() {
         if (closing) return
         closing = true
+        lastSheetCloseMs = android.os.SystemClock.uptimeMillis()
+        dim.tag = null
         card.animate().cancel(); dim.animate().cancel()
         card.animate().scaleX(0.94f).scaleY(0.94f)
             .setDuration(motionDuration(140)).setInterpolator(easing()).start()
@@ -548,6 +561,7 @@ private fun sheet(anchor: View) {
             anchor.requestFocus()
         }.start()
     }
+    dim.setTag(TAG_SHEET_CLOSE, ::close)
     val paints = ArrayList<() -> Unit>()
     fun cell(feature: Feature): View {
         val mark = Mark(dp)
@@ -600,7 +614,7 @@ private fun sheet(anchor: View) {
     }
     card.addView(heading)
     grid.addView(TextView(ctx).apply {
-        text = "勾选仅表示配置开启，不代表效果已验证。部分功能需重进页面或重启 QQ；恢复默认也遵循此规则。"
+        text = "勾选仅表示配置开启，不代表效果已验证。部分功能需重进页面或重启 QQ（结束进程只结束当前进程）；恢复默认也遵循此规则。"
         textSize = 12f; setTextColor(sub)
         setPadding((6 * dp).toInt(), 0, (6 * dp).toInt(), (8 * dp).toInt())
     }, 0)
@@ -676,10 +690,7 @@ private fun sheet(anchor: View) {
             paints.forEach { it() }; refreshLooks(); card.invalidate()
         })
         addView(button("结束进程") {
-            AlertDialog.Builder(ctx).setTitle("结束 QQ 当前进程？")
-                .setMessage("之后请重新打开 QQ。此操作只结束当前进程，不保证其他 QQ 进程同时退出。")
-                .setNegativeButton("取消", null)
-                .setPositiveButton("结束") { _, _ -> android.os.Process.killProcess(android.os.Process.myPid()) }.show()
+            android.os.Process.killProcess(android.os.Process.myPid())
         })
         addView(button("好", ::close))
     })
@@ -727,6 +738,7 @@ private fun sheet(anchor: View) {
     })
     sheets.add(dim)
     decor.addView(dim, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    anchor.bringToFront()
     decor.viewTreeObserver.addOnGlobalLayoutListener(layout)
     place()
     dim.requestFocus()

@@ -328,14 +328,31 @@ private class InnerClearState(view: View) {
     val fasterIncludePad = BubbleSurface.getFasterIncludePad(view)
 }
 
+private fun collectBubbleInners(root: View, quote: View?, extras: List<View>): List<View> {
+    val out = ArrayList<View>()
+    fun walk(v: View) {
+        if (v === quote) return
+        if (v !== root) out.add(v)
+        if (v is ViewGroup) {
+            for (i in 0 until v.childCount) v.getChildAt(i)?.let(::walk)
+        }
+    }
+    walk(root)
+    for (e in extras) if (e !== root && e !== quote && out.none { it === e }) out.add(e)
+    return out
+}
+
 private class BubbleSurface(
     surface: View,
     innerClears: List<View> = emptyList(),
     quote: View? = null,
     private val compactPadding: Boolean = false,
+    private val fasterWrappers: List<Any> = emptyList(),
 ) {
     private val surface = WeakReference(surface)
-    private val innerClears = innerClears.filter { it !== surface }.distinct().map(::InnerClearState)
+    private val innerClears = java.util.concurrent.CopyOnWriteArrayList(
+        collectBubbleInners(surface, quote, innerClears).map(::InnerClearState)
+    )
     private val quote = WeakReference(quote)
     private val savedBg = surface.background
     private val savedSurfacePadding = intArrayOf(surface.paddingLeft, surface.paddingTop, surface.paddingRight, surface.paddingBottom)
@@ -370,10 +387,17 @@ private class BubbleSurface(
         setFasterIncludePad(v, false)
         v.invalidate()
         val qView = quote.get()
+        // 动态加入的子视图（如链接卡片、富文本区）也一并纳入内层清零列表，确保外层 5dp 内边距不被内层叠加。
+        for (dyn in collectBubbleInners(v, qView, emptyList())) {
+            if (innerClears.none { it.ref.get() === dyn }) innerClears.add(InnerClearState(dyn))
+        }
+        for (w in fasterWrappers) setWrapperPadding(w, 0, 0, 0, 0)
         for (state in innerClears) {
             state.ref.get()?.let { inner ->
                 if (inner.background != null) inner.background = null
-                inner.setPadding(0, 0, 0, 0)
+                if (inner.paddingLeft != 0 || inner.paddingTop != 0 || inner.paddingRight != 0 || inner.paddingBottom != 0) {
+                    inner.setPadding(0, 0, 0, 0)
+                }
                 inner.minimumWidth = 0
                 inner.minimumHeight = 0
                 if (inner is android.widget.TextView && inner.includeFontPadding) inner.includeFontPadding = false
@@ -406,6 +430,7 @@ private class BubbleSurface(
             fun cleanQuoteTree(node: View) {
                 if (node is android.widget.TextView && node.includeFontPadding) node.includeFontPadding = false
                 setFasterIncludePad(node, false)
+                if (node.id == 0x7f0a5c11) node.setPadding(0, 0, 0, 0)
                 if (node.id == 0x7f0a126a || node.id == 0x7f0a1395 || node.id == 0x7f0a480f || node.javaClass == View::class.java) {
                     if (hiddenQuoteBars.none { it.first.get() === node }) {
                         hiddenQuoteBars.add(WeakReference(node) to node.visibility)
@@ -414,12 +439,14 @@ private class BubbleSurface(
                     return
                 }
                 if (node.id == 0x7f0a64bc) {
+                    node.setPadding(0, 0, 0, 0)
                     (node.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
                         if (!savedQuoteMsgMargins.containsKey(node)) {
                             savedQuoteMsgMargins[node] = intArrayOf(lp.leftMargin, lp.topMargin, lp.rightMargin, lp.bottomMargin)
                         }
                         val gap2 = (2 * dp).roundToInt()
-                        if (lp.topMargin != gap2) {
+                        if (lp.leftMargin != 0 || lp.rightMargin != 0 || lp.topMargin != gap2) {
+                            lp.leftMargin = 0; lp.rightMargin = 0; lp.marginStart = 0; lp.marginEnd = 0
                             lp.topMargin = gap2
                             node.layoutParams = lp
                         }
@@ -487,10 +514,21 @@ private class BubbleSurface(
         private var fasterCls: Class<*>? = null
         private var fasterPadField: java.lang.reflect.Field? = null
         private var fasterPadSetter: java.lang.reflect.Method? = null
-        fun initFasterTextView(cls: Class<*>, field: java.lang.reflect.Field, setter: java.lang.reflect.Method) {
+        private var wrapperPadSetter: java.lang.reflect.Method? = null
+        fun initFasterTextView(
+            cls: Class<*>,
+            field: java.lang.reflect.Field,
+            setter: java.lang.reflect.Method,
+            wrapperSetter: java.lang.reflect.Method? = null,
+        ) {
             fasterCls = cls
             fasterPadField = field.apply { isAccessible = true }
             fasterPadSetter = setter.apply { isAccessible = true }
+            wrapperPadSetter = wrapperSetter?.apply { isAccessible = true }
+        }
+        fun setWrapperPadding(wrapper: Any?, l: Int, t: Int, r: Int, b: Int) {
+            if (wrapper == null) return
+            runCatching { wrapperPadSetter?.invoke(wrapper, l, t, r, b) }
         }
         fun getFasterIncludePad(view: View?): Boolean? {
             val c = fasterCls ?: return null
@@ -586,27 +624,89 @@ private class RowGeometry(
     tailSlot: View?,
     headSlot: View?,
     private val f: ConstraintFields,
+    private val hasBubbleSurface: Boolean = false,
 ) {
     private val root = WeakReference(root)
     private val origRootPadding = intArrayOf(root.paddingLeft, root.paddingTop, root.paddingRight, root.paddingBottom)
     private val origAvatarPadding = avatarSlot?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
+    private val origContentPadding = contentSlot?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
+    private val origNickPadding = nickSlot?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
     private val avatar = SavedConstraint(avatarSlot, f)
     private val content = SavedConstraint(contentSlot, f)
     private val nick = SavedConstraint(nickSlot, f)
     private val tail = SavedConstraint(tailSlot, f)
     private val head = SavedConstraint(headSlot, f)
     private val origContentGravity = (contentSlot as? LinearLayout)?.gravity
+    private val savedChildPaddings = WeakHashMap<View, IntArray>()
+    private val savedChildMargins = WeakHashMap<View, IntArray>()
+    private val savedNickGravities = WeakHashMap<LinearLayout, Int>()
+    private val savedFrameGravities = WeakHashMap<View, Int>()
     private var applied = false
+    private fun zeroHorizontalInsets(v: View?) {
+        if (v == null) return
+        if (!savedChildPaddings.containsKey(v)) {
+            savedChildPaddings[v] = intArrayOf(v.paddingLeft, v.paddingTop, v.paddingRight, v.paddingBottom)
+        }
+        if (v.paddingLeft != 0 || v.paddingRight != 0) {
+            v.setPadding(0, v.paddingTop, 0, v.paddingBottom)
+        }
+        (v.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            if (!savedChildMargins.containsKey(v)) {
+                savedChildMargins[v] = intArrayOf(lp.leftMargin, lp.topMargin, lp.rightMargin, lp.bottomMargin, lp.marginStart, lp.marginEnd)
+            }
+            if (lp.leftMargin != 0 || lp.rightMargin != 0 || lp.marginStart != 0 || lp.marginEnd != 0) {
+                lp.leftMargin = 0; lp.rightMargin = 0; lp.marginStart = 0; lp.marginEnd = 0
+                v.layoutParams = lp
+            }
+        }
+    }
+    private fun alignNickAndContentChildren(nv: View?, cv: View?, self: Boolean) {
+        val targetHoriz = if (self) Gravity.END else Gravity.START
+        (nv as? ViewGroup)?.let { ng ->
+            for (i in 0 until ng.childCount) {
+                val child = ng.getChildAt(i) ?: continue
+                zeroHorizontalInsets(child)
+                (child.layoutParams as? android.widget.FrameLayout.LayoutParams)?.let { flp ->
+                    if (!savedFrameGravities.containsKey(child)) savedFrameGravities[child] = flp.gravity
+                    val g = targetHoriz or Gravity.CENTER_VERTICAL
+                    if (flp.gravity != g) { flp.gravity = g; child.layoutParams = flp }
+                }
+                if (child is LinearLayout) {
+                    if (!savedNickGravities.containsKey(child)) savedNickGravities[child] = child.gravity
+                    val g = targetHoriz or Gravity.CENTER_VERTICAL
+                    if (child.gravity != g) child.gravity = g
+                    if (child.childCount > 0) zeroHorizontalInsets(child.getChildAt(0))
+                }
+            }
+        }
+        if (!hasBubbleSurface) {
+            // 原生非文本组件（图片、视频、卡片、表情包）内层自带 9-patch 补偿边距，清零使其与自绘气泡严丝合缝对齐。
+            (cv as? ViewGroup)?.let { cg ->
+                for (i in 0 until cg.childCount) {
+                    val compRoot = cg.getChildAt(i) ?: continue
+                    if (compRoot.tag == "qself-external-time") continue
+                    zeroHorizontalInsets(compRoot)
+                    if (compRoot is ViewGroup && compRoot.childCount > 0) {
+                        zeroHorizontalInsets(compRoot.getChildAt(0))
+                    }
+                }
+            }
+        }
+    }
     fun apply(self: Boolean, continued: Boolean, enabled: Boolean) {
         if (!enabled) { restore(); return }
         applied = true
         val row = root.get()
         val av = avatar.ref.get()
         val cv = content.ref.get()
+        val nv = nick.ref.get()
         val dp = (av ?: cv ?: row)?.dp ?: return
         val m = nagramRowMargins(self, dp, continued)
         row?.setPadding(0, 0, 0, 0)
         av?.setPadding(0, 0, 0, 0)
+        cv?.setPadding(0, 0, 0, 0)
+        nv?.setPadding(0, 0, 0, 0)
+        alignNickAndContentChildren(nv, cv, self)
         if (self) {
             avatar.restore()
             nick.restore()
@@ -623,7 +723,6 @@ private class RowGeometry(
                 p.bottomMargin = 0
                 av.layoutParams = p
             }
-            val nv = nick.ref.get()
             if (nv != null && nick.lp != null && nv.layoutParams === nick.lp) {
                 val p = nick.lp
                 p.leftMargin = m.contentMarginStart
@@ -676,7 +775,6 @@ private class RowGeometry(
             }
             av.layoutParams = p
         }
-        val nv = nick.ref.get()
         if (nv != null && nick.lp != null && nv.layoutParams === nick.lp) {
             val p = nick.lp
             p.leftMargin = m.contentMarginStart
@@ -747,6 +845,30 @@ private class RowGeometry(
         avatar.ref.get()?.let { av ->
             origAvatarPadding?.let { av.setPadding(it[0], it[1], it[2], it[3]) }
         }
+        content.ref.get()?.let { cv ->
+            origContentPadding?.let { cv.setPadding(it[0], it[1], it[2], it[3]) }
+        }
+        nick.ref.get()?.let { nv ->
+            origNickPadding?.let { nv.setPadding(it[0], it[1], it[2], it[3]) }
+        }
+        for ((v, pad) in savedChildPaddings) v.setPadding(pad[0], pad[1], pad[2], pad[3])
+        savedChildPaddings.clear()
+        for ((v, m) in savedChildMargins) {
+            (v.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                lp.leftMargin = m[0]; lp.topMargin = m[1]; lp.rightMargin = m[2]; lp.bottomMargin = m[3]
+                lp.marginStart = m[4]; lp.marginEnd = m[5]
+                v.layoutParams = lp
+            }
+        }
+        savedChildMargins.clear()
+        for ((ll, g) in savedNickGravities) ll.gravity = g
+        savedNickGravities.clear()
+        for ((v, g) in savedFrameGravities) {
+            (v.layoutParams as? android.widget.FrameLayout.LayoutParams)?.let { flp ->
+                flp.gravity = g; v.layoutParams = flp
+            }
+        }
+        savedFrameGravities.clear()
         avatar.restore()
         nick.restore()
         content.restore()
@@ -780,7 +902,7 @@ private val runMeasurements = WeakHashMap<View, WeakReference<RunBinding>>()
 private val runVisibilities = WeakHashMap<View, RunVisibility>()
 private class RunVisibility(view: View) {
     private val view = WeakReference(view)
-    var native = view.visibility
+    var native: Int = runVisibilities[view]?.native ?: view.visibility
     private var override: Int? = null
     var writing = false
     init { runVisibilities[view] = this }
@@ -854,10 +976,14 @@ fun groupRuns() {
     feature = null
     try {
         val fasterViewType = cls("android.widget.FasterTextView")
+        val fasterWrapperClass = cls("com.tencent.fastertextview.wrapper.a")
+        val fasterWrapperView = fasterWrapperClass.getDeclaredMethod("g").apply { isAccessible = true }
+        val fasterWrapperSetPad = fasterWrapperClass.getDeclaredMethod("l", Integer.TYPE, Integer.TYPE, Integer.TYPE, Integer.TYPE).apply { isAccessible = true }
         BubbleSurface.initFasterTextView(
             fasterViewType,
             fasterViewType.getDeclaredField("mIncludePad"),
             fasterViewType.getDeclaredMethod("setIncludeFontPadding", java.lang.Boolean.TYPE),
+            fasterWrapperSetPad,
         )
         val adapter = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.ui.adapter.a")
         val data = adapter.getMethod("d0")
@@ -904,7 +1030,6 @@ fun groupRuns() {
         val mixFgGetter = mixType.getDeclaredMethod("j2").apply { isAccessible = true }
         val mixImagesGetter = mixType.getDeclaredMethod("l2").apply { isAccessible = true }
         val mixTextsGetter = mixType.getDeclaredMethod("m2").apply { isAccessible = true }
-        val fasterWrapperView = cls("com.tencent.fastertextview.wrapper.a").getDeclaredMethod("g").apply { isAccessible = true }
         val aioMixType = cls("com.tencent.mobileqq.aio.msglist.holder.component.mix.AIOMixContentComponent")
         val aioMixContainerGetter = aioMixType.getDeclaredMethod("G2").apply { isAccessible = true }
         val replyType = cls("com.tencent.mobileqq.aio.msglist.holder.component.reply.AIOReplyComponent")
@@ -913,9 +1038,18 @@ fun groupRuns() {
         val textContentGetter = textType.getDeclaredMethod("k2").apply { isAccessible = true }
         val textMsgContentType = cls("com.tencent.mobileqq.aio.msg.TextMsgContent")
         val textFgField = textMsgContentType.getDeclaredField("b").apply { isAccessible = true }
+        val textSelectableField = textMsgContentType.getDeclaredField("c").apply { isAccessible = true }
         val textLinearField = textMsgContentType.getDeclaredField("d").apply { isAccessible = true }
+        val textWrapperField = textMsgContentType.getDeclaredField("e").apply { isAccessible = true }
+        val textRelField = textMsgContentType.getDeclaredField("f").apply { isAccessible = true }
         val textViewGetter = textMsgContentType.getDeclaredMethod("l").apply { isAccessible = true }
-        val textUpdateBubble = textMsgContentType.getDeclaredMethod("H", cls("com.tencent.mobileqq.aio.msg.ai")).apply { isAccessible = true }
+        val aiMsgClass = cls("com.tencent.mobileqq.aio.msg.ai")
+        val textUpdateBubble = textMsgContentType.getDeclaredMethod("H", aiMsgClass).apply { isAccessible = true }
+        val textBindEntry = textMsgContentType.getDeclaredMethod("e", aiMsgClass).apply { isAccessible = true }
+        val textApplyPadR = textMsgContentType.getDeclaredMethod("r", cls("com.tencent.mobileqq.aio.msglist.holder.skin.AIOBubbleSkinInfo"), aiMsgClass).apply { isAccessible = true }
+        val textApplyPadS = textMsgContentType.getDeclaredMethod("s", cls("com.tencent.mobileqq.aio.msglist.holder.skin.AIOBubbleSkinInfo"), aiMsgClass).apply { isAccessible = true }
+        val textAddExtA = textMsgContentType.getDeclaredMethod("A", View::class.java, aiMsgClass, Integer.TYPE).apply { isAccessible = true }
+        val textUpdateRichF = textMsgContentType.getDeclaredMethod("F", aiMsgClass, cls("com.tencent.qqnt.kernel.nativeinterface.LinkInfo")).apply { isAccessible = true }
         val pttType = cls("com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttContentComponent")
         val unsupportType = cls("com.tencent.mobileqq.aio.msglist.holder.component.text.AIOUnsuportContentComponent")
         val unsupportTextGetter = unsupportType.getDeclaredMethod("Y1").apply { isAccessible = true }
@@ -935,6 +1069,7 @@ fun groupRuns() {
         val richPadBottom = richPaddingType.getDeclaredField("m").apply { isAccessible = true }
         val richReplyTextTop = richPaddingType.getDeclaredField("n").apply { isAccessible = true }
         val richQuoteInnerPad = richPaddingType.getDeclaredField("o").apply { isAccessible = true }
+        val holderMarginClass = cls("com.tencent.mobileqq.aio.msglist.holder.c")
         val bindingVB = ThreadLocal<Boolean>()
         var reported = false
         var warned = false
@@ -955,6 +1090,8 @@ fun groupRuns() {
             }
         }
         fun capture(binder: Any, row: View, run: RunBinding) {
+            // 先释放上一轮绑定留下的 RunLayout，避免新 RunVisibility 把已被隐藏的 INVISIBLE/GONE 误存成 native。
+            run.layout?.dispose()
             run.layout = runCatching {
                 val table = components.invoke(registry.invoke(binder)) as SparseArray<*>
                 val active = extras.get(binder) as SparseArray<*>
@@ -984,6 +1121,7 @@ fun groupRuns() {
                             (componentSlot.invoke(c) as? View)?.let { slots.add(it) }
                             if (mixType.isInstance(c) && rootView != null) {
                                 val inners = ArrayList<View>()
+                                val wrappers = ArrayList<Any>()
                                 bubbleView?.let(inners::add)
                                 (runCatching { mixFgGetter.invoke(c) as? View }.getOrNull())?.let(inners::add)
                                 if (aioMixType.isInstance(c)) {
@@ -993,6 +1131,7 @@ fun groupRuns() {
                                     rootView.getChildAt(0)?.let(inners::add)
                                 }
                                 (runCatching { mixTextsGetter.invoke(c) as? Iterable<*> }.getOrNull())?.forEach { w ->
+                                    if (w != null) wrappers.add(w)
                                     (runCatching { w?.let { fasterWrapperView.invoke(it) as? View } }.getOrNull())?.let(inners::add)
                                 }
                                 (runCatching { mixImagesGetter.invoke(c) as? Iterable<*> }.getOrNull())?.forEach { iv ->
@@ -1006,14 +1145,23 @@ fun groupRuns() {
                                     (q as? ViewGroup)?.findViewById<View>(0x7f0a5c11)?.let(inners::add)
                                     q
                                 } else null
-                                bubbles.add(BubbleSurface(rootView, inners, quote))
+                                bubbles.add(BubbleSurface(rootView, inners, quote, fasterWrappers = wrappers))
                             } else if (textType.isInstance(c) && (rootView ?: bubbleView) != null) {
                                 val tmc = runCatching { textContentGetter.invoke(c) }.getOrNull()
                                 val fg = runCatching { tmc?.let { textFgField.get(it) as? View } }.getOrNull()
+                                val sel = runCatching { tmc?.let { textSelectableField.get(it) as? View } }.getOrNull()
                                 val linear = runCatching { tmc?.let { textLinearField.get(it) as? View } }.getOrNull()
+                                val rel = runCatching { tmc?.let { textRelField.get(it) as? View } }.getOrNull()
+                                val wrapper = runCatching { tmc?.let { textWrapperField.get(it) } }.getOrNull()
                                 val tv = runCatching { tmc?.let { textViewGetter.invoke(it) as? View } }.getOrNull()
                                 val surfaceTarget = rootView ?: bubbleView!!
-                                bubbles.add(BubbleSurface(surfaceTarget, listOfNotNull(bubbleView, fg, linear, tv)))
+                                bubbles.add(
+                                    BubbleSurface(
+                                        surfaceTarget,
+                                        listOfNotNull(bubbleView, fg, sel, linear, rel, tv),
+                                        fasterWrappers = listOfNotNull(wrapper),
+                                    )
+                                )
                             } else if (pttType.isInstance(c) && (bubbleView ?: rootView) != null) {
                                 val surfaceTarget = rootView ?: bubbleView!!
                                 val inners = if (rootView != null && bubbleView != null && rootView !== bubbleView) listOf(bubbleView) else emptyList()
@@ -1040,7 +1188,7 @@ fun groupRuns() {
                     val tlSlot = runCatching { tplTail.invoke(tpl) as? View }.getOrNull()
                     val hdSlot = runCatching { tplHead.invoke(tpl) as? View }.getOrNull()
                     val geom = if (avSlot != null && ctSlot != null) {
-                        RowGeometry(rootView, avSlot, ctSlot, nkSlot, tlSlot, hdSlot, constraintFields)
+                        RowGeometry(rootView, avSlot, ctSlot, nkSlot, tlSlot, hdSlot, constraintFields, bubbles.isNotEmpty())
                     } else null
                     RunLayout(avatars, nicks.distinct(), contents.distinct(), slots.distinct(),
                         rootView, avatarSlots.distinct(), bubbles, geom, run.self, run.continues)
@@ -1133,12 +1281,38 @@ fun groupRuns() {
                 chain.proceed().also { restyleComponent(chain.thisObject) }
             }
         }
-        hook(textUpdateBubble) { chain ->
-            chain.proceed().also {
-                val fg = runCatching { textFgField.get(chain.thisObject) as? View }.getOrNull() ?: return@also
-                val row = generateSequence(fg) { it.parent as? View }.firstOrNull { pendingRun.containsKey(it) } ?: return@also
-                pendingRun[row]?.let { run -> run.layout?.apply(run.continued, on("连发合并")) }
+        fun restyleTextMsgContent(tmc: Any?) {
+            if (tmc == null) return
+            val anchor = runCatching { textLinearField.get(tmc) as? View }.getOrNull()
+                ?: runCatching { textSelectableField.get(tmc) as? View }.getOrNull()
+                ?: runCatching { textViewGetter.invoke(tmc) as? View }.getOrNull()
+                ?: runCatching { textFgField.get(tmc) as? View }.getOrNull()
+                ?: return
+            val row = generateSequence(anchor) { it.parent as? View }.firstOrNull { pendingRun.containsKey(it) } ?: return
+            pendingRun[row]?.let { run -> run.layout?.apply(run.continued, on("连发合并")) }
+        }
+        for (m in listOf(textUpdateBubble, textBindEntry, textApplyPadR, textApplyPadS, textAddExtA, textUpdateRichF)) {
+            hook(m) { chain ->
+                chain.proceed().also { restyleTextMsgContent(chain.thisObject) }
             }
+        }
+        for (getterName in listOf("a", "b", "c", "d")) {
+            hook(holderMarginClass.getDeclaredMethod(getterName)) { chain ->
+                if (on("连发合并") || on("统一气泡")) 0 else chain.proceed()
+            }
+        }
+        for (getterName in listOf("b", "c", "d", "e")) {
+            hook(paddingType.getDeclaredMethod(getterName)) { chain ->
+                if (on("统一气泡")) 0 else chain.proceed()
+            }
+        }
+        for (getterName in listOf("j", "k", "l", "n", "o")) {
+            hook(richPaddingType.getDeclaredMethod(getterName)) { chain ->
+                if (on("统一气泡")) 0 else chain.proceed()
+            }
+        }
+        hook(richPaddingType.getDeclaredMethod("m")) { chain ->
+            if (on("统一气泡")) (4 * android.content.res.Resources.getSystem().displayMetrics.density).roundToInt() else chain.proceed()
         }
         fun compactBubblePadding(target: Any) {
             val unified = on("统一气泡")
@@ -1345,6 +1519,10 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
         }
         if (changed) invalidateSelf()
     }
+    fun notifyAvatarUpdated() {
+        invalidateSelf()
+        host.invalidate()
+    }
     override fun onPreDraw(): Boolean {
         runIndexes.clear()
         val clip = Rect()
@@ -1352,7 +1530,7 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
             commitFrame(emptyList(), clip)
             return true
         }
-        if (host.clipToPadding) {
+        if (host.clipToPadding || host.paddingTop > 0 || host.paddingBottom > 0) {
             clip.left = maxOf(clip.left, host.paddingLeft)
             clip.top = maxOf(clip.top, host.paddingTop)
             clip.right = minOf(clip.right, host.width - host.paddingRight)
@@ -1458,12 +1636,23 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
                 it.image.get() === face.view && it.container.get() === face.target
             }
         }
+    private val clipPath = android.graphics.Path()
     override fun draw(canvas: Canvas) {
+        val roundOn = on("头像圆角")
+        val pct = (store()?.getInt(AVATAR_RADIUS, 20) ?: 20).coerceIn(0, 50)
         for (face in faces) {
             if (!isCurrent(face)) continue
             val save = canvas.save()
             canvas.clipRect(viewport)
             canvas.concat(face.matrix)
+            if (roundOn && face.view.width > 0 && face.view.height > 0) {
+                val r = avatarCorner(minOf(face.view.width, face.view.height), pct).toFloat()
+                if (r > 0f) {
+                    clipPath.reset()
+                    clipPath.addRoundRect(0f, 0f, face.view.width.toFloat(), face.view.height.toFloat(), r, r, android.graphics.Path.Direction.CW)
+                    canvas.clipPath(clipPath)
+                }
+            }
             face.view.draw(canvas)
             canvas.restoreToCount(save)
         }
@@ -1528,6 +1717,10 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
     override fun setAlpha(alpha: Int) = Unit
     override fun setColorFilter(filter: ColorFilter?) = Unit
     @Deprecated("Drawable opacity") override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+internal fun notifyChatAvatarsUpdated() {
+    runAvatars.values.mapNotNull { it.get() }.forEach { it.notifyAvatarUpdated() }
 }
 
 fun refreshChatLayout() {
