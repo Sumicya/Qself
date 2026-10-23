@@ -14,6 +14,40 @@ import java.util.WeakHashMap
 private val inputs = WeakHashMap<EditText, WeakReference<NativeInput>>()
 private val inputDecorations = WeakHashMap<View, InputDecoration>()
 private val msgListUnderScrolls = WeakHashMap<ViewGroup, MsgListUnderScroll>()
+private val panelGlasses = WeakHashMap<View, PanelGlassState>()
+
+private class PanelGlassState(val root: View) : ViewTreeObserver.OnPreDrawListener, View.OnAttachStateChangeListener {
+    private val origBg = root.background
+    private val glass = Glass(root, 20 * root.dp, kernelSurface = true)
+    init {
+        root.viewTreeObserver.addOnPreDrawListener(this)
+        root.addOnAttachStateChangeListener(this)
+    }
+    fun sync() {
+        if (!on("TG输入栏") && !on("玻璃底栏")) {
+            restore()
+            return
+        }
+        if (root.background !== glass) root.background = glass
+        glass.sync()
+    }
+    fun restore() {
+        if (root.background === glass) root.background = origBg
+    }
+    fun dispose() {
+        restore()
+        glass.dispose()
+        if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnPreDrawListener(this)
+        root.removeOnAttachStateChangeListener(this)
+        panelGlasses.remove(root)
+    }
+    override fun onPreDraw(): Boolean {
+        if (on("TG输入栏") || on("玻璃底栏")) glass.sync()
+        return true
+    }
+    override fun onViewAttachedToWindow(v: View) = sync()
+    override fun onViewDetachedFromWindow(v: View) = dispose()
+}
 
 private class MsgListUnderScroll(val group: ViewGroup, val recycler: ViewGroup) {
     private var savedGroupTop = group.paddingTop
@@ -242,6 +276,20 @@ fun inputLayout() {
             }
         }
     }
+    for (panelName in listOf(
+        "com.tencent.mobileqq.aio.panel.emoticon.c",
+        "com.tencent.mobileqq.aio.panel.photo.PhotoPanelVB",
+        "com.tencent.mobileqq.aio.panel.b",
+    )) {
+        val panelCls = cls(panelName)
+        hook(panelCls.getDeclaredMethod("onCreateView", helpParam), gated = false) { chain ->
+            chain.proceed().also { res ->
+                (res as? View)?.let { root ->
+                    panelGlasses.getOrPut(root) { PanelGlassState(root) }.sync()
+                }
+            }
+        }
+    }
 }
 
 /** 兼容旧布局，但不再从任意祖先搜索第一个编辑器，更不强制把用户关闭的开关改回开启。 */
@@ -279,6 +327,7 @@ fun refreshInputLayout() {
     val enabled = on("TG输入栏")
     inputDecorations.values.toList().forEach { if (enabled) it.apply() else it.restore() }
     msgListUnderScrolls.values.toList().forEach { it.sync() }
+    panelGlasses.values.toList().forEach { it.sync() }
     inputs.values.mapNotNull { it.get() }.forEach { it.sync() }
 }
 
@@ -633,6 +682,8 @@ fun resetInputLayout() {
     inputDecorations.clear()
     msgListUnderScrolls.values.toList().forEach { it.restore() }
     msgListUnderScrolls.clear()
+    panelGlasses.values.toList().forEach { it.dispose() }
+    panelGlasses.clear()
     inputs.values.mapNotNull { it.get() }.forEach { it.dispose() }
     inputs.clear()
 }

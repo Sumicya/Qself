@@ -26,6 +26,12 @@ import java.util.WeakHashMap
 
 internal const val TIME_PATTERN = "message_time_pattern"
 internal const val AVATAR_RADIUS = "avatar_radius_percent"
+internal const val BUBBLE_CORNER = "bubble_corner_dp"
+internal const val BUBBLE_PADDING = "bubble_padding_dp"
+internal const val HEADER_TOP_OFFSET = "header_top_offset_dp"
+internal fun bubbleCornerDp(): Float = (store()?.getInt(BUBBLE_CORNER, 17) ?: 17).coerceIn(0, 32).toFloat()
+internal fun bubblePaddingDp(): Float = (store()?.getInt(BUBBLE_PADDING, 5) ?: 5).coerceIn(0, 16).toFloat()
+internal fun headerTopOffsetDp(): Float = (store()?.getInt(HEADER_TOP_OFFSET, 1) ?: 1).coerceIn(-12, 16).toFloat()
 internal const val TIME_FORMAT_GUIDE =
     "格式码（左对齐显示）：yyyy/yy 年 · MM/M 月 · dd/d 日 · E 星期 · HH/H 0-23时 · kk/k 1-24时 · hh/h 1-12时 · KK/K 0-11时 · a 上下午 · mm/m 分 · ss/s 秒 · SSS/S 毫秒；文字用单引号包裹"
 internal fun validTimePattern(pattern: String): Boolean = pattern.isNotEmpty() && pattern.none { it.isISOControl() } && runCatching {

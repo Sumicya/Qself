@@ -598,6 +598,13 @@ class ProtoTest {
         assertEquals(PillBox(6, 1, 52, 47), shifted.leftPill)
         assertEquals(PillBox(308, 1, 354, 47), shifted.rightPill)
         assertEquals(3, shifted.avatarTop)
+        val raised = nagramHeaderLayout(360, 50, 1f, unreadWidth = 0, rightCount = 1, titleWidth = 80, subtitleWidth = 50, hasAvatar = true, topOffsetDp = -4f)
+        assertEquals(PillBox(6, -4, 52, 42), raised.leftPill)
+        val customRadii = nagramBubbleRadii(self = false, continued = false, continues = false, density = 2f, cornerDp = 24f)
+        assertEquals(BubbleCornerRadii(48, 48, 48, 48), customRadii)
+        assertEquals(17f, bubbleCornerDp())
+        assertEquals(5f, bubblePaddingDp())
+        assertEquals(1f, headerTopOffsetDp())
         assertTrue(continuesMessageRun("a", "a", 3600, 1000, 2, 2, maxGapSeconds = Long.MAX_VALUE))
         assertEquals(1f, glassBlurDp())
     }

@@ -235,16 +235,17 @@ internal fun compactMessageTop(original: Int, continued: Boolean, density: Float
 
 internal data class BubbleCornerRadii(val topLeft: Int, val topRight: Int, val bottomRight: Int, val bottomLeft: Int)
 
-/** 全部消息保持四角全圆角（17dp），不切直角、不强限圆角半径，与头像圆角解耦。 */
+/** 全部消息保持四角全圆角（默认 17dp，可通过滑条自定义），不切直角、不强限圆角半径，与头像圆角解耦。 */
 internal fun nagramBubbleRadii(
     self: Boolean,
     continued: Boolean,
     continues: Boolean,
     density: Float,
     heightPx: Int = 0,
+    cornerDp: Float = bubbleCornerDp(),
 ): BubbleCornerRadii {
     if (density <= 0f) return BubbleCornerRadii(0, 0, 0, 0)
-    val outer = (17 * density).roundToInt()
+    val outer = (cornerDp.coerceAtLeast(0f) * density).roundToInt()
     return BubbleCornerRadii(
         topLeft = outer,
         topRight = outer,
@@ -371,7 +372,8 @@ private class BubbleSurface(
         }
         v.background = NagramBubbleDrawable(fill, self, continued, continues, dp)
         val pad5 = (5 * dp).roundToInt()
-        v.setPadding(pad5, pad5, pad5, pad5)
+        val pad = if (store() != null) (bubblePaddingDp() * dp).roundToInt() else pad5
+        v.setPadding(pad, pad, pad, pad)
         v.minimumWidth = 0
         v.minimumHeight = 0
         if (v is android.widget.TextView && v.includeFontPadding) v.includeFontPadding = false
@@ -1025,6 +1027,14 @@ fun groupRuns() {
         val avatarType = cls("com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent")
         // 真包 C1 的访问标记为 0x12（private final），getMethod 只查 public 会使整项安装失败。
         val avatarImage = avatarType.method("C1").apply { isAccessible = true }
+        val avatarLongClick = avatarType.getDeclaredMethod("w1", avatarType, View::class.java).apply { isAccessible = true }
+        hook(avatarLongClick) { chain ->
+            val res = chain.proceed()
+            if (res == true && on("连发合并")) {
+                (chain.args.getOrNull(1) as? View)?.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            }
+            res
+        }
         val nickType = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.pit.AIONickComponentV2")
         val slotNickType = cls("com.tencent.mobileqq.aio.msglist.holder.component.nick.slot.AIONickComponentV4")
         val contentType = cls("com.tencent.mobileqq.aio.msglist.holder.component.BaseContentComponent")
@@ -1890,3 +1900,98 @@ fun noLightInteraction() {
 
 fun noEmojiRain() =
     hook(cls("com.tencent.mobileqq.aio.animation.util.AioAnimationConfigHolder").method("e")) { ArrayList<Any>() }
+
+// ---- 双击消息快速回应：拦截双击打开全屏文本预览（openTextPreview），改为直接给该消息贴上快捷回应表情（👍 76）。
+
+fun doubleTapReaction() {
+    val aioCtx = cls("com.tencent.aio.api.runtime.a")
+    val msgItemCls = cls("com.tencent.mobileqq.aio.msg.AIOMsgItem")
+    val getRecord = msgItemCls.getMethod("getMsgRecord")
+    val msgRecordCls = cls("com.tencent.qqnt.kernel.nativeinterface.MsgRecord")
+    val emoCallbackCls = cls("com.tencent.qqnt.kernel.nativeinterface.ISetMsgEmojiLikesCallback")
+    val emoApiCls = cls("com.tencent.qqnt.aio.adapter.api.impl.AIOEmoReplyApiImpl")
+    val emoApiCtor = emoApiCls.getDeclaredConstructor().apply { isAccessible = true }
+    val setEmojiLikes = emoApiCls.getDeclaredMethod(
+        "setEmojiLikes",
+        msgRecordCls,
+        String::class.java,
+        Integer.TYPE,
+        java.lang.Boolean.TYPE,
+        emoCallbackCls,
+    ).apply { isAccessible = true }
+    for (previewImplName in listOf(
+        "com.tencent.qqnt.aio.adapter.api.impl.TextPreviewApiImpl",
+        "com.tencent.qqnt.aio.adapter.api.impl.TextPreviewApiNtImpl",
+    )) {
+        val previewCls = cls(previewImplName)
+        val openPreview = previewCls.getDeclaredMethod(
+            "openTextPreview",
+            aioCtx,
+            String::class.java,
+            msgItemCls,
+            java.lang.Long.TYPE,
+        ).apply { isAccessible = true }
+        hook(openPreview) { chain ->
+            if (!on("双击回应")) return@hook chain.proceed()
+            val item = chain.args.getOrNull(2) ?: return@hook chain.proceed()
+            val rec = runCatching { getRecord.invoke(item) }.getOrNull() ?: return@hook chain.proceed()
+            runCatching {
+                val api = emoApiCtor.newInstance()
+                setEmojiLikes.invoke(api, rec, "76", 1, true, null)
+            }.onFailure {
+                return@hook chain.proceed()
+            }
+            null
+        }
+    }
+}
+
+// ---- 语音倍速播放记忆与进度条直拖：记住上次选择的语音倍速（不被单条播完重置为 1.0x），并开启波形条直接横向拖动。
+
+internal const val PTT_SPEED_KEY = "ptt_play_speed"
+
+fun pttSpeedMemory() {
+    val waveCls = cls("com.tencent.mobileqq.aio.msglist.holder.component.ptt.PttAudioWaveView")
+    val setCanSlide = waveCls.getDeclaredMethod("setCanSupportSlide", java.lang.Boolean.TYPE).apply { isAccessible = true }
+    waveCls.afterNew { view ->
+        if (on("语音倍速记忆")) runCatching { setCanSlide.invoke(view, true) }
+    }
+    val mgrCls = cls("com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttAudioPlayerManager")
+    val speedField = mgrCls.getDeclaredField("h").apply { isAccessible = true }
+    val audioPlayerBase = cls("com.tencent.mobileqq.qqaudio.audioplayer.AudioPlayerBase")
+    for (playName in listOf("w", "E")) {
+        val m = mgrCls.getDeclaredMethod(playName, String::class.java, Integer.TYPE, java.lang.Float.TYPE, java.lang.Long.TYPE)
+            .apply { isAccessible = true }
+        hook(m) { chain ->
+            if (!on("语音倍速记忆")) return@hook chain.proceed()
+            val argSpeed = (chain.args.getOrNull(2) as? Number)?.toFloat() ?: 1.0f
+            val saved = store()?.getFloat(PTT_SPEED_KEY, 1.0f) ?: 1.0f
+            val effective = if (argSpeed != 1.0f) {
+                store()?.edit()?.putFloat(PTT_SPEED_KEY, argSpeed)?.apply()
+                argSpeed
+            } else if (saved > 0.5f && saved != 1.0f) {
+                saved
+            } else {
+                1.0f
+            }
+            runCatching { speedField.setFloat(null, effective) }
+            val newArgs = chain.args.toTypedArray()
+            newArgs[2] = effective
+            chain.proceed(newArgs)
+        }
+    }
+    val onComplete = mgrCls.getDeclaredMethod("C8", audioPlayerBase, String::class.java).apply { isAccessible = true }
+    hook(onComplete) { chain ->
+        val before = runCatching { speedField.getFloat(null) }.getOrDefault(1.0f)
+        if (on("语音倍速记忆") && before > 0.5f && before != 1.0f) {
+            store()?.edit()?.putFloat(PTT_SPEED_KEY, before)?.apply()
+        }
+        chain.proceed().also {
+            if (on("语音倍速记忆")) {
+                val remembered = store()?.getFloat(PTT_SPEED_KEY, before) ?: before
+                if (remembered > 0.5f) runCatching { speedField.setFloat(null, remembered) }
+            }
+        }
+    }
+}
+

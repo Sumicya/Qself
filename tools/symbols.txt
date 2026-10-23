@@ -630,4 +630,28 @@ member! com.tencent.mobileqq.qqui.widget.ImmersiveTitleBar#onMeasure
 class com.tencent.qqnt.base.widget.NTImmersiveTitleBar
 member! com.tencent.qqnt.base.widget.NTImmersiveTitleBar#a
 member! com.tencent.qqnt.base.widget.NTImmersiveTitleBar#onMeasure
+member! com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent#w1
+class com.tencent.qqnt.kernel.nativeinterface.ISetMsgEmojiLikesCallback
+class com.tencent.qqnt.aio.adapter.api.impl.AIOEmoReplyApiImpl
+member! com.tencent.qqnt.aio.adapter.api.impl.AIOEmoReplyApiImpl#<init>
+member! com.tencent.qqnt.aio.adapter.api.impl.AIOEmoReplyApiImpl#setEmojiLikes
+class com.tencent.qqnt.aio.adapter.api.impl.TextPreviewApiImpl
+member! com.tencent.qqnt.aio.adapter.api.impl.TextPreviewApiImpl#openTextPreview
+class com.tencent.qqnt.aio.adapter.api.impl.TextPreviewApiNtImpl
+member! com.tencent.qqnt.aio.adapter.api.impl.TextPreviewApiNtImpl#openTextPreview
+class com.tencent.mobileqq.aio.panel.emoticon.c
+member! com.tencent.mobileqq.aio.panel.emoticon.c#onCreateView
+class com.tencent.mobileqq.aio.panel.photo.PhotoPanelVB
+member! com.tencent.mobileqq.aio.panel.photo.PhotoPanelVB#onCreateView
+class com.tencent.mobileqq.aio.panel.b
+member! com.tencent.mobileqq.aio.panel.b#onCreateView
+class com.tencent.mobileqq.aio.msglist.holder.component.ptt.PttAudioWaveView
+member! com.tencent.mobileqq.aio.msglist.holder.component.ptt.PttAudioWaveView#setCanSupportSlide
+class com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttAudioPlayerManager
+member! com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttAudioPlayerManager#h
+member! com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttAudioPlayerManager#w
+member! com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttAudioPlayerManager#E
+member! com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttAudioPlayerManager#C8
+class com.tencent.mobileqq.qqaudio.audioplayer.AudioPlayerBase
+
 

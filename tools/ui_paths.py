@@ -192,6 +192,27 @@ RULES.update({
          'com.tencent.qui.smoothcorner.b#k:Z'},
         {'android.graphics.drawable.Drawable#invalidateSelf',
          'com.tencent.qui.smoothcorner.b$b#f'}),
+    ('com.tencent.qqnt.aio.adapter.api.impl.AIOEmoReplyApiImpl', 'setEmojiLikes',
+     'V com.tencent.qqnt.kernel.nativeinterface.MsgRecord,java.lang.String,I,Z,com.tencent.qqnt.kernel.nativeinterface.ISetMsgEmojiLikesCallback'): (
+        {'com.tencent.qqnt.kernel.nativeinterface.MsgRecord#chatType:I',
+         'com.tencent.qqnt.kernel.nativeinterface.MsgRecord#peerUid:java.lang.String',
+         'com.tencent.qqnt.kernel.nativeinterface.MsgRecord#msgSeq:J'},
+        {'com.tencent.qqnt.msg.api.IMsgService#setMsgEmojiLikes'}),
+    ('com.tencent.qqnt.aio.adapter.api.impl.TextPreviewApiImpl', 'openTextPreview',
+     'V com.tencent.aio.api.runtime.a,java.lang.String,com.tencent.mobileqq.aio.msg.AIOMsgItem,J'): (
+        set(),
+        {'com.tencent.mobileqq.aio.msg.AIOMsgItem#getMsgRecord'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttAudioPlayerManager', 'C8',
+     'V com.tencent.mobileqq.qqaudio.audioplayer.AudioPlayerBase,java.lang.String'): (
+        {'com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttAudioPlayerManager#h:F'},
+        {'com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttAudioPlayerManager#l'}),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.ptt.PttAudioWaveView', 'setCanSupportSlide', 'V Z'): (
+        {'com.tencent.mobileqq.aio.msglist.holder.component.ptt.PttAudioWaveView#k0:Z'},
+        set()),
+    ('com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent', 'w1',
+     'Z com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent,android.view.View'): (
+        {'com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent#i:com.tencent.mobileqq.aio.msg.AIOMsgItem'},
+        {'com.tencent.mvi.mvvm.BaseVB#sendIntent'}),
 })
 
 

@@ -46,7 +46,7 @@ fun looks() {
     }
     hook(ViewGroup::class.java.getDeclaredMethod("dispatchDraw", Canvas::class.java)) { chain ->
         val source = chain.thisObject as? ViewGroup
-        val glass = source?.takeIf { it in floatStates }?.background as? Glass
+        val glass = (source?.takeIf { it in floatStates }?.background as? Glass) ?: floatStates[source]?.glass
         if (glass?.drawKernelContent(chain.getArg(0) as Canvas) == true) null else chain.proceed()
     }
     hook(ViewGroup::class.java.getDeclaredMethod("dispatchTouchEvent", MotionEvent::class.java)) { chain ->
@@ -120,7 +120,6 @@ private class AppearanceObserver(decor: View) : ViewTreeObserver.OnGlobalLayoutL
         dirty = false
         val wasRequested = decor.isLayoutRequested
         walk(decor, false)
-        if (on("页面动画")) bindDownwardListExpand(decor)
         if (!wasRequested && decor.isLayoutRequested && !cancelledOnce) {
             cancelledOnce = true
             return false
@@ -155,9 +154,6 @@ fun resetLooks() {
     resetAioHeaders()
     resetSecNavBars()
     resetSearchBars()
-    animatedPages.clear()
-    animatedLists.clear()
-    animatedListItems.clear()
 }
 
 private fun walk(v: View, inDrawer: Boolean) {
@@ -243,7 +239,8 @@ private fun copyLayoutParams(lp: ViewGroup.LayoutParams): ViewGroup.LayoutParams
 }
 private class BarState(bar: ViewGroup) {
     val params = copyLayoutParams(bar.layoutParams)
-    val background = bar.background
+    var background = bar.background
+    val glass = Glass(bar, kernelBar = true) { selectedTab(bar) }
     val outline = bar.outlineProvider
     val clip = bar.clipToOutline
     val elevation = bar.elevation
@@ -278,6 +275,7 @@ private fun restoreBar(bar: ViewGroup) {
         state.layoutListener?.let(bar.viewTreeObserver::removeOnGlobalLayoutListener)
         state.drawListener?.let(bar.viewTreeObserver::removeOnPreDrawListener)
     }
+    state.glass.dispose()
     (bar.background as? Glass)?.dispose()
     bar.layoutParams = copyLayoutParams(state.params)
     bar.background = state.background; bar.outlineProvider = state.outline; bar.clipToOutline = state.clip
@@ -356,7 +354,7 @@ private fun float(bar: ViewGroup) {
     bar.setPadding(0, 0, 0, 0)
     bar.getChildAt(0)?.setPadding((4 * dp).toInt(), (4 * dp).toInt(), (4 * dp).toInt(), (4 * dp).toInt())
     (bar.getChildAt(0) as? ViewGroup)?.let { it.clipChildren = false; it.clipToPadding = false }
-    val glass = Glass(bar, kernelBar = true) { selectedTab(bar) }
+    val glass = floatStates[bar]?.glass ?: Glass(bar, kernelBar = true) { selectedTab(bar) }
     bar.background = glass
     // 内容一滚、布局一变就重画一次玻璃（底栏自己不会因为身后的东西动而重画）；选中页签换了也要重画。
     val weak = WeakReference(bar)
@@ -365,8 +363,16 @@ private fun float(bar: ViewGroup) {
             .also(bar.viewTreeObserver::addOnScrollChangedListener)
         state.layoutListener = ViewTreeObserver.OnGlobalLayoutListener { weak.get()?.invalidate() }
             .also(bar.viewTreeObserver::addOnGlobalLayoutListener)
-        state.drawListener = ViewTreeObserver.OnPreDrawListener { (weak.get()?.background as? Glass)?.sync(); true }
-            .also(bar.viewTreeObserver::addOnPreDrawListener)
+        state.drawListener = ViewTreeObserver.OnPreDrawListener {
+            weak.get()?.let { b ->
+                if (b in floated && b.background !== state.glass) {
+                    if (b.background !is Glass) state.background = b.background
+                    b.background = state.glass
+                }
+                state.glass.sync()
+            }
+            true
+        }.also(bar.viewTreeObserver::addOnPreDrawListener)
     }
 }
 
@@ -561,6 +567,15 @@ fun selectedTab(bar: ViewGroup): View? {
 private val absorbed = WeakHashMap<View, Int>()
 
 private fun settle(bar: ViewGroup) {
+    floatStates[bar]?.let { state ->
+        if (bar.background !== state.glass) {
+            if (bar.background !is Glass) state.background = bar.background
+            bar.background = state.glass
+        }
+        val shadow = if (night()) 0x33000000 else 0x1A000000
+        bar.outlineAmbientShadowColor = shadow
+        bar.outlineSpotShadowColor = shadow
+    }
     val inset = bar.paddingBottom
     if (inset == 0) return
     val delta = inset - (absorbed[bar] ?: 0) // QQ 反复设同一个值时不要越挪越高
@@ -859,7 +874,7 @@ internal fun nagramHeaderLayout(
 ): NagramHeaderLayout {
     val p = (6 * density).roundToInt()
     val s = (46 * density).roundToInt()
-    val pillTop = if (topOffsetDp.isFinite()) (topOffsetDp * density).roundToInt().coerceIn(0, (height - s).coerceAtLeast(0))
+    val pillTop = if (topOffsetDp.isFinite()) (topOffsetDp * density).roundToInt()
         else ((height - s) / 2).coerceAtLeast(0)
     val pillBottom = pillTop + s
     val leftW = if (unreadWidth > 0) maxOf(s, (36 * density).roundToInt() + unreadWidth + (10 * density).roundToInt()) else s
@@ -1121,18 +1136,19 @@ private class HeaderState(
         root?.background = null
         outer?.background = null
         (root?.parent as? View)?.background = null
-        // 缩小顶部安全区按钮与屏幕顶部的距离，使三段玻璃胶囊上移贴合顶部安全区。
+        // 缩小顶部安全区按钮与屏幕顶部的距离，支持自定义顶栏距顶偏移（headerTopOffsetDp）。
+        val extraShiftDp = headerTopOffsetDp() - 1f
         outer?.let { o ->
             val orig = origOuterPad ?: intArrayOf(o.paddingLeft, o.paddingTop, o.paddingRight, o.paddingBottom)
             if (orig[1] > 0) {
-                val reducedTop = (orig[1] - (10 * bar.dp).roundToInt()).coerceAtLeast((6 * bar.dp).roundToInt())
+                val reducedTop = (orig[1] - ((10f - extraShiftDp) * bar.dp).roundToInt()).coerceAtLeast(0)
                 if (o.paddingTop != reducedTop) o.setPadding(orig[0], reducedTop, orig[2], 0)
             }
         }
         root?.let { r ->
             val orig = origRootPad ?: intArrayOf(r.paddingLeft, r.paddingTop, r.paddingRight, r.paddingBottom)
             if (orig[1] > 0) {
-                val reducedTop = (orig[1] - (8 * bar.dp).roundToInt()).coerceAtLeast(0)
+                val reducedTop = (orig[1] - ((8f - extraShiftDp) * bar.dp).roundToInt()).coerceAtLeast(0)
                 if (r.paddingTop != reducedTop) r.setPadding(orig[0], reducedTop, orig[2], 0)
             }
         }
@@ -1432,7 +1448,7 @@ private fun aioHeader() {
                     }
                 }
             }
-            val geom = nagramHeaderLayout(w, h, dp, unreadW, rightViews.size, titleTextW, subW, hasAvatar = true, topOffsetDp = 1f)
+            val geom = nagramHeaderLayout(w, h, dp, unreadW, rightViews.size, titleTextW, subW, hasAvatar = true, topOffsetDp = headerTopOffsetDp())
             state.lastGeom = geom
             state.lastRightViews = rightViews
             state.pills.update(geom)
@@ -1618,7 +1634,7 @@ private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawLis
         val rightCount = (if (rightLayout != null && rightLayout.visibility == View.VISIBLE) {
             (0 until rightLayout.childCount).count { rightLayout.getChildAt(it).visibility == View.VISIBLE }
         } else 0) + (if (rightTv != null && rightTv.visibility == View.VISIBLE && !rightTv.text.isNullOrEmpty()) 1 else 0)
-        val geom = nagramHeaderLayout(w, h, dp, 0, rightCount, titleW, 0, hasAvatar = false, topOffsetDp = 1f)
+        val geom = nagramHeaderLayout(w, h, dp, 0, rightCount, titleW, 0, hasAvatar = false, topOffsetDp = headerTopOffsetDp())
         lastGeom = geom
         pills.update(geom)
         // 同步重定位 QUISecNavBar 内部左返回按钮、居中标题与右侧按钮到三段玻璃胶囊中心，消除自绘胶囊与原生按钮位置错位。
@@ -1703,12 +1719,13 @@ private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawLis
         nav.background = null
         (nav.parent as? View)?.background = null
         if (titleRoot.background !== pills) titleRoot.background = pills
+        val extraShiftDp = headerTopOffsetDp() - 1f
         if (origNavPad[1] > 0) {
-            val reduced = (origNavPad[1] - (10 * nav.dp).roundToInt()).coerceAtLeast((6 * nav.dp).roundToInt())
+            val reduced = (origNavPad[1] - ((10f - extraShiftDp) * nav.dp).roundToInt()).coerceAtLeast(0)
             if (nav.paddingTop != reduced) nav.setPadding(origNavPad[0], reduced, origNavPad[2], 0)
         }
         if (origTitleRootPad[1] > 0) {
-            val reduced = (origTitleRootPad[1] - (10 * titleRoot.dp).roundToInt()).coerceAtLeast((6 * titleRoot.dp).roundToInt())
+            val reduced = (origTitleRootPad[1] - ((10f - extraShiftDp) * titleRoot.dp).roundToInt()).coerceAtLeast(0)
             if (titleRoot.paddingTop != reduced) titleRoot.setPadding(origTitleRootPad[0], reduced, origTitleRootPad[2], 0)
         }
         titleBgView?.visibility = View.GONE
@@ -1836,117 +1853,8 @@ private fun resetSearchBars() {
     searchBars.clear()
 }
 
-// ---- 原生页面动画重绘：全部页面与弹窗切换为原地展开菜单，列表项挂载为向下展开列表。
+// ---- 按用户指示「要不就不要展开/下展开」，停用侵入式页面/列表展开动画，保留原生流畅过渡。
 
-private val animatedPages: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
-private val animatedLists: MutableSet<ViewGroup> = Collections.newSetFromMap(WeakHashMap())
-private val animatedListItems: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
-private fun expandInterpolator() = android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f)
-
-private fun animateInPlaceMenuExpand(target: View) {
-    if (! android.animation.ValueAnimator.areAnimatorsEnabled()) return
-    target.animate().cancel()
-    if (target.width > 0) target.pivotX = target.width / 2f
-    target.pivotY = 0f
-    target.scaleX = 0.92f
-    target.scaleY = 0.92f
-    target.alpha = 0f
-    target.animate()
-        .scaleX(1f)
-        .scaleY(1f)
-        .alpha(1f)
-        .setDuration(motionDuration(220))
-        .setInterpolator(expandInterpolator())
-        .start()
-}
-
-private fun animateDownwardListItem(item: View) {
-    if (!on("页面动画") || !android.animation.ValueAnimator.areAnimatorsEnabled()) return
-    if (!animatedListItems.add(item)) return
-    val dp = item.dp
-    item.animate().cancel()
-    item.pivotY = 0f
-    item.translationY = -16f * dp
-    item.scaleY = 0.92f
-    item.alpha = 0f
-    item.animate()
-        .translationY(0f)
-        .scaleY(1f)
-        .alpha(1f)
-        .setDuration(motionDuration(190))
-        .setInterpolator(expandInterpolator())
-        .start()
-}
-
-private fun bindDownwardListExpand(root: View) {
-    if (root !is ViewGroup) return
-    val isList = root is android.widget.AbsListView ||
-        generateSequence<Class<*>>(root.javaClass) { it.superclass }.any { it.name == "androidx.recyclerview.widget.RecyclerView" }
-    if (isList && animatedLists.add(root)) {
-        root.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
-            override fun onChildViewAdded(parent: View?, child: View?) {
-                if (child != null) animateDownwardListItem(child)
-            }
-            override fun onChildViewRemoved(parent: View?, child: View?) {
-                if (child != null) animatedListItems.remove(child)
-            }
-        })
-        for (i in 0 until root.childCount) {
-            root.getChildAt(i)?.let(::animateDownwardListItem)
-        }
-        return
-    }
-    for (i in 0 until root.childCount) {
-        root.getChildAt(i)?.let(::bindDownwardListExpand)
-    }
-}
-
-@Suppress("DEPRECATION")
-fun pageAnimations() {
-    hook(Activity::class.java.getMethod("overridePendingTransition", Integer.TYPE, Integer.TYPE), gated = false) { chain ->
-        if (on("页面动画")) chain.proceed(arrayOf<Any?>(0, 0)) else chain.proceed()
-    }
-    hook(Instrumentation::class.java.getMethod("callActivityOnStart", Activity::class.java), gated = false) { chain ->
-        chain.proceed().also {
-            if (!on("页面动画")) return@also
-            val act = chain.getArg(0) as? Activity ?: return@also
-            act.overridePendingTransition(0, 0)
-            val decor = act.window?.decorView ?: return@also
-            val content = decor.findViewById<View>(android.R.id.content) ?: decor
-            if (animatedPages.add(content)) {
-                animateInPlaceMenuExpand(content)
-            }
-            bindDownwardListExpand(content)
-        }
-    }
-    hook(Activity::class.java.getMethod("finish"), gated = false) { chain ->
-        chain.proceed().also {
-            if (on("页面动画")) (chain.thisObject as? Activity)?.overridePendingTransition(0, 0)
-        }
-    }
-    hook(android.app.Dialog::class.java.getMethod("show"), gated = false) { chain ->
-        chain.proceed().also {
-            if (!on("页面动画")) return@also
-            val dlg = chain.thisObject as? android.app.Dialog ?: return@also
-            val decor = dlg.window?.decorView ?: return@also
-            val content = decor.findViewById<View>(android.R.id.content) ?: decor
-            animateInPlaceMenuExpand(content)
-            bindDownwardListExpand(content)
-        }
-    }
-    for (m in android.widget.PopupWindow::class.java.declaredMethods.filter {
-        it.name == "showAtLocation" || it.name == "showAsDropDown"
-    }) {
-        hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            chain.proceed().also {
-                if (!on("页面动画")) return@also
-                val pop = chain.thisObject as? android.widget.PopupWindow ?: return@also
-                val content = pop.contentView ?: return@also
-                animateInPlaceMenuExpand(content)
-                bindDownwardListExpand(content)
-            }
-        }
-    }
-}
+fun pageAnimations() = Unit
 
 

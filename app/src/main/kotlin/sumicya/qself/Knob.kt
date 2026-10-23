@@ -105,6 +105,15 @@ fun knob(bar: View) {
     val bottom = placement.bottom; val end = placement.end
     if (old != null) {
         old.visibility = View.VISIBLE
+        val shadow = if (night()) 0x33000000 else 0x1A000000
+        old.outlineAmbientShadowColor = shadow
+        old.outlineSpotShadowColor = shadow
+        (old as? ImageView)?.let { iv ->
+            iv.imageTintList = ColorStateList.valueOf(
+                monet(night(), 0xFF) ?: if (night()) 0xFFFFFFFF.toInt() else 0xFF1C1C1E.toInt()
+            )
+            iv.drawable?.invalidateSelf()
+        }
         val lp = old.layoutParams as ViewGroup.MarginLayoutParams
         if (lp.width != width || lp.height != height || lp.bottomMargin != bottom || lp.marginEnd != end) {
             lp.width = width; lp.height = height; lp.bottomMargin = bottom; lp.marginEnd = end
@@ -128,7 +137,9 @@ fun knob(bar: View) {
                 outline.setRoundRect(inset,inset,view.width-inset,view.height-inset,32*dp)
             }
         }
-        clipToOutline = false; elevation = 16 * dp
+        clipToOutline = false; elevation = 10 * dp
+        outlineAmbientShadowColor = if (night()) 0x33000000 else 0x1A000000
+        outlineSpotShadowColor = outlineAmbientShadowColor
         val glass = Glass(this, kernelButton = true)
         background = InsetDrawable(glass,inset)
         setOnClickListener { sheet(it) }
@@ -171,15 +182,26 @@ internal fun menuPlacement(width: Int, height: Int, left: Int, top: Int, right: 
     return MenuPlacement(x, y, w, h)
 }
 
-/** 明确的三线菜单，替换 Android 自带的小扳手图标。 */
+/** 明确的三线菜单，替换 Android 自带的小扳手图标；支持深浅色自动取色与 setTintList。 */
 private class MenuGlyph(dp: Float) : Drawable() {
     private val intrinsic = (24 * dp).toInt()
+    private var tint: ColorStateList? = null
     override fun getIntrinsicWidth() = intrinsic
     override fun getIntrinsicHeight() = intrinsic
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = -1; strokeWidth = 2f; strokeCap = Paint.Cap.ROUND
     }
+    override fun setTintList(tint: ColorStateList?) {
+        this.tint = tint
+        invalidateSelf()
+    }
     override fun draw(canvas: Canvas) {
+        val baseColor = tint?.defaultColor
+            ?: monet(night(), 0xFF)
+            ?: if (night()) 0xFFFFFFFF.toInt() else 0xFF1C1C1E.toInt()
+        val prevAlpha = paint.alpha
+        paint.color = baseColor
+        paint.alpha = prevAlpha
         val save = canvas.save()
         val size = min(bounds.width(),bounds.height()).toFloat()
         canvas.translate(bounds.exactCenterX()-size/2,bounds.exactCenterY()-size/2)
@@ -697,13 +719,86 @@ private fun sheet(anchor: View) {
         })
     }
     grid.addView(blurSeek)
+    val bubbleCornerLabel = TextView(ctx).apply {
+        textSize = 13f; setTextColor(ink)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+    }
+    grid.addView(bubbleCornerLabel)
+    val bubbleCornerSeek = android.widget.SeekBar(ctx).apply {
+        max = 32; progress = (prefs.getInt(BUBBLE_CORNER, 17)).coerceIn(0, 32)
+        bubbleCornerLabel.text = "气泡圆角：${progress}dp（默认 17dp）"
+        contentDescription = "气泡圆角半径"
+        setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: android.widget.SeekBar, value: Int, user: Boolean) {
+                bubbleCornerLabel.text = "气泡圆角：${value}dp（默认 17dp）"
+            }
+            override fun onStartTrackingTouch(bar: android.widget.SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: android.widget.SeekBar) {
+                prefs.edit().putInt(BUBBLE_CORNER, bar.progress).apply()
+                refreshChatLayout()
+            }
+        })
+    }
+    grid.addView(bubbleCornerSeek)
+    val bubblePadLabel = TextView(ctx).apply {
+        textSize = 13f; setTextColor(ink)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+    }
+    grid.addView(bubblePadLabel)
+    val bubblePadSeek = android.widget.SeekBar(ctx).apply {
+        max = 16; progress = (prefs.getInt(BUBBLE_PADDING, 5)).coerceIn(0, 16)
+        bubblePadLabel.text = "气泡边距：${progress}dp（默认 5dp）"
+        contentDescription = "气泡四周内边距"
+        setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: android.widget.SeekBar, value: Int, user: Boolean) {
+                bubblePadLabel.text = "气泡边距：${value}dp（默认 5dp）"
+            }
+            override fun onStartTrackingTouch(bar: android.widget.SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: android.widget.SeekBar) {
+                prefs.edit().putInt(BUBBLE_PADDING, bar.progress).apply()
+                refreshChatLayout()
+            }
+        })
+    }
+    grid.addView(bubblePadSeek)
+    val topOffsetLabel = TextView(ctx).apply {
+        textSize = 13f; setTextColor(ink)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+    }
+    grid.addView(topOffsetLabel)
+    val topOffsetSeek = android.widget.SeekBar(ctx).apply {
+        max = 28
+        val savedOffset = (prefs.getInt(HEADER_TOP_OFFSET, 1)).coerceIn(-12, 16)
+        progress = savedOffset + 12
+        topOffsetLabel.text = "顶栏偏移：${savedOffset}dp（默认 1dp）"
+        contentDescription = "顶部安全区胶囊距顶偏移"
+        setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: android.widget.SeekBar, value: Int, user: Boolean) {
+                topOffsetLabel.text = "顶栏偏移：${value - 12}dp（默认 1dp）"
+            }
+            override fun onStartTrackingTouch(bar: android.widget.SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: android.widget.SeekBar) {
+                prefs.edit().putInt(HEADER_TOP_OFFSET, bar.progress - 12).apply()
+                refreshLooks()
+            }
+        })
+    }
+    grid.addView(topOffsetSeek)
     grid.addView(LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.END
         addView(button("恢复默认") {
             val edit = prefs.edit()
             features.forEach { edit.putBoolean(it.name, it.default) }
             edit.putString(TIME_PATTERN, "HH:mm").putInt(AVATAR_RADIUS, 20).putInt(GLASS_BLUR, 1)
+                .putInt(BUBBLE_CORNER, 17).putInt(BUBBLE_PADDING, 5).putInt(HEADER_TOP_OFFSET, 1)
             edit.apply(); format.setText("HH:mm"); radiusSeek.progress = 20; blurSeek.progress = 1
+            bubbleCornerSeek.progress = 17; bubblePadSeek.progress = 5; topOffsetSeek.progress = 13
             paints.forEach { it() }; refreshLooks(); card.invalidate()
         })
         addView(button("结束进程") {
