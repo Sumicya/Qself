@@ -604,7 +604,6 @@ class ProtoTest {
         assertEquals(BubbleCornerRadii(48, 48, 48, 48), customRadii)
         assertEquals(17f, bubbleCornerDp())
         assertEquals(5f, bubblePaddingDp())
-        assertEquals(1f, headerTopOffsetDp())
         assertTrue(continuesMessageRun("a", "a", 3600, 1000, 2, 2, maxGapSeconds = Long.MAX_VALUE))
         assertEquals(1f, glassBlurDp())
 
@@ -613,9 +612,9 @@ class ProtoTest {
         assertEquals(636, (noRight.textLeft + noRight.textRight) / 2)
         assertTrue(noRight.centerPill.top >= 0)
 
-        assertEquals(109, reducedSafeTop(140, 1.953125f, 1f))
+        assertEquals(109, reducedSafeTop(140, 1.953125f))
         assertEquals(101, reducedSafeTop(140, 1.953125f, -24f))
-        assertEquals(0, reducedSafeTop(0, 1.953125f, 1f))
+        assertEquals(0, reducedSafeTop(0, 1.953125f))
 
         assertEquals(-85.5f, centeredBarTranslationX(1272, 460, 1.953125f, rtl = false))
         assertEquals(85.5f, centeredBarTranslationX(1272, 460, 1.953125f, rtl = true))

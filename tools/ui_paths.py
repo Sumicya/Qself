@@ -247,6 +247,19 @@ RULES.update({
     ('com.tencent.widget.immersive.SystemBarTintManager', 'setStatusBarAlpha', 'V F'): (
         {'com.tencent.widget.immersive.SystemBarTintManager#mStatusBarTintView:android.view.View'},
         {'android.view.View#setAlpha'}),
+    ('com.tencent.mobileqq.aio.widget.EdgeTransparentView', 'drawChild', 'Z android.graphics.Canvas,android.view.View,J'): (
+        {'com.tencent.mobileqq.aio.widget.EdgeTransparentView#D:I',
+         'com.tencent.mobileqq.aio.widget.EdgeTransparentView#i:I',
+         'com.tencent.mobileqq.aio.widget.EdgeTransparentView#m:I'},
+        {'android.widget.FrameLayout#drawChild', 'android.graphics.Canvas#saveLayer'}),
+    ('com.tencent.mobileqq.aio.widget.AIOMsgListGroup', 'onMeasure', 'V I,I'): (
+        {'com.tencent.mobileqq.aio.widget.AIOMsgListGroup#h:com.tencent.mobileqq.aio.widget.EdgeTransparentView'},
+        {'android.view.View#getPaddingTop', 'android.view.View#getPaddingBottom',
+         'android.view.View#setMeasuredDimension'}),
+    (CONTROLLER, 'updateUIAfterTabChange',
+     'V com.tencent.mobileqq.app.FrameFragment,java.lang.String,java.lang.String,com.tencent.mobileqq.app.bf'): (
+        set(),
+        {f'{CONTROLLER}#getTabIndexFromName'}),
 })
 
 

@@ -73,6 +73,13 @@ fun looks() {
                 floated.toList().forEach { (it as? ViewGroup)?.let(::homeBar) }
             }
         }
+        hook(controller.getDeclaredMethod("recoverUselessBackground", View::class.java), gated = false) { chain ->
+            if (on("玻璃底栏")) {
+                controller.getDeclaredMethod("clearUselessBackground", View::class.java).apply { isAccessible = true }
+                    .invoke(chain.thisObject, chain.args.getOrNull(0))
+                null
+            } else chain.proceed()
+        }
     }
     // 真包 MainUIHelperApiImpl#updateTitleBar 与 Leba#updateTitleBar 会在恢复/刷主题时把主页顶栏 (0x7f0a11f9 / 0x7f0a5dff) 高度设为 194px 并重设 #222325 安全区底色；在此处同步剥离底色并对齐顶栏组件。
     runCatching {
@@ -94,13 +101,15 @@ fun looks() {
             }
         }
     }
-    // 真包 QUISecNavBar#S 与 #X 会将内部 mRoot 的 paddingTop 重设为 140px 状态栏高度；直接钩住以保持缩小后的顶部距离。
+    // 真包 QUISecNavBar#S / #X / #C / #updateView / #setBlur / #setTitleBlurAlpha 会重设内部 mRoot 的 paddingTop、安全区底色与模糊层；直接钩住以保持无安全区胶囊样式。
     runCatching {
         val secNavCls = cls("com.tencent.biz.qui.quisecnavbar.QUISecNavBar")
-        for (mName in listOf("S", "X")) {
-            hook(secNavCls.getDeclaredMethod(mName), gated = false) { chain ->
-                chain.proceed().also {
-                    (chain.thisObject as? ViewGroup)?.let(::secNavBar)
+        for (mName in listOf("S", "X", "C", "updateView", "setBlur", "setTitleBlurAlpha")) {
+            secNavCls.declaredMethods.filter { it.name == mName }.forEach { m ->
+                hook(m.apply { isAccessible = true }, gated = false) { chain ->
+                    chain.proceed().also {
+                        (chain.thisObject as? ViewGroup)?.let(::secNavBar)
+                    }
                 }
             }
         }
@@ -1203,7 +1212,7 @@ internal fun nagramHeaderLayout(
 }
 
 /** 顶部安全区内边距压缩计算：保留状态栏时钟安全下界，避免胶囊上移时越出父容器上界被裁切。 */
-internal fun reducedSafeTop(origTop: Int, dp: Float, offsetDp: Float = headerTopOffsetDp()): Int {
+internal fun reducedSafeTop(origTop: Int, dp: Float, offsetDp: Float = 1f): Int {
     if (origTop <= 0) return 0
     val minTop = (origTop * 0.72f).roundToInt()
     val baseTop = (origTop - (16f * dp).roundToInt()).coerceAtLeast(minTop)
@@ -1211,15 +1220,27 @@ internal fun reducedSafeTop(origTop: Int, dp: Float, offsetDp: Float = headerTop
     return (baseTop + delta).coerceAtLeast(minTop)
 }
 
-private class HeaderPillsDrawable(host: View) : android.graphics.drawable.Drawable() {
-    private val backGlass = Glass(host, 23 * host.dp, kernelSurface = true)
-    private val centerGlass = Glass(host, 23 * host.dp, kernelSurface = true)
-    private val rightGlass = Glass(host, 23 * host.dp, kernelSurface = true)
+private class HeaderPillsDrawable(private val host: View) : android.graphics.drawable.Drawable() {
+    private val sharedScene = android.graphics.RenderNode("qself-header-scene")
+    private var sharedSceneReady = false
+    private val sharedOverride: (Canvas) -> Boolean = { rc ->
+        if (sharedSceneReady) {
+            rc.drawRenderNode(sharedScene)
+            true
+        } else false
+    }
+    private val backGlass = Glass(host, 23 * host.dp, kernelSurface = true, backdropOverride = sharedOverride)
+    private val centerGlass = Glass(host, 23 * host.dp, kernelSurface = true, backdropOverride = sharedOverride)
+    private val rightGlass = Glass(host, 23 * host.dp, kernelSurface = true, backdropOverride = sharedOverride)
     var leftRect = Rect()
     var centerRect = Rect()
     var rightRect = Rect()
     fun update(layout: NagramHeaderLayout) {
-        leftRect = layout.leftPill.toRect(); centerRect = layout.centerPill.toRect(); rightRect = layout.rightPill.toRect()
+        val nextLeft = layout.leftPill.toRect()
+        val nextCenter = layout.centerPill.toRect()
+        val nextRight = layout.rightPill.toRect()
+        if (leftRect == nextLeft && centerRect == nextCenter && rightRect == nextRight) return
+        leftRect = nextLeft; centerRect = nextCenter; rightRect = nextRight
         backGlass.bounds = leftRect; centerGlass.bounds = centerRect; rightGlass.bounds = rightRect
         invalidateSelf()
     }
@@ -1255,12 +1276,35 @@ private class HeaderPillsDrawable(host: View) : android.graphics.drawable.Drawab
         backGlass.sync(); centerGlass.sync(); if (!rightRect.isEmpty) rightGlass.sync()
     }
     fun dispose() {
+        sharedSceneReady = false
+        sharedScene.discardDisplayList()
         backGlass.dispose(); centerGlass.dispose(); rightGlass.dispose()
     }
     override fun draw(canvas: Canvas) {
-        if (!leftRect.isEmpty) backGlass.draw(canvas)
-        if (!centerRect.isEmpty) centerGlass.draw(canvas)
-        if (!rightRect.isEmpty) rightGlass.draw(canvas)
+        val count = (if (!leftRect.isEmpty) 1 else 0) + (if (!centerRect.isEmpty) 1 else 0) + (if (!rightRect.isEmpty) 1 else 0)
+        if (count == 0) return
+        val hw = canvas.isHardwareAccelerated && host.width > 0 && host.height > 0 && count >= 2
+        if (hw) {
+            val pad = (40 * host.dp).toInt()
+            val w = host.width
+            val h = host.height
+            sharedScene.setPosition(-pad, -pad, w + pad, h + pad)
+            val sc = sharedScene.beginRecording(w + 2 * pad, h + 2 * pad)
+            try {
+                sc.translate(pad.toFloat(), pad.toFloat())
+                backGlass.recordBehind(sc, useTightBounds = false)
+                sharedSceneReady = true
+            } finally {
+                sharedScene.endRecording()
+            }
+        }
+        try {
+            if (!leftRect.isEmpty) backGlass.draw(canvas)
+            if (!centerRect.isEmpty) centerGlass.draw(canvas)
+            if (!rightRect.isEmpty) rightGlass.draw(canvas)
+        } finally {
+            sharedSceneReady = false
+        }
     }
     override fun setAlpha(alpha: Int) {
         backGlass.alpha = alpha; centerGlass.alpha = alpha; rightGlass.alpha = alpha
@@ -1649,10 +1693,13 @@ private fun aioHeader() {
         if (on("玻璃底栏")) loadHeaderAvatar(vb, state.avatar)
     }
 
-    for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "Z1", "Y1", "z1", "A1", "D1")) {
+    for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "Z1", "Y1", "z1", "A1", "D1", "C1", "R1", "S1", "W1", "h1", "l1")) {
         val m = titleVB.declaredMethods.firstOrNull { it.name == name } ?: continue
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            chain.proceed().also { if (titleVB.isInstance(chain.thisObject)) bindHeader(chain.thisObject) }
+            chain.proceed().also {
+                val target = chain.thisObject?.takeIf(titleVB::isInstance) ?: chain.args.firstOrNull(titleVB::isInstance)
+                if (target != null) bindHeader(target)
+            }
         }
     }
     val titleContainerVB = cls("com.tencent.mobileqq.aio.title.AIODefaultTitleContainerVB")
@@ -2255,9 +2302,8 @@ private fun homeTopBar(bar: ViewGroup) {
             root.background = fill
         }
     }
-    // 主页顶栏（Conversation r/i/e5p.xml / Contacts / Leba）统一按顶栏上边距滑条平移头像、标题与右侧按钮，
-    // 默认 1dp 时整体上移 4dp（8px），在避开系统状态栏时钟（y=68..97）的前提下缩小顶部空白并保持水平对齐。
-    val shiftY = ((headerTopOffsetDp() - 5f) * bar.dp).coerceIn(-6f * bar.dp, 24f * bar.dp)
+    // 主页顶栏（Conversation r/i/e5p.xml / Contacts / Leba）整体上移 4dp（8px），在避开系统状态栏时钟（y=68..97）的前提下缩小顶部空白并保持水平对齐。
+    val shiftY = -4f * bar.dp
     val dark = night()
     for (id in intArrayOf(0x7f0a3245, 0x7f0a3d3f, 0x7f0a120a, 0x7f0a2ef9, 0x7f0a2ed1, 0x7f0a6bb6, 0x7f0a6bb7)) {
         scope.findViewById<View>(id)?.let { ch ->
@@ -2375,8 +2421,84 @@ private fun resetSearchBars() {
     searchBars.clear()
 }
 
-// ---- 按用户指示「要不就不要展开/下展开」，停用侵入式页面/列表展开动画，保留原生流畅过渡。
+// ---- 页面与底栏页签切换过渡：共享 X 轴微缩淡入（RenderThread 属性动画，无 Y 轴下展开，零布局抖动）。
 
-fun pageAnimations() = Unit
+private fun runSwitchTransition(view: View?, dirX: Float = 1f, distanceDp: Float = 16f, durationMs: Long = 210L) {
+    val v = view ?: return
+    v.animate().cancel()
+    if (!on("页面过渡动效") || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
+        v.translationX = 0f
+        v.scaleX = 1f
+        v.scaleY = 1f
+        v.alpha = 1f
+        return
+    }
+    val dx = dirX * distanceDp * v.dp
+    v.translationX = dx
+    v.scaleX = 0.985f
+    v.scaleY = 0.985f
+    v.alpha = 0.74f
+    v.animate()
+        .translationX(0f)
+        .scaleX(1f)
+        .scaleY(1f)
+        .alpha(1f)
+        .setDuration(durationMs)
+        .setInterpolator(android.view.animation.PathInterpolator(0.22f, 1f, 0.36f, 1f))
+        .withEndAction {
+            v.translationX = 0f
+            v.scaleX = 1f
+            v.scaleY = 1f
+            v.alpha = 1f
+        }
+        .start()
+}
+
+fun pageAnimations() {
+    runCatching {
+        val controller = cls("com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl")
+        val frameFrag = cls("com.tencent.mobileqq.app.FrameFragment")
+        val bfCls = cls("com.tencent.mobileqq.app.bf")
+        val getTabIdx = controller.getDeclaredMethod("getTabIndexFromName", String::class.java).apply { isAccessible = true }
+        val getContentView = bfCls.getDeclaredMethod("getContentView").apply { isAccessible = true }
+        val updateAfter = controller.getDeclaredMethod(
+            "updateUIAfterTabChange",
+            frameFrag,
+            String::class.java,
+            String::class.java,
+            bfCls,
+        )
+        hook(updateAfter, gated = false) { chain ->
+            chain.proceed().also {
+                if (!on("页面过渡动效")) return@also
+                val newTag = chain.args.getOrNull(1) as? String ?: return@also
+                val oldTag = chain.args.getOrNull(2) as? String ?: return@also
+                if (newTag == oldTag || oldTag.isEmpty()) return@also
+                val frame = chain.args.getOrNull(3) ?: return@also
+                val content = runCatching { getContentView.invoke(frame) as? View }.getOrNull() ?: return@also
+                val newIdx = runCatching { getTabIdx.invoke(chain.thisObject, newTag) as? Int }.getOrNull() ?: 0
+                val oldIdx = runCatching { getTabIdx.invoke(chain.thisObject, oldTag) as? Int }.getOrNull() ?: 0
+                val dir = if (newIdx >= oldIdx) 1f else -1f
+                runSwitchTransition(content, dirX = dir, distanceDp = 18f, durationMs = 220L)
+            }
+        }
+    }
+    runCatching {
+        val msgListVB = cls("com.tencent.mobileqq.aio.msglist.AIOMsgListVB")
+        val helpParam = cls("com.tencent.mvi.api.help.a")
+        val onCreate = generateSequence<Class<*>>(msgListVB) { it.superclass }
+            .mapNotNull { c -> c.declaredMethods.firstOrNull { it.name == "onCreateView" && it.parameterTypes.size == 1 && it.parameterTypes[0] == helpParam } }
+            .firstOrNull()
+        if (onCreate != null) {
+            hook(onCreate.apply { isAccessible = true }, gated = false) { chain ->
+                chain.proceed().also { res ->
+                    if (msgListVB.isInstance(chain.thisObject) && on("页面过渡动效")) {
+                        runSwitchTransition(res as? View, dirX = 1f, distanceDp = 14f, durationMs = 200L)
+                    }
+                }
+            }
+        }
+    }
+}
 
 

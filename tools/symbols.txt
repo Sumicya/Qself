@@ -675,6 +675,48 @@ field com.google.android.material.tabs.TabLayout#T
 field com.google.android.material.tabs.TabLayout#P
 class com.tencent.mobileqq.widget.TabDragAnimationView
 member! com.tencent.mobileqq.widget.TabDragAnimationView#setIconGravity
+class com.tencent.mobileqq.aio.widget.EdgeTransparentView
+field com.tencent.mobileqq.aio.widget.EdgeTransparentView#i
+field com.tencent.mobileqq.aio.widget.EdgeTransparentView#m
+field com.tencent.mobileqq.aio.widget.EdgeTransparentView#D
+member! com.tencent.mobileqq.aio.widget.EdgeTransparentView#drawChild
+member! com.tencent.mobileqq.aio.widget.EdgeTransparentView#onInterceptTouchEvent
+member! com.tencent.mobileqq.aio.widget.AIOMsgListGroup#onMeasure
+member! com.tencent.mobileqq.aio.msglist.AIOMsgListVB#F2
+member! com.tencent.mobileqq.aio.msglist.AIOMsgListVB#M3
+member! com.tencent.mobileqq.aio.msglist.AIOMsgListVB#T3
+member! com.tencent.mobileqq.aio.msglist.AIOMsgListVB#I3
+member! com.tencent.mobileqq.aio.msglist.AIOMsgListVB#G3
+member! com.tencent.mobileqq.aio.msglist.AIOMsgListVB#H3
+member! com.tencent.mobileqq.aio.msglist.AIOMsgListVB#N3
+member! com.tencent.mobileqq.aio.msglist.AIOMsgListVB#S0
+member! com.tencent.mobileqq.aio.msglist.AIOMsgListVB#x3
+member! com.tencent.mobileqq.aio.reserve1.blur.f#d1
+member! com.tencent.mobileqq.aio.reserve1.blur.f#g1
+member! com.tencent.mobileqq.aio.reserve1.blur.BottomBlurVB#f1
+member! com.tencent.mobileqq.aio.reserve1.blur.BottomBlurVB#m1
+member! com.tencent.mobileqq.aio.reserve1.blur.BottomBlurVB#o1
+member! com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB#s1
+member! com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB#u1
+member! com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB#v1
+member! com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB#w1
+member! com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB#z1
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#C1
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#R1
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#S1
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#W1
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#h1
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#l1
+member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#C
+member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#updateView
+member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#setBlur
+member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#setTitleBlurAlpha
+class com.tencent.mobileqq.app.bf
+member! com.tencent.mobileqq.app.bf#getContentView
+member! com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl#recoverUselessBackground
+member! com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl#updateUIAfterTabChange
+member! com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl#getTabIndexFromName
+
 
 
 

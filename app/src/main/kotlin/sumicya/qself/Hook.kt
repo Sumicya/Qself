@@ -139,9 +139,20 @@ fun Class<*>.afterNew(body: (Any) -> Unit) = declaredConstructors.forEach { c ->
     hook(c) { chain -> chain.proceed().also { body(chain.thisObject) } }
 }
 
-/** 反射读写字段，父类里的也认。 */
-private fun Any.field(name: String) = generateSequence<Class<*>>(javaClass) { it.superclass }
-    .firstNotNullOfOrNull { c -> c.declaredFields.firstOrNull { it.name == name } }?.apply { isAccessible = true }
+private val NO_FIELD = Any()
+private val fieldCache = java.util.concurrent.ConcurrentHashMap<Pair<Class<*>, String>, Any>()
+
+/** 反射读写字段，父类里的也认；缓存 Field 避免高频调用（如 MsgRecord 读取）反复分配 declaredFields 数组。 */
+private fun Any.field(name: String): java.lang.reflect.Field? {
+    val key = javaClass to name
+    val cached = fieldCache[key]
+    if (cached != null) return cached as? java.lang.reflect.Field
+    val found = generateSequence<Class<*>>(javaClass) { it.superclass }
+        .firstNotNullOfOrNull { c -> c.declaredFields.firstOrNull { it.name == name } }
+        ?.apply { isAccessible = true }
+    fieldCache[key] = found ?: NO_FIELD
+    return found
+}
 
 fun Any.set(name: String, value: Any?) =
     (field(name) ?: throw NoSuchFieldException("${javaClass.name}#$name")).set(this, value)

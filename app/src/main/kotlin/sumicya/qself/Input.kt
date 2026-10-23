@@ -49,12 +49,18 @@ private class PanelGlassState(val root: View) : ViewTreeObserver.OnPreDrawListen
     override fun onViewDetachedFromWindow(v: View) = dispose()
 }
 
-private class MsgListUnderScroll(val group: ViewGroup, val recycler: ViewGroup) {
+private class MsgListUnderScroll(val group: ViewGroup, val edge: ViewGroup?, val recycler: ViewGroup) {
     private var savedGroupTop = group.paddingTop
     private var savedGroupBottom = group.paddingBottom
     private val origGroupClipToPad = group.clipToPadding
     private val origGroupClipChildren = group.clipChildren
+    private val origEdgeClipToPad = edge?.clipToPadding ?: true
+    private val origEdgeClipChildren = edge?.clipChildren ?: true
+    private val origEdgeI = runCatching { edge?.get("i") as? Int }.getOrNull() ?: 0
+    private val origEdgeM = runCatching { edge?.get("m") as? Int }.getOrNull() ?: 0
+    private val origEdgeD = runCatching { edge?.get("D") as? Int }.getOrNull() ?: 0
     private val origRecyclerClipToPad = recycler.clipToPadding
+    private val origRecyclerClipChildren = recycler.clipChildren
     private val origRecyclerTop = recycler.paddingTop
     private val origRecyclerBottom = recycler.paddingBottom
     private var active = false
@@ -75,9 +81,22 @@ private class MsgListUnderScroll(val group: ViewGroup, val recycler: ViewGroup) 
         if (gt != 0 || gb != 0) {
             group.setPadding(group.paddingLeft, 0, group.paddingRight, 0)
         }
+        edge?.let { ev ->
+            if (ev.clipToPadding) ev.clipToPadding = false
+            if (ev.clipChildren) ev.clipChildren = false
+            if (ev.background != null) ev.background = null
+            if (ev.paddingTop != 0 || ev.paddingBottom != 0) ev.setPadding(ev.paddingLeft, 0, ev.paddingRight, 0)
+            // 清零 EdgeTransparentView 的 i / m / D，阻止 drawChild 分配全屏 saveLayer 并用 PorterDuff.Mode.CLEAR 擦除顶部 y=0..238 消息。
+            runCatching {
+                if ((ev.get("i") as? Int ?: 0) != 0) ev.set("i", 0)
+                if ((ev.get("m") as? Int ?: 0) != 0) ev.set("m", 0)
+                if ((ev.get("D") as? Int ?: 0) != 0) ev.set("D", 0)
+            }
+        }
         if (recycler.clipToPadding) recycler.clipToPadding = false
+        if (recycler.clipChildren) recycler.clipChildren = false
         if (recycler.background != null) recycler.background = null
-        val topReduction = (10 * group.dp).toInt()
+        val topReduction = (14 * group.dp).toInt()
         val targetTop = if (on("玻璃底栏")) (savedGroupTop - topReduction).coerceAtLeast(0) else origRecyclerTop
         val targetBottom = if (on("TG输入栏")) savedGroupBottom else origRecyclerBottom
         if (recycler.paddingTop != targetTop || recycler.paddingBottom != targetBottom) {
@@ -90,7 +109,17 @@ private class MsgListUnderScroll(val group: ViewGroup, val recycler: ViewGroup) 
         group.clipToPadding = origGroupClipToPad
         group.clipChildren = origGroupClipChildren
         group.setPadding(group.paddingLeft, savedGroupTop, group.paddingRight, savedGroupBottom)
+        edge?.let { ev ->
+            ev.clipToPadding = origEdgeClipToPad
+            ev.clipChildren = origEdgeClipChildren
+            runCatching {
+                ev.set("i", origEdgeI)
+                ev.set("m", origEdgeM)
+                ev.set("D", origEdgeD)
+            }
+        }
         recycler.clipToPadding = origRecyclerClipToPad
+        recycler.clipChildren = origRecyclerClipChildren
         recycler.setPadding(recycler.paddingLeft, origRecyclerTop, recycler.paddingRight, origRecyclerBottom)
     }
 }
@@ -147,12 +176,17 @@ fun inputLayout() {
     val expContainer = expandable.getDeclaredField("e").apply { isAccessible = true }
     val expDivider = expandable.getDeclaredField("f").apply { isAccessible = true }
     val helpParam = cls("com.tencent.mvi.api.help.a")
-    fun syncExpandable(vb: Any) {
-        val bindingOrView = runCatching { expContainer.get(vb) }.getOrNull()
+    fun syncExpandable(vb: Any?) {
+        val target = vb ?: return
+        val bindingOrView = runCatching { expContainer.get(target) }.getOrNull()
         val rootView = (bindingOrView as? View) ?: runCatching { bindingOrView?.get("a") as? View }.getOrNull()
         rootView?.let { v ->
             val dec = inputDecorations.getOrPut(v) { InputDecoration(v, false) }
             if (on("TG输入栏")) dec.apply() else dec.restore()
+            (v.parent as? View)?.let { p ->
+                val pDec = inputDecorations.getOrPut(p) { InputDecoration(p, false) }
+                if (on("TG输入栏")) pDec.apply() else pDec.restore()
+            }
         }
         for (fieldName in listOf("d", "f")) {
             (runCatching { bindingOrView?.get(fieldName) as? View }.getOrNull())?.let { v ->
@@ -160,7 +194,7 @@ fun inputLayout() {
                 if (on("TG输入栏")) dec.apply() else dec.restore()
             }
         }
-        (runCatching { expDivider.get(vb) as? View }.getOrNull())?.let { v ->
+        (runCatching { expDivider.get(target) as? View }.getOrNull())?.let { v ->
             val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
             if (on("TG输入栏")) dec.apply() else dec.restore()
         }
@@ -168,47 +202,128 @@ fun inputLayout() {
         val send = runCatching { bindingOrView?.get("i") as? View }.getOrNull()
         if (ed != null) tgInput(ed, sendBtn = send)
     }
-    for (name in listOf("onCreateView", "handleUIState", "o1", "p1", "f1")) {
+    for (name in listOf("onCreateView", "handleUIState", "o1", "p1", "f1", "m1")) {
         val m = generateSequence<Class<*>>(expandable) { it.superclass }
             .mapNotNull { c -> c.declaredMethods.firstOrNull { it.name == name } }
             .firstOrNull() ?: continue
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            chain.proceed().also { if (expandable.isInstance(chain.thisObject)) syncExpandable(chain.thisObject) }
+            chain.proceed().also {
+                val target = chain.thisObject?.takeIf(expandable::isInstance) ?: chain.args.firstOrNull(expandable::isInstance)
+                if (target != null) syncExpandable(target)
+            }
+        }
+    }
+    val topBlur = cls("com.tencent.mobileqq.aio.reserve1.blur.f")
+    val getTopBlurF1 = runCatching { topBlur.getDeclaredMethod("f1").apply { isAccessible = true } }.getOrNull()
+    fun syncTopBlur(vb: Any?) {
+        val target = vb ?: return
+        (runCatching { getTopBlurF1?.invoke(target) as? View }.getOrNull())?.let { v ->
+            val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
+            if (on("玻璃底栏") || on("TG输入栏")) dec.apply() else dec.restore()
+        }
+    }
+    for (name in listOf("onCreateView", "handleUIState", "d1", "g1", "h1")) {
+        val m = generateSequence<Class<*>>(topBlur) { it.superclass }
+            .mapNotNull { c -> c.declaredMethods.firstOrNull { it.name == name } }
+            .firstOrNull() ?: continue
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
+            chain.proceed().also {
+                val target = chain.thisObject?.takeIf(topBlur::isInstance) ?: chain.args.firstOrNull(topBlur::isInstance)
+                if (target != null) syncTopBlur(target)
+            }
         }
     }
     val bottomBlur = cls("com.tencent.mobileqq.aio.reserve1.blur.BottomBlurVB")
     val getBottomBlurI1 = runCatching { bottomBlur.getDeclaredMethod("i1").apply { isAccessible = true } }.getOrNull()
     val getBottomBlurK1 = runCatching { bottomBlur.getDeclaredMethod("k1").apply { isAccessible = true } }.getOrNull()
-    fun syncBottomBlur(vb: Any) {
+    fun syncBottomBlur(vb: Any?) {
+        val target = vb ?: return
         for (getter in listOfNotNull(getBottomBlurI1, getBottomBlurK1)) {
-            (runCatching { getter.invoke(vb) as? View }.getOrNull())?.let { v ->
+            (runCatching { getter.invoke(target) as? View }.getOrNull())?.let { v ->
                 val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
-                if (on("TG输入栏")) dec.apply() else dec.restore()
+                if (on("TG输入栏") || on("玻璃底栏")) dec.apply() else dec.restore()
             }
         }
     }
-    for (name in listOf("onCreateView", "handleUIState", "h1")) {
+    for (name in listOf("onCreateView", "handleUIState", "h1", "j1", "l1", "n1", "e1", "f1", "m1", "o1")) {
         val m = generateSequence<Class<*>>(bottomBlur) { it.superclass }
             .mapNotNull { c -> c.declaredMethods.firstOrNull { it.name == name } }
             .firstOrNull() ?: continue
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            chain.proceed().also { if (bottomBlur.isInstance(chain.thisObject)) syncBottomBlur(chain.thisObject) }
+            chain.proceed().also {
+                val target = chain.thisObject?.takeIf(bottomBlur::isInstance) ?: chain.args.firstOrNull(bottomBlur::isInstance)
+                if (target != null) syncBottomBlur(target)
+            }
+        }
+    }
+    val edgeTransparent = cls("com.tencent.mobileqq.aio.widget.EdgeTransparentView")
+    for (name in listOf("setTransparentSize", "setPositionAndDrawSize")) {
+        edgeTransparent.declaredMethods.filter { it.name == name }.forEach { m ->
+            hook(m.apply { isAccessible = true }, gated = false) { chain ->
+                chain.proceed().also {
+                    val ev = chain.thisObject as? View ?: return@also
+                    if (on("TG输入栏") || on("玻璃底栏")) {
+                        runCatching {
+                            ev.set("i", 0)
+                            ev.set("m", 0)
+                            ev.set("D", 0)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    edgeTransparent.declaredMethods.firstOrNull { it.name == "onInterceptTouchEvent" }?.let { m ->
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
+            val ev = chain.thisObject as? View
+            if (ev != null && (on("TG输入栏") || on("玻璃底栏"))) {
+                runCatching {
+                    if ((ev.get("i") as? Int ?: 0) != 0) ev.set("i", 0)
+                    if ((ev.get("m") as? Int ?: 0) != 0) ev.set("m", 0)
+                }
+            }
+            chain.proceed()
+        }
+    }
+    val msgListGroupCls = cls("com.tencent.mobileqq.aio.widget.AIOMsgListGroup")
+    msgListGroupCls.declaredMethods.firstOrNull { it.name == "onMeasure" }?.let { m ->
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
+            val group = chain.thisObject as? ViewGroup
+            if (group != null) {
+                msgListUnderScrolls[group]?.sync() ?: run {
+                    val edge = (0 until group.childCount).map(group::getChildAt).filterIsInstance<ViewGroup>()
+                        .firstOrNull { edgeTransparent.isInstance(it) }
+                    val rv = (edge ?: group).let { host ->
+                        (0 until host.childCount).map(host::getChildAt).filterIsInstance<ViewGroup>().firstOrNull { ch ->
+                            generateSequence<Class<*>>(ch.javaClass) { it.superclass }.any { it.name == "androidx.recyclerview.widget.RecyclerView" }
+                        }
+                    }
+                    if (rv != null) msgListUnderScrolls.getOrPut(group) { MsgListUnderScroll(group, edge, rv) }.sync()
+                }
+            }
+            chain.proceed()
         }
     }
     val msgListVB = cls("com.tencent.mobileqq.aio.msglist.AIOMsgListVB")
     val msgListGroupGetter = msgListVB.getDeclaredMethod("M2").apply { isAccessible = true }
-    val msgListRecyclerGetter = msgListVB.getDeclaredMethod("S2").apply { isAccessible = true }
-    fun syncMsgListPadding(vb: Any) {
-        val group = runCatching { msgListGroupGetter.invoke(vb) as? ViewGroup }.getOrNull() ?: return
-        val recycler = runCatching { msgListRecyclerGetter.invoke(vb) as? ViewGroup }.getOrNull() ?: return
-        msgListUnderScrolls.getOrPut(group) { MsgListUnderScroll(group, recycler) }.sync()
+    val msgListEdgeGetter = msgListVB.getDeclaredMethod("S2").apply { isAccessible = true }
+    val msgListRecyclerGetter = msgListVB.getDeclaredMethod("F2").apply { isAccessible = true }
+    fun syncMsgListPadding(vb: Any?) {
+        val target = vb ?: return
+        val group = runCatching { msgListGroupGetter.invoke(target) as? ViewGroup }.getOrNull() ?: return
+        val edge = runCatching { msgListEdgeGetter.invoke(target) as? ViewGroup }.getOrNull()
+        val recycler = runCatching { msgListRecyclerGetter.invoke(target) as? ViewGroup }.getOrNull() ?: edge ?: return
+        msgListUnderScrolls.getOrPut(group) { MsgListUnderScroll(group, if (edge !== recycler) edge else null, recycler) }.sync()
     }
-    for (name in listOf("U0", "v0", "K3", "L3")) {
+    for (name in listOf("U0", "v0", "S0", "K3", "L3", "M3", "T3", "I3", "G3", "H3", "N3", "x3")) {
         val m = generateSequence<Class<*>>(msgListVB) { it.superclass }
             .mapNotNull { c -> c.declaredMethods.firstOrNull { it.name == name } }
             .firstOrNull() ?: continue
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            chain.proceed().also { if (msgListVB.isInstance(chain.thisObject)) syncMsgListPadding(chain.thisObject) }
+            chain.proceed().also {
+                val target = chain.thisObject?.takeIf(msgListVB::isInstance) ?: chain.args.firstOrNull(msgListVB::isInstance)
+                if (target != null) syncMsgListPadding(target)
+            }
         }
     }
     val chatBgApi = cls("com.tencent.qqnt.aio.adapter.api.impl.AIOChatBackgroundApiImpl")
@@ -246,21 +361,20 @@ fun inputLayout() {
             (strip.parent as? View)?.let { p ->
                 val pDec = inputDecorations.getOrPut(p) { InputDecoration(p, false) }
                 if (on("TG输入栏")) pDec.apply() else pDec.restore()
+                (p.parent as? View)?.let { gp ->
+                    val gpDec = inputDecorations.getOrPut(gp) { InputDecoration(gp, false) }
+                    if (on("TG输入栏")) gpDec.apply() else gpDec.restore()
+                }
             }
             tgInput(strip)
         }
     }
-    for (name in listOf("onCreateView", "handleUIState", "x1", "d1", "s1")) {
+    for (name in listOf("onCreateView", "handleUIState", "x1", "d1", "s1", "u1", "v1", "w1", "y1", "z1")) {
         val m = shortcutBar.declaredMethods.firstOrNull { it.name == name } ?: continue
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            chain.proceed().also { if (shortcutBar.isInstance(chain.thisObject)) syncShortcutBar(chain.thisObject) }
-        }
-    }
-    shortcutBar.declaredMethods.firstOrNull { it.name == "y1" }?.let { m ->
-        hook(m.apply { isAccessible = true }, gated = false) { chain ->
             chain.proceed().also {
-                val vb = chain.args.getOrNull(0)?.takeIf { shortcutBar.isInstance(it) } ?: chain.thisObject?.takeIf { shortcutBar.isInstance(it) }
-                syncShortcutBar(vb)
+                val target = chain.thisObject?.takeIf(shortcutBar::isInstance) ?: chain.args.firstOrNull(shortcutBar::isInstance)
+                if (target != null) syncShortcutBar(target)
             }
         }
     }
@@ -354,20 +468,32 @@ private class SendButtonPill(view: View) {
     private val origTextColor = (view as? android.widget.TextView)?.currentTextColor
     private val shape = capsule()
     private val origRadii = WeakHashMap<Any, Float>()
+    private var lastAppliedHeight = -1
+    private var lastAppliedBg: android.graphics.drawable.Drawable? = null
     fun apply() {
         val v = view.get() ?: return
-        if (v.outlineProvider !== shape) v.outlineProvider = shape
-        if (!v.clipToOutline) v.clipToOutline = true
-        val targetRadius = if (v.height > 0) v.height / 2f else 18f * v.dp
-        updateSmoothRadii(v.background, targetRadius)
-        if (v is android.widget.TextView && night()) {
-            if (v.currentTextColor != 0xFFFFFFFF.toInt()) v.setTextColor(0xFFFFFFFF.toInt())
+        var dirty = false
+        if (v.outlineProvider !== shape) { v.outlineProvider = shape; dirty = true }
+        if (!v.clipToOutline) { v.clipToOutline = true; dirty = true }
+        if (v.height != lastAppliedHeight || v.background !== lastAppliedBg) {
+            lastAppliedHeight = v.height
+            lastAppliedBg = v.background
+            val targetRadius = if (v.height > 0) v.height / 2f else 18f * v.dp
+            updateSmoothRadii(v.background, targetRadius)
+            dirty = true
         }
-        v.invalidateOutline()
-        v.invalidate()
+        if (v is android.widget.TextView && night()) {
+            if (v.currentTextColor != 0xFFFFFFFF.toInt()) { v.setTextColor(0xFFFFFFFF.toInt()); dirty = true }
+        }
+        if (dirty) {
+            v.invalidateOutline()
+            v.invalidate()
+        }
     }
     fun restore() {
         val v = view.get() ?: return
+        lastAppliedHeight = -1
+        lastAppliedBg = null
         v.outlineProvider = outline
         v.clipToOutline = clip
         if (v is android.widget.TextView && origTextColor != null) v.setTextColor(origTextColor)
@@ -569,29 +695,7 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
                 }
             }
         }
-        val root = edit.rootView as? ViewGroup ?: return
-        fun findRecyclers(v: View) {
-            if (v is ViewGroup) {
-                if (v.javaClass.name == "com.tencent.mobileqq.aio.widget.AIOMsgListGroup") {
-                    val rv = (0 until v.childCount).map(v::getChildAt).filterIsInstance<ViewGroup>().firstOrNull { ch ->
-                        generateSequence<Class<*>>(ch.javaClass) { it.superclass }.any { it.name == "androidx.recyclerview.widget.RecyclerView" }
-                    }
-                    if (rv != null) {
-                        msgListUnderScrolls.getOrPut(v) { MsgListUnderScroll(v, rv) }.sync()
-                        return
-                    }
-                }
-                val isRv = generateSequence<Class<*>>(v.javaClass) { it.superclass }
-                    .any { it.name == "androidx.recyclerview.widget.RecyclerView" }
-                if (isRv) {
-                    if (!savedRecyclerClips.containsKey(v)) savedRecyclerClips[v] = v.clipToPadding
-                    if (v.clipToPadding) v.clipToPadding = false
-                } else {
-                    for (i in 0 until v.childCount) v.getChildAt(i)?.let(::findRecyclers)
-                }
-            }
-        }
-        findRecyclers(root)
+        msgListUnderScrolls.values.toList().forEach { it.sync() }
     }
     fun sync() {
         val edit = edit.get() ?: return
@@ -633,6 +737,11 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
     }
     override fun onGlobalLayout() {
         if (!on("TG输入栏")) return
+        edit.get()?.let {
+            repositionSafeArea(it)
+            val focus = it.hasFocus()
+            if (focused != focus) sync()
+        }
         sendPill?.apply()
         val strip = strip.get() ?: return
         if (strip.width <= 0) return
@@ -676,7 +785,10 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
         margins.values.forEach { it.restore() }; margins.clear()
         applied = false
     }
-    override fun onPreDraw(): Boolean { sync(); return true }
+    override fun onPreDraw(): Boolean {
+        if (on("TG输入栏")) glass.sync()
+        return true
+    }
     override fun onViewAttachedToWindow(view: View) = Unit
     override fun onViewDetachedFromWindow(view: View) = dispose()
     fun dispose() {

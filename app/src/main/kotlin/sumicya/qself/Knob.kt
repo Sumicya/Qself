@@ -765,40 +765,15 @@ private fun sheet(anchor: View) {
         })
     }
     grid.addView(bubblePadSeek)
-    val topOffsetLabel = TextView(ctx).apply {
-        textSize = 13f; setTextColor(ink)
-        gravity = Gravity.START
-        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
-    }
-    grid.addView(topOffsetLabel)
-    val topOffsetSeek = android.widget.SeekBar(ctx).apply {
-        max = 28
-        val savedOffset = (prefs.getInt(HEADER_TOP_OFFSET, 1)).coerceIn(-12, 16)
-        progress = savedOffset + 12
-        topOffsetLabel.text = "顶栏偏移：${savedOffset}dp（默认 1dp）"
-        contentDescription = "顶部安全区胶囊距顶偏移"
-        setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(bar: android.widget.SeekBar, value: Int, user: Boolean) {
-                topOffsetLabel.text = "顶栏偏移：${value - 12}dp（默认 1dp）"
-            }
-            override fun onStartTrackingTouch(bar: android.widget.SeekBar) = Unit
-            override fun onStopTrackingTouch(bar: android.widget.SeekBar) {
-                prefs.edit().putInt(HEADER_TOP_OFFSET, bar.progress - 12).apply()
-                refreshLooks()
-            }
-        })
-    }
-    grid.addView(topOffsetSeek)
     grid.addView(LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.END
         addView(button("恢复默认") {
             val edit = prefs.edit()
             features.forEach { edit.putBoolean(it.name, it.default) }
             edit.putString(TIME_PATTERN, "HH:mm").putInt(AVATAR_RADIUS, 20).putInt(GLASS_BLUR, 1)
-                .putInt(BUBBLE_CORNER, 17).putInt(BUBBLE_PADDING, 5).putInt(HEADER_TOP_OFFSET, 1)
+                .putInt(BUBBLE_CORNER, 17).putInt(BUBBLE_PADDING, 5)
             edit.apply(); format.setText("HH:mm"); radiusSeek.progress = 20; blurSeek.progress = 1
-            bubbleCornerSeek.progress = 17; bubblePadSeek.progress = 5; topOffsetSeek.progress = 13
+            bubbleCornerSeek.progress = 17; bubblePadSeek.progress = 5
             paints.forEach { it() }; refreshLooks(); card.invalidate()
         })
         addView(button("结束进程") {

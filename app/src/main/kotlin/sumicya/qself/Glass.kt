@@ -37,7 +37,15 @@ import kotlin.math.min
  * [radius] 圆角上限（默认全圆 = 胶囊 / 圆钮），[selected] 给底栏用：返回当前选中的页签，
  * 玻璃里就多一块会弹着滑过去的亮胶囊。
  */
-class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE, kernelBar: Boolean = false, kernelButton: Boolean = false, kernelSurface: Boolean = false, private val selected: (() -> View?)? = null) : Drawable() {
+class Glass(
+    private val host: View,
+    private val radius: Float = Float.MAX_VALUE,
+    kernelBar: Boolean = false,
+    kernelButton: Boolean = false,
+    kernelSurface: Boolean = false,
+    private val backdropOverride: ((Canvas) -> Boolean)? = null,
+    private val selected: (() -> View?)? = null,
+) : Drawable() {
     private val kernel = if (kernelBar || kernelButton || kernelSurface) KernelBar(host, { behind(it) }, { invalidateSelf() }, standalone = !kernelBar, cornerRadius = if (kernelSurface) radius else Float.MAX_VALUE, deformBody = !kernelSurface) else null
     private val dp = host.dp
     private val node = RenderNode("qself-glass")
@@ -162,32 +170,43 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         return RenderEffect.createRuntimeShaderEffect(lens, "content")
     }
 
+    private val levelsScratch = ArrayList<Pair<ViewGroup, View>>(8)
+    private val overlapMatrix = Matrix()
+    private val overlapRect = RectF()
+    private val paintMatrix = Matrix()
+
     /** 按画家顺序（先远后近）把宿主底下的东西画到以宿主左上角为原点的画布上。 */
     private fun behind(rc: Canvas) {
-        host.getLocationInWindow(here)
-        val levels = ArrayList<Pair<ViewGroup, View>>(8)
+        if (backdropOverride?.invoke(rc) == true) return
+        recordBehind(rc, useTightBounds = true)
+    }
+
+    internal fun recordBehind(rc: Canvas, useTightBounds: Boolean = false) {
+        levelsScratch.clear()
         var child: View = host
         while (true) {
             val p = child.parent as? ViewGroup ?: break
-            levels += p to child
+            levelsScratch += p to child
             child = p
         }
-        for ((p, c) in levels.asReversed()) {
+        for (idx in levelsScratch.size - 1 downTo 0) {
+            val (p, c) = levelsScratch[idx]
             p.background?.let { paint(rc, p, background = true) { bg -> it.draw(bg) } }
             val hostIndex = p.indexOfChild(c)
             val hostZ = c.z
             for (i in 0 until p.childCount) {
                 if (i == hostIndex) continue
                 val s = p.getChildAt(i)
-                if (!isBehind(c, s, i, hostZ)) continue
-                if (s.visibility != View.VISIBLE || s.javaClass.simpleName.contains("Blur") || !overlaps(s)) continue
+                if (!isBehind(c, s, i, hostZ, hostIndex)) continue
+                if (s.visibility != View.VISIBLE || s.javaClass.simpleName.contains("Blur") || !overlaps(s, useTightBounds)) continue
                 paint(rc, s) { s.draw(it) }
             }
         }
     }
 
     private inline fun paint(rc: Canvas, v: View, background: Boolean = false, body: (Canvas) -> Unit) {
-        val transform = Matrix()
+        val transform = paintMatrix
+        transform.reset()
         v.transformMatrixToGlobal(transform)
         host.transformMatrixToLocal(transform)
         val save = rc.save()
@@ -204,19 +223,25 @@ class Glass(private val host: View, private val radius: Float = Float.MAX_VALUE,
         rc.restoreToCount(save)
     }
 
-    private fun isBehind(hostChild: View, sibling: View, index: Int, hostZ: Float): Boolean {
-        val parent = hostChild.parent as? ViewGroup ?: return false
-        val hostIndex = parent.indexOfChild(hostChild)
+    private fun isBehind(hostChild: View, sibling: View, index: Int, hostZ: Float, hostIndex: Int = (hostChild.parent as? ViewGroup)?.indexOfChild(hostChild) ?: -1): Boolean {
+        if (hostIndex < 0) return false
         val z = sibling.z
         return z < hostZ || (z == hostZ && index < hostIndex)
     }
 
-    private fun overlaps(v: View): Boolean {
-        val transform = Matrix()
-        v.transformMatrixToGlobal(transform); host.transformMatrixToLocal(transform)
-        val rect = RectF(0f,0f,v.width.toFloat(),v.height.toFloat()).also(transform::mapRect)
-        val margin = if (kernel != null) 40*dp else pad.toFloat()
-        return rect.intersects(-margin,-margin,host.width+margin,host.height+margin)
+    private fun overlaps(v: View, useTightBounds: Boolean = true): Boolean {
+        if (v.width <= 0 || v.height <= 0) return false
+        overlapMatrix.reset()
+        v.transformMatrixToGlobal(overlapMatrix); host.transformMatrixToLocal(overlapMatrix)
+        overlapRect.set(0f, 0f, v.width.toFloat(), v.height.toFloat())
+        overlapMatrix.mapRect(overlapRect)
+        val margin = if (kernel != null) 40 * dp else pad.toFloat()
+        val b = bounds
+        val l = (if (useTightBounds && !b.isEmpty) b.left else 0) - margin
+        val t = (if (useTightBounds && !b.isEmpty) b.top else 0) - margin
+        val r = (if (useTightBounds && !b.isEmpty) b.right else host.width) + margin
+        val bot = (if (useTightBounds && !b.isEmpty) b.bottom else host.height) + margin
+        return overlapRect.intersects(l, t, r, bot)
     }
     fun drawKernelContent(canvas: Canvas): Boolean = runCatching {
         kernel?.drawContent(canvas,bounds) ?: false

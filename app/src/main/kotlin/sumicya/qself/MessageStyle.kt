@@ -28,24 +28,53 @@ internal const val TIME_PATTERN = "message_time_pattern"
 internal const val AVATAR_RADIUS = "avatar_radius_percent"
 internal const val BUBBLE_CORNER = "bubble_corner_dp"
 internal const val BUBBLE_PADDING = "bubble_padding_dp"
-internal const val HEADER_TOP_OFFSET = "header_top_offset_dp"
 internal fun bubbleCornerDp(): Float = (store()?.getInt(BUBBLE_CORNER, 17) ?: 17).coerceIn(0, 32).toFloat()
 internal fun bubblePaddingDp(): Float = (store()?.getInt(BUBBLE_PADDING, 5) ?: 5).coerceIn(0, 16).toFloat()
-internal fun headerTopOffsetDp(): Float = (store()?.getInt(HEADER_TOP_OFFSET, 1) ?: 1).coerceIn(-12, 16).toFloat()
 internal const val TIME_FORMAT_GUIDE =
     "格式码（左对齐显示）：yyyy/yy 年 · MM/M 月 · dd/d 日 · E 星期 · HH/H 0-23时 · kk/k 1-24时 · hh/h 1-12时 · KK/K 0-11时 · a 上下午 · mm/m 分 · ss/s 秒 · SSS/S 毫秒；文字用单引号包裹"
-internal fun validTimePattern(pattern: String): Boolean = pattern.isNotEmpty() && pattern.none { it.isISOControl() } && runCatching {
-    DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(Instant.EPOCH.atZone(ZoneId.systemDefault()))
-}.isSuccess
+
+private val INVALID_FORMATTER = Any()
+private val timeFormatterCache = java.util.concurrent.ConcurrentHashMap<Pair<String, Locale>, Any>()
+
+private fun cachedTimeFormatter(pattern: String, locale: Locale = Locale.getDefault()): DateTimeFormatter? {
+    if (pattern.isEmpty() || pattern.any { it.isISOControl() }) return null
+    val key = pattern to locale
+    val cached = timeFormatterCache[key]
+    if (cached != null) return cached as? DateTimeFormatter
+    val fmt = runCatching {
+        DateTimeFormatter.ofPattern(pattern, locale).also {
+            it.format(Instant.EPOCH.atZone(ZoneId.systemDefault()))
+        }
+    }.getOrNull()
+    if (timeFormatterCache.size > 32) timeFormatterCache.clear()
+    timeFormatterCache[key] = fmt ?: INVALID_FORMATTER
+    return fmt
+}
+
+internal fun validTimePattern(pattern: String): Boolean = cachedTimeFormatter(pattern) != null
+
 internal fun messageTime(seconds: Long, pattern: String, zone: ZoneId = ZoneId.systemDefault()): String =
     if (seconds <= 0) "" else runCatching {
-        val fmt = if (validTimePattern(pattern)) pattern else "HH:mm"
-        DateTimeFormatter.ofPattern(fmt, Locale.getDefault()).format(Instant.ofEpochSecond(seconds).atZone(zone))
+        val formatter = cachedTimeFormatter(pattern) ?: cachedTimeFormatter("HH:mm") ?: return@runCatching ""
+        formatter.format(Instant.ofEpochSecond(seconds).atZone(zone))
     }.getOrDefault("")
 internal fun avatarCorner(size: Int, percent: Int): Int =
     (size.coerceAtLeast(0) * percent.coerceAtLeast(0) / 100f).toInt()
 
-private fun messageRecord(item: Any?): Any? = runCatching { item?.javaClass?.getMethod("getMsgRecord")?.invoke(item) }.getOrNull()
+private val msgRecordGetters = java.util.concurrent.ConcurrentHashMap<Class<*>, java.lang.reflect.Method>()
+private val isSelfGetters = java.util.concurrent.ConcurrentHashMap<Class<*>, java.lang.reflect.Method>()
+private fun messageRecord(item: Any?): Any? = item?.let {
+    runCatching {
+        val m = msgRecordGetters.getOrPut(it.javaClass) { it.javaClass.getMethod("getMsgRecord") }
+        m.invoke(it)
+    }.getOrNull()
+}
+private fun isSelfItem(item: Any?): Boolean = item?.let {
+    runCatching {
+        val m = isSelfGetters.getOrPut(it.javaClass) { it.javaClass.getMethod("isSelf") }
+        m.invoke(it) as? Boolean
+    }.getOrNull() == true
+} ?: false
 private fun textViews(view: View): Sequence<TextView> = sequence {
     if (view is TextView && view.javaClass.name == "com.tencent.qqnt.aio.widget.AIOMsgTextView") yield(view)
     if (view is android.view.ViewGroup) for (i in 0 until view.childCount) yieldAll(textViews(view.getChildAt(i)))
@@ -135,22 +164,28 @@ private class ExternalStamp(host: android.view.ViewGroup) {
                 if (changed) ch.layoutParams = chLp
             }
         }
-        labelView.text = text
-        labelView.setTextColor(if (night()) 0xCCDFE5F0.toInt() else 0x993C3C43.toInt())
-        labelView.gravity = align
-        val lp = (labelView.layoutParams as? android.widget.LinearLayout.LayoutParams)
-            ?: android.widget.LinearLayout.LayoutParams(
+        val textColor = if (night()) 0xCCDFE5F0.toInt() else 0x993C3C43.toInt()
+        if (labelView.text?.toString() != text) labelView.text = text
+        if (labelView.currentTextColor != textColor) labelView.setTextColor(textColor)
+        if (labelView.gravity != align) labelView.gravity = align
+        val targetTop = (2 * dp).toInt()
+        val curLp = labelView.layoutParams as? android.widget.LinearLayout.LayoutParams
+        if (curLp == null || curLp.gravity != align || curLp.topMargin != targetTop ||
+            curLp.bottomMargin != 0 || curLp.leftMargin != 0 || curLp.rightMargin != 0 ||
+            curLp.marginStart != 0 || curLp.marginEnd != 0) {
+            val lp = curLp ?: android.widget.LinearLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
             )
-        lp.gravity = align
-        lp.topMargin = (2 * dp).toInt()
-        lp.bottomMargin = 0
-        lp.leftMargin = 0
-        lp.rightMargin = 0
-        lp.marginStart = 0
-        lp.marginEnd = 0
-        labelView.layoutParams = lp
+            lp.gravity = align
+            lp.topMargin = targetTop
+            lp.bottomMargin = 0
+            lp.leftMargin = 0
+            lp.rightMargin = 0
+            lp.marginStart = 0
+            lp.marginEnd = 0
+            labelView.layoutParams = lp
+        }
         if (labelView.parent !== container) {
             (labelView.parent as? android.view.ViewGroup)?.removeView(labelView)
             container.addView(labelView)
@@ -158,7 +193,7 @@ private class ExternalStamp(host: android.view.ViewGroup) {
             container.removeView(labelView)
             container.addView(labelView)
         }
-        labelView.visibility = View.VISIBLE
+        if (labelView.visibility != View.VISIBLE) labelView.visibility = View.VISIBLE
     }
     fun dispose() = restore()
 }
@@ -177,7 +212,7 @@ fun messageTimestamps() {
     val tplSender = cls("com.tencent.mobileqq.aio.msglist.holder.template.l")
     fun bindSlot(slotView: android.view.ViewGroup, item: Any?) {
         val time = messageRecord(item)?.get("msgTime") as? Long ?: 0L
-        val self = runCatching { item?.javaClass?.getMethod("isSelf")?.invoke(item) as? Boolean }.getOrNull() == true
+        val self = isSelfItem(item)
         externalStamps.getOrPut(slotView) { ExternalStamp(slotView) }.also {
             it.seconds = time
             it.self = self
@@ -244,12 +279,22 @@ private class AvatarCorners(
     private val origClip = view.clipToOutline
     var loadedNoCircle = false
     var loadedSkipVas = false
-    fun apply(enabled: Boolean = on("头像圆角"), allowReload: Boolean = true) {
+    private var appliedEnabled: Boolean? = null
+    private var appliedRadius: Int = Int.MIN_VALUE
+    private var appliedMode: Int = Int.MIN_VALUE
+    private var outlineRadius = 0f
+    private val reusableOutline = object : android.view.ViewOutlineProvider() {
+        override fun getOutline(v: View, outline: android.graphics.Outline) {
+            val r = minOf(outlineRadius, v.width / 2f, v.height / 2f)
+            outline.setRoundRect(0, 0, v.width, v.height, r)
+        }
+    }
+    fun apply(enabled: Boolean = on("头像圆角"), allowReload: Boolean = true, fromDraw: Boolean = false) {
         val v = view.get() ?: return
         val percent = (store()?.getInt(AVATAR_RADIUS, 20) ?: 20).coerceIn(0, 50)
         val wantNoCircle = enabled
         val wantSkipVas = enabled && percent < 50
-        if (allowReload && inAioAvatarLoad.get() != true && (wantNoCircle != loadedNoCircle || wantSkipVas != loadedSkipVas)) {
+        if (allowReload && !fromDraw && inAioAvatarLoad.get() != true && (wantNoCircle != loadedNoCircle || wantSkipVas != loadedSkipVas)) {
             component.get()?.let { comp ->
                 runCatching {
                     val item = msgField.get(comp)
@@ -268,30 +313,56 @@ private class AvatarCorners(
             ?: v.layoutParams?.let { minOf(it.width, it.height) }?.takeIf { it > 0 }
             ?: (37f * v.dp).toInt()
         val radius = avatarCorner(size, percent)
+        val targetRadius: Int
+        val targetMode: Int
+        when {
+            enabled -> {
+                targetRadius = radius
+                targetMode = if (radius > 0) 1 else 0
+            }
+            nativeMode == 0 && loadedNoCircle && size > 0 -> {
+                targetRadius = size / 2
+                targetMode = 1
+            }
+            else -> {
+                targetRadius = nativeRadius
+                targetMode = nativeMode
+            }
+        }
+        val curRadius = v.get("mRadius") as? Int
+        val curMode = v.get("mRoundMode") as? Int
+        if (appliedEnabled == enabled && appliedRadius == targetRadius && appliedMode == targetMode &&
+            curRadius == targetRadius && curMode == targetMode) {
+            return
+        }
+        appliedEnabled = enabled
+        appliedRadius = targetRadius
+        appliedMode = targetMode
         runCatching { lastRadiusField?.setInt(v, -1) }
-        // 真包 checkPathChanged 的 mode=1 分支调用四角等半径 addRoundRect；0%（90°直角）时置 0。
         if (enabled) {
+            // 真包 checkPathChanged 的 mode=1 分支调用四角等半径 addRoundRect；0%（90°直角）时置 0。
             setter.invoke(v, radius, if (radius > 0) 1 else 0)
             if (radius > 0) {
-                v.outlineProvider = capsule(radius.toFloat())
-                v.clipToOutline = true
+                outlineRadius = radius.toFloat()
+                if (v.outlineProvider !== reusableOutline) v.outlineProvider = reusableOutline else v.invalidateOutline()
+                if (!v.clipToOutline) v.clipToOutline = true
             } else {
-                v.outlineProvider = origOutline
-                v.clipToOutline = false
+                if (v.outlineProvider !== origOutline) v.outlineProvider = origOutline
+                if (v.clipToOutline) v.clipToOutline = false
             }
-        } else if (nativeMode == 0 && loadedNoCircle && size > 0) {
-            setter.invoke(v, size / 2, 1)
-            v.outlineProvider = origOutline
-            v.clipToOutline = origClip
         } else {
-            setter.invoke(v, nativeRadius, nativeMode)
-            v.outlineProvider = origOutline
-            v.clipToOutline = origClip
+            if (nativeMode == 0 && loadedNoCircle && size > 0) setter.invoke(v, size / 2, 1)
+            else setter.invoke(v, nativeRadius, nativeMode)
+            if (v.outlineProvider !== origOutline) v.outlineProvider = origOutline
+            if (v.clipToOutline != origClip) v.clipToOutline = origClip
         }
-        v.invalidate()
-        notifyChatAvatarsUpdated()
+        if (!fromDraw) {
+            v.invalidate()
+            notifyChatAvatarsUpdated()
+        }
     }
     override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
+        if (r - l == or - ol && b - t == ob - ot && appliedEnabled != null) return
         apply(allowReload = false)
     }
     fun dispose() { apply(false, allowReload = false); view.get()?.removeOnLayoutChangeListener(this) }
@@ -442,7 +513,7 @@ fun customAvatarCorners() {
         val state = corners[chain.thisObject]
         if (state == null) chain.proceed()
         else {
-            state.apply(allowReload = false)
+            state.apply(allowReload = false, fromDraw = true)
             val prev = inAioAvatarDraw.get()
             inAioAvatarDraw.set(true)
             try { chain.proceed() } finally { if (prev == null) inAioAvatarDraw.remove() else inAioAvatarDraw.set(prev) }
