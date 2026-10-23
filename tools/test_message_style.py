@@ -156,6 +156,11 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('pageAnimations()', looks_src)
         self.assertIn('AIODefaultTitleContainerVB', looks_src)
         self.assertIn('ImmersiveTitleBar2', looks_src)
+        self.assertIn('reducedSafeTop', looks_src)
+        self.assertIn('centeredBarTranslationX', looks_src)
+        self.assertIn('syncStatusBarTintViews', looks_src)
+        self.assertIn('homeTopBar', looks_src)
+        self.assertIn('homeListClip', looks_src)
 
 
 if __name__ == '__main__':

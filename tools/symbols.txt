@@ -540,6 +540,7 @@ member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#p
 member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#s
 member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#t
 member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#w
+member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#x
 member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#y
 member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#z
 class com.tencent.mobileqq.widget.search.QUISearchBar

@@ -1,8 +1,13 @@
+## 2026-10-23 — 修复底栏 64dp 胶囊被原生重置、页签内部三明治挤压与偏心、底栏与按钮组合水平居中，以及群通知/主页顶栏安全区移除、防裁切与水平居中
+
+- 底栏 64dp 高度防回退、页签三层分离居中与组合水平居中（`Looks.kt`）：针对 `TabFrameControllerImpl#checkEnableTabAnim` 将 `QQTabLayout` 高度重置为 `54dp`（`106px`）导致 `56dp`（`110px`）选中胶囊向下溢出 `12px`、以及 `TabView` 原生上下内边距（`9dp + 8dp`）将 `customView` 压缩为 `29dp` 造成未读数/图标/文字重叠偏心的问题，`settle(bar)` 始终强制锁定底栏高度 `64dp`（`125px`）与 `strip` 四周 `4dp`（`8px`）对称内边距；`fit(tab)` 清零 `TabView` 四向内边距并将 `customView` 设为 `MATCH_PARENT × MATCH_PARENT`（`56dp`），将 `TabDragAnimationView`（`0x7f0a67c7`）设为 `MATCH_PARENT`（`paddingTop = 8dp`）、`mTabTextView`（`0x7f0a7345`）设为 `bottomMargin = 4dp`，使未读数、图标与文字三层垂直分离且水平居中于 `tab.width / 2f`；`AppearanceObserver.onPreDraw()` 在隐藏底栏页签取消首帧绘制时保持 `dirty = true`，并在 `settle(bar)` 中通过 `centeredBarTranslationX`（`- (gap + knobW) / 2f`）配合 `drawListener` 同步 `knob(bar)`，使 `[底栏 + 12dp 间距 + Qself 按钮]` 整体在屏幕水平正中（预览见 [`docs/preview-bottom-bar-and-safe-area-fix.png`](../docs/preview-bottom-bar-and-safe-area-fix.png)）。
+- 顶栏安全区彻底移除、胶囊防上界裁切与标题水平居中（`Looks.kt`）：新增 `syncStatusBarTintViews` 将 `DecorView` 下 `SystemBarTintManager` 的顶部状态栏着色层 `alpha` 置 `0f`，主页 `homeTopBar` 移除 `0x7f0a64c2` / `0x7f0a7361` / `0x7f0a5e9c` 的 `#222325` 背景并提亮暗色模式右侧按钮，`homeListClip` 将会话列表 `RecyclerView`（`0x7f0a0e96`）`clipToPadding` 置 `false`；针对二级页 `QUISecNavBar`（`classes8.dex`），接入 `x()` 获取真实外层 `mRoot`（`140px` `paddingTop`）并在 `onPreDraw` 中拦截 `X()` 回写，通过 `reducedSafeTop` 将顶部安全区缩减至时钟下沿（默认 `109px`，安全下界 `101px`），同时将垂直 `LinearLayout` 父容器同步为内容区背景色消除 `#000000` 黑边；`nagramHeaderLayout` 保持胶囊在 `titleRoot` 内垂直居中（`pillTop >= 0`）彻底根除上半截裁切，并按 `((width - centerW) / 2).coerceIn(availLeft, availRight - centerW)` 将无右侧按钮的「群通知」胶囊严格置于屏幕水平正中（`tools/symbols.txt` 增至 595 条符号零不匹配，57 项 Kotlin 单元测试与 52 项 Python 契约测试全部通过，待真机复验）。
+
 ## 2026-10-21 — 四向严格 5dp 气泡边距与被回复消息去外框、顶栏返回箭头恢复与三胶囊触控重定向、输入栏异步防回退、二级页与搜索栏适配及长按菜单/撤回修复
 
 - 气泡四向严格 `5dp` 内边距与被回复消息彻底去除内层外框（`Chat.kt`）：当 `统一气泡` 开启时将 `skin.padding.j` 与 `skin.padding.h` 归零，由最外层 `BubbleSurface` 施加 `5dp` 四向内边距与四角 `17dp` 全圆角，彻底清除被回复消息 `0x7f0a5c31` 外框与左侧竖条。
 - 顶栏安全区按钮重定位、返回箭头恢复与夜间提亮（`Looks.kt`）：保留 `sm1.u#f` `TextView` 返回箭头背景并隐藏 `1px` 分割线 `u.d`，在 `ViewGroup#dispatchTouchEvent` 中按左、中、右三枚悬浮胶囊命中区转发点击。
-- 输入栏与底部快捷栏防异步回写及全胶囊化（`Input.kt`）：对 `compat.b`、`compat.e$b#f`、`AIOShortcutBarVB` 与 `PanelIconLinearLayout#f` 全路径挂钩，并适配二级页顶栏 `QUISecNavBar` 与搜索栏 `QUISearchBar`（预览见 [`docs/preview-light-mode-fix-and-custom-sliders.png`](../docs/preview-light-mode-fix-and-custom-sliders.png)）。
+- 输入栏与底部快捷栏防异步回写及全胶囊化（`Input.kt`）：对 `compat.b`、`compat.e$b#f`、`AIOShortcutBarVB` 与 `PanelIconLinearLayout#f` 全路径挂钩，并适配二级页顶栏 `QUISecNavBar` 与搜索栏 `QUISearchBar`（预览见 [`docs/preview-bottom-bar-and-safe-area-fix.png`](../docs/preview-bottom-bar-and-safe-area-fix.png)）。
 
 ## 2026-10-20 — 灰字恢复居中、仅他人居左自己居右、单条头像顶对齐防侵入、T字接缝直角、消息外部时间与输入栏药丸化
 
