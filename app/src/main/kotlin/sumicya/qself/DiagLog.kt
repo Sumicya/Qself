@@ -280,6 +280,8 @@ fun buildFullDiagnosticReport(ctx: Context?, includeLogcat: Boolean = true): Str
             .append(" GLASS_BLUR=").append(p.getInt(GLASS_BLUR, 1))
             .append(" BUBBLE_CORNER=").append(p.getInt(BUBBLE_CORNER, 17))
             .append(" BUBBLE_PADDING=").append(p.getInt(BUBBLE_PADDING, 5))
+            .append(" SAFE_TOP=").append(p.getInt(SAFE_TOP, 0))
+            .append(" SAFE_TOP_SHIFT=").append(p.getInt(SAFE_TOP_SHIFT, 0))
             .append('\n')
     }
     if (failures.isNotEmpty()) {

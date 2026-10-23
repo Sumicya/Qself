@@ -194,6 +194,18 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('com.tencent.qphone.base.util.QLog', diag_src)
         self.assertIn('addLogItem', diag_src)
         self.assertIn('导出全量日志', MENU)
+        # 顶栏安全区滑条：默认 0% 完全去掉，不再有 0.72f 比例下限。
+        self.assertIn('SAFE_TOP', MENU)
+        self.assertIn('SAFE_TOP_SHIFT', MENU)
+        self.assertIn('SAFE_TOP_GUIDE', MENU)
+        self.assertIn('safeTopPercent', looks_src)
+        self.assertIn('safeTopShiftDp', looks_src)
+        self.assertNotIn('origTop * 0.72f', looks_src)
+        self.assertIn('HomeSafeArea', looks_src)
+        self.assertIn('0x7f0a6cfa', looks_src)
+        self.assertIn('0x7f0a0e96', looks_src)
+        self.assertIn('aioLayoutSnapshot', looks_src)
+        self.assertIn('SAFE_TOP', diag_src)
 
 
 if __name__ == '__main__':

@@ -612,9 +612,17 @@ class ProtoTest {
         assertEquals(636, (noRight.textLeft + noRight.textRight) / 2)
         assertTrue(noRight.centerPill.top >= 0)
 
-        assertEquals(109, reducedSafeTop(140, 1.953125f))
-        assertEquals(101, reducedSafeTop(140, 1.953125f, -24f))
+        // 顶栏安全区：默认 0% 完全去掉（旧实现的 0.72f 下限会把 141px 只压到 109px，等于没去掉）。
+        assertEquals(0, safeTopPercent())
+        assertEquals(0, safeTopShiftDp())
+        assertEquals(0, reducedSafeTop(141, 1.9761429f))
+        assertEquals(0, reducedSafeTop(68, 1.9761429f))
         assertEquals(0, reducedSafeTop(0, 1.953125f))
+        // 百分比之外还能按 dp 微调（正下负上），且结果不会为负、不会超过 QQ 预留值 + 96dp。
+        assertEquals(31, reducedSafeTop(141, 1.9761429f, 15.75f))   // 15.75dp × 1.976 ≈ 31px
+        assertEquals(59, reducedSafeTop(141, 1.9761429f, 30f))      // 30dp × 1.976 ≈ 59px
+        assertEquals(0, reducedSafeTop(141, 1.9761429f, -40f))
+        assertEquals(331, reducedSafeTop(141, 1.9761429f, 400f))    // 夹紧到 141 + 96dp = 331px
 
         assertEquals(-85.5f, centeredBarTranslationX(1272, 460, 1.953125f, rtl = false))
         assertEquals(85.5f, centeredBarTranslationX(1272, 460, 1.953125f, rtl = true))

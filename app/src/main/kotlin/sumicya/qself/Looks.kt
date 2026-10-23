@@ -90,7 +90,11 @@ fun looks() {
         hook(resCfgCls.getDeclaredMethod("n", android.content.Context::class.java), gated = false) { chain ->
             val orig = (chain.proceed() as? Number)?.toInt() ?: 0
             val ctx = chain.args.getOrNull(0) as? android.content.Context
-            if (on("玻璃底栏") && orig > 0 && ctx != null) reducedSafeTop(orig, ctx.resources.displayMetrics.density) else orig
+            val out = if (on("玻璃底栏") && orig > 0 && ctx != null) {
+                reducedSafeTop(orig, ctx.resources.displayMetrics.density)
+            } else orig
+            recordQselfEvent("MainResourceConfig#n orig=${orig}px -> ${out}px (percent=${safeTopPercent()}% shift=${safeTopShiftDp()}dp)")
+            out
         }
         hook(resCfgCls.getDeclaredMethod("p", android.content.Context::class.java, android.graphics.drawable.Drawable::class.java), gated = false) { chain ->
             val orig = chain.proceed()
@@ -1276,12 +1280,29 @@ internal fun nagramHeaderLayout(
 }
 
 /** 顶部安全区内边距压缩计算：保留状态栏时钟安全下界，避免胶囊上移时越出父容器上界被裁切。 */
-internal fun reducedSafeTop(origTop: Int, dp: Float, offsetDp: Float = 1f): Int {
+/** 顶栏安全区：QQ 真包按状态栏高度（本例 `statusBars=[0,141,0,0]`）给 AIO / 主页 / 二级页顶栏容器留出 paddingTop。 */
+internal const val SAFE_TOP = "safe_top_percent"
+/** 顶栏安全区之外的 dp 微调（正数下移、负数上移）。 */
+internal const val SAFE_TOP_SHIFT = "safe_top_shift_dp"
+/** 「顶栏安全区」滑条缺省 0%：完全去掉，内容顶到窗口最上沿。 */
+internal fun safeTopPercent(): Int = (store()?.getInt(SAFE_TOP, 0) ?: 0).coerceIn(0, 100)
+internal fun safeTopShiftDp(): Int = (store()?.getInt(SAFE_TOP_SHIFT, 0) ?: 0).coerceIn(-48, 96)
+
+/**
+ * 顶栏安全区高度（px）。[origTop] 是 QQ 原本预留的顶部空间（AIO 为 `getStatusBarHeight()`，主页为 `MainResourceConfig#n()`，二级页为 `QUISecNavBar` 根内边距）。
+ *
+ * - `percent = 0`   → 完全去掉安全区（本设备状态栏实际不绘制，141px 预留是纯浪费）；
+ * - `percent = 100` → 保持 QQ 原样；
+ * - `shiftDp` 为百分比之外的 dp 微调，缺省取「顶栏上移」滑条的值。
+ *
+ * 不再设「至少保留七成」的比例下限（旧下限会把 141px 只压到 109px，等于没去掉），
+ * 也不再对结果做人为夹紧（只保证非负且不超过 QQ 预留值 + 96dp 的上移/下移余量）。
+ */
+internal fun reducedSafeTop(origTop: Int, dp: Float, offsetDp: Float = Float.NaN): Int {
     if (origTop <= 0) return 0
-    val minTop = (origTop * 0.72f).roundToInt()
-    val baseTop = (origTop - (16f * dp).roundToInt()).coerceAtLeast(minTop)
-    val delta = ((offsetDp - 1f) * dp).roundToInt()
-    return (baseTop + delta).coerceAtLeast(minTop)
+    val shiftDp = if (offsetDp.isNaN()) safeTopShiftDp().toFloat() else offsetDp
+    val keep = (origTop * safeTopPercent() / 100f).roundToInt() + (shiftDp * dp).roundToInt()
+    return keep.coerceIn(0, origTop + (96 * dp).roundToInt())
 }
 
 private class HeaderPillsDrawable(private val host: View) : android.graphics.drawable.Drawable() {
@@ -1567,7 +1588,12 @@ private class HeaderState(
             val orig = origOuterPad
             if (orig != null && orig[1] > 0) {
                 val reducedTop = reducedSafeTop(orig[1], bar.dp)
-                lastAppliedOuterTop = reducedTop
+                if (lastAppliedOuterTop != reducedTop) {
+                    lastAppliedOuterTop = reducedTop
+                    aioSafeTopRemovedPx = (orig[1] - reducedTop).coerceAtLeast(0)
+                    recordQselfEvent("AIO 顶栏 outer 安全区 ${orig[1]}px -> ${reducedTop}px (percent=${safeTopPercent()}% shift=${safeTopShiftDp()}dp)")
+                    refreshInputLayout()
+                }
                 if (o.paddingTop != reducedTop || o.paddingBottom != 0) o.setPadding(orig[0], reducedTop, orig[2], 0)
             }
         }
@@ -1578,7 +1604,10 @@ private class HeaderState(
             val orig = origRootPad
             if (orig != null && orig[1] > 0) {
                 val reducedTop = reducedSafeTop(orig[1], bar.dp)
-                lastAppliedRootTop = reducedTop
+                if (lastAppliedRootTop != reducedTop) {
+                    lastAppliedRootTop = reducedTop
+                    recordQselfEvent("AIO 顶栏 root 安全区 ${orig[1]}px -> ${reducedTop}px (percent=${safeTopPercent()}% shift=${safeTopShiftDp()}dp)")
+                }
                 if (r.paddingTop != reducedTop || r.paddingBottom != 0) r.setPadding(orig[0], reducedTop, orig[2], 0)
             }
         }
@@ -1896,6 +1925,8 @@ private fun aioHeader() {
             if (!on("玻璃底栏")) return@also
             val w = bar.width; val h = bar.height
             if (w <= 0 || h <= 0) return@also
+            // 顶栏真正完成布局后抓一次带真实尺寸的 AIO 视图树（此前只在预加载阶段抓到 0×0 的空树）。
+            aioLayoutSnapshot(bar)
             val dp = bar.dp
             if (bar.touchDelegate != null) bar.touchDelegate = null
             // 清理或收纳标题栏内动态 inflate 的铭牌/火花/VIP 装饰，保留功能性的听筒图标（0x7f0a1630）。
@@ -2436,7 +2467,72 @@ private fun tintHomeIcons(v: View?, dark: Boolean) {
 private val homeTopBlurVis = WeakHashMap<View, Int>()
 private val homeTopAppliedRootBgs = WeakHashMap<ViewGroup, android.graphics.drawable.Drawable?>()
 
+/**
+ * AIO 顶栏被去掉的安全区像素数。真包 `AIOMsgListGroup.paddingTop = 238 = 141(状态栏) + 97(标题栏)`，
+ * 顶栏整体上移后消息列表顶部内边距必须同步减掉同样的量，否则标题栏与第一条消息之间会空出一大段。
+ */
+@Volatile
+private var aioSafeTopRemovedPx = 0
+
+internal fun aioSafeTopRemoved(): Int = aioSafeTopRemovedPx
+
+/** AIO 顶栏完成布局后 3 秒内只抓一次带真实尺寸的视图树，避免每帧都 dump。 */
+private var aioSnapshotAt = 0L
+
+private fun aioLayoutSnapshot(bar: View) {
+    if (!on("全量日志")) return
+    val now = android.os.SystemClock.uptimeMillis()
+    if (now - aioSnapshotAt < 3000L) return
+    aioSnapshotAt = now
+    captureViewRootSnapshot(bar, "AIO-Header-LaidOut:${bar.context.javaClass.simpleName}")
+}
+
+/**
+ * 主页（`Conversation` `r/i/e5p.xml`）顶栏安全区三件套，实测值（`1272×2800`、density `1.976`、`statusBars=[0,141,0,0]`）：
+ * - `0x7f0a3245` `TitleAreaHeadLayout`（头像）`topMargin = 68px`；
+ * - `0x7f0a6cfa` 顶栏容器 `b=[0,0,1272,167]`（`167 = 68 + 99`），其右侧按钮区 `0x7f0a120a` 贴底排布；
+ * - `0x7f0a0e96` `ClipSkinnableRecycleView` `paddingTop = 167px`（搜索框与会话列表均在列表内）。
+ *
+ * 三者用的是同一个安全区高度，所以只要把头像的 `topMargin` 与顶栏容器整体上移同样的 `delta`，
+ * 再把会话列表 `paddingTop` 减掉 `delta`，主页顶栏安全区就真的没了；关掉开关时原样还原。
+ */
+private class HomeSafeArea(val head: View, val container: View, val list: View) {
+    val origHeadTop: Int = (head.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin ?: 0
+    val origContainerTy: Float = container.translationY
+    val origListPad: Int = list.paddingTop
+}
+
+private val homeSafeAreas = WeakHashMap<View, HomeSafeArea>()
+
+private fun homeSafeArea(bar: ViewGroup) {
+    val state = if (homeSafeAreas.containsKey(bar)) homeSafeAreas[bar] else run {
+        val root = bar.rootView as? ViewGroup
+        val head = bar.takeIf { it.id == 0x7f0a3245 } ?: root?.findViewById(0x7f0a3245)
+        val container = root?.findViewById<View>(0x7f0a6cfa)
+        val list = root?.findViewById<View>(0x7f0a0e96)
+        val made = if (head != null && container != null && list != null) HomeSafeArea(head, container, list) else null
+        if (made != null) homeSafeAreas[bar] = made
+        made
+    }
+    if (state == null) return
+    val target = if (on("玻璃底栏") && state.origHeadTop > 0) reducedSafeTop(state.origHeadTop, bar.dp) else state.origHeadTop
+    val delta = state.origHeadTop - target
+    val lp = state.head.layoutParams as? ViewGroup.MarginLayoutParams
+    if (lp != null && lp.topMargin != target) {
+        lp.topMargin = target
+        state.head.layoutParams = lp
+        recordQselfEvent("homeSafeArea 顶栏安全区 ${state.origHeadTop}px -> ${target}px (delta=$delta, percent=${safeTopPercent()}%, shift=${safeTopShiftDp()}dp)")
+    }
+    val ty = state.origContainerTy - delta
+    if (state.container.translationY != ty) state.container.translationY = ty
+    val pad = (state.origListPad - delta).coerceAtLeast(0)
+    if (state.list.paddingTop != pad) {
+        state.list.setPadding(state.list.paddingLeft, pad, state.list.paddingRight, state.list.paddingBottom)
+    }
+}
+
 private fun homeTopBar(bar: ViewGroup) {
+    homeSafeArea(bar)
     if (homeTopRecorded[bar] != true) {
         homeTopBgs[bar] = bar.background
         homeTopClips[bar] = bar.clipChildren to bar.clipToPadding
@@ -2492,9 +2588,9 @@ private fun homeTopBar(bar: ViewGroup) {
             root.background = fill
         }
     }
-    // 主页顶栏（Conversation r/i/e5p.xml / Contacts / Leba）：MainResourceConfig#n 与 TitleAreaHeadLayout#k 已按 reducedSafeTop 压缩安全区高度，
-    // 此处对未走 MainResourceConfig#n 的子组件微调 4dp 并对夜间模式图标统一提亮。
-    val shiftY = -4f * bar.dp
+    // 主页顶栏（Conversation r/i/e5p.xml / Contacts / Leba）：安全区由 homeSafeArea 按「顶栏安全区」滑条整体去掉，
+    // 未命中 homeSafeArea 三件套的页面（Contacts / Leba）仍按旧的 4dp 微调，并对夜间模式图标统一提亮。
+    val shiftY = if (homeSafeAreas.containsKey(bar)) 0f else -4f * bar.dp
     val dark = night()
     for (id in intArrayOf(0x7f0a3245, 0x7f0a3d3f, 0x7f0a120a, 0x7f0a2ef9, 0x7f0a2ed1, 0x7f0a6bb6, 0x7f0a6bb7)) {
         scope.findViewById<View>(id)?.let { ch ->
@@ -2545,6 +2641,16 @@ private fun resetHomeTopBars() {
     for ((iv, _) in homeTopIconRecorded) iv.imageTintList = homeTopIconTints[iv]
     homeListClips.forEach { (g, old) -> g.clipChildren = old.first; g.clipToPadding = old.second }
     statusTintAlphas.forEach { (ch, origA) -> ch.alpha = origA }
+    homeSafeAreas.values.toList().forEach { st ->
+        (st.head.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            if (lp.topMargin != st.origHeadTop) { lp.topMargin = st.origHeadTop; st.head.layoutParams = lp }
+        }
+        if (st.container.translationY != st.origContainerTy) st.container.translationY = st.origContainerTy
+        if (st.list.paddingTop != st.origListPad) {
+            st.list.setPadding(st.list.paddingLeft, st.origListPad, st.list.paddingRight, st.list.paddingBottom)
+        }
+    }
+    homeSafeAreas.clear()
     homeTopBgs.clear(); homeTopRecorded.clear(); homeTopClips.clear()
     homeTopBlurVis.clear(); homeDividers.clear(); homeTopAppliedRootBgs.clear()
     homeTopChildShifts.clear(); homeTopIconTints.clear(); homeTopIconRecorded.clear()

@@ -48,6 +48,9 @@ private fun easing() = PathInterpolator(0.2f, 0f, 0f, 1f)
 
 fun motionDuration(milliseconds: Long): Long = if (ValueAnimator.areAnimatorsEnabled()) milliseconds else 0L
 
+private fun safeTopText(percent: Int, shiftDp: Int) =
+    "顶栏安全区：$percent%（0% 完全去掉 / 100% 保持 QQ 原样） · 顶栏上下微调：${if (shiftDp > 0) "+" else ""}${shiftDp}dp"
+
 /** 只用于模块自己创建的按钮，不替换 QQ 原控件的触摸监听器。 */
 private fun View.pressMotion(kernel: Glass? = null) {
     setOnTouchListener { view, event ->
@@ -764,6 +767,59 @@ private fun sheet(anchor: View) {
             }
         })
     }
+    val safeTopLabel = TextView(ctx).apply {
+        textSize = 13f; setTextColor(ink)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+    }
+    grid.addView(safeTopLabel)
+    val safeTopSeek = android.widget.SeekBar(ctx).apply {
+        max = 100; progress = prefs.getInt(SAFE_TOP, 0).coerceIn(0, 100)
+        safeTopLabel.text = safeTopText(progress, prefs.getInt(SAFE_TOP_SHIFT, 0))
+        contentDescription = "顶栏安全区保留百分比"
+        setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: android.widget.SeekBar, value: Int, user: Boolean) {
+                safeTopLabel.text = safeTopText(value, prefs.getInt(SAFE_TOP_SHIFT, 0))
+            }
+            override fun onStartTrackingTouch(bar: android.widget.SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: android.widget.SeekBar) {
+                prefs.edit().putInt(SAFE_TOP, bar.progress).apply()
+                refreshLooks(); card.invalidate()
+            }
+        })
+    }
+    grid.addView(safeTopSeek)
+    grid.addView(TextView(ctx).apply {
+        text = SAFE_TOP_GUIDE
+        textSize = 11.5f; setTextColor(sub)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (2 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
+    })
+    val safeShiftLabel = TextView(ctx).apply {
+        textSize = 13f; setTextColor(ink)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+    }
+    grid.addView(safeShiftLabel)
+    val safeShiftSeek = android.widget.SeekBar(ctx).apply {
+        max = 72; progress = prefs.getInt(SAFE_TOP_SHIFT, 0).coerceIn(-24, 48) + 24
+        safeShiftLabel.text = safeTopText(prefs.getInt(SAFE_TOP, 0), progress - 24)
+        contentDescription = "顶栏上下微调"
+        setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: android.widget.SeekBar, value: Int, user: Boolean) {
+                safeShiftLabel.text = safeTopText(prefs.getInt(SAFE_TOP, 0), value - 24)
+            }
+            override fun onStartTrackingTouch(bar: android.widget.SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: android.widget.SeekBar) {
+                prefs.edit().putInt(SAFE_TOP_SHIFT, bar.progress - 24).apply()
+                refreshLooks(); card.invalidate()
+            }
+        })
+    }
+    grid.addView(safeShiftSeek)
     val activity = generateSequence(ctx) { (it as? ContextWrapper)?.baseContext?.takeIf { base -> base !== it } }
         .filterIsInstance<Activity>().firstOrNull()
     grid.addView(bubblePadSeek)
@@ -777,8 +833,11 @@ private fun sheet(anchor: View) {
             features.forEach { edit.putBoolean(it.name, it.default) }
             edit.putString(TIME_PATTERN, "HH:mm").putInt(AVATAR_RADIUS, 20).putInt(GLASS_BLUR, 1)
                 .putInt(BUBBLE_CORNER, 17).putInt(BUBBLE_PADDING, 5)
+                .putInt(SAFE_TOP, 0).putInt(SAFE_TOP_SHIFT, 0)
             edit.apply(); format.setText("HH:mm"); radiusSeek.progress = 20; blurSeek.progress = 1
             bubbleCornerSeek.progress = 17; bubblePadSeek.progress = 5
+            safeTopSeek.progress = 0; safeShiftSeek.progress = 24
+            safeTopLabel.text = safeTopText(0, 0); safeShiftLabel.text = safeTopText(0, 0)
             paints.forEach { it() }; refreshLooks(); card.invalidate()
         })
         addView(button("结束进程") {

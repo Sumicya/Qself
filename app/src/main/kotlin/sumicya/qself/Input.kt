@@ -114,7 +114,10 @@ private class MsgListUnderScroll(
         if (recycler.clipChildren) recycler.clipChildren = false
         if (recycler.background != null) recycler.background = null
         val topReduction = (14 * group.dp).toInt()
-        val targetTop = if (on("玻璃底栏")) (savedGroupTop - topReduction).coerceAtLeast(0) else origRecyclerTop
+        // 顶栏安全区被去掉多少，消息列表顶部内边距就跟着减多少（真包 238 = 141 状态栏 + 97 标题栏）。
+        val targetTop = if (on("玻璃底栏")) {
+            (savedGroupTop - topReduction - aioSafeTopRemoved()).coerceAtLeast(0)
+        } else origRecyclerTop
         val targetBottom = if (on("TG输入栏")) savedGroupBottom else origRecyclerBottom
         lastAppliedTop = targetTop
         lastAppliedBottom = targetBottom
