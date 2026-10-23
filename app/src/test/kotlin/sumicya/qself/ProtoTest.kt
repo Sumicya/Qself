@@ -634,4 +634,81 @@ class ProtoTest {
         assertEquals(458, barW)
         assertEquals((barW - 2 * pad4) / 3, tabW)
     }
+
+    // ---- 全量日志合并：反复导出只应产生一个累计文件，编号副本由导出前清理负责 ----
+    private fun fakeReport(times: List<String>, snapshotTitles: List<String>, hookTop: String): String {
+        val sb = StringBuilder()
+        sb.append("Qself Full QQ Diagnostic Report\nVersion      : test\n\n")
+        sb.append("--- [2] Hook Invocation Counts (Top 120) ---\n")
+        sb.append("     1  $hookTop\n")
+        sb.append("--- [3] Live Activity & Scene View Hierarchy Snapshots (${snapshotTitles.size}) ---\n")
+        for (t in snapshotTitles) {
+            sb.append("=== Scene Snapshot: $t ===\n")
+            sb.append("[0] root ${'$'}{t.hashCode()}\n")
+        }
+        sb.append("--- [4] Qself Events & Hook Samples (${times.size}) ---\n")
+        for (t in times) sb.append("$t I/Qself: event\n")
+        sb.append("--- [5] UI / AIO / Header / Error QLog Stream (${times.size}) ---\n")
+        for (t in times) sb.append("$t D/Qself: ui\n")
+        sb.append("--- [6] All QQ QLog Stream (${times.size}) ---\n")
+        for (t in times) sb.append("$t V/Qself: qq\n")
+        return sb.toString()
+    }
+
+    @Test fun mergeDiagnosticReportsUnionDedupesAndSortsStreamingSections() {
+        val a = fakeReport(listOf("03:00:01.000", "03:00:03.000"), listOf("Home:1", "AIO:1"), "hook.A")
+        val b = fakeReport(listOf("03:00:03.000", "03:00:02.000"), listOf("AIO:1", "Home:2"), "hook.B")
+        val m = mergeDiagnosticReports(a, b)
+        // 报告头与 [2] 钩子调用次数永远用最新一份（次数是累计的，不该叠加旧值）
+        assertTrue(m.contains("hook.B"))
+        assertFalse(m.contains("hook.A"))
+        // 快照按标题取并集：同标题新的覆盖旧的，不同标题都保留
+        assertTrue(m.contains("=== Scene Snapshot: Home:1 ==="))
+        assertTrue(m.contains("=== Scene Snapshot: Home:2 ==="))
+        assertTrue(m.contains("=== Scene Snapshot: AIO:1 ==="))
+        assertTrue(m.indexOf("--- [3]") < m.indexOf("Home:1"))
+        // 流式小节 4/5/6 按整条记录去重后按时间戳排序：3 条唯一时间 × 3 个小节
+        assertTrue(m.contains("--- [4] Qself Events & Hook Samples (3) ---"))
+        assertTrue(m.contains("--- [5] UI / AIO / Header / Error QLog Stream (3) ---"))
+        assertTrue(m.contains("--- [6] All QQ QLog Stream (3) ---"))
+        for (sec in listOf("event", "ui", "qq")) {
+            val idx = m.lineSequence()
+                .filter { it.endsWith(sec) }
+                .map { it.take(12) }
+                .toList()
+            assertEquals(listOf("03:00:01.000", "03:00:02.000", "03:00:03.000"), idx)
+        }
+        // 合并幂等：再合并一次同样内容，长度与增量都不再变化
+        val again = mergeDiagnosticReports(m, b)
+        assertEquals(m.length, again.length)
+        assertEquals(0, reportDeltaRecords(m, again))
+        // 首次导出（没有历史文件）原样返回
+        assertEquals(b, mergeDiagnosticReports(null, b))
+        assertEquals(b, mergeDiagnosticReports("", b))
+    }
+
+    @Test fun reportDeltaRecordsOnlyCountsNewlyAddedRecords() {
+        val a = fakeReport(listOf("03:00:01.000"), listOf("Home:1"), "hook.A")
+        val b = fakeReport(listOf("03:00:01.000", "03:00:09.000"), listOf("Home:1"), "hook.A")
+        val merged = mergeDiagnosticReports(a, b)
+        // 三个流式小节各新增 1 条
+        assertEquals(3, reportDeltaRecords(a, merged))
+        // 没有历史记录时，增量就是本次全部条数（3 个小节 × 2 条 = 6）
+        assertEquals(6, reportDeltaRecords(null, b))
+        // 完全相同的内容没有增量
+        assertEquals(0, reportDeltaRecords(a, a))
+    }
+
+    @Test fun mergeDiagnosticReportsCapsStreamingRecordsAndSnapshots() {
+        val times = (0 until 40).map { "03:%02d:00.000".format(it) }
+        val a = fakeReport(times, (0 until 20).map { "S$it" }, "hook.A")
+        val b = fakeReport(times.takeLast(2), listOf("S99"), "hook.B")
+        val m = mergeDiagnosticReports(a, b)
+        // 记录数上限：只保留最新的 MAX_MERGED_RECORDS 条，40 < 12000 所以全留
+        assertTrue(m.contains("--- [6] All QQ QLog Stream (40) ---"))
+        // 快照上限：只保留最新的 MAX_MERGED_SNAPSHOTS 块（旧的被淘汰）
+        assertEquals(MAX_MERGED_SNAPSHOTS, m.lineSequence().count { it.startsWith("=== Scene Snapshot: ") })
+        assertTrue(m.contains("=== Scene Snapshot: S99 ==="))
+        assertFalse(m.contains("=== Scene Snapshot: S0 ==="))
+    }
 }

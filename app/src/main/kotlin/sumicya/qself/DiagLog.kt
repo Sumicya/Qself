@@ -5,10 +5,13 @@ package sumicya.qself
 
 import android.app.Activity
 import android.content.ClipData
+import android.app.RecoverableSecurityException
 import android.content.ClipboardManager
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.IntentSender
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
@@ -56,6 +59,12 @@ private val ioExecutor = Executors.newSingleThreadExecutor { r ->
 }
 @Volatile
 private var lastAutoFlushMs = 0L
+/** 最近一次导出清理掉的历史副本数，供提示复用。 */
+@Volatile
+private var lastMergeRemoved = 0
+/** 删除别的应用写进 Download 的历史副本所需的系统授权 IntentSender（null 表示无需授权）。 */
+@Volatile
+private var pendingCleanupConsent: IntentSender? = null
 
 private val uiKeywords = Regex(
     "AIO|Title|NavBar|QUISec|SearchBar|Immersive|Blur|Mask|Safe|Status|Header|Padding|Margin|" +
@@ -320,9 +329,66 @@ private fun captureProcessLogcat(lines: Int): String = runCatching {
     out
 }.getOrElse { "logcat capture failed: $it\n" }
 
-private fun writeLogFiles(ctx: Context, includeLogcat: Boolean): List<String> {
-    val content = buildFullDiagnosticReport(ctx, includeLogcat = includeLogcat)
+// ---- 多次导出的合并与清理：一个进程只产出一个 qself-full-log.txt，重复导出合并去重而不是堆编号副本 ----
+
+/** 导出前清掉 Download 与本应用目录里所有历史 `qself-full-log*.txt`（含分享面板另存出的编号副本）。 */
+private fun cleanupPriorExports(ctx: Context): Int {
+    var removed = 0
+    pendingCleanupConsent = null
+    runCatching {
+        val resolver = ctx.contentResolver
+        val uri = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(MediaStore.MediaColumns._ID)
+        resolver.query(uri, projection, "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?", arrayOf("$LOG_FILE_PREFIX%"), null)
+            ?.use { c ->
+                val idCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                while (c.moveToNext()) {
+                    val item = ContentUris.withAppendedId(uri, c.getLong(idCol))
+                    // 别的应用写进 Download 的副本不能直接删，抛出的是 RecoverableSecurityException：
+                    // 记下系统给的授权 IntentSender，写完新文件后弹一次系统授权框，用户点了就真删掉。
+                    try {
+                        removed += resolver.delete(item, null, null)
+                    } catch (e: RecoverableSecurityException) {
+                        pendingCleanupConsent = e.userAction.actionIntent.intentSender
+                    }
+                }
+            }
+    }
+    val dirs = listOfNotNull(
+        runCatching { ctx.getExternalFilesDir(null) }.getOrNull(),
+        runCatching { ctx.externalCacheDir }.getOrNull(),
+        runCatching { Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) }.getOrNull(),
+    )
+    for (dir in dirs) {
+        runCatching {
+            dir.listFiles()?.filter { it.name.startsWith(LOG_FILE_PREFIX) && it.name.endsWith(".txt") }
+                ?.forEach { if (it.delete()) removed++ }
+        }
+    }
+    return removed
+}
+
+private fun writeLogFiles(ctx: Context, includeLogcat: Boolean, prebuiltReport: String? = null): List<String> {
+    // 先读上一次的导出用于合并；filesDir 是本应用私有目录，无需任何存储权限即可读。
+    val prior = runCatching { File(ctx.filesDir, LOG_FILE_NAME).takeIf { it.isFile }?.readText() }.getOrNull()
+    val fresh = prebuiltReport
+        ?: runCatching { buildFullDiagnosticReport(ctx, includeLogcat = includeLogcat) }.getOrNull()
+        ?: return emptyList()
+    val merged = runCatching { mergeDiagnosticReports(prior, fresh) }.getOrDefault(fresh)
+    val removed = cleanupPriorExports(ctx)
+    val mergeNote = if (prior == null) {
+        "首次导出，无历史文件可合并"
+    } else {
+        "已与上一次导出按小节合并去重（上次 ${prior.length} 字节）"
+    }
+    val content = merged.replace(
+        "Qself Full QQ Diagnostic Report\n",
+        "Qself Full QQ Diagnostic Report\n" +
+            "合并         : $mergeNote；导出前清理历史副本 $removed 个，同名文件只保留 $LOG_FILE_NAME\n",
+    )
     val bytes = content.toByteArray(Charsets.UTF_8)
+    lastMergeRemoved = removed
+    recordQselfEvent("合并导出写入 ${content.length} 字节：$mergeNote，清理历史副本 $removed 个")
     val savedPaths = ArrayList<String>()
     for (dir in listOfNotNull(
         runCatching { ctx.getExternalFilesDir(null) }.getOrNull(),
@@ -330,30 +396,26 @@ private fun writeLogFiles(ctx: Context, includeLogcat: Boolean): List<String> {
         runCatching { ctx.filesDir }.getOrNull(),
     )) {
         runCatching {
-            val f = File(dir, "qself-full-log.txt")
+            val f = File(dir, LOG_FILE_NAME)
             f.writeBytes(bytes)
             savedPaths.add(f.absolutePath)
         }
     }
     runCatching {
-        val dl = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "qself-full-log.txt")
+        val dl = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), LOG_FILE_NAME)
         dl.writeBytes(bytes)
         savedPaths.add(dl.absolutePath)
     }
     runCatching {
         val resolver = ctx.contentResolver
-        val uri = MediaStore.Downloads.EXTERNAL_CONTENT_URI
-        runCatching {
-            resolver.delete(uri, "${MediaStore.MediaColumns.DISPLAY_NAME}=?", arrayOf("qself-full-log.txt"))
-        }
         val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "qself-full-log.txt")
+            put(MediaStore.MediaColumns.DISPLAY_NAME, LOG_FILE_NAME)
             put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         }
-        resolver.insert(uri, values)?.let { itemUri ->
+        resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)?.let { itemUri ->
             resolver.openOutputStream(itemUri)?.use { it.write(bytes) }
-            savedPaths.add("/sdcard/Download/qself-full-log.txt")
+            savedPaths.add("/sdcard/Download/$LOG_FILE_NAME")
         }
     }
     return savedPaths.distinct()
@@ -361,33 +423,50 @@ private fun writeLogFiles(ctx: Context, includeLogcat: Boolean): List<String> {
 
 fun exportFullQqLog(ctx: Context, currentActivity: Activity? = null) {
     currentActivity?.let { runCatching { captureActivitySnapshot(it, "button-export") } }
-    val fullReport = buildFullDiagnosticReport(ctx, includeLogcat = true)
+    val prior = runCatching { File(ctx.filesDir, LOG_FILE_NAME).takeIf { it.isFile }?.readText() }.getOrNull()
+    val fullReport = mergeDiagnosticReports(prior, buildFullDiagnosticReport(ctx, includeLogcat = true))
     // 1. 先复制核心诊断摘要+界面树+近期日志至系统剪贴板（限制在 320KB 以内确保 Android Binder 剪贴板零截断抛错）
     val clipText = if (fullReport.length > 320_000) {
-        fullReport.take(200_000) + "\n...[中间省略，完整日志见 qself-full-log.txt]...\n" + fullReport.takeLast(110_000)
+        fullReport.take(200_000) + "\n...[中间省略，完整日志见 $LOG_FILE_NAME]...\n" + fullReport.takeLast(110_000)
     } else fullReport
     runCatching {
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         cm?.setPrimaryClip(ClipData.newPlainText("Qself Full QQ Log", clipText))
     }
-    // 2. 分段镜像关键部分到 LSPosed 日志与 logcat -s QselfDiag，方便直接从 LSPosed 管理器导出
+    // 2. 只把本次相对上一次导出的新增记录镜像到 LSPosed 日志与 logcat -s QselfDiag，重复导出不再刷屏
+    val delta = runCatching { reportDeltaRecords(prior, fullReport) }.getOrDefault(0)
     runCatching {
-        val summary = buildFullDiagnosticReport(ctx, includeLogcat = false)
-        summary.chunked(3200).take(40).forEachIndexed { idx, chunk ->
-            Log.i("QselfDiag", "[Part ${idx + 1}]\n$chunk")
-            xposed.log(Log.INFO, "QselfDiag", "[Part ${idx + 1}]\n$chunk", null)
+        if (delta == 0) {
+            Log.i("QselfDiag", "[合并导出] 无新增记录，完整累计日志见 /sdcard/Download/$LOG_FILE_NAME")
+            xposed.log(Log.INFO, "QselfDiag", "[合并导出] 无新增记录，完整累计日志见 /sdcard/Download/$LOG_FILE_NAME", null)
+        } else {
+            Log.i("QselfDiag", "[合并导出] 新增 $delta 条记录")
+            xposed.log(Log.INFO, "QselfDiag", "[合并导出] 新增 $delta 条记录", null)
         }
     }
     // 3. 后台写入 Download/qself-full-log.txt 与外部应用目录，并弹出提示与系统分享面板
     ioExecutor.execute {
-        val paths = runCatching { writeLogFiles(ctx, includeLogcat = true) }.getOrDefault(emptyList())
+        val paths = runCatching { writeLogFiles(ctx, includeLogcat = true, prebuiltReport = fullReport) }
+            .getOrDefault(emptyList())
+        val removed = lastMergeRemoved
         mainHandler.post {
             val primaryPath = paths.firstOrNull { it.contains("Download") } ?: paths.firstOrNull() ?: "剪贴板"
             Toast.makeText(
                 ctx,
-                "已复制全量日志到剪贴板，并写入：$primaryPath",
+                "已复制合并后的全量日志到剪贴板，并写入：$primaryPath${if (removed > 0) "（清理历史副本 $removed 个）" else ""}",
                 Toast.LENGTH_LONG,
             ).show()
+            // Download 里若还有别的应用写入的历史副本，弹一次系统授权框；用户允许后下次导出就彻底只剩一个文件。
+            val consent = pendingCleanupConsent
+            if (consent != null) {
+                pendingCleanupConsent = null
+                val act = currentActivity
+                if (act != null) runCatching {
+                    act.startIntentSenderForResult(consent, 0x5165, null, 0, 0, 0)
+                    Toast.makeText(ctx, "Download 里还有别的应用写入的历史副本，请在系统弹窗里允许删除", Toast.LENGTH_LONG).show()
+                    return@post
+                }
+            }
             runCatching {
                 val share = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"

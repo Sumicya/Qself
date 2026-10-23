@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-10-24（四）— 全量日志导出改为「合并去重 + 导出前清理」，反复导出只留一个 qself-full-log.txt
+
+- 用户回传 10 份真机日志（均为 `26.10.24.3.3165`，OnePlus `PLC110` / Android 16 / `1272×2800` / `density 1.9761429`，采集区间 `03:00:07.750` → `03:00:57.427`，其中 `qself-full-log.txt` 与 `(9).txt` 字节完全相同）后指出「清理和 log 合并是不是没做」。逐行核对结论：**确实一个字都没做** —— 仓库里只有 CI 侧的 `cleanup-artifacts`（GitHub 只保留最新 5 个构建产物，与手机无关），设备端没有任何清理与合并代码；`writeLogFiles` 每次都用同一个 `DISPLAY_NAME = qself-full-log.txt` 往 MediaStore 插入**新行**，系统自动把重名文件改名成 `(1)(2)…`，于是点 10 次就堆出 10 个副本，且每份都只保留最后一次采集的环缓冲内容、老记录白白丢掉。
+- 本次修复（新增 `LogMerge.kt`，改 `DiagLog.kt`、`Knob.kt`、`ProtoTest.kt`、`tools/test_message_style.py`）：
+  1. **与上一次导出合并去重**：先从上一次落盘的 `filesDir/qself-full-log.txt` 读回（应用私有目录，无需任何存储权限），`mergeDiagnosticReports(old, new)` 按 `--- [n] ---` 小节拆开后分别合并 —— 报告头与 `[2]` 钩子调用次数取最新一份（次数本就累计，叠加没有意义）；`[3]` 视图树快照按 `=== 标题 ===` 分块取并集（同标题新块覆盖旧块，超过 `MAX_MERGED_SNAPSHOTS = 16` 淘汰最老）；`[4][5][6]` 三个流式小节按「时间戳起始行 + 其续行」切记录后整条去重、按 `HH:mm:ss.SSS` 排序、上限 `MAX_MERGED_RECORDS = 12000` 保留最新，`headerWithCount` 重建小节标题里的 `(N)`。环缓冲（`[6]` 单份只留 3000 条）挤掉的老行因此会被捞回来 —— 一次导出就是到此刻为止的完整累计，再也用不着发好几个编号文件。
+  2. **导出前清理历史副本**：`cleanupPriorExports(ctx)` 先按 `DISPLAY_NAME LIKE 'qself-full-log%'` 查询 MediaStore Downloads 的全部历史行逐条删除（正好覆盖 `(1)…(9)` 这类系统自动改名的副本），再扫描 `getExternalFilesDir` / `externalCacheDir` / `/sdcard/Download` 三个目录删除同名前缀文件；别的应用写进 Download 的副本删不掉时系统会抛 `RecoverableSecurityException`，此时记下它带的 `IntentSender`，写完新文件后弹一次系统授权框，用户点允许之后下次导出就真的只剩一个文件。
+  3. **永远只写一个文件**：所有落盘路径统一使用 `LOG_FILE_NAME`，MediaStore 侧只在清理之后 insert 一次；报告头新增一行「合并 ：已与上一次导出按小节合并去重（上次 N 字节）；导出前清理历史副本 M 个，同名文件只保留 qself-full-log.txt」。
+  4. **重复导出不再刷屏**：新增 `reportDeltaRecords(old, new)` 只统计流式小节里本次相对上次的**新增记录数**，`LSPosed` 日志与 `logcat -s QselfDiag` 只吐这一行增量（无新增时直接提示「无新增记录，完整累计日志见 /sdcard/Download/qself-full-log.txt」）；剪贴板仍是 320KB 头尾截取，完整内容在文件里。
+  5. **可离线回归**：合并/去重逻辑整体抽到 `LogMerge.kt`，零 Android 依赖，可用真机日志在 JVM 上直接跑。`ProtoTest` 新增 3 条用例（并集去重与排序、增量统计、上限与快照淘汰），并用用户回传的 10 份日志按时间顺序逐份回放：`1.60MB → 4.36MB`（9 次再导出累计新增 `8340` 条），`[6] 全量 QQ QLog` 由单份上限 `3000` 条累计到 `9367` 条，`[3]` 快照由 4 块并到 15 块；重复喂同一份内容时增量 `0`、长度不变（幂等）。`tools/test_message_style.py` 增加契约断言：导出必须先合并再清理、只写 `qself-full-log.txt`、`LogMerge.kt` 不得引入 `import android`。
+- 顺带用这 10 份日志核对了上一版（`26.10.24.3.3165`）顶栏安全区修复，**已确认生效**：`MainResourceConfig#n orig=95px -> 0px (percent=0% shift=0dp)`（3 处）、`AIO 顶栏 outer 安全区 141px -> 0px`（`03:00:19.791`）、`FrameLayout 0x7f0a6cfa(5un) b=[0,0,1272,99]`（原 `167`）、`TitleAreaHeadLayout 0x7f0a3245(e3u) mar=[0,0,0,0]`（原 `[0,68,0,0]`）、`ClipSkinnableRecycleView 0x7f0a0e96(u3q) pad=[0,99,0,107]`（原 `167`）、`TitleAreaRightLayout 0x7f0a120a b=[0,0,1272,99]`。仍缺一张**真 AIO** 界面树：日志里所有 `AIO-Header*` 快照的活动名都还是 `SplashActivity`（即用户全程停在主页/启动页），需要进任意聊天窗口再导出一次才能拿到 AIO 顶栏真实树。
+- 新增预览图 [`docs/preview-log-merge-and-cleanup.png`](docs/preview-log-merge-and-cleanup.png)（`tools/make_log_merge_preview.py` 可复现）：左侧列出手机上那 10 个副本与改名根因，中间是「读回 → 合并 → 清理 → 写回唯一文件」四步，右侧是真机 10 份日志逐份回放的字节数与增量，底部给出合并后单文件的分小节账本。上一版预览图 `docs/preview-safe-top-slider-and-aio-diagnosis.png` 仍是顶栏安全区这一问题的当前有效证据，保留不删。
+
 ## 2026-10-24（三）— 按真机全量日志定位顶栏安全区残余根因并实装「顶栏安全区 / 顶栏上下微调」滑条
 
 - 针对用户回传的真机全量日志（三份 `qself-full-log.txt`，`26.10.24.2.3164`，OnePlus `PLC110` / Android 16 / `1272×2800` / `density 1.9761429`）逐行核对，定位「顶栏安全区还是没去」的真实根因并修复（`Looks.kt`、`Input.kt`、`Knob.kt`、`MessageStyle.kt`、`DiagLog.kt`、`ProtoTest.kt`、`tools/test_message_style.py`）：

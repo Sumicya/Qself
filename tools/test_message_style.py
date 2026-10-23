@@ -189,6 +189,7 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('0x7f0a6596', looks_src)
         self.assertIn('uUpMask', looks_src)
         diag_src = (SRC / 'DiagLog.kt').read_text()
+        merge_src = (SRC / 'LogMerge.kt').read_text()
         self.assertIn('fullQqLogger', diag_src)
         self.assertIn('exportFullQqLog', diag_src)
         self.assertIn('com.tencent.qphone.base.util.QLog', diag_src)
@@ -206,6 +207,16 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('0x7f0a0e96', looks_src)
         self.assertIn('aioLayoutSnapshot', looks_src)
         self.assertIn('SAFE_TOP', diag_src)
+
+        # 反复导出只应产生一个 qself-full-log.txt：先与上一次导出合并去重，再清理历史编号副本。
+        self.assertIn('mergeDiagnosticReports(prior', diag_src)
+        self.assertIn('cleanupPriorExports(ctx)', diag_src)
+        self.assertIn('LOG_FILE_NAME', diag_src)
+        self.assertIn('"qself-full-log.txt"', merge_src)
+        self.assertIn('LOG_FILE_PREFIX%', diag_src)
+        self.assertIn('reportDeltaRecords(prior', diag_src)
+        # 合并逻辑与 Android 解耦，才能用真机日志在 JVM 上直接回归。
+        self.assertNotIn('import android', merge_src)
 
 
 if __name__ == '__main__':

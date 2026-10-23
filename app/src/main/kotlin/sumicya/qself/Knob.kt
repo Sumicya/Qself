@@ -825,7 +825,14 @@ private fun sheet(anchor: View) {
     grid.addView(bubblePadSeek)
     grid.addView(LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.END
-        addView(button("导出全量日志") {
+        addView(TextView(ctx).apply {
+            text = "每点一次就与上次的 qself-full-log.txt 合并去重，并先清掉 Download 里的历史编号副本，所以永远只留一个文件。"
+            textSize = 11.5f; setTextColor(sub)
+            gravity = Gravity.END
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_END
+            setPadding((6 * dp).toInt(), (2 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
+        })
+        addView(button("导出全量日志（合并去重）") {
             exportFullQqLog(ctx, activity)
         })
         addView(button("恢复默认") {
