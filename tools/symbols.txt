@@ -716,6 +716,49 @@ member! com.tencent.mobileqq.app.bf#getContentView
 member! com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl#recoverUselessBackground
 member! com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl#updateUIAfterTabChange
 member! com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl#getTabIndexFromName
+class com.tencent.mobileqq.aio.utils.AIOUtil
+member! com.tencent.mobileqq.aio.utils.AIOUtil#b
+member! com.tencent.mobileqq.aio.utils.AIOUtil#A
+member! com.tencent.mobileqq.aio.utils.AIOUtil#C
+member! com.tencent.mobileqq.aio.utils.AIOUtil#D
+class com.tencent.mobileqq.aio.reserve1.mask.b
+field com.tencent.mobileqq.aio.reserve1.mask.b#d
+class sm1.y
+field sm1.y#a
+member! com.tencent.mobileqq.aio.reserve1.mask.b#e1
+member! com.tencent.mobileqq.aio.reserve1.mask.b#f1
+member! com.tencent.mobileqq.aio.reserve1.mask.b#g1
+field com.tencent.mobileqq.aio.reserve1.blur.f#d
+class sm1.t
+field sm1.t#a
+field sm1.u#q
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#H1
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#I1
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#w1
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#P1
+member! com.tencent.mobileqq.aio.title.AIOTitleVB#X1
+class com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.core.AbsMsgListVB
+member! com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.core.AbsMsgListVB#m1
+field com.tencent.mobileqq.aio.widget.AIOMsgListGroup#h
+field com.tencent.mobileqq.aio.widget.AIOMsgListGroup#i
+class com.tencent.mobileqq.activity.home.view.TitleAreaHeadLayout
+member! com.tencent.mobileqq.activity.home.view.TitleAreaHeadLayout#k
+class com.tencent.qqnt.chats.view.SkinnableRecycleView
+field com.tencent.qqnt.chats.view.SkinnableRecycleView#f
+member! com.tencent.qqnt.chats.view.SkinnableRecycleView#setClipToTopPadding
+member! com.tencent.qqnt.chats.view.SkinnableRecycleView#dispatchDraw
+class com.tencent.mobileqq.utils.SimpleModeHelper
+member! com.tencent.mobileqq.utils.SimpleModeHelper#u
+member! com.tencent.mobileqq.utils.SimpleModeHelper#A
+member! com.tencent.mobileqq.resconfig.MainResourceConfig#n
+member! com.tencent.mobileqq.resconfig.MainResourceConfig#p
+member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#T
+member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#U
+member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#W
+member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#Q
+member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#R
+member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#Z
+
 
 
 

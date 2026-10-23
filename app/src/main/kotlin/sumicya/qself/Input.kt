@@ -49,9 +49,16 @@ private class PanelGlassState(val root: View) : ViewTreeObserver.OnPreDrawListen
     override fun onViewDetachedFromWindow(v: View) = dispose()
 }
 
-private class MsgListUnderScroll(val group: ViewGroup, val edge: ViewGroup?, val recycler: ViewGroup) {
-    private var savedGroupTop = group.paddingTop
-    private var savedGroupBottom = group.paddingBottom
+private class MsgListUnderScroll(
+    val group: ViewGroup,
+    val edge: ViewGroup?,
+    val refresh: ViewGroup?,
+    val recycler: ViewGroup,
+) {
+    private var savedGroupTop = group.paddingTop.takeIf { it > 0 } ?: recycler.paddingTop
+    private var savedGroupBottom = group.paddingBottom.takeIf { it > 0 } ?: recycler.paddingBottom
+    private var lastAppliedTop = -1
+    private var lastAppliedBottom = -1
     private val origGroupClipToPad = group.clipToPadding
     private val origGroupClipChildren = group.clipChildren
     private val origEdgeClipToPad = edge?.clipToPadding ?: true
@@ -59,6 +66,8 @@ private class MsgListUnderScroll(val group: ViewGroup, val edge: ViewGroup?, val
     private val origEdgeI = runCatching { edge?.get("i") as? Int }.getOrNull() ?: 0
     private val origEdgeM = runCatching { edge?.get("m") as? Int }.getOrNull() ?: 0
     private val origEdgeD = runCatching { edge?.get("D") as? Int }.getOrNull() ?: 0
+    private val origRefreshClipToPad = refresh?.clipToPadding ?: true
+    private val origRefreshClipChildren = refresh?.clipChildren ?: true
     private val origRecyclerClipToPad = recycler.clipToPadding
     private val origRecyclerClipChildren = recycler.clipChildren
     private val origRecyclerTop = recycler.paddingTop
@@ -73,7 +82,9 @@ private class MsgListUnderScroll(val group: ViewGroup, val edge: ViewGroup?, val
         val gt = group.paddingTop
         val gb = group.paddingBottom
         if (gt > 0) savedGroupTop = gt
+        else if (recycler.paddingTop > 0 && recycler.paddingTop != lastAppliedTop) savedGroupTop = recycler.paddingTop
         if (gb > 0) savedGroupBottom = gb
+        else if (recycler.paddingBottom > 0 && recycler.paddingBottom != lastAppliedBottom) savedGroupBottom = recycler.paddingBottom
         active = true
         if (group.clipToPadding) group.clipToPadding = false
         if (group.clipChildren) group.clipChildren = false
@@ -93,12 +104,20 @@ private class MsgListUnderScroll(val group: ViewGroup, val edge: ViewGroup?, val
                 if ((ev.get("D") as? Int ?: 0) != 0) ev.set("D", 0)
             }
         }
+        refresh?.let { rf ->
+            if (rf.clipToPadding) rf.clipToPadding = false
+            if (rf.clipChildren) rf.clipChildren = false
+            if (rf.background != null) rf.background = null
+            if (rf.paddingTop != 0 || rf.paddingBottom != 0) rf.setPadding(rf.paddingLeft, 0, rf.paddingRight, 0)
+        }
         if (recycler.clipToPadding) recycler.clipToPadding = false
         if (recycler.clipChildren) recycler.clipChildren = false
         if (recycler.background != null) recycler.background = null
         val topReduction = (14 * group.dp).toInt()
         val targetTop = if (on("玻璃底栏")) (savedGroupTop - topReduction).coerceAtLeast(0) else origRecyclerTop
         val targetBottom = if (on("TG输入栏")) savedGroupBottom else origRecyclerBottom
+        lastAppliedTop = targetTop
+        lastAppliedBottom = targetBottom
         if (recycler.paddingTop != targetTop || recycler.paddingBottom != targetBottom) {
             recycler.setPadding(recycler.paddingLeft, targetTop, recycler.paddingRight, targetBottom)
         }
@@ -106,6 +125,8 @@ private class MsgListUnderScroll(val group: ViewGroup, val edge: ViewGroup?, val
     fun restore() {
         if (!active) return
         active = false
+        lastAppliedTop = -1
+        lastAppliedBottom = -1
         group.clipToPadding = origGroupClipToPad
         group.clipChildren = origGroupClipChildren
         group.setPadding(group.paddingLeft, savedGroupTop, group.paddingRight, savedGroupBottom)
@@ -117,6 +138,10 @@ private class MsgListUnderScroll(val group: ViewGroup, val edge: ViewGroup?, val
                 ev.set("m", origEdgeM)
                 ev.set("D", origEdgeD)
             }
+        }
+        refresh?.let { rf ->
+            rf.clipToPadding = origRefreshClipToPad
+            rf.clipChildren = origRefreshClipChildren
         }
         recycler.clipToPadding = origRecyclerClipToPad
         recycler.clipChildren = origRecyclerClipChildren
@@ -214,15 +239,17 @@ fun inputLayout() {
         }
     }
     val topBlur = cls("com.tencent.mobileqq.aio.reserve1.blur.f")
-    val getTopBlurF1 = runCatching { topBlur.getDeclaredMethod("f1").apply { isAccessible = true } }.getOrNull()
+    val topBlurBindingField = topBlur.getDeclaredField("d").apply { isAccessible = true }
+    val topBlurViewField = cls("sm1.t").getDeclaredField("a").apply { isAccessible = true }
     fun syncTopBlur(vb: Any?) {
         val target = vb ?: return
-        (runCatching { getTopBlurF1?.invoke(target) as? View }.getOrNull())?.let { v ->
+        val binding = runCatching { topBlurBindingField.get(target) }.getOrNull() ?: return
+        (runCatching { topBlurViewField.get(binding) as? View }.getOrNull())?.let { v ->
             val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
             if (on("玻璃底栏") || on("TG输入栏")) dec.apply() else dec.restore()
         }
     }
-    for (name in listOf("onCreateView", "handleUIState", "d1", "g1", "h1")) {
+    for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "d1", "f1", "g1")) {
         val m = generateSequence<Class<*>>(topBlur) { it.superclass }
             .mapNotNull { c -> c.declaredMethods.firstOrNull { it.name == name } }
             .firstOrNull() ?: continue
@@ -230,6 +257,28 @@ fun inputLayout() {
             chain.proceed().also {
                 val target = chain.thisObject?.takeIf(topBlur::isInstance) ?: chain.args.firstOrNull(topBlur::isInstance)
                 if (target != null) syncTopBlur(target)
+            }
+        }
+    }
+    val topMask = cls("com.tencent.mobileqq.aio.reserve1.mask.b")
+    val topMaskBindingField = topMask.getDeclaredField("d").apply { isAccessible = true }
+    val topMaskViewField = cls("sm1.y").getDeclaredField("a").apply { isAccessible = true }
+    fun syncTopMask(vb: Any?) {
+        val target = vb ?: return
+        val binding = runCatching { topMaskBindingField.get(target) }.getOrNull() ?: return
+        (runCatching { topMaskViewField.get(binding) as? View }.getOrNull())?.let { v ->
+            val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
+            if (on("玻璃底栏") || on("TG输入栏")) dec.apply() else dec.restore()
+        }
+    }
+    for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "e1", "f1", "g1")) {
+        val m = generateSequence<Class<*>>(topMask) { it.superclass }
+            .mapNotNull { c -> c.declaredMethods.firstOrNull { it.name == name } }
+            .firstOrNull() ?: continue
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
+            chain.proceed().also {
+                val target = chain.thisObject?.takeIf(topMask::isInstance) ?: chain.args.firstOrNull(topMask::isInstance)
+                if (target != null) syncTopMask(target)
             }
         }
     }
@@ -273,6 +322,19 @@ fun inputLayout() {
             }
         }
     }
+    edgeTransparent.declaredMethods.firstOrNull { it.name == "drawChild" }?.let { m ->
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
+            val ev = chain.thisObject as? View
+            if (ev != null && (on("TG输入栏") || on("玻璃底栏"))) {
+                runCatching {
+                    if ((ev.get("i") as? Int ?: 0) != 0) ev.set("i", 0)
+                    if ((ev.get("m") as? Int ?: 0) != 0) ev.set("m", 0)
+                    if ((ev.get("D") as? Int ?: 0) != 0) ev.set("D", 0)
+                }
+            }
+            chain.proceed()
+        }
+    }
     edgeTransparent.declaredMethods.firstOrNull { it.name == "onInterceptTouchEvent" }?.let { m ->
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
             val ev = chain.thisObject as? View
@@ -286,34 +348,49 @@ fun inputLayout() {
         }
     }
     val msgListGroupCls = cls("com.tencent.mobileqq.aio.widget.AIOMsgListGroup")
+    val groupEdgeField = runCatching { msgListGroupCls.getDeclaredField("h").apply { isAccessible = true } }.getOrNull()
+    val groupRefreshField = runCatching { msgListGroupCls.getDeclaredField("i").apply { isAccessible = true } }.getOrNull()
+    fun findRecyclerInTree(root: ViewGroup): ViewGroup? {
+        for (i in 0 until root.childCount) {
+            val ch = root.getChildAt(i) as? ViewGroup ?: continue
+            if (generateSequence<Class<*>>(ch.javaClass) { it.superclass }.any { it.name == "androidx.recyclerview.widget.RecyclerView" }) {
+                return ch
+            }
+            findRecyclerInTree(ch)?.let { return it }
+        }
+        return null
+    }
     msgListGroupCls.declaredMethods.firstOrNull { it.name == "onMeasure" }?.let { m ->
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
             val group = chain.thisObject as? ViewGroup
             if (group != null) {
                 msgListUnderScrolls[group]?.sync() ?: run {
-                    val edge = (0 until group.childCount).map(group::getChildAt).filterIsInstance<ViewGroup>()
-                        .firstOrNull { edgeTransparent.isInstance(it) }
-                    val rv = (edge ?: group).let { host ->
-                        (0 until host.childCount).map(host::getChildAt).filterIsInstance<ViewGroup>().firstOrNull { ch ->
-                            generateSequence<Class<*>>(ch.javaClass) { it.superclass }.any { it.name == "androidx.recyclerview.widget.RecyclerView" }
-                        }
-                    }
-                    if (rv != null) msgListUnderScrolls.getOrPut(group) { MsgListUnderScroll(group, edge, rv) }.sync()
+                    val edge = (runCatching { groupEdgeField?.get(group) as? ViewGroup }.getOrNull())
+                        ?: (0 until group.childCount).map(group::getChildAt).filterIsInstance<ViewGroup>().firstOrNull { edgeTransparent.isInstance(it) }
+                    val refresh = (runCatching { groupRefreshField?.get(group) as? ViewGroup }.getOrNull())
+                    val rv = findRecyclerInTree(edge ?: group)
+                    if (rv != null) msgListUnderScrolls.getOrPut(group) { MsgListUnderScroll(group, edge, refresh, rv) }.sync()
                 }
             }
             chain.proceed()
         }
     }
     val msgListVB = cls("com.tencent.mobileqq.aio.msglist.AIOMsgListVB")
+    val absMsgListVB = cls("com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.vb.core.AbsMsgListVB")
     val msgListGroupGetter = msgListVB.getDeclaredMethod("M2").apply { isAccessible = true }
-    val msgListEdgeGetter = msgListVB.getDeclaredMethod("S2").apply { isAccessible = true }
-    val msgListRecyclerGetter = msgListVB.getDeclaredMethod("F2").apply { isAccessible = true }
+    val msgListRecyclerGetter = msgListVB.getDeclaredMethod("S2").apply { isAccessible = true }
+    val msgListRefreshGetter = absMsgListVB.getDeclaredMethod("m1").apply { isAccessible = true }
     fun syncMsgListPadding(vb: Any?) {
         val target = vb ?: return
         val group = runCatching { msgListGroupGetter.invoke(target) as? ViewGroup }.getOrNull() ?: return
-        val edge = runCatching { msgListEdgeGetter.invoke(target) as? ViewGroup }.getOrNull()
-        val recycler = runCatching { msgListRecyclerGetter.invoke(target) as? ViewGroup }.getOrNull() ?: edge ?: return
-        msgListUnderScrolls.getOrPut(group) { MsgListUnderScroll(group, if (edge !== recycler) edge else null, recycler) }.sync()
+        val recycler = runCatching { msgListRecyclerGetter.invoke(target) as? ViewGroup }.getOrNull()
+            ?: findRecyclerInTree(group) ?: return
+        val refresh = runCatching { msgListRefreshGetter.invoke(target) as? ViewGroup }.getOrNull()
+            ?: (recycler.parent as? ViewGroup)?.takeIf { it !== group && !edgeTransparent.isInstance(it) }
+        val edge = (runCatching { groupEdgeField?.get(group) as? ViewGroup }.getOrNull())
+            ?: (refresh?.parent as? ViewGroup)?.takeIf { it !== group }
+            ?: (recycler.parent as? ViewGroup)?.takeIf { it !== group && it !== refresh }
+        msgListUnderScrolls.getOrPut(group) { MsgListUnderScroll(group, edge, refresh, recycler) }.sync()
     }
     for (name in listOf("U0", "v0", "S0", "K3", "L3", "M3", "T3", "I3", "G3", "H3", "N3", "x3")) {
         val m = generateSequence<Class<*>>(msgListVB) { it.superclass }

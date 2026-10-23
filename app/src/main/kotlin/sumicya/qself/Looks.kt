@@ -53,10 +53,12 @@ fun looks() {
         val source = chain.thisObject as? ViewGroup
         if (source != null && on("玻璃底栏")) {
             aioHeaders[source]?.let { header ->
-                if (header.dispatchPillTouch(chain.getArg(0) as MotionEvent)) return@hook true
+                if (header.multiSelectRoot()?.visibility != View.VISIBLE) {
+                    return@hook header.dispatchPillTouch(chain.getArg(0) as MotionEvent)
+                }
             }
             secNavBars[source]?.let { sec ->
-                if (sec.dispatchPillTouch(chain.getArg(0) as MotionEvent)) return@hook true
+                return@hook sec.dispatchPillTouch(chain.getArg(0) as MotionEvent)
             }
         }
         val bar = source?.let { barTouchHosts[it]?.get() ?: it }
@@ -81,7 +83,20 @@ fun looks() {
             } else chain.proceed()
         }
     }
-    // 真包 MainUIHelperApiImpl#updateTitleBar 与 Leba#updateTitleBar 会在恢复/刷主题时把主页顶栏 (0x7f0a11f9 / 0x7f0a5dff) 高度设为 194px 并重设 #222325 安全区底色；在此处同步剥离底色并对齐顶栏组件。
+    // 真包 MainResourceConfig#n(Context) / #p(Context, Drawable) 决定主页顶栏状态栏安全区高度（140px）与底色，
+    // MainUIHelperApiImpl#updateTitleBar、Leba#updateTitleBar 与 TitleAreaHeadLayout#k 均由此派生顶栏总高度（194px）与列表顶部内边距（a$r）。
+    runCatching {
+        val resCfgCls = cls("com.tencent.mobileqq.resconfig.MainResourceConfig")
+        hook(resCfgCls.getDeclaredMethod("n", android.content.Context::class.java), gated = false) { chain ->
+            val orig = (chain.proceed() as? Number)?.toInt() ?: 0
+            val ctx = chain.args.getOrNull(0) as? android.content.Context
+            if (on("玻璃底栏") && orig > 0 && ctx != null) reducedSafeTop(orig, ctx.resources.displayMetrics.density) else orig
+        }
+        hook(resCfgCls.getDeclaredMethod("p", android.content.Context::class.java, android.graphics.drawable.Drawable::class.java), gated = false) { chain ->
+            val orig = chain.proceed()
+            if (on("玻璃底栏")) null else orig
+        }
+    }
     runCatching {
         val mainUiHelper = cls("com.tencent.mobileqq.main.api.impl.MainUIHelperApiImpl")
         val frameCls = cls("com.tencent.mobileqq.app.Frame")
@@ -101,14 +116,62 @@ fun looks() {
             }
         }
     }
-    // 真包 QUISecNavBar#S / #X / #C / #updateView / #setBlur / #setTitleBlurAlpha 会重设内部 mRoot 的 paddingTop、安全区底色与模糊层；直接钩住以保持无安全区胶囊样式。
+    runCatching {
+        val headCls = cls("com.tencent.mobileqq.activity.home.view.TitleAreaHeadLayout")
+        headCls.declaredMethods.firstOrNull { it.name == "k" && it.parameterTypes.size == 2 }?.let { m ->
+            hook(m.apply { isAccessible = true }, gated = false) { chain ->
+                chain.proceed().also {
+                    (chain.thisObject as? ViewGroup)?.let(::homeTopBar)
+                }
+            }
+        }
+    }
+    // 真包 SkinnableRecycleView#setClipToTopPadding(true) 会在 dispatchDraw 中用 canvas.clipRect(scrollX, scrollY + paddingTop, ...) 硬裁切会话列表顶部 194px 区域；强制关闭以允许列表滚入顶栏下方。
+    runCatching {
+        val skinRvCls = cls("com.tencent.qqnt.chats.view.SkinnableRecycleView")
+        val clipField = skinRvCls.getDeclaredField("f").apply { isAccessible = true }
+        hook(skinRvCls.getDeclaredMethod("setClipToTopPadding", Boolean::class.javaPrimitiveType), gated = false) { chain ->
+            if (on("玻璃底栏")) {
+                chain.proceed(arrayOf<Any?>(false))
+            } else chain.proceed()
+        }
+        hook(skinRvCls.getDeclaredMethod("dispatchDraw", Canvas::class.java), gated = false) { chain ->
+            val rv = chain.thisObject as? ViewGroup
+            if (rv != null && on("玻璃底栏")) {
+                runCatching { if (clipField.getBoolean(rv)) clipField.setBoolean(rv, false) }
+            }
+            chain.proceed()
+        }
+    }
+    // 真包 SimpleModeHelper#u / #A 会在主页 Conversation 顶栏底部生成并显示 mStatusTitleDivider 分割线；开启无安全区顶栏时隐藏该分割线。
+    runCatching {
+        val simpleHelper = cls("com.tencent.mobileqq.utils.SimpleModeHelper")
+        hook(simpleHelper.getDeclaredMethod("u", View::class.java), gated = false) { chain ->
+            chain.proceed().also { div ->
+                (div as? View)?.let { v ->
+                    homeDividers.putIfAbsent(v, v.visibility)
+                    if (on("玻璃底栏")) v.visibility = View.GONE
+                }
+            }
+        }
+        hook(simpleHelper.getDeclaredMethod("A", View::class.java), gated = false) { chain ->
+            chain.proceed().also {
+                (chain.args.getOrNull(0) as? View)?.let { v ->
+                    homeDividers.putIfAbsent(v, v.visibility)
+                    if (on("玻璃底栏")) v.visibility = View.GONE
+                }
+            }
+        }
+    }
+    // 真包 QUISecNavBar#T(Activity) / #U(Fragment) 内联调用 W(Window)->X() 重设 mRoot.paddingTop，Z(ImageView, boolean) 为右侧按钮单独套圆底；全部钩住以保持 NagramXF 三段玻璃胶囊。
     runCatching {
         val secNavCls = cls("com.tencent.biz.qui.quisecnavbar.QUISecNavBar")
-        for (mName in listOf("S", "X", "C", "updateView", "setBlur", "setTitleBlurAlpha")) {
+        for (mName in listOf("S", "T", "U", "W", "X", "C", "Q", "R", "Z", "updateView", "setBlur", "setTitleBlurAlpha")) {
             secNavCls.declaredMethods.filter { it.name == mName }.forEach { m ->
                 hook(m.apply { isAccessible = true }, gated = false) { chain ->
                     chain.proceed().also {
-                        (chain.thisObject as? ViewGroup)?.let(::secNavBar)
+                        val nav = (chain.thisObject as? ViewGroup) ?: (chain.args.firstOrNull { secNavCls.isInstance(it) } as? ViewGroup)
+                        nav?.let(::secNavBar)
                     }
                 }
             }
@@ -138,8 +201,8 @@ fun looks() {
             chain.proceed().also { syncTintView(chain.thisObject) }
         }
     }
-    aioHeader()
-    nativeMessageMenu()
+    runCatching { aioHeader() }
+    runCatching { nativeMessageMenu() }
 }
 
 /** 三个输入均处于 badge.parent 的局部坐标；不把窗口像素直接写入 translationX。 */
@@ -1321,6 +1384,7 @@ private class HeaderState(
     val root: View?,
     val outer: View?,
     val dividerLine: View?,
+    val upMask: View?,
     val leftBtn: View?,
     val unreadBadge: TextView?,
     val titleTv: TextView?,
@@ -1338,9 +1402,12 @@ private class HeaderState(
     val rootBg = root?.background
     val outerBg = outer?.background
     val parentBg = (root?.parent as? View)?.background
-    val origOuterPad = outer?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
-    val origRootPad = root?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
+    var origOuterPad = outer?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
+    var lastAppliedOuterTop = -1
+    var origRootPad = root?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
+    var lastAppliedRootTop = -1
     val dividerVis = dividerLine?.visibility
+    val upMaskVis = upMask?.visibility
     val right1Bg = right1?.background
     val right2Bg = right2?.background
     val origTouchDelegate = bar.touchDelegate
@@ -1368,7 +1435,18 @@ private class HeaderState(
         setOnClickListener { titleTv?.performClick() }
     }
     val preDraw = ViewTreeObserver.OnPreDrawListener {
-        if (on("玻璃底栏")) pills.sync()
+        if (on("玻璃底栏")) {
+            val o = outer
+            val r = root
+            if (bar.background !== pills || o?.background != null || r?.background != null ||
+                dividerLine?.visibility == View.VISIBLE || upMask?.visibility == View.VISIBLE ||
+                (o != null && ((lastAppliedOuterTop >= 0 && o.paddingTop != lastAppliedOuterTop) || (lastAppliedOuterTop < 0 && o.paddingTop > 0))) ||
+                (r != null && ((lastAppliedRootTop >= 0 && r.paddingTop != lastAppliedRootTop) || (lastAppliedRootTop < 0 && r.paddingTop > 0)))) {
+                applyStyle()
+            } else {
+                pills.sync()
+            }
+        }
         true
     }
     init {
@@ -1480,22 +1558,31 @@ private class HeaderState(
         root?.background = null
         outer?.background = null
         (root?.parent as? View)?.background = null
-        // 缩小顶部安全区按钮与屏幕顶部的距离，支持自定义顶栏距顶偏移（headerTopOffsetDp）。
+        // 动态捕获 AIOTitleVB#Y1 / #A1 延后设置的 statusBarHeight（140px）并按 reducedSafeTop 压缩顶部内边距。
         outer?.let { o ->
-            val orig = origOuterPad ?: intArrayOf(o.paddingLeft, o.paddingTop, o.paddingRight, o.paddingBottom)
-            if (orig[1] > 0) {
+            if (o.paddingTop != lastAppliedOuterTop && o.paddingTop > 0) {
+                origOuterPad = intArrayOf(o.paddingLeft, o.paddingTop, o.paddingRight, o.paddingBottom)
+            }
+            val orig = origOuterPad
+            if (orig != null && orig[1] > 0) {
                 val reducedTop = reducedSafeTop(orig[1], bar.dp)
-                if (o.paddingTop != reducedTop) o.setPadding(orig[0], reducedTop, orig[2], 0)
+                lastAppliedOuterTop = reducedTop
+                if (o.paddingTop != reducedTop || o.paddingBottom != 0) o.setPadding(orig[0], reducedTop, orig[2], 0)
             }
         }
-        root?.let { r ->
-            val orig = origRootPad ?: intArrayOf(r.paddingLeft, r.paddingTop, r.paddingRight, r.paddingBottom)
-            if (orig[1] > 0) {
+        root?.takeIf { it !== outer }?.let { r ->
+            if (r.paddingTop != lastAppliedRootTop && r.paddingTop > 0) {
+                origRootPad = intArrayOf(r.paddingLeft, r.paddingTop, r.paddingRight, r.paddingBottom)
+            }
+            val orig = origRootPad
+            if (orig != null && orig[1] > 0) {
                 val reducedTop = reducedSafeTop(orig[1], bar.dp)
-                if (r.paddingTop != reducedTop) r.setPadding(orig[0], reducedTop, orig[2], 0)
+                lastAppliedRootTop = reducedTop
+                if (r.paddingTop != reducedTop || r.paddingBottom != 0) r.setPadding(orig[0], reducedTop, orig[2], 0)
             }
         }
         dividerLine?.visibility = View.GONE
+        upMask?.visibility = View.GONE
         right1?.background = null
         right2?.background = null
         right3()?.background = null
@@ -1521,6 +1608,8 @@ private class HeaderState(
         activeTouchTarget = null
         lastGeom = null
         lastRightViews = emptyList()
+        lastAppliedOuterTop = -1
+        lastAppliedRootTop = -1
         if (avatar.parent === bar) bar.removeView(avatar)
         if (bar.background === pills) bar.background = barBg
         bar.touchDelegate = origTouchDelegate
@@ -1528,8 +1617,9 @@ private class HeaderState(
         outer?.background = outerBg
         (root?.parent as? View)?.background = parentBg
         outer?.let { o -> origOuterPad?.let { o.setPadding(it[0], it[1], it[2], it[3]) } }
-        root?.let { r -> origRootPad?.let { r.setPadding(it[0], it[1], it[2], it[3]) } }
+        root?.takeIf { it !== outer }?.let { r -> origRootPad?.let { r.setPadding(it[0], it[1], it[2], it[3]) } }
         if (dividerLine != null && dividerVis != null) dividerLine.visibility = dividerVis
+        if (upMask != null && upMaskVis != null) upMask.visibility = upMaskVis
         right1?.background = right1Bg
         right2?.background = right2Bg
         for ((iv, _) in recordedIconTints) {
@@ -1570,12 +1660,24 @@ private class HeaderState(
 
 private val aioHeaders = WeakHashMap<ViewGroup, HeaderState>()
 private val topBlurs = WeakHashMap<View, Int>()
+private val topMasks = WeakHashMap<View, Pair<Int, android.graphics.drawable.Drawable?>>()
 
 private fun refreshAioHeaders() {
     aioHeaders.values.toList().forEach { it.applyStyle() }
     topBlurs.entries.toList().forEach { (view, vis) ->
         view.visibility = if (on("玻璃底栏")) View.GONE else vis
         view.alpha = if (on("玻璃底栏")) 0f else 1f
+    }
+    topMasks.entries.toList().forEach { (view, orig) ->
+        if (on("玻璃底栏")) {
+            view.visibility = View.GONE
+            view.alpha = 0f
+            view.background = null
+        } else {
+            view.visibility = orig.first
+            view.alpha = 1f
+            if (view.background == null && orig.second != null) view.background = orig.second
+        }
     }
 }
 
@@ -1584,9 +1686,40 @@ private fun resetAioHeaders() {
     aioHeaders.clear()
     topBlurs.entries.toList().forEach { (view, vis) -> view.visibility = vis; view.alpha = 1f }
     topBlurs.clear()
+    topMasks.entries.toList().forEach { (view, orig) ->
+        view.visibility = orig.first
+        view.alpha = 1f
+        if (orig.second != null) view.background = orig.second
+    }
+    topMasks.clear()
 }
 
 private fun aioHeader() {
+    // 真包 AIOUtil#b(a) / #A(a) 在未设置自定义聊天背景时返回 false，驱动 AIOTitleVM->UpdateVasTheme(false) 设 #25272d 顶栏安全区底色与分割线、
+    // 驱动 AIOMsgListVB#K3/#L3 将 M2() paddingTop 设为 238px 硬裁切消息列表；开启玻璃底栏或 TG输入栏时统一返回 true 切入全屏透明叠层模式。
+    runCatching {
+        val aioUtil = cls("com.tencent.mobileqq.aio.utils.AIOUtil")
+        val aioCtx = cls("com.tencent.aio.api.runtime.a")
+        for (mName in listOf("b", "A")) {
+            aioUtil.declaredMethods.firstOrNull { it.name == mName && it.parameterTypes.size == 1 && it.parameterTypes[0] == aioCtx }?.let { m ->
+                hook(m.apply { isAccessible = true }, gated = false) { chain ->
+                    val orig = chain.proceed()
+                    if (on("玻璃底栏") || on("TG输入栏")) true else orig
+                }
+            }
+        }
+        for (mName in listOf("C", "D")) {
+            aioUtil.declaredMethods.firstOrNull { it.name == mName && it.parameterTypes.size == 2 && it.parameterTypes[0] == View::class.java }?.let { m ->
+                hook(m.apply { isAccessible = true }, gated = false) { chain ->
+                    val v = chain.args.getOrNull(0) as? View
+                    if (v != null && on("玻璃底栏") && (v in aioHeaders || aioHeaders.values.any { it.root === v || it.outer === v })) {
+                        return@hook null
+                    }
+                    chain.proceed()
+                }
+            }
+        }
+    }
     val titleVB = cls("com.tencent.mobileqq.aio.title.AIOTitleVB")
     val bindingField = titleVB.getDeclaredField("d").apply { isAccessible = true }
     val multiSelectField = titleVB.getDeclaredField("e").apply { isAccessible = true }
@@ -1604,6 +1737,7 @@ private fun aioHeader() {
     val uTail = bindingClass.getDeclaredField("n").apply { isAccessible = true }
     val uTitle = bindingClass.getDeclaredField("o").apply { isAccessible = true }
     val uUnread = bindingClass.getDeclaredField("p").apply { isAccessible = true }
+    val uUpMask = bindingClass.getDeclaredField("q").apply { isAccessible = true }
     val vClass = cls("sm1.v")
     val vRoot = vClass.getDeclaredMethod("f").apply { isAccessible = true }
     val wClass = cls("sm1.w")
@@ -1675,6 +1809,7 @@ private fun aioHeader() {
                 root = runCatching { uRoot.get(u) as? View }.getOrNull(),
                 outer = runCatching { uOuter.get(u) as? View }.getOrNull(),
                 dividerLine = runCatching { uDivider.get(u) as? View }.getOrNull(),
+                upMask = runCatching { uUpMask.get(u) as? View }.getOrNull(),
                 leftBtn = runCatching { uLeft.get(u) as? View }.getOrNull(),
                 unreadBadge = runCatching { uUnread.get(u) as? TextView }.getOrNull(),
                 titleTv = runCatching { uTitle.get(u) as? TextView }.getOrNull(),
@@ -1693,7 +1828,7 @@ private fun aioHeader() {
         if (on("玻璃底栏")) loadHeaderAvatar(vb, state.avatar)
     }
 
-    for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "Z1", "Y1", "z1", "A1", "D1", "C1", "R1", "S1", "W1", "h1", "l1")) {
+    for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "H1", "I1", "w1", "P1", "X1", "Z1", "Y1", "z1", "A1", "D1", "C1", "R1", "S1", "W1", "h1", "l1")) {
         val m = titleVB.declaredMethods.firstOrNull { it.name == name } ?: continue
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
             chain.proceed().also {
@@ -1898,16 +2033,51 @@ private fun aioHeader() {
     }
 
     val topBlur = cls("com.tencent.mobileqq.aio.reserve1.blur.f")
-    val getTopBlurView = topBlur.getDeclaredMethod("a")
+    val topBlurBindingField = topBlur.getDeclaredField("d").apply { isAccessible = true }
+    val topBlurViewField = cls("sm1.t").getDeclaredField("a").apply { isAccessible = true }
     fun syncTopBlur(vb: Any) {
-        val blur = runCatching { getTopBlurView.invoke(vb) as? View }.getOrNull() ?: return
+        val binding = runCatching { topBlurBindingField.get(vb) }.getOrNull() ?: return
+        val blur = runCatching { topBlurViewField.get(binding) as? View }.getOrNull() ?: return
         topBlurs.putIfAbsent(blur, blur.visibility)
-        if (on("玻璃底栏")) { blur.visibility = View.GONE; blur.alpha = 0f }
+        if (on("玻璃底栏")) { blur.visibility = View.GONE; blur.alpha = 0f; blur.background = null }
         else topBlurs[blur]?.let { blur.visibility = it; blur.alpha = 1f }
     }
-    for (name in listOf("onCreateView", "handleUIState")) {
-        hook(topBlur.getDeclaredMethod(name, *topBlur.declaredMethods.first { it.name == name }.parameterTypes), gated = false) { chain ->
-            chain.proceed().also { if (topBlur.isInstance(chain.thisObject)) syncTopBlur(chain.thisObject) }
+    for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "d1", "f1", "g1")) {
+        val m = topBlur.declaredMethods.firstOrNull { it.name == name } ?: continue
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
+            chain.proceed().also {
+                val target = chain.thisObject?.takeIf(topBlur::isInstance) ?: chain.args.firstOrNull(topBlur::isInstance)
+                if (target != null) syncTopBlur(target)
+            }
+        }
+    }
+
+    val topMask = cls("com.tencent.mobileqq.aio.reserve1.mask.b")
+    val topMaskBindingField = topMask.getDeclaredField("d").apply { isAccessible = true }
+    val topMaskViewField = cls("sm1.y").getDeclaredField("a").apply { isAccessible = true }
+    fun syncTopMask(vb: Any) {
+        val binding = runCatching { topMaskBindingField.get(vb) }.getOrNull() ?: return
+        val mask = runCatching { topMaskViewField.get(binding) as? View }.getOrNull() ?: return
+        topMasks.putIfAbsent(mask, mask.visibility to mask.background)
+        if (on("玻璃底栏")) {
+            mask.visibility = View.GONE
+            mask.alpha = 0f
+            mask.background = null
+        } else {
+            topMasks[mask]?.let {
+                mask.visibility = it.first
+                mask.alpha = 1f
+                if (mask.background == null && it.second != null) mask.background = it.second
+            }
+        }
+    }
+    for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "e1", "f1", "g1")) {
+        val m = topMask.declaredMethods.firstOrNull { it.name == name } ?: continue
+        hook(m.apply { isAccessible = true }, gated = false) { chain ->
+            chain.proceed().also {
+                val target = chain.thisObject?.takeIf(topMask::isInstance) ?: chain.args.firstOrNull(topMask::isInstance)
+                if (target != null) syncTopMask(target)
+            }
         }
     }
 }
@@ -1948,6 +2118,8 @@ private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawLis
     private val origBorderVis = borderView?.visibility
     private val savedIconTints = WeakHashMap<android.widget.ImageView, android.content.res.ColorStateList?>()
     private val recordedIconTints = WeakHashMap<android.widget.ImageView, Boolean>()
+    private val savedIconBgs = WeakHashMap<View, android.graphics.drawable.Drawable?>()
+    private val recordedIconBgs = WeakHashMap<View, Boolean>()
     private val savedTextColors = WeakHashMap<TextView, Int>()
     val pills = HeaderPillsDrawable(titleRoot)
     var lastGeom: NagramHeaderLayout? = null
@@ -1964,6 +2136,11 @@ private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawLis
                 savedIconTints[v] = v.imageTintList
                 recordedIconTints[v] = true
             }
+            if (recordedIconBgs[v] != true) {
+                savedIconBgs[v] = v.background
+                recordedIconBgs[v] = true
+            }
+            if (v.background != null) v.background = null
             if (dark) {
                 if (v.imageTintList != bright) v.imageTintList = bright
             } else {
@@ -2163,6 +2340,8 @@ private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawLis
         if (borderView != null && origBorderVis != null) borderView.visibility = origBorderVis
         for ((iv, _) in recordedIconTints) iv.imageTintList = savedIconTints[iv]
         savedIconTints.clear(); recordedIconTints.clear()
+        for ((v, _) in recordedIconBgs) v.background = savedIconBgs[v]
+        savedIconBgs.clear(); recordedIconBgs.clear()
         for ((tv, col) in savedTextColors) tv.setTextColor(col)
         savedTextColors.clear()
         titleRoot.invalidate()
@@ -2218,6 +2397,7 @@ private val homeTopChildShifts = WeakHashMap<View, Float>()
 private val homeTopIconTints = WeakHashMap<android.widget.ImageView, android.content.res.ColorStateList?>()
 private val homeTopIconRecorded = WeakHashMap<android.widget.ImageView, Boolean>()
 private val homeListClips = WeakHashMap<ViewGroup, Pair<Boolean, Boolean>>()
+private val homeDividers = WeakHashMap<View, Int>()
 
 private fun syncStatusBarTintViews(decor: ViewGroup) {
     val maxStatusH = (120 * decor.dp).roundToInt()
@@ -2266,6 +2446,9 @@ private fun homeTopBar(bar: ViewGroup) {
         bar.findViewById<View>(0x7f0a0951)?.let { blur ->
             homeTopBlurVis.remove(blur)?.let { blur.visibility = it }
         }
+        scope.findViewById<View>(0x7f0a6596)?.let { div ->
+            homeDividers.remove(div)?.let { div.visibility = it }
+        }
         (bar.parent as? ViewGroup)?.takeIf { it.id == 0x7f0a1142 }?.let { root ->
             if (root.background === homeTopAppliedRootBgs[root]) {
                 root.background = homeTopBgs[root]
@@ -2286,6 +2469,10 @@ private fun homeTopBar(bar: ViewGroup) {
         homeTopBlurVis.putIfAbsent(blur, blur.visibility)
         if (blur.visibility != View.GONE) blur.visibility = View.GONE
     }
+    scope.findViewById<View>(0x7f0a6596)?.let { div ->
+        homeDividers.putIfAbsent(div, div.visibility)
+        if (div.visibility != View.GONE) div.visibility = View.GONE
+    }
     // Contacts 顶栏（r/i/e51.xml：0x7f0a1142 Vertical LinearLayout -> 0x7f0a6588 immersive_title_container_layout）
     // 为 Y 轴串联结构，清空 0x7f0a6588 背景后需把根容器 0x7f0a1142 背景同步为 0x7f0a1143 或列表表面色，避免露出顶部黑底。
     (bar.parent as? ViewGroup)?.takeIf { it.id == 0x7f0a1142 }?.let { root ->
@@ -2302,14 +2489,17 @@ private fun homeTopBar(bar: ViewGroup) {
             root.background = fill
         }
     }
-    // 主页顶栏（Conversation r/i/e5p.xml / Contacts / Leba）整体上移 4dp（8px），在避开系统状态栏时钟（y=68..97）的前提下缩小顶部空白并保持水平对齐。
+    // 主页顶栏（Conversation r/i/e5p.xml / Contacts / Leba）：MainResourceConfig#n 与 TitleAreaHeadLayout#k 已按 reducedSafeTop 压缩安全区高度，
+    // 此处对未走 MainResourceConfig#n 的子组件微调 4dp 并对夜间模式图标统一提亮。
     val shiftY = -4f * bar.dp
     val dark = night()
     for (id in intArrayOf(0x7f0a3245, 0x7f0a3d3f, 0x7f0a120a, 0x7f0a2ef9, 0x7f0a2ed1, 0x7f0a6bb6, 0x7f0a6bb7)) {
         scope.findViewById<View>(id)?.let { ch ->
-            val origY = homeTopChildShifts.getOrPut(ch) { ch.translationY }
-            val targetY = origY + shiftY
-            if (ch.translationY != targetY) ch.translationY = targetY
+            if (id != 0x7f0a3245) {
+                val origY = homeTopChildShifts.getOrPut(ch) { ch.translationY }
+                val targetY = origY + shiftY
+                if (ch.translationY != targetY) ch.translationY = targetY
+            }
             if (id == 0x7f0a120a || id == 0x7f0a2ed1 || id == 0x7f0a6bb7) tintHomeIcons(ch, dark)
         }
     }
@@ -2332,6 +2522,9 @@ private fun homeListClip(group: ViewGroup) {
 private fun refreshHomeTopBars() {
     homeTopRecorded.keys.toList().forEach { homeTopBar(it) }
     homeListClips.keys.toList().forEach { homeListClip(it) }
+    homeDividers.entries.toList().forEach { (div, vis) ->
+        div.visibility = if (on("玻璃底栏")) View.GONE else vis
+    }
     statusTintAlphas.keys.toList().forEach { ch ->
         (ch.parent as? ViewGroup)?.let(::syncStatusBarTintViews)
     }
@@ -2343,12 +2536,13 @@ private fun resetHomeTopBars() {
         homeTopClips[bar]?.let { bar.clipChildren = it.first; bar.clipToPadding = it.second }
     }
     homeTopBlurVis.forEach { (blur, vis) -> blur.visibility = vis }
+    homeDividers.forEach { (div, vis) -> div.visibility = vis }
     homeTopChildShifts.forEach { (ch, origY) -> ch.translationY = origY }
     for ((iv, _) in homeTopIconRecorded) iv.imageTintList = homeTopIconTints[iv]
     homeListClips.forEach { (g, old) -> g.clipChildren = old.first; g.clipToPadding = old.second }
     statusTintAlphas.forEach { (ch, origA) -> ch.alpha = origA }
     homeTopBgs.clear(); homeTopRecorded.clear(); homeTopClips.clear()
-    homeTopBlurVis.clear(); homeTopAppliedRootBgs.clear()
+    homeTopBlurVis.clear(); homeDividers.clear(); homeTopAppliedRootBgs.clear()
     homeTopChildShifts.clear(); homeTopIconTints.clear(); homeTopIconRecorded.clear()
     homeListClips.clear(); statusTintAlphas.clear()
 }

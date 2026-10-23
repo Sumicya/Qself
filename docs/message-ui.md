@@ -6,7 +6,7 @@
 
 | 项目 | 本轮实现 | 边界 |
 | --- | --- | --- |
-| 聊天顶栏与二级页导航栏 | 照 NagramXF `ActionBar.setupGlass` + `ChatAvatarContainer` 三胶囊（`p=6dp`、`s=46dp`、`r=23dp`、中胶囊 `42dp` 圆形会话头像 + 左对齐 `17.5sp`/`13.5sp` 标题副标题 + 内联听筒图标 `0x7f0a1630`），隐藏 `reserve1.blur.f` 通栏模糊与 `sm1.u#d`（`0x7f0a14ea` `1px` 底边线），保留 `sm1.u#f`（`0x7f0a2ec2` `TextView`）返回箭头背景并在夜间模式提亮（`backgroundTintList = #F2F5FA`），移除失效的旧 `TouchDelegate` 并在 `ViewGroup#dispatchTouchEvent` 按三枚胶囊命中区精确转发点击；同时适配二级页导航栏 `QUISecNavBar`（`SecNavBarState`）与搜索栏 `QUISearchBar`（`SearchBarState`） | 头像经 `com.tencent.qqnt.avatar.a` 从 `AIOContact` 异步加载，关闭完整恢复；真机视觉待复验 |
+| 聊天顶栏与二级页导航栏 | 照 NagramXF `ActionBar.setupGlass` + `ChatAvatarContainer` 三胶囊（`p=6dp`、`s=46dp`、`r=23dp`、中胶囊 `42dp` 圆形会话头像 + 左对齐 `17.5sp`/`13.5sp` 标题副标题 + 内联听筒图标 `0x7f0a1630`），接入 `AIOUtil#b`/`A`/`C`/`D`、隐藏 `reserve1.blur.f`（`sm1.t#a`）通栏模糊、`reserve1.mask.b`（`sm1.y#a`）渐变遮罩、`sm1.u#d`（`0x7f0a152e` `1px` 底边线）与 `sm1.u#q`（`0x7f0a7514` `upMask`），拦截 `AIOTitleVB#H1`/`I1`/`w1`/`P1`/`X1` 防止 UI Handler 异步重设 `#25272d` 实色背景，保留 `sm1.u#f`（`0x7f0a2ec2` `TextView`）返回箭头背景并在夜间模式提亮（`backgroundTintList = #F2F5FA`），移除失效的旧 `TouchDelegate` 并在 `ViewGroup#dispatchTouchEvent` 令三枚胶囊外间隙直接返回 `false` 透传给底层消息列表滑动；同时挂钩 `MainResourceConfig#n`/`p`、`TitleAreaHeadLayout#k`、`SimpleModeHelper#u`/`A`（`0x7f0a6596` `mStatusTitleDivider`）、`SkinnableRecycleView#dispatchDraw`（`f = false`）与二级页导航栏 `QUISecNavBar`（`SecNavBarState`，覆盖 `S`/`T`/`U`/`W`/`X`/`C`/`Q`/`R`/`Z` 并清理按钮圆底）及搜索栏 `QUISearchBar`（`SearchBarState`） | 头像经 `com.tencent.qqnt.avatar.a` 从 `AIOContact` 异步加载，关闭完整恢复；真机视觉待复验 |
 | 原生菜单与面板 | `QQCustomMenuExpandableLayout` 重排为 12dp 圆角纵向 `ActionBarPopupWindow` 列表（48dp 行高、18dp 左右内边距、0dp 上下内边距、20dp 图标 + 16sp 完整文案、6dp 按压圆角，保持聊天列表 `T: mSourceView` 可见且 `C = 220dp` 不裁高），随指单有效项高亮、移出取消、危险项标红 | 面板不整块按压缩放，正常底栏透镜不变；真机手势待复验 |
 | 转发人数 | 私有方法按完整签名 declared + accessible 查找；同步原生搜索勾选 | 真包可访问性不证明服务端无限制 |
 | 消息行、气泡与时间 | 仅对气泡收发模板（`template.g` / `template.l`）套用行几何，居中灰字提示（`template.m` / `sm1.z`）保持原生居中且撤回变灰字时自动解绑连发；他人消息居左（头像左距 8dp、气泡左距 6dp，保留 `WRAP_CONTENT` 与清零 `msgAvatar` 顶内边距防止侵入气泡或下行 `LVxx` 头衔）、自己消息保持原生居右与右侧头像并在连发组首右对齐显示头衔+昵称 ID（续条折叠）；全部消息气泡保持四角全圆角（`17dp`，不切直角）、四向内边距严格统一 `5dp`（归零 `skin.padding.j` `a,b,c,d=0` 与 `skin.padding.h` `j,k,l,n,o=0, m=4dp`，递归清零 `f3()`/`G2()`/`0x7f0a5c31`/`0x7f0a5c11`/`j2()`/`m2()`/`l2()` 内边距、四向 `margin` 与 `57dp × 65dp` 最小宽高锁，并关闭 `TextView` 与 `FasterTextView#mIncludePad` 的 `includeFontPadding`）；被回复消息彻底清除 `0x7f0a5c31` 外框与左竖条，与回复正文融为单一外层玻璃气泡；自定义格式时间（`ExternalStamp`）统一挂载于 `msgContent`（`0x7f0a11b9`）容器底部外侧（他人左对齐 `START`、自己右对齐 `END`）并将同容器兄弟内容根的 `MATCH_PARENT` 宽度转为 `WRAP_CONTENT` 防止压窄图片/表情/卡片/短文本，同时折叠顶部 `AIOTimestampComponent`；面板附带 `DateTimeFormatter` 格式码说明 | 不改文字数据和复制内容；气泡圆角与头像圆角滑块解耦；关闭/复用恢复；真机视觉待复验 |
@@ -17,7 +17,7 @@
 
 ## 需求对齐渲染预览图
 
-![移除仅按钮安全区 + 消息滑动重绘性能优化 + 共享轴切换动画预览](preview-safe-area-scroll-and-transition.png)
+![NagramXF 顶栏安全区彻底移除与悬浮三胶囊实装 + 先进聊天软件演进架构预览](preview-nagramxf-top-safe-area-and-roadmap.png)
 
 设置入口：菜单内部「消息外观」。自定义格式单行输入，不再加字符长度硬限制；非法格式不写入偏好。面板提供头像圆角（`0~50%`）、玻璃模糊（`0~15dp`）、气泡圆角（`0~32dp`）、气泡边距（`0~16dp`）共 4 项滑条（已按指示移除「顶栏偏移」滑条），「恢复默认」同步还原全部参数。消息内时间、At 对象、头像圆角、双击回应、语音倍速记忆、页面过渡动效分别有开关；头像连发浮绘与长按 `@` 微震由「连发合并」控制。
 

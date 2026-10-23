@@ -178,6 +178,16 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('0x7f0a11f9', looks_src)
         self.assertIn('0x7f0a6594', looks_src)
         self.assertIn('0x7f0a3245', looks_src)
+        self.assertIn('com.tencent.mobileqq.aio.utils.AIOUtil', looks_src)
+        self.assertIn('com.tencent.mobileqq.aio.reserve1.mask.b', looks_src)
+        self.assertIn('com.tencent.mobileqq.aio.reserve1.mask.b', inp_src)
+        self.assertIn('AbsMsgListVB', inp_src)
+        self.assertIn('TitleAreaHeadLayout', looks_src)
+        self.assertIn('SkinnableRecycleView', looks_src)
+        self.assertIn('SimpleModeHelper', looks_src)
+        self.assertIn('MainResourceConfig', looks_src)
+        self.assertIn('0x7f0a6596', looks_src)
+        self.assertIn('uUpMask', looks_src)
 
 
 if __name__ == '__main__':

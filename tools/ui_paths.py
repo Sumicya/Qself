@@ -260,6 +260,29 @@ RULES.update({
      'V com.tencent.mobileqq.app.FrameFragment,java.lang.String,java.lang.String,com.tencent.mobileqq.app.bf'): (
         set(),
         {f'{CONTROLLER}#getTabIndexFromName'}),
+    ('com.tencent.mobileqq.aio.title.AIOTitleVB', 'I1',
+     'V com.tencent.mobileqq.aio.title.AIOTitleVB'): (
+        {'com.tencent.mobileqq.aio.title.AIOTitleVB#d:sm1.u',
+         'sm1.u#l:com.tencent.mobileqq.aio.widget.AIOTitleRelativeLayout'},
+        {'android.view.View#setBackgroundColor', 'android.view.View#setBackground'}),
+    ('com.tencent.mobileqq.aio.reserve1.blur.f', 'g1', 'V '): (
+        {'com.tencent.mobileqq.aio.reserve1.blur.f#d:sm1.t'},
+        {'com.tencent.qui.quiblurview.QQBlurViewWrapper#a'}),
+    ('com.tencent.mobileqq.aio.reserve1.mask.b', 'g1', 'V I'): (
+        {'com.tencent.mobileqq.aio.reserve1.mask.b#d:sm1.y'},
+        {'sm1.y#getRoot', 'android.view.View#setLayoutParams'}),
+    ('com.tencent.mobileqq.activity.home.view.TitleAreaHeadLayout', 'k',
+     'V com.tencent.mobileqq.app.QBaseActivity,com.tencent.mobileqq.activity.home.view.TitleAreaHeadLayout$a'): (
+        {'com.tencent.mobileqq.activity.home.view.TitleAreaHeadLayout#f:com.tencent.mobileqq.proavatar.QQProAvatarView'},
+        {'com.tencent.mobileqq.resconfig.MainResourceConfig#n', 'android.view.ViewGroup$MarginLayoutParams#setMargins'}),
+    ('com.tencent.qqnt.chats.view.SkinnableRecycleView', 'dispatchDraw',
+     'V android.graphics.Canvas'): (
+        {'com.tencent.qqnt.chats.view.SkinnableRecycleView#f:Z'},
+        {'android.graphics.Canvas#clipRect', 'android.view.ViewGroup#dispatchDraw'}),
+    ('com.tencent.mobileqq.utils.SimpleModeHelper', 'u',
+     'android.view.View android.view.View'): (
+        set(),
+        {'android.view.View#setBackgroundColor', 'android.view.ViewGroup#addView'}),
 })
 
 
