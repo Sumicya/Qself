@@ -161,6 +161,16 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('syncStatusBarTintViews', looks_src)
         self.assertIn('homeTopBar', looks_src)
         self.assertIn('homeListClip', looks_src)
+        self.assertIn('uniformTabWidth', looks_src)
+        self.assertIn('tabLayoutGravityField', looks_src)
+        self.assertIn('tabLayoutMinWidthField', looks_src)
+        self.assertIn('tabDragSetGravityMethod', looks_src)
+        self.assertIn('checkEnableTabAnim', looks_src)
+        self.assertIn('MainUIHelperApiImpl', looks_src)
+        self.assertIn('SystemBarTintManager', looks_src)
+        self.assertIn('0x7f0a11f9', looks_src)
+        self.assertIn('0x7f0a6594', looks_src)
+        self.assertIn('0x7f0a3245', looks_src)
 
 
 if __name__ == '__main__':

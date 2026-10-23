@@ -64,6 +64,71 @@ fun looks() {
         if (state == null || source == null) chain.proceed()
         else state.dispatch(source, chain.getArg(0) as MotionEvent) { event -> chain.proceed(arrayOf<Any?>(event)) as Boolean }
     }
+    // 真包 TabFrameControllerImpl#checkEnableTabAnim 会在切换页签/主题恢复时把 0x7f0a67ce (QQTabLayout) 高度重设为 106px (54dp) 并重置 TabDragAnimationView 内边距；在此处同步重套 64dp 胶囊与居中规则。
+    runCatching {
+        val controller = cls("com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl")
+        val frameFrag = cls("com.tencent.mobileqq.app.FrameFragment")
+        hook(controller.getDeclaredMethod("checkEnableTabAnim", frameFrag, Boolean::class.javaPrimitiveType), gated = false) { chain ->
+            chain.proceed().also {
+                floated.toList().forEach { (it as? ViewGroup)?.let(::homeBar) }
+            }
+        }
+    }
+    // 真包 MainUIHelperApiImpl#updateTitleBar 与 Leba#updateTitleBar 会在恢复/刷主题时把主页顶栏 (0x7f0a11f9 / 0x7f0a5dff) 高度设为 194px 并重设 #222325 安全区底色；在此处同步剥离底色并对齐顶栏组件。
+    runCatching {
+        val mainUiHelper = cls("com.tencent.mobileqq.main.api.impl.MainUIHelperApiImpl")
+        val frameCls = cls("com.tencent.mobileqq.app.Frame")
+        val resCfgCls = cls("com.tencent.mobileqq.resconfig.MainResourceConfig")
+        hook(mainUiHelper.getDeclaredMethod("updateTitleBar", frameCls, RelativeLayout::class.java, resCfgCls, Boolean::class.javaPrimitiveType), gated = false) { chain ->
+            chain.proceed().also {
+                (chain.args.getOrNull(1) as? ViewGroup)?.let(::homeTopBar)
+            }
+        }
+    }
+    runCatching {
+        val lebaCls = cls("com.tencent.mobileqq.leba.Leba")
+        val resCfgCls = cls("com.tencent.mobileqq.resconfig.MainResourceConfig")
+        hook(lebaCls.getDeclaredMethod("updateTitleBar", RelativeLayout::class.java, resCfgCls), gated = false) { chain ->
+            chain.proceed().also {
+                (chain.args.getOrNull(0) as? ViewGroup)?.let(::homeTopBar)
+            }
+        }
+    }
+    // 真包 QUISecNavBar#S 与 #X 会将内部 mRoot 的 paddingTop 重设为 140px 状态栏高度；直接钩住以保持缩小后的顶部距离。
+    runCatching {
+        val secNavCls = cls("com.tencent.biz.qui.quisecnavbar.QUISecNavBar")
+        for (mName in listOf("S", "X")) {
+            hook(secNavCls.getDeclaredMethod(mName), gated = false) { chain ->
+                chain.proceed().also {
+                    (chain.thisObject as? ViewGroup)?.let(::secNavBar)
+                }
+            }
+        }
+    }
+    // 真包 SystemBarTintManager 会通过 handleMessage / setStatusBarTintEnabled / setStatusBarAlpha 异步恢复 DecorView 顶部的 140px mStatusBarTintView 色块（遮挡上移后的胶囊上半部）。
+    runCatching {
+        val tintMgrCls = cls("com.tencent.widget.immersive.SystemBarTintManager")
+        val tintViewField = tintMgrCls.getDeclaredField("mStatusBarTintView").apply { isAccessible = true }
+        fun syncTintView(mgr: Any?) {
+            val v = runCatching { mgr?.let { tintViewField.get(it) as? View } }.getOrNull() ?: return
+            statusTintAlphas.putIfAbsent(v, v.alpha)
+            val targetAlpha = if (on("玻璃底栏")) 0f else (statusTintAlphas[v] ?: 1f)
+            v.clearAnimation()
+            if (v.alpha != targetAlpha) v.alpha = targetAlpha
+        }
+        hook(tintMgrCls.getDeclaredMethod("setupStatusBarView", android.view.Window::class.java, ViewGroup::class.java), gated = false) { chain ->
+            chain.proceed().also { syncTintView(chain.thisObject) }
+        }
+        hook(tintMgrCls.getDeclaredMethod("setStatusBarTintEnabled", Boolean::class.javaPrimitiveType), gated = false) { chain ->
+            chain.proceed().also { syncTintView(chain.thisObject) }
+        }
+        hook(tintMgrCls.getDeclaredMethod("handleMessage", android.os.Message::class.java), gated = false) { chain ->
+            chain.proceed().also { syncTintView(chain.thisObject) }
+        }
+        hook(tintMgrCls.getDeclaredMethod("setStatusBarAlpha", java.lang.Float.TYPE), gated = false) { chain ->
+            chain.proceed().also { syncTintView(chain.thisObject) }
+        }
+    }
     aioHeader()
     nativeMessageMenu()
 }
@@ -170,8 +235,10 @@ private fun walk(v: View, inDrawer: Boolean) {
         name == "com.tencent.mobileqq.aio.input.edit.AIOEditText" && v is android.widget.EditText -> { tgInput(v); return }
         else -> trim(v, inDrawer)
     }
-    if (v is ViewGroup && (v.id == 0x7f0a64c2 || v.id == 0x7f0a7361 || v.id == 0x7f0a5e9c)) homeTopBar(v)
-    if (v is ViewGroup && (v.id == 0x7f0a0e96 || v.id == 0x7f0a6401)) homeListClip(v)
+    if (v is ViewGroup && (v.id == 0x7f0a11f9 || v.id == 0x7f0a6594 || v.id == 0x7f0a6cfa ||
+            v.id == 0x7f0a5dff || v.id == 0x7f0a6588 || v.id == 0x7f0a3245 ||
+            v.id == 0x7f0a64c2 || v.id == 0x7f0a7361 || v.id == 0x7f0a5e9c)) homeTopBar(v)
+    if (v is ViewGroup && (v.id == 0x7f0a0e96 || v.id == 0x7f0a6401 || v.id == 0x7f0a5b55)) homeListClip(v)
     if (!inDrawer && generateSequence<Class<*>>(v.javaClass) { it.superclass }
             .any { it.name == "androidx.recyclerview.widget.RecyclerView" }) return
     if (v is ViewGroup) {
@@ -243,6 +310,16 @@ private fun copyLayoutParams(lp: ViewGroup.LayoutParams): ViewGroup.LayoutParams
     is ViewGroup.MarginLayoutParams -> ViewGroup.MarginLayoutParams(lp)
     else -> ViewGroup.LayoutParams(lp)
 }
+private val tabLayoutGravityField by lazy {
+    runCatching { cls("com.google.android.material.tabs.TabLayout").getDeclaredField("T").apply { isAccessible = true } }.getOrNull()
+}
+private val tabLayoutMinWidthField by lazy {
+    runCatching { cls("com.google.android.material.tabs.TabLayout").getDeclaredField("P").apply { isAccessible = true } }.getOrNull()
+}
+private val tabDragSetGravityMethod by lazy {
+    runCatching { cls("com.tencent.mobileqq.widget.TabDragAnimationView").getDeclaredMethod("setIconGravity", Integer.TYPE).apply { isAccessible = true } }.getOrNull()
+}
+
 private class BarState(bar: ViewGroup) {
     val params = copyLayoutParams(bar.layoutParams)
     var background = bar.background
@@ -251,6 +328,8 @@ private class BarState(bar: ViewGroup) {
     val clip = bar.clipToOutline
     val elevation = bar.elevation
     val origTranslationX = bar.translationX
+    val origTabGravity = runCatching { tabLayoutGravityField?.getInt(bar) }.getOrNull()
+    val origTabMinWidth = runCatching { tabLayoutMinWidthField?.getInt(bar) }.getOrNull()
     val parentClip = (bar.parent as? ViewGroup)?.clipChildren
     val ambientShadow = bar.outlineAmbientShadowColor
     val spotShadow = bar.outlineSpotShadowColor
@@ -258,9 +337,12 @@ private class BarState(bar: ViewGroup) {
     val stripClip = (bar.getChildAt(0) as? ViewGroup)?.let { it.clipChildren to it.clipToPadding }
     val stripPadding = bar.getChildAt(0)?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
     val tabs = WeakHashMap<View, Pair<ViewGroup.LayoutParams, IntArray>>()
+    val tabMinWidths = WeakHashMap<View, Int>()
     val tabCustoms = WeakHashMap<View, ViewGroup.LayoutParams>()
+    val tabCustomClips = WeakHashMap<ViewGroup, Pair<Boolean, Boolean>>()
     val tabIcons = WeakHashMap<View, Pair<ViewGroup.LayoutParams, IntArray>>()
     val tabTexts = WeakHashMap<View, ViewGroup.LayoutParams>()
+    val tabBadges = WeakHashMap<View, ViewGroup.LayoutParams>()
     val badgeClips = WeakHashMap<ViewGroup, Pair<Boolean, Boolean>>()
     fun restoreBadgeClips() {
         badgeClips.forEach { (group, old) -> group.clipChildren = old.first; group.clipToPadding = old.second }
@@ -270,6 +352,7 @@ private class BarState(bar: ViewGroup) {
     var scrollListener: ViewTreeObserver.OnScrollChangedListener? = null
     var layoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
     var drawListener: ViewTreeObserver.OnPreDrawListener? = null
+    var preDrawPasses = 0
 }
 private val floatStates = WeakHashMap<ViewGroup, BarState>()
 private fun restoreBar(bar: ViewGroup) {
@@ -287,6 +370,8 @@ private fun restoreBar(bar: ViewGroup) {
     }
     state.glass.dispose()
     (bar.background as? Glass)?.dispose()
+    state.origTabGravity?.let { g -> runCatching { tabLayoutGravityField?.setInt(bar, g) } }
+    state.origTabMinWidth?.let { mw -> runCatching { tabLayoutMinWidthField?.setInt(bar, mw) } }
     bar.layoutParams = copyLayoutParams(state.params)
     bar.translationX = state.origTranslationX
     bar.background = state.background; bar.outlineProvider = state.outline; bar.clipToOutline = state.clip
@@ -302,12 +387,15 @@ private fun restoreBar(bar: ViewGroup) {
         tab.layoutParams = copyLayoutParams(old.first)
         old.second.let { tab.setPadding(it[0], it[1], it[2], it[3]) }
     }
+    state.tabMinWidths.forEach { (tab, mw) -> tab.minimumWidth = mw }
     state.tabCustoms.forEach { (v, oldLp) -> v.layoutParams = copyLayoutParams(oldLp) }
+    state.tabCustomClips.forEach { (g, old) -> g.clipChildren = old.first; g.clipToPadding = old.second }
     state.tabIcons.forEach { (v, old) ->
         v.layoutParams = copyLayoutParams(old.first)
         old.second.let { v.setPadding(it[0], it[1], it[2], it[3]) }
     }
     state.tabTexts.forEach { (v, oldLp) -> v.layoutParams = copyLayoutParams(oldLp) }
+    state.tabBadges.forEach { (v, oldLp) -> v.layoutParams = copyLayoutParams(oldLp) }
     floated.remove(bar); absorbed.remove(bar); originalFloatBottomMargin.remove(bar)
 }
 
@@ -388,19 +476,24 @@ private fun float(bar: ViewGroup) {
             }
         }.also(bar.viewTreeObserver::addOnGlobalLayoutListener)
         state.drawListener = ViewTreeObserver.OnPreDrawListener {
-            weak.get()?.let { b ->
-                if (b in floated) {
-                    settle(b)
-                    (b.getChildAt(0) as? ViewGroup)?.let { strip ->
-                        for (i in 0 until strip.childCount) {
-                            val tab = strip.getChildAt(i)
-                            if (tab.visibility != View.GONE) fit(tab)
-                        }
+            val b = weak.get() ?: return@OnPreDrawListener true
+            if (b in floated) {
+                val strip = b.getChildAt(0) as? ViewGroup
+                if (strip != null) {
+                    for (i in 0 until strip.childCount) {
+                        val tab = strip.getChildAt(i)
+                        if (tab.visibility != View.GONE) fit(tab)
                     }
-                    knob(b)
                 }
-                state.glass.sync()
+                settle(b)
+                if ((b.isLayoutRequested || strip?.isLayoutRequested == true) && state.preDrawPasses < 2) {
+                    state.preDrawPasses++
+                    return@OnPreDrawListener false
+                }
+                state.preDrawPasses = 0
+                knob(b)
             }
+            state.glass.sync()
             true
         }.also(bar.viewTreeObserver::addOnPreDrawListener)
     }
@@ -572,15 +665,28 @@ private val barTouchHosts = WeakHashMap<ViewGroup, WeakReference<ViewGroup>>()
 /** 上游最小宽 76dp、指示器高 56dp；各项等宽，数字变长时一同扩展。 */
 private val countTabWidths = WeakHashMap<View, Int>()
 
+private fun uniformTabWidth(strip: ViewGroup?, dp: Float): Int {
+    val maxCountW = strip?.let { group ->
+        (0 until group.childCount).filter { group.getChildAt(it).visibility != View.GONE }
+            .maxOfOrNull { countTabWidths[group.getChildAt(it)] ?: 0 }
+    } ?: 0
+    return kernelTabWidth(dp, maxCountW)
+}
+
 private fun fit(tab: View) {
     val strip = tab.parent as? ViewGroup
     val bar = strip?.parent as? ViewGroup
     val state = bar?.let { floatStates[it] }
     val dp = tab.dp
-    val w = kernelTabWidth(dp, strip?.let { group ->
-        (0 until group.childCount).filter { group.getChildAt(it).visibility != View.GONE }
-            .maxOfOrNull { countTabWidths[group.getChildAt(it)] ?: 0 }
-    } ?: 0)
+    val w = uniformTabWidth(strip, dp)
+    if (bar != null) {
+        runCatching {
+            if (tabLayoutGravityField?.getInt(bar) != 0) tabLayoutGravityField?.setInt(bar, 0)
+            if (tabLayoutMinWidthField?.getInt(bar) != w) tabLayoutMinWidthField?.setInt(bar, w)
+        }
+    }
+    state?.tabMinWidths?.getOrPut(tab) { tab.minimumWidth }
+    if (tab.minimumWidth != w) tab.minimumWidth = w
     val lp = tab.layoutParams as? LinearLayout.LayoutParams ?: return
     if (lp.width != w || lp.height != ViewGroup.LayoutParams.MATCH_PARENT || lp.weight != 0f ||
         tab.paddingLeft != 0 || tab.paddingTop != 0 || tab.paddingRight != 0 || tab.paddingBottom != 0) {
@@ -590,47 +696,92 @@ private fun fit(tab: View) {
         tab.setPadding(0, 0, 0, 0)
         tab.layoutParams = lp
     }
-    val custom = (tab as? ViewGroup)?.getChildAt(0) as? ViewGroup ?: return
-    custom.layoutParams?.let { clp ->
-        state?.tabCustoms?.getOrPut(custom) { copyLayoutParams(clp) }
-        if (clp.width != ViewGroup.LayoutParams.MATCH_PARENT || clp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
-            clp.width = ViewGroup.LayoutParams.MATCH_PARENT
-            clp.height = ViewGroup.LayoutParams.MATCH_PARENT
-            if (clp is LinearLayout.LayoutParams) clp.gravity = Gravity.CENTER
-            custom.layoutParams = clp
+    // 真包 TabLayout$TabView 子视图顺序为：0=f(ImageView), 1=e(TextView), 2=m(customView: r/i/c07.xml 或 TianshuRedTouch)。
+    // 严禁用 getChildAt(0) as? ViewGroup（恒为 null），直接通过 findViewById 定位图标/文字/角标并向上遍历至 tab。
+    val icon = tab.findViewById<View>(0x7f0a67c7)
+    val text = tab.findViewById<TextView>(0x7f0a7345)
+    val badge = tab.findViewById<View>(0x7f0a74a1)
+    val anchor = tab.findViewById<View>(0x7f0a75e0)
+    var cur = (icon ?: text ?: badge)?.parent as? ViewGroup
+    while (cur != null && cur !== tab && cur !== strip) {
+        val group = cur
+        state?.tabCustomClips?.getOrPut(group) { group.clipChildren to group.clipToPadding }
+        if (group.clipChildren || group.clipToPadding) {
+            group.clipChildren = false
+            group.clipToPadding = false
+        }
+        group.layoutParams?.let { clp ->
+            state?.tabCustoms?.getOrPut(group) { copyLayoutParams(clp) }
+            if (clp.width != ViewGroup.LayoutParams.MATCH_PARENT || clp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+                clp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                clp.height = ViewGroup.LayoutParams.MATCH_PARENT
+                when (clp) {
+                    is LinearLayout.LayoutParams -> clp.gravity = Gravity.CENTER
+                    is FrameLayout.LayoutParams -> clp.gravity = Gravity.CENTER
+                }
+                group.layoutParams = clp
+            }
+        }
+        cur = group.parent as? ViewGroup
+    }
+    anchor?.layoutParams?.let { alp ->
+        state?.tabCustoms?.getOrPut(anchor) { copyLayoutParams(alp) }
+        if (alp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+            alp.height = ViewGroup.LayoutParams.MATCH_PARENT
+            anchor.layoutParams = alp
         }
     }
-    custom.findViewById<View>(0x7f0a67c7)?.let { icon ->
-        val ilp = icon.layoutParams
+    icon?.let { iv ->
+        val ilp = iv.layoutParams
         if (ilp != null) {
-            state?.tabIcons?.getOrPut(icon) {
-                copyLayoutParams(ilp) to intArrayOf(icon.paddingLeft, icon.paddingTop, icon.paddingRight, icon.paddingBottom)
+            state?.tabIcons?.getOrPut(iv) {
+                copyLayoutParams(ilp) to intArrayOf(iv.paddingLeft, iv.paddingTop, iv.paddingRight, iv.paddingBottom)
             }
-            val padTop = (8 * dp).roundToInt()
-            if (ilp.height != ViewGroup.LayoutParams.MATCH_PARENT || icon.paddingTop != padTop || icon.paddingBottom != 0) {
+            val hasLabel = text != null && text.visibility != View.GONE
+            val padTop = if (hasLabel) (6 * dp).roundToInt() else 0
+            val targetGravity = if (hasLabel) 1 else 0
+            runCatching { tabDragSetGravityMethod?.invoke(iv, targetGravity) }
+            if (ilp.width != ViewGroup.LayoutParams.MATCH_PARENT || ilp.height != ViewGroup.LayoutParams.MATCH_PARENT ||
+                iv.paddingTop != padTop || iv.paddingBottom != 0 || iv.paddingLeft != 0 || iv.paddingRight != 0) {
+                ilp.width = ViewGroup.LayoutParams.MATCH_PARENT
                 ilp.height = ViewGroup.LayoutParams.MATCH_PARENT
-                icon.setPadding(icon.paddingLeft, padTop, icon.paddingRight, 0)
-                icon.layoutParams = ilp
+                iv.setPadding(0, padTop, 0, 0)
+                iv.layoutParams = ilp
             }
         }
     }
-    custom.findViewById<View>(0x7f0a7345)?.let { text ->
-        val tlp = text.layoutParams as? ViewGroup.MarginLayoutParams
+    text?.let { tv ->
+        val tlp = tv.layoutParams as? ViewGroup.MarginLayoutParams
         if (tlp != null) {
-            state?.tabTexts?.getOrPut(text) { copyLayoutParams(tlp) }
-            val btm = (4 * dp).roundToInt()
-            if (tlp.bottomMargin != btm || tlp.leftMargin != 0 || tlp.rightMargin != 0) {
+            state?.tabTexts?.getOrPut(tv) { copyLayoutParams(tlp) }
+            val btm = (6 * dp).roundToInt()
+            if (tlp is RelativeLayout.LayoutParams) {
+                tlp.addRule(RelativeLayout.CENTER_HORIZONTAL, RelativeLayout.TRUE)
+                tlp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM, RelativeLayout.TRUE)
+            }
+            if (tlp.bottomMargin != btm || tlp.leftMargin != 0 || tlp.rightMargin != 0 || tv.gravity != Gravity.CENTER) {
                 tlp.bottomMargin = btm
                 tlp.leftMargin = 0
                 tlp.rightMargin = 0
-                text.layoutParams = tlp
+                tv.gravity = Gravity.CENTER
+                tv.layoutParams = tlp
             }
         }
     }
-    custom.findViewById<View>(0x7f0a74a1)?.let { badge ->
-        if (badge in badgeLayouts && badge.visibility == View.VISIBLE && tab.width > 0 && badge.width > 0) {
-            val targetTx = tab.width / 2f - (badge.left + badge.width / 2f)
-            if (badge.translationX != targetTx) badge.translationX = targetTx
+    badge?.let { bv ->
+        if (bv in badgeLayouts && bv.visibility == View.VISIBLE && tab.width > 0 && bv.width > 0) {
+            val targetTx = tab.width / 2f - (bv.left + bv.width / 2f)
+            if (bv.translationX != targetTx) bv.translationX = targetTx
+        } else {
+            val blp = bv.layoutParams as? RelativeLayout.LayoutParams
+            if (blp != null) {
+                state?.tabBadges?.getOrPut(bv) { copyLayoutParams(blp) }
+                val topM = (3 * dp).roundToInt()
+                if (blp.topMargin != topM) {
+                    blp.topMargin = topM
+                    bv.layoutParams = blp
+                }
+            }
         }
     }
 }
@@ -668,14 +819,24 @@ private fun settle(bar: ViewGroup) {
     }
     val dp = bar.dp
     val pad4 = (4 * dp).toInt()
-    (bar.getChildAt(0) as? ViewGroup)?.let { strip ->
-        if (strip.paddingLeft != pad4 || strip.paddingTop != pad4 || strip.paddingRight != pad4 || strip.paddingBottom != pad4) {
-            strip.setPadding(pad4, pad4, pad4, pad4)
+    val strip = bar.getChildAt(0) as? ViewGroup
+    val tabW = uniformTabWidth(strip, dp)
+    var visibleTabs = 0
+    strip?.let {
+        if (it.paddingLeft != pad4 || it.paddingTop != pad4 || it.paddingRight != pad4 || it.paddingBottom != pad4) {
+            it.setPadding(pad4, pad4, pad4, pad4)
         }
-        if (strip.clipChildren || strip.clipToPadding) {
-            strip.clipChildren = false
-            strip.clipToPadding = false
+        if (it.clipChildren || it.clipToPadding) {
+            it.clipChildren = false
+            it.clipToPadding = false
         }
+        for (i in 0 until it.childCount) {
+            if (it.getChildAt(i).visibility != View.GONE) visibleTabs++
+        }
+    }
+    runCatching {
+        if (tabLayoutGravityField?.getInt(bar) != 0) tabLayoutGravityField?.setInt(bar, 0)
+        if (tabLayoutMinWidthField?.getInt(bar) != tabW) tabLayoutMinWidthField?.setInt(bar, tabW)
     }
     val inset = bar.paddingBottom
     val delta = if (inset > 0) inset - (absorbed[bar] ?: 0) else 0
@@ -683,17 +844,18 @@ private fun settle(bar: ViewGroup) {
     if (bar.paddingLeft != 0 || bar.paddingTop != 0 || bar.paddingRight != 0 || bar.paddingBottom != 0) {
         bar.setPadding(0, 0, 0, 0)
     }
+    val targetW = if (visibleTabs > 0) visibleTabs * tabW + 2 * pad4 else ViewGroup.LayoutParams.WRAP_CONTENT
     val targetH = (64 * dp).toInt()
     val hostW = (bar.parent as? View)?.width?.takeIf { it > 0 } ?: bar.resources.displayMetrics.widthPixels
-    val barW = bar.width.takeIf { it > 0 } ?: bar.measuredWidth
+    val barW = if (targetW > 0) targetW else (bar.width.takeIf { it > 0 } ?: bar.measuredWidth)
     val targetTx = centeredBarTranslationX(hostW, barW, dp, bar.layoutDirection == View.LAYOUT_DIRECTION_RTL)
     if (bar.translationX != targetTx) bar.translationX = targetTx
     (bar.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
         val base = originalFloatBottomMargin.getOrPut(bar) { it.bottomMargin }
         val minBottom = base + (12 * dp).toInt() + (absorbed[bar] ?: 0)
         val targetBottom = if (delta != 0) it.bottomMargin + delta else it.bottomMargin.coerceAtLeast(minBottom)
-        if (it.width != ViewGroup.LayoutParams.WRAP_CONTENT || it.height != targetH || it.bottomMargin != targetBottom) {
-            it.width = ViewGroup.LayoutParams.WRAP_CONTENT
+        if (it.width != targetW || it.height != targetH || it.bottomMargin != targetBottom) {
+            it.width = targetW
             it.height = targetH
             it.bottomMargin = targetBottom
             when (it) {
@@ -746,6 +908,14 @@ private class BadgeLayout(view: View) {
 private val badgeLayouts = WeakHashMap<View, BadgeLayout>()
 private var restoreNativeBadge: ((View) -> Unit)? = null
 private var refreshNativeBadges: (() -> Unit)? = null
+private fun refitBarForTab(tab: View) {
+    val strip = tab.parent as? ViewGroup ?: run { fit(tab); return }
+    for (i in 0 until strip.childCount) {
+        val child = strip.getChildAt(i)
+        if (child.visibility != View.GONE) fit(child)
+    }
+    (strip.parent as? ViewGroup)?.let { bar -> if (bar in floated) settle(bar) }
+}
 private fun restoreBadgeLayouts() {
     badgeLayouts.entries.toList().forEach { (view, state) ->
         state.restore(view)
@@ -753,7 +923,7 @@ private fun restoreBadgeLayouts() {
     }
     badgeLayouts.clear()
     floatStates.values.forEach { it.restoreBadgeClips() }
-    countTabWidths.keys.toList().forEach { tab -> countTabWidths.remove(tab); fit(tab) }
+    countTabWidths.keys.toList().forEach { tab -> countTabWidths.remove(tab); refitBarForTab(tab) }
 }
 
 /** 旧 TextView 与 QUIBadge 分别在真实数据入口处理；文字、测量宽度和内边距同时更新。 */
@@ -829,8 +999,8 @@ fun exactCount() {
                 val center = floatArrayOf(view.width/2f,view.height/2f).also(transform::mapPoints)
                 view.translationX = centeredBadgeTranslation(view.translationX,anchor[0],center[0])
                 val needed = maxOf((56 * view.dp).toInt(), numericBadgeWidth((paint.get(view) as Paint).measureText(label), 0, (6 * view.dp).toInt()))
-                if (countTabWidths.put(tab, needed) != needed) fit(tab)
-            } else if (countTabWidths.remove(tab) != null) fit(tab)
+                if (countTabWidths.put(tab, needed) != needed) refitBarForTab(tab)
+            } else if (countTabWidths.remove(tab) != null) refitBarForTab(tab)
         }
         chain.proceed()
     }
@@ -1863,13 +2033,16 @@ private class SecNavBarState(val nav: ViewGroup) : ViewTreeObserver.OnPreDrawLis
         (nav.parent as? ViewGroup)?.let { parentView ->
             parentView.clipChildren = false; parentView.clipToPadding = false
             if (parentView is LinearLayout && parentView.orientation == LinearLayout.VERTICAL) {
-                if (origParentBg == null) {
-                    val siblingBg = (0 until parentView.childCount).map(parentView::getChildAt)
-                        .firstOrNull { it !== nav && it.background != null }
-                        ?.background?.constantState?.newDrawable(nav.resources)?.mutate()
-                    val fill = siblingBg ?: android.graphics.drawable.ColorDrawable(
-                        if (night()) 0xFF1B1C1E.toInt() else 0xFFF5F6FA.toInt()
-                    )
+                // Y 轴串联布局（如 r/i/fte.xml 0x7f0a5ef0）中，父容器背景常被设为 #000000（0x7f083633），
+                // 清空 nav.background 后顶部会露出纯黑断层；优先用 nav 原始表面背景（0x7f083688 #1b1c1e）或兄弟列表背景统一铺满。
+                val navSurface = origNavBg?.constantState?.newDrawable(nav.resources)?.mutate()
+                val siblingBg = (0 until parentView.childCount).map(parentView::getChildAt)
+                    .firstOrNull { it !== nav && it.background != null }
+                    ?.background?.constantState?.newDrawable(nav.resources)?.mutate()
+                val fill = navSurface ?: siblingBg ?: android.graphics.drawable.ColorDrawable(
+                    if (night()) 0xFF1B1C1E.toInt() else 0xFFF5F6FA.toInt()
+                )
+                if (parentView.background !== appliedParentBg) {
                     appliedParentBg = fill
                     parentView.background = fill
                 }
@@ -2030,33 +2203,71 @@ private fun tintHomeIcons(v: View?, dark: Boolean) {
     }
 }
 
+private val homeTopBlurVis = WeakHashMap<View, Int>()
+private val homeTopAppliedRootBgs = WeakHashMap<ViewGroup, android.graphics.drawable.Drawable?>()
+
 private fun homeTopBar(bar: ViewGroup) {
     if (homeTopRecorded[bar] != true) {
         homeTopBgs[bar] = bar.background
         homeTopClips[bar] = bar.clipChildren to bar.clipToPadding
         homeTopRecorded[bar] = true
     }
+    val scope = (bar.parent as? ViewGroup) ?: bar
     if (!on("玻璃底栏")) {
-        if (bar.background == null && homeTopBgs[bar] != null) bar.background = homeTopBgs[bar]
+        if (bar.id != 0x7f0a3245 && bar.background == null && homeTopBgs[bar] != null) bar.background = homeTopBgs[bar]
         homeTopClips[bar]?.let { bar.clipChildren = it.first; bar.clipToPadding = it.second }
-        for (id in intArrayOf(0x7f0a6bb6, 0x7f0a6bb7)) {
-            bar.findViewById<View>(id)?.let { ch ->
+        bar.findViewById<View>(0x7f0a0951)?.let { blur ->
+            homeTopBlurVis.remove(blur)?.let { blur.visibility = it }
+        }
+        (bar.parent as? ViewGroup)?.takeIf { it.id == 0x7f0a1142 }?.let { root ->
+            if (root.background === homeTopAppliedRootBgs[root]) {
+                root.background = homeTopBgs[root]
+                homeTopAppliedRootBgs.remove(root)
+            }
+        }
+        for (id in intArrayOf(0x7f0a3245, 0x7f0a3d3f, 0x7f0a120a, 0x7f0a2ef9, 0x7f0a2ed1, 0x7f0a6bb6, 0x7f0a6bb7)) {
+            scope.findViewById<View>(id)?.let { ch ->
                 homeTopChildShifts[ch]?.let { ch.translationY = it }
             }
         }
+        for ((iv, _) in homeTopIconRecorded) iv.imageTintList = homeTopIconTints[iv]
         return
     }
-    if (bar.background != null) bar.background = null
+    if (bar.id != 0x7f0a3245 && bar.background != null) bar.background = null
     bar.clipChildren = false; bar.clipToPadding = false
-    val shiftY = ((headerTopOffsetDp() - 1f) * bar.dp).coerceIn(-16f * bar.dp, 24f * bar.dp)
-    for (id in intArrayOf(0x7f0a6bb6, 0x7f0a6bb7)) {
-        bar.findViewById<View>(id)?.let { ch ->
+    bar.findViewById<View>(0x7f0a0951)?.let { blur ->
+        homeTopBlurVis.putIfAbsent(blur, blur.visibility)
+        if (blur.visibility != View.GONE) blur.visibility = View.GONE
+    }
+    // Contacts 顶栏（r/i/e51.xml：0x7f0a1142 Vertical LinearLayout -> 0x7f0a6588 immersive_title_container_layout）
+    // 为 Y 轴串联结构，清空 0x7f0a6588 背景后需把根容器 0x7f0a1142 背景同步为 0x7f0a1143 或列表表面色，避免露出顶部黑底。
+    (bar.parent as? ViewGroup)?.takeIf { it.id == 0x7f0a1142 }?.let { root ->
+        if (homeTopRecorded[root] != true) {
+            homeTopBgs[root] = root.background
+            homeTopClips[root] = root.clipChildren to root.clipToPadding
+            homeTopRecorded[root] = true
+        }
+        val bgIv = root.findViewById<android.widget.ImageView>(0x7f0a1143)
+        val fill = bgIv?.drawable?.constantState?.newDrawable(root.resources)?.mutate()
+            ?: android.graphics.drawable.ColorDrawable(if (night()) 0xFF17191D.toInt() else 0xFFF5F6FA.toInt())
+        if (root.background !== homeTopAppliedRootBgs[root]) {
+            homeTopAppliedRootBgs[root] = fill
+            root.background = fill
+        }
+    }
+    // 主页顶栏（Conversation r/i/e5p.xml / Contacts / Leba）统一按顶栏上边距滑条平移头像、标题与右侧按钮，
+    // 默认 1dp 时整体上移 4dp（8px），在避开系统状态栏时钟（y=68..97）的前提下缩小顶部空白并保持水平对齐。
+    val shiftY = ((headerTopOffsetDp() - 5f) * bar.dp).coerceIn(-6f * bar.dp, 24f * bar.dp)
+    val dark = night()
+    for (id in intArrayOf(0x7f0a3245, 0x7f0a3d3f, 0x7f0a120a, 0x7f0a2ef9, 0x7f0a2ed1, 0x7f0a6bb6, 0x7f0a6bb7)) {
+        scope.findViewById<View>(id)?.let { ch ->
             val origY = homeTopChildShifts.getOrPut(ch) { ch.translationY }
             val targetY = origY + shiftY
             if (ch.translationY != targetY) ch.translationY = targetY
-            if (id == 0x7f0a6bb7) tintHomeIcons(ch, night())
+            if (id == 0x7f0a120a || id == 0x7f0a2ed1 || id == 0x7f0a6bb7) tintHomeIcons(ch, dark)
         }
     }
+    scope.findViewById<View>(0x7f0a1209)?.let { tintHomeIcons(it, dark) }
 }
 
 private fun homeListClip(group: ViewGroup) {
@@ -2085,11 +2296,13 @@ private fun resetHomeTopBars() {
         bar.background = homeTopBgs[bar]
         homeTopClips[bar]?.let { bar.clipChildren = it.first; bar.clipToPadding = it.second }
     }
+    homeTopBlurVis.forEach { (blur, vis) -> blur.visibility = vis }
     homeTopChildShifts.forEach { (ch, origY) -> ch.translationY = origY }
     for ((iv, _) in homeTopIconRecorded) iv.imageTintList = homeTopIconTints[iv]
     homeListClips.forEach { (g, old) -> g.clipChildren = old.first; g.clipToPadding = old.second }
     statusTintAlphas.forEach { (ch, origA) -> ch.alpha = origA }
     homeTopBgs.clear(); homeTopRecorded.clear(); homeTopClips.clear()
+    homeTopBlurVis.clear(); homeTopAppliedRootBgs.clear()
     homeTopChildShifts.clear(); homeTopIconTints.clear(); homeTopIconRecorded.clear()
     homeListClips.clear(); statusTintAlphas.clear()
 }

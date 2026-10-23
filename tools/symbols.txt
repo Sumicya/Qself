@@ -654,5 +654,27 @@ member! com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttAudioPlayerM
 member! com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttAudioPlayerManager#E
 member! com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttAudioPlayerManager#C8
 class com.tencent.mobileqq.qqaudio.audioplayer.AudioPlayerBase
+class com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl
+class com.tencent.mobileqq.app.FrameFragment
+field com.tencent.mobileqq.app.FrameFragment#mTabViewMap
+member! com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl#checkEnableTabAnim
+class com.tencent.mobileqq.main.api.impl.MainUIHelperApiImpl
+class com.tencent.mobileqq.app.Frame
+class com.tencent.mobileqq.resconfig.MainResourceConfig
+member! com.tencent.mobileqq.main.api.impl.MainUIHelperApiImpl#updateTitleBar
+class com.tencent.mobileqq.leba.Leba
+member! com.tencent.mobileqq.leba.Leba#updateTitleBar
+member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#X
+class com.tencent.widget.immersive.SystemBarTintManager
+field com.tencent.widget.immersive.SystemBarTintManager#mStatusBarTintView
+member! com.tencent.widget.immersive.SystemBarTintManager#setupStatusBarView
+member! com.tencent.widget.immersive.SystemBarTintManager#setStatusBarTintEnabled
+member! com.tencent.widget.immersive.SystemBarTintManager#handleMessage
+member! com.tencent.widget.immersive.SystemBarTintManager#setStatusBarAlpha
+field com.google.android.material.tabs.TabLayout#T
+field com.google.android.material.tabs.TabLayout#P
+class com.tencent.mobileqq.widget.TabDragAnimationView
+member! com.tencent.mobileqq.widget.TabDragAnimationView#setIconGravity
+
 
 

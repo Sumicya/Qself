@@ -363,6 +363,7 @@ private class SendButtonPill(view: View) {
         if (v is android.widget.TextView && night()) {
             if (v.currentTextColor != 0xFFFFFFFF.toInt()) v.setTextColor(0xFFFFFFFF.toInt())
         }
+        v.invalidateOutline()
         v.invalidate()
     }
     fun restore() {
@@ -371,13 +372,23 @@ private class SendButtonPill(view: View) {
         v.clipToOutline = clip
         if (v is android.widget.TextView && origTextColor != null) v.setTextColor(origTextColor)
         for ((drawable, orig) in origRadii.entries.toList()) {
-            runCatching { setRadiusMethod?.invoke(drawable, orig) }
+            if (drawable is android.graphics.drawable.GradientDrawable) {
+                drawable.cornerRadius = orig
+            } else {
+                runCatching { setRadiusMethod?.invoke(drawable, orig) }
+            }
         }
         origRadii.clear()
+        v.invalidateOutline()
         v.invalidate()
     }
     private fun updateSmoothRadii(drawable: android.graphics.drawable.Drawable?, radius: Float) {
         if (drawable == null) return
+        if (drawable is android.graphics.drawable.GradientDrawable) {
+            if (!origRadii.containsKey(drawable)) origRadii[drawable] = drawable.cornerRadius
+            if (drawable.cornerRadius != radius) drawable.cornerRadius = radius
+            return
+        }
         val cls = smoothClass
         if (cls != null && cls.isInstance(drawable)) {
             if (!origRadii.containsKey(drawable)) {
@@ -386,6 +397,9 @@ private class SendButtonPill(view: View) {
             }
             runCatching { setRadiusMethod?.invoke(drawable, radius) }
             return
+        }
+        if (drawable is android.graphics.drawable.LayerDrawable) {
+            for (i in 0 until drawable.numberOfLayers) updateSmoothRadii(drawable.getDrawable(i), radius)
         }
         val state = drawable.constantState as? android.graphics.drawable.DrawableContainer.DrawableContainerState
         if (state != null) {

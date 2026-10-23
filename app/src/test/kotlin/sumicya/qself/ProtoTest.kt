@@ -617,8 +617,14 @@ class ProtoTest {
         assertEquals(101, reducedSafeTop(140, 1.953125f, -24f))
         assertEquals(0, reducedSafeTop(0, 1.953125f, 1f))
 
-        assertEquals(-85.5f, centeredBarTranslationX(1272, 336, 1.953125f, rtl = false))
-        assertEquals(85.5f, centeredBarTranslationX(1272, 336, 1.953125f, rtl = true))
-        assertEquals(0f, centeredBarTranslationX(400, 336, 1.953125f, rtl = false))
+        assertEquals(-85.5f, centeredBarTranslationX(1272, 460, 1.953125f, rtl = false))
+        assertEquals(85.5f, centeredBarTranslationX(1272, 460, 1.953125f, rtl = true))
+        assertEquals(0f, centeredBarTranslationX(400, 460, 1.953125f, rtl = false))
+        val tabW = kernelTabWidth(1.953125f, 0)
+        assertEquals(148, tabW)
+        val pad4 = (4 * 1.953125f).toInt()
+        val barW = 3 * tabW + 2 * pad4
+        assertEquals(458, barW)
+        assertEquals((barW - 2 * pad4) / 3, tabW)
     }
 }

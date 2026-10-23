@@ -213,6 +213,40 @@ RULES.update({
      'Z com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent,android.view.View'): (
         {'com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent#i:com.tencent.mobileqq.aio.msg.AIOMsgItem'},
         {'com.tencent.mvi.mvvm.BaseVB#sendIntent'}),
+    (CONTROLLER, 'checkEnableTabAnim', 'V com.tencent.mobileqq.app.FrameFragment,Z'): (
+        {'com.tencent.mobileqq.app.FrameFragment#mRootView:android.view.View',
+         'android.view.ViewGroup$LayoutParams#height:I'},
+        {'android.view.View#findViewById',
+         f'{CONTROLLER}#dispatchResetTabDrag'}),
+    ('com.google.android.material.tabs.TabLayout$TabView', 'w', 'V '): (
+        {'com.google.android.material.tabs.TabLayout$TabView#f:android.widget.ImageView',
+         'com.google.android.material.tabs.TabLayout$TabView#e:android.widget.TextView',
+         'com.google.android.material.tabs.TabLayout$TabView#m:android.view.View'},
+        {'android.view.ViewGroup#addView'}),
+    ('com.google.android.material.tabs.TabLayout$f', 'onMeasure', 'V I,I'): (
+        {'com.google.android.material.tabs.TabLayout#T:I'},
+        {'com.google.android.material.tabs.TabLayout#V'}),
+    ('com.tencent.mobileqq.widget.TabDragAnimationView', 'setIconGravity', 'V I'): (
+        {'com.tencent.mobileqq.widget.TabDragAnimationView#e:I'},
+        {'android.view.View#invalidate'}),
+    ('com.tencent.mobileqq.main.api.impl.MainUIHelperApiImpl', 'updateTitleBar',
+     'V com.tencent.mobileqq.app.Frame,android.widget.RelativeLayout,com.tencent.mobileqq.resconfig.MainResourceConfig,Z'): (
+        {'android.view.ViewGroup$LayoutParams#height:I'},
+        {'android.view.View#setBackground', 'com.tencent.mobileqq.resconfig.MainResourceConfig#p'}),
+    ('com.tencent.mobileqq.leba.Leba', 'updateTitleBar',
+     'V android.widget.RelativeLayout,com.tencent.mobileqq.resconfig.MainResourceConfig'): (
+        {'android.view.ViewGroup$LayoutParams#height:I'},
+        {'android.view.View#setBackground', 'com.tencent.mobileqq.resconfig.MainResourceConfig#p'}),
+    ('com.tencent.biz.qui.quisecnavbar.QUISecNavBar', 'X', 'V '): (
+        {'w80.d#e:I'},
+        {'android.view.View#setLayoutParams', 'android.view.View#setPadding'}),
+    ('com.tencent.widget.immersive.SystemBarTintManager', 'setupStatusBarView',
+     'V android.view.Window,android.view.ViewGroup'): (
+        {'com.tencent.widget.immersive.SystemBarTintManager#mStatusBarTintView:android.view.View'},
+        {'android.view.ViewGroup#addView'}),
+    ('com.tencent.widget.immersive.SystemBarTintManager', 'setStatusBarAlpha', 'V F'): (
+        {'com.tencent.widget.immersive.SystemBarTintManager#mStatusBarTintView:android.view.View'},
+        {'android.view.View#setAlpha'}),
 })
 
 
