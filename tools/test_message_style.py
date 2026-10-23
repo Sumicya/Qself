@@ -188,6 +188,12 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('MainResourceConfig', looks_src)
         self.assertIn('0x7f0a6596', looks_src)
         self.assertIn('uUpMask', looks_src)
+        diag_src = (SRC / 'DiagLog.kt').read_text()
+        self.assertIn('fullQqLogger', diag_src)
+        self.assertIn('exportFullQqLog', diag_src)
+        self.assertIn('com.tencent.qphone.base.util.QLog', diag_src)
+        self.assertIn('addLogItem', diag_src)
+        self.assertIn('导出全量日志', MENU)
 
 
 if __name__ == '__main__':

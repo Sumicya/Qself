@@ -47,6 +47,7 @@ val features = listOf(
     Feature("系统WebView", false, "网页走系统 WebView，不加载 X5", ::systemWebView),
     Feature("屏蔽统计上报", false, "灯塔统计空转", ::noTelemetry),
     Feature("屏蔽崩溃上报", false, "不初始化 Bugly", ::noCrashReport),
+    Feature("全量日志", false, "录制 QQ 全量 QLog、钩子轨迹与界面树快照，支持一键导出/复制", ::fullQqLogger),
 )
 
 val featureDefaults = features.associate { it.name to it.default }

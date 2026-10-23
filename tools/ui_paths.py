@@ -283,6 +283,13 @@ RULES.update({
      'android.view.View android.view.View'): (
         set(),
         {'android.view.View#setBackgroundColor', 'android.view.ViewGroup#addView'}),
+    ('com.tencent.qphone.base.util.QLog', 'isColorLevel', 'Z '): (
+        {'com.tencent.qphone.base.util.QLog#UIN_REPORTLOG_LEVEL:I'},
+        {'com.tencent.qphone.base.util.QLog#isEncrypted'}),
+    ('com.tencent.qphone.base.util.QLog', 'addLogItem',
+     'V B,java.lang.String,I,java.lang.String,java.lang.Throwable'): (
+        {'com.tencent.qphone.base.util.QLog#useXlog:Z'},
+        {'com.tencent.qphone.base.util.QLog#printByXlog'}),
 })
 
 

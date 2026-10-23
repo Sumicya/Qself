@@ -764,9 +764,14 @@ private fun sheet(anchor: View) {
             }
         })
     }
+    val activity = generateSequence(ctx) { (it as? ContextWrapper)?.baseContext?.takeIf { base -> base !== it } }
+        .filterIsInstance<Activity>().firstOrNull()
     grid.addView(bubblePadSeek)
     grid.addView(LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.END
+        addView(button("导出全量日志") {
+            exportFullQqLog(ctx, activity)
+        })
         addView(button("恢复默认") {
             val edit = prefs.edit()
             features.forEach { edit.putBoolean(it.name, it.default) }
@@ -808,8 +813,6 @@ private fun sheet(anchor: View) {
     dim.setOnKeyListener { _, key, event ->
         if (key == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) { close(); true } else false
     }
-    val activity = generateSequence(ctx) { (it as? ContextWrapper)?.baseContext?.takeIf { base -> base !== it } }
-        .filterIsInstance<Activity>().firstOrNull()
     val back = OnBackInvokedCallback { close() }
     dim.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
         override fun onViewAttachedToWindow(view: View) {

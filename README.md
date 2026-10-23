@@ -7,7 +7,7 @@
 ## 要求
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
-但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，699 条）——换版本先看那张表红哪条，别猜。
+但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，702 条）——换版本先看那张表红哪条，别猜。
 
 ## 功能
 
@@ -48,6 +48,7 @@
 - 网页一律走系统 WebView，不加载 X5
 - 灯塔 (beacon) 与 StatisticCollector 的统计上报空转
 - 不初始化崩溃上报
+- **全量日志录制与一键导出（`全量日志` / `DiagLog.kt`）**：挂钩 `com.tencent.qphone.base.util.QLog#isColorLevel`（开启 QQ 内部 UI/AIO/顶栏/底栏调试日志）与 `QLog#addLogItem(byte, String, int, String, Throwable)`，双环缓冲记录全量 QQ `QLog`、UI/AIO/顶栏专项 `QLog`、全部 Qself 钩子调用频次与前 10 次入参/返回值样本、未捕获崩溃栈、当前进程 `logcat -d`，并在主页/AIO/二级页自动抓取完整 `DecorView` 视图树快照（含每个 View 的类名、资源 ID、屏幕坐标、`padding`/`margin`、`clip`、背景 Drawable 颜色与 `EdgeTransparentView`/`SkinnableRecycleView` 内部状态）；设置面板底部提供「导出全量日志」按钮，一键复制到剪贴板、写入 `/sdcard/Download/qself-full-log.txt` 与 `/sdcard/Android/data/com.tencent.mobileqq/files/qself-full-log.txt` 并拉起系统分享面板。
 
 ## 安装与使用
 

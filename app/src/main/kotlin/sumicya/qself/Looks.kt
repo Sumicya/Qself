@@ -235,6 +235,7 @@ private fun watch(decor: View) {
         prefs.registerOnSharedPreferenceChangeListener(listener)
         preferenceListener = listener
     }
+    (decor.context as? Activity)?.let { scheduleActivitySnapshot(it, "watch") }
     if (watched[decor]?.get() != null) { watched[decor]?.get()?.refresh(); return }
     watched[decor] = WeakReference(AppearanceObserver(decor))
 }
@@ -1826,6 +1827,7 @@ private fun aioHeader() {
         }
         state.applyStyle()
         if (on("玻璃底栏")) loadHeaderAvatar(vb, state.avatar)
+        captureViewRootSnapshot(bar, "AIO-Header:${bar.context.javaClass.simpleName}")
     }
 
     for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "H1", "I1", "w1", "P1", "X1", "Z1", "Y1", "z1", "A1", "D1", "C1", "R1", "S1", "W1", "h1", "l1")) {
@@ -2376,6 +2378,7 @@ private fun secNavBar(nav: ViewGroup) {
         SecNavBarState(nav).also { secNavBars[it.titleRoot] = it }
     }
     state.applyStyle()
+    captureViewRootSnapshot(nav, "QUISecNavBar:${nav.context.javaClass.simpleName}")
 }
 
 private fun refreshSecNavBars() {
@@ -2504,6 +2507,7 @@ private fun homeTopBar(bar: ViewGroup) {
         }
     }
     scope.findViewById<View>(0x7f0a1209)?.let { tintHomeIcons(it, dark) }
+    captureViewRootSnapshot(bar, "HomeTopBar:0x${Integer.toHexString(bar.id)}")
 }
 
 private fun homeListClip(group: ViewGroup) {

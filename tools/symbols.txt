@@ -758,6 +758,10 @@ member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#W
 member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#Q
 member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#R
 member! com.tencent.biz.qui.quisecnavbar.QUISecNavBar#Z
+class com.tencent.qphone.base.util.QLog
+member! com.tencent.qphone.base.util.QLog#isColorLevel
+member! com.tencent.qphone.base.util.QLog#addLogItem
+
 
 
 

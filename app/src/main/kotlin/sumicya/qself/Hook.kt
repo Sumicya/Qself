@@ -13,8 +13,9 @@ import java.lang.reflect.Method
 lateinit var xposed: XposedInterface
 lateinit var loader: ClassLoader
 
-/** 同时写 logcat（`logcat -s Qself`）和 LSPosed 管理器的日志页。 */
+/** 同时写 logcat（`logcat -s Qself`）、LSPosed 管理器的日志页与内存诊断环。 */
 fun log(msg: String, t: Throwable? = null) {
+    runCatching { recordQselfEvent(msg, t) }
     Log.i("Qself", msg, t)
     xposed.log(Log.INFO, "Qself", msg, t)
 }
@@ -79,11 +80,17 @@ private class SafeChain(private val delegate: Chain) : Chain by delegate {
  */
 fun hook(target: Executable, gated: Boolean = true, body: (Chain) -> Any?): XposedInterface.HookHandle {
     val name = if (gated) feature else null
+    val sig = "${target.declaringClass.name}#${target.name}"
+    val isQLogSelf = target.declaringClass.name == "com.tencent.qphone.base.util.QLog"
     return xposed.hook(target).intercept { chain ->
         if (name != null && !on(name)) return@intercept chain.proceed()
         val safe = SafeChain(chain)
         try {
-            body(safe)
+            val res = body(safe)
+            if (!isQLogSelf) {
+                runCatching { recordHookInvocation(sig, safe.thisObject, safe.args, res) }
+            }
+            res
         } catch (t: Throwable) {
             if (t === safe.targetFailure) throw t
             if (!safe.proceeded) {

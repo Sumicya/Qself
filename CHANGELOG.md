@@ -1,6 +1,14 @@
 # CHANGELOG
 
-## 2026-10-24 — 按 NagramXF 彻底移除 AIO / 主页 / 二级页顶栏安全区与遮罩、实装胶囊外间隙触摸直通与消息全屏穿底，并确立先进聊天软件三阶段演进蓝图
+## 2026-10-24（二）— 实装全量 QQ 日志与界面树快照录制引擎（`DiagLog.kt` / `全量日志`）及面板一键导出/复制
+
+- 针对用户请求（「写一版录全qq日志的我返日志给你」），新增全量诊断日志引擎 `DiagLog.kt` 并集成至 `Qself.kt`、`Hook.kt`、`Looks.kt`、`Knob.kt`（`tools/symbols.txt` 增至 702 条符号）：
+  1. **全量 `QLog` 拦截与调试级别解锁**：挂钩 `com.tencent.qphone.base.util.QLog#isColorLevel()` 返回 `true`（解锁 QQ 内部被 `if (QLog.isColorLevel())` 包裹的 UI/AIO/顶栏/底栏/皮肤调试日志）并拦截 `QLog#addLogItem(byte, String, int, String, Throwable)`，分双环缓冲保存最新 `3000` 条全量 `QLog` 与 `2500` 条 UI/AIO/顶栏/错误专项 `QLog`；
+  2. **全钩子调用轨迹与异常采样**：在 `Hook.kt` `hook(...)` 与 `log(...)` 中记录每个已挂钩方法的调用总次数（`hookCallCounts`）、前 10 次调用的 `this`/入参/返回值摘要以及全部钩子前后置异常与线程未捕获异常栈；
+  3. **主页 / AIO / 二级页完整 `DecorView` 视图树与安全区自动快照**：在 Activity 进入、AIO 顶栏绑定（`bindHeader`）、二级页 `QUISecNavBar` 绑定与主页顶栏（`homeTopBar`）刷新后自动抓取完整视图树（每个 View 的类名、资源 ID 十六进制与 entry 名、可见性、局部与屏幕坐标、`padding`/`margin`、`translation`、`clipChildren`/`clipToPadding`/`clipToOutline`、背景 Drawable 类型与颜色值、`EdgeTransparentView` `D/i/m` 与 `SkinnableRecycleView` `f` 状态），并在后台自动落盘；
+  4. **三通道零门槛一键导出（`导出全量日志`）**：在 Qself 设置面板底部新增「导出全量日志」按钮，点击即刻将诊断报告复制到系统剪贴板、写入 `/sdcard/Download/qself-full-log.txt` 与 `/sdcard/Android/data/com.tencent.mobileqq/files/qself-full-log.txt`、分段输出至 `LSPosed` 日志（`QselfDiag`）并拉起系统分享面板。
+
+## 2026-10-24（一）— 按 NagramXF 彻底移除 AIO / 主页 / 二级页顶栏安全区与遮罩、实装胶囊外间隙触摸直通与消息全屏穿底，并确立先进聊天软件三阶段演进蓝图
 
 - 针对用户反馈（「顶栏安全区还是没去 接着按nagramxf做」「nagramxf作为短期目标 接下来是把qq做成先进聊天软件」），对照 [`Keeperorowner/NagramXF`](https://github.com/Keeperorowner/NagramXF/tree/30dcd6ce7b5b0279fa86f302ca61cd272bfa3068)（`ActionBar.java`、`ChatAvatarContainer.java`、`ChatActivity.java`、`DialogsActivity.java`）与 `/tmp/qq.apk` 真包 DEX/AXML 字节码，定位并拔除导致顶栏安全区残余的全部底层根因（`Looks.kt`、`Input.kt`、`tools/symbols.txt`、`tools/ui_paths.py`、`tools/test_message_style.py`）：
   - **聊天页（AIO）顶栏安全区、异步背景重设、模糊/渐变遮罩与列表全链路裁切彻底拔除**：
