@@ -668,33 +668,18 @@ private fun sheet(anchor: View) {
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
         setPadding((6 * dp).toInt(), (16 * dp).toInt(), 0, (6 * dp).toInt())
     })
-    val format = android.widget.EditText(ctx).apply {
-        setText(prefs.getString(TIME_PATTERN, "HH:mm")); textSize = 14f; setTextColor(ink)
-        hint = "时间格式，例如 MM-dd HH:mm:ss"; setHintTextColor(sub); isSingleLine = true
-        gravity = Gravity.START or Gravity.CENTER_VERTICAL
-        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
-        contentDescription = "消息时间格式"
-    }
-    grid.addView(format)
-    grid.addView(TextView(ctx).apply {
-        text = TIME_FORMAT_GUIDE
-        textSize = 11.5f; setTextColor(sub)
-        gravity = Gravity.START
-        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (2 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
-    })
-    grid.addView(button("保存时间格式") {
-        val value = format.text.toString()
-        if (!validTimePattern(value)) format.error = "格式无效，例如 HH:mm 或 MM-dd HH:mm:ss"
-        else { prefs.edit().putString(TIME_PATTERN, value).apply(); refreshMessageStyle(); format.error = null }
-    })
     val cornerLabel = TextView(ctx).apply {
         textSize = 13f; setTextColor(ink)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
         setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
     }
+    grid.addView(TextView(ctx).apply {
+        text = "消息（头像 / 气泡）"; textSize = 13.5f; setTextColor(sub)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (14 * dp).toInt(), 0, (2 * dp).toInt())
+    })
     grid.addView(cornerLabel)
     val radiusSeek = android.widget.SeekBar(ctx).apply {
         max = 50; progress = (prefs.getInt(AVATAR_RADIUS, 20)).coerceIn(0, 50)
@@ -717,6 +702,12 @@ private fun sheet(anchor: View) {
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
         setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
     }
+    grid.addView(TextView(ctx).apply {
+        text = "玻璃"; textSize = 13.5f; setTextColor(sub)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (14 * dp).toInt(), 0, (2 * dp).toInt())
+    })
     grid.addView(blurLabel)
     val blurSeek = android.widget.SeekBar(ctx).apply {
         max = 15; progress = (prefs.getInt(GLASS_BLUR, 1)).coerceIn(0, 15)
@@ -779,12 +770,19 @@ private fun sheet(anchor: View) {
             }
         })
     }
+    grid.addView(bubblePadSeek)
     val safeTopLabel = TextView(ctx).apply {
         textSize = 13f; setTextColor(ink)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
         setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
     }
+    grid.addView(TextView(ctx).apply {
+        text = "顶栏"; textSize = 13.5f; setTextColor(sub)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (14 * dp).toInt(), 0, (2 * dp).toInt())
+    })
     grid.addView(safeTopLabel)
     val safeTopSeek = android.widget.SeekBar(ctx).apply {
         max = 100; progress = prefs.getInt(SAFE_TOP, 0).coerceIn(0, 100)
@@ -832,9 +830,35 @@ private fun sheet(anchor: View) {
         })
     }
     grid.addView(safeShiftSeek)
+    grid.addView(TextView(ctx).apply {
+        text = "时间格式"; textSize = 13.5f; setTextColor(sub)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (14 * dp).toInt(), 0, (2 * dp).toInt())
+    })
+    val format = android.widget.EditText(ctx).apply {
+        setText(prefs.getString(TIME_PATTERN, "HH:mm")); textSize = 14f; setTextColor(ink)
+        hint = "时间格式，例如 MM-dd HH:mm:ss"; setHintTextColor(sub); isSingleLine = true
+        gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
+        contentDescription = "消息时间格式"
+    }
+    grid.addView(format)
+    grid.addView(TextView(ctx).apply {
+        text = TIME_FORMAT_GUIDE
+        textSize = 11.5f; setTextColor(sub)
+        gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (2 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
+    })
+    grid.addView(button("保存时间格式") {
+        val value = format.text.toString()
+        if (!validTimePattern(value)) format.error = "格式无效，例如 HH:mm 或 MM-dd HH:mm:ss"
+        else { prefs.edit().putString(TIME_PATTERN, value).apply(); refreshMessageStyle(); format.error = null }
+    })
     val activity = generateSequence(ctx) { (it as? ContextWrapper)?.baseContext?.takeIf { base -> base !== it } }
         .filterIsInstance<Activity>().firstOrNull()
-    grid.addView(bubblePadSeek)
     grid.addView(LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.END
         addView(TextView(ctx).apply {

@@ -1596,6 +1596,10 @@ private class HeaderState(
                     refreshInputLayout()
                 }
                 if (o.paddingTop != reducedTop || o.paddingBottom != 0) o.setPadding(orig[0], reducedTop, orig[2], 0)
+                // 安全区一去掉，标题栏就被推到 y=0，里面的按钮会落到状态栏底下（真机：状态栏 0~141px，
+                // 返回键跑到 y=26）。把去掉的那段补成标题栏自己的内容内边距，玻璃板从 y=0 铺满顶部，
+                // 按钮仍留在状态栏以下，两边不相撞。
+                compensateTitleSafeTop(bar, aioSafeTopRemovedPx)
             }
         }
         root?.takeIf { it !== outer }?.let { r ->
@@ -1915,7 +1919,8 @@ private fun aioHeader() {
         chain.proceed().also {
             val bar = chain.thisObject as? ViewGroup ?: return@also
             if (!on("玻璃底栏") || bar !in aioHeaders) return@also
-            val minH = (50 * bar.dp).roundToInt()
+            // 标题栏高度 = 50dp + 补进去的安全区高度，不然补的内边距会把按钮挤出可视区。
+            val minH = (50 * bar.dp).roundToInt() + aioSafeTopRemovedPx
             if (bar.measuredHeight in 1 until minH) setMeasured.invoke(bar, bar.measuredWidthAndState, minH)
         }
     }
@@ -2494,6 +2499,21 @@ private fun aioLayoutSnapshot(bar: View) {
  * 以及还有没有祖先开着 `fitsSystemWindows`（开了就会把状态栏高度重新贴回 AIO 内容区，
  * 「顶栏安全区还是没去」的残余往往就藏在这里）。只写日志，不改任何布局。
  */
+/**
+ * 顶栏安全区被去掉 `removed` px 后，把同样一段补成标题栏自己的内容内边距：
+ * 玻璃板从 y=0 一直铺到底，按钮（返回键、群名、右侧按钮）仍停在状态栏以下，不与状态栏相撞。
+ * `removed = 0`（滑条在 100%，或开关关闭）时把内边距还原成 0。
+ */
+private fun compensateTitleSafeTop(bar: View, removed: Int) {
+    if (bar.paddingTop == removed) return
+    val before = bar.paddingTop
+    bar.setPadding(bar.paddingLeft, removed, bar.paddingRight, bar.paddingBottom)
+    recordQselfEvent(
+        "AIO 顶栏内容补偿：去掉安全区 ${removed}px 补进标题栏 paddingTop（$before -> $removed），" +
+            "按钮留在状态栏以下；标题栏目标高度=${(50 * bar.dp).roundToInt() + removed}px",
+    )
+}
+
 private fun aioGeometry(bar: View) {
     val root = bar.rootView
     val statusTop = runCatching {

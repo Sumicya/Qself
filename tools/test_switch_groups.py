@@ -65,6 +65,21 @@ class SwitchGroupContractTest(unittest.TestCase):
         self.assertNotIn('features.forEach { grid.addView(cell(it)', KNOB)
         self.assertIn('featuresByGroup()', DIAG)  # 日志里的 Switches 也要分组，不能是一长条
 
+    def test_message_appearance_rows_are_grouped_and_paired(self):
+        # 消息外观那一节：每条滑条必须紧跟自己的标题（气泡边距的滑条曾经被丢到整节最后，
+        # 和它的标题隔着一整片顶栏滑条），四个小组的先后顺序也要固定。
+        block = KNOB.split('text = "消息外观"', 1)[1].split('grid.addView(LinearLayout', 1)[0]
+        order = re.findall(r'grid\.addView\((\w+)\)', block)
+        for label, seek in (('cornerLabel', 'radiusSeek'), ('bubbleCornerLabel', 'bubbleCornerSeek'),
+                            ('bubblePadLabel', 'bubblePadSeek'), ('blurLabel', 'blurSeek'),
+                            ('safeTopLabel', 'safeTopSeek'), ('safeShiftLabel', 'safeShiftSeek')):
+            self.assertIn(label, order)
+            self.assertIn(seek, order)
+            self.assertEqual(order.index(label) + 1, order.index(seek),
+                             f'{seek} 没紧跟在 {label} 后面：{order}')
+        heads = re.findall(r'text = "(消息（头像 / 气泡）|玻璃|顶栏|时间格式)"', block)
+        self.assertEqual(['消息（头像 / 气泡）', '玻璃', '顶栏', '时间格式'], heads, f'小组顺序不对：{heads}')
+
     def test_name_verbs_are_consistent(self):
         # 藏/去/屏蔽 三个动词都在说「关掉一样东西」，一律收口成 隐藏 或 停止。
         banned = ('屏蔽', '藏', '去')

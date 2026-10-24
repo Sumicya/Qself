@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-10-24（九）— 面板「消息外观」按四组重排并钉死滑条与标题的配对，群聊顶栏去掉安全区后改为组件重定位而非相撞
+
+- 面板「消息外观」重排（`Knob.kt`）：气泡边距的滑条原先被 `grid.addView` 加在整节最后，和它自己的标题隔着一整片顶栏滑条；现在按「消息（头像 / 气泡）→ 玻璃 → 顶栏 → 时间格式」四组排，小组内标题紧跟对应滑条。新增契约（`tools/test_switch_groups.py`）：六条滑条必须紧跟自己的标题、四个小组顺序固定，再挪错位就红。
+- 群聊顶栏安全区改为组件重定位（`Looks.kt`）：真机快照（群聊，`26.10.24.10.3172`，`SAFE_TOP=100`）实测状态栏 `141px`、顶栏容器 `0x7f0a6bc6 pad=[0,141,0,0]`、标题栏 `0x7f0a6c15 b=[0,141,1272,240]`、返回键 `y=167`、消息区 `y=239` —— 一旦把安全区去掉，标题栏被推到 `y=0`、返回键落到 `y=26`，正好压在状态栏底下，与主人说的「这个安全区去掉就和状态栏撞了」一致。新增 `compensateTitleSafeTop()`：把去掉的那段补成标题栏自己的内容内边距，玻璃板从 `y=0` 铺满整个顶部（`0~240px`），按钮仍留在 `141px` 以下；标题栏最小高度改为 `50dp + 补进去的那段`，否则补的内边距会把按钮挤出可视区。滑条在 `100%` 或开关关闭时还原为 `0`。
+
 ## 2026-10-24（八）— 拆掉「不点导出也自己冒日志、还带 (1)」与帧率判据被抖动带塌两处真机缺陷
 
 - 日志不再自己往外吐（`DiagLog.kt`）：抓界面树的 `captureActivitySnapshot` / `captureViewRootSnapshot` 收尾都会调 `maybeAutoFlush`，而它每 2.5 秒就把整份日志写进 Download —— 主人不点导出也会自己冒出一个文件。现在自动落盘只写本应用私有目录（充当下次导出的累计底稿），间隔放宽到 60 秒；Download 那份只有点「导出全量日志」才写，同名直接覆盖。
@@ -33,16 +38,4 @@
 - 新增 `Looks.kt` `aioGeometry(bar)`：开启「全量日志」时随 AIO 顶栏布局快照（3 秒节流）打**一行几何账** —— `状态栏高度 / 顶栏容器 paddingTop / 标题栏屏幕 y 与高 / 消息区屏幕 y / 返回键屏幕 y / 已去掉的安全区像素 / 仍开着 fitsSystemWindows 的祖先类名与 paddingTop / 当前 percent 与 shift`。只读，不改任何布局；`tools/test_message_style.py` 增加契约断言。
 - 顺带在真包 `classes4.dex` 里定位到 `com.tencent.aio.part.fitwindow.vb.FitSystemWindowVB#onCreateView` 会调用 `View#setFitsSystemWindows(...)`（QQ 把系统窗口内边距贴回 AIO 内容区的入口，此前全仓未挂钩也未记录）。本次**只把它读出来记进几何账**，是否要动等真机 `SAFE_TOP=0%` 的日志出来再定，不臆测。
 - 真机当前设置核对：`SAFE_TOP=80` / `SAFE_TOP_SHIFT=0` 时，主页顶栏内容落在屏幕 `y=61..160`（头像 `0x7f0a3245` `mar=[0,61,0,0]`，会话列表 `0x7f0a0e96 pad=[0,160,0,107]`，搜索框 `y=160`），AIO 顶栏外层 `0x7f0a6bc6 padTop=113`、`AIOTitleRelativeLayout` 落在 `y=113..212`、返回键 `y=139..186`；`MainResourceConfig#n orig=95px -> 76px`。同一份日志里 `sysUiVis=0x700`（`LOW_PROFILE|HIDE_NAVIGATION|FULLSCREEN`）且 10-23 那批截图顶部 `0..63px` 全为空，说明这台机上状态栏是隐藏的、顶部并没有系统图标要避让——`0%` 并不会撞状态栏，想让顶栏更贴屏幕上沿直接用「顶栏安全区」百分比或「顶栏上下微调」即可。
-
-## 2026-10-24（四）— 全量日志导出改为「合并去重 + 导出前清理」，反复导出只留一个 qself-full-log.txt
-
-- 用户回传 10 份真机日志（均为 `26.10.24.3.3165`，OnePlus `PLC110` / Android 16 / `1272×2800` / `density 1.9761429`，采集区间 `03:00:07.750` → `03:00:57.427`，其中 `qself-full-log.txt` 与 `(9).txt` 字节完全相同）后指出「清理和 log 合并是不是没做」。逐行核对结论：**确实一个字都没做** —— 仓库里只有 CI 侧的 `cleanup-artifacts`（GitHub 只保留最新 5 个构建产物，与手机无关），设备端没有任何清理与合并代码；`writeLogFiles` 每次都用同一个 `DISPLAY_NAME = qself-full-log.txt` 往 MediaStore 插入**新行**，系统自动把重名文件改名成 `(1)(2)…`，于是点 10 次就堆出 10 个副本，且每份都只保留最后一次采集的环缓冲内容、老记录白白丢掉。
-- 本次修复（新增 `LogMerge.kt`，改 `DiagLog.kt`、`Knob.kt`、`ProtoTest.kt`、`tools/test_message_style.py`）：
-  1. **与上一次导出合并去重**：先从上一次落盘的 `filesDir/qself-full-log.txt` 读回（应用私有目录，无需任何存储权限），`mergeDiagnosticReports(old, new)` 按 `--- [n] ---` 小节拆开后分别合并 —— 报告头与 `[2]` 钩子调用次数取最新一份（次数本就累计，叠加没有意义）；`[3]` 视图树快照按 `=== 标题 ===` 分块取并集（同标题新块覆盖旧块，超过 `MAX_MERGED_SNAPSHOTS = 16` 淘汰最老）；`[4][5][6]` 三个流式小节按「时间戳起始行 + 其续行」切记录后整条去重、按 `HH:mm:ss.SSS` 排序、上限 `MAX_MERGED_RECORDS = 12000` 保留最新，`headerWithCount` 重建小节标题里的 `(N)`。环缓冲（`[6]` 单份只留 3000 条）挤掉的老行因此会被捞回来 —— 一次导出就是到此刻为止的完整累计，再也用不着发好几个编号文件。
-  2. **导出前清理历史副本**：`cleanupPriorExports(ctx)` 先按 `DISPLAY_NAME LIKE 'qself-full-log%'` 查询 MediaStore Downloads 的全部历史行逐条删除（正好覆盖 `(1)…(9)` 这类系统自动改名的副本），再扫描 `getExternalFilesDir` / `externalCacheDir` / `/sdcard/Download` 三个目录删除同名前缀文件；别的应用写进 Download 的副本删不掉时系统会抛 `RecoverableSecurityException`，此时记下它带的 `IntentSender`，写完新文件后弹一次系统授权框，用户点允许之后下次导出就真的只剩一个文件。
-  3. **永远只写一个文件**：所有落盘路径统一使用 `LOG_FILE_NAME`，MediaStore 侧只在清理之后 insert 一次；报告头新增一行「合并 ：已与上一次导出按小节合并去重（上次 N 字节）；导出前清理历史副本 M 个，同名文件只保留 qself-full-log.txt」。
-  4. **重复导出不再刷屏**：新增 `reportDeltaRecords(old, new)` 只统计流式小节里本次相对上次的**新增记录数**，`LSPosed` 日志与 `logcat -s QselfDiag` 只吐这一行增量（无新增时直接提示「无新增记录，完整累计日志见 /sdcard/Download/qself-full-log.txt」）；剪贴板仍是 320KB 头尾截取，完整内容在文件里。
-  5. **可离线回归**：合并/去重逻辑整体抽到 `LogMerge.kt`，零 Android 依赖，可用真机日志在 JVM 上直接跑。`ProtoTest` 新增 3 条用例（并集去重与排序、增量统计、上限与快照淘汰），并用用户回传的 10 份日志按时间顺序逐份回放：`1.60MB → 4.36MB`（9 次再导出累计新增 `8340` 条），`[6] 全量 QQ QLog` 由单份上限 `3000` 条累计到 `9367` 条，`[3]` 快照由 4 块并到 15 块；重复喂同一份内容时增量 `0`、长度不变（幂等）。`tools/test_message_style.py` 增加契约断言：导出必须先合并再清理、只写 `qself-full-log.txt`、`LogMerge.kt` 不得引入 `import android`。
-- 顺带用这 10 份日志核对了上一版（`26.10.24.3.3165`）顶栏安全区修复，**已确认生效**：`MainResourceConfig#n orig=95px -> 0px (percent=0% shift=0dp)`（3 处）、`AIO 顶栏 outer 安全区 141px -> 0px`（`03:00:19.791`）、`FrameLayout 0x7f0a6cfa(5un) b=[0,0,1272,99]`（原 `167`）、`TitleAreaHeadLayout 0x7f0a3245(e3u) mar=[0,0,0,0]`（原 `[0,68,0,0]`）、`ClipSkinnableRecycleView 0x7f0a0e96(u3q) pad=[0,99,0,107]`（原 `167`）、`TitleAreaRightLayout 0x7f0a120a b=[0,0,1272,99]`。仍缺一张**真 AIO** 界面树：日志里所有 `AIO-Header*` 快照的活动名都还是 `SplashActivity`（即用户全程停在主页/启动页），需要进任意聊天窗口再导出一次才能拿到 AIO 顶栏真实树。
-- 按「旧图全清」清库：仓库不再保存任何图片，`docs/` 下此前那两张预览图全部删除，`README.md` / `CHANGELOG.md` / `docs/message-ui.md` / `bad/CHANGELOG-history.md` 中所有指向它们的链接与图片嵌入同步移除，不留失效引用；生成脚本 `tools/make_log_merge_preview.py`、`tools/make_safe_top_preview.py` 暂时保留待你确认是否一并删除，预览内容改为直接在回复里渲染。
 
