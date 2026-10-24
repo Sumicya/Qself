@@ -11,6 +11,7 @@ import android.app.Activity
 import android.app.Instrumentation
 import android.content.SharedPreferences
 import android.view.ViewTreeObserver
+import android.view.WindowInsets
 import java.lang.ref.WeakReference
 import android.view.View
 import android.view.ViewGroup
@@ -2484,7 +2485,40 @@ private fun aioLayoutSnapshot(bar: View) {
     val now = android.os.SystemClock.uptimeMillis()
     if (now - aioSnapshotAt < 3000L) return
     aioSnapshotAt = now
+    aioGeometry(bar)
     captureViewRootSnapshot(bar, "AIO-Header-LaidOut:${bar.context.javaClass.simpleName}")
+}
+
+/**
+ * AIO 顶栏的一行几何账：状态栏到底多高、顶栏被压到多少、标题栏与消息区实际落在屏幕哪个 y、
+ * 以及还有没有祖先开着 `fitsSystemWindows`（开了就会把状态栏高度重新贴回 AIO 内容区，
+ * 「顶栏安全区还是没去」的残余往往就藏在这里）。只写日志，不改任何布局。
+ */
+private fun aioGeometry(bar: View) {
+    val root = bar.rootView
+    val statusTop = runCatching {
+        root.rootWindowInsets?.getInsets(WindowInsets.Type.statusBars())?.top ?: 0
+    }.getOrDefault(0)
+    val loc = IntArray(2)
+    fun screenTop(v: View?): Int =
+        if (v == null) -1 else runCatching { v.getLocationOnScreen(loc); loc[1] }.getOrDefault(-1)
+    val title = runCatching { root.findViewById<View>(0x7f0a6c15) }.getOrNull()       // AIOTitleRelativeLayout
+    val titleOuter = runCatching { root.findViewById<View>(0x7f0a6bc6) }.getOrNull()  // 顶栏外层容器
+    val msgArea = runCatching { root.findViewById<View>(0x7f0a02b5) }.getOrNull()     // AIOAnimationContainer（消息区）
+    val back = runCatching { root.findViewById<View>(0x7f0a2ec2) }.getOrNull()        // ivTitleBtnLeft
+    var fit: View? = null
+    var p = bar.parent as? View
+    while (p != null) {
+        if (p.fitsSystemWindows) { fit = p; break }
+        p = p.parent as? View
+    }
+    recordQselfEvent(
+        "AIO 几何 : 状态栏=${statusTop}px 顶栏容器padTop=${titleOuter?.paddingTop ?: -1}px " +
+            "标题栏y=${screenTop(title)} 高=${title?.height ?: -1} 消息区y=${screenTop(msgArea)} " +
+            "返回键y=${screenTop(back)} 已去掉安全区=${aioSafeTopRemovedPx}px " +
+            "fitsSystemWindows祖先=${fit?.javaClass?.simpleName ?: "无"}(padTop=${fit?.paddingTop ?: -1}) " +
+            "(percent=${safeTopPercent()}% shift=${safeTopShiftDp()}dp)",
+    )
 }
 
 /**

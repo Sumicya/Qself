@@ -217,6 +217,10 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('reportDeltaRecords(prior', diag_src)
         # 合并逻辑与 Android 解耦，才能用真机日志在 JVM 上直接回归。
         self.assertNotIn('import android', merge_src)
+        # AIO 顶栏几何：每次布局后必须打一行账（状态栏高度/顶栏位置/消息区顶/fitsSystemWindows 祖先）。
+        self.assertIn('private fun aioGeometry(bar: View)', looks_src)
+        self.assertIn('AIO 几何 : 状态栏=', looks_src)
+        self.assertIn('aioGeometry(bar)', looks_src)
 
 
 if __name__ == '__main__':
