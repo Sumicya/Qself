@@ -76,14 +76,14 @@
 
 ```sh
 git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
-python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 451 条全绿才算数
+python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 702 条全绿才算数
 python3 tools/ui_paths.py qq.apk                                   # 完整签名、字段读写和调用关系；不是设备验收
 python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
 ```
 
 ### 源码结构
 
-纯 Kotlin，九个源码文件，没有第三方依赖、没有 `.so`、不联网。开关状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
+纯 Kotlin，十三个源码文件，没有第三方依赖、没有 `.so`、不联网。开关状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
 
 ```
 app/src/main/kotlin/sumicya/qself/
@@ -96,6 +96,10 @@ app/src/main/kotlin/sumicya/qself/
   Input.kt   TG 式输入栏
   Glass.kt   液态玻璃 Drawable；底栏、设置入口、菜单与输入区委托 KernelBar
   KernelBar.kt   KernelSU 算法的无依赖 View 移植（着色器 / 弹簧 / 手势 / 生命周期）
+  MessageStyle.kt  消息行几何：头像圆角、气泡边距、外部时间、连发合并的绘制与触摸
+  DiagLog.kt    全量日志与界面树快照录制、一键导出
+  LogMerge.kt   导出日志的合并去重（纯 JVM，可离线回放真机日志）
+  Perf.kt       Choreographer 帧率采样，导出日志里的卡顿数字
 app/src/test/kotlin/sumicya/qself/ProtoTest.kt   协议、分组、间距、菜单尺寸等纯逻辑回归
 app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop、作用域
 tools/symbols.txt    落点表：代码依赖的每一个名字
