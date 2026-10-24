@@ -102,6 +102,22 @@ private val externalStamps = WeakHashMap<android.view.ViewGroup, ExternalStamp>(
 private val timestampSlots = WeakHashMap<View, Int>()
 private const val MATCH_PARENT_RESTORE_TAG = 0x51534D50
 
+/**
+ * 卡片 (Ark) 内容根：Ark 按自己的宽度排版、整块绘制，宽度必须由原生 MATCH_PARENT 决定。
+ * 一旦被改成 WRAP_CONTENT，QQ 用 AT_MOST 量它，卡片视图比它实际画的内容窄，右侧一列按钮与链接图标会被卡片自身边界裁掉。
+ */
+private fun isArkCard(v: android.view.View): Boolean {
+    var cur: android.view.View? = v
+    var depth = 0
+    while (cur != null && depth < 4) {
+        val name = cur.javaClass.name
+        if (name.contains(".ark.", true) || name.contains("ArkApp", true) || name.contains("ArkView", true)) return true
+        cur = (cur as? android.view.ViewGroup)?.takeIf { it.childCount > 0 }?.getChildAt(0)
+        depth++
+    }
+    return false
+}
+
 /** 消息外独立时间标签：挂在 msgContent（BubbleLayoutCompatPress）底部，他人左对齐、自己右对齐，适配全部消息类型。 */
 private class ExternalStamp(host: android.view.ViewGroup) {
     private val host = WeakReference(host)
@@ -115,6 +131,9 @@ private class ExternalStamp(host: android.view.ViewGroup) {
     }
     var seconds = 0L
     var self = false
+    /** 卡片 (Ark) 内容根必须留在原生 MATCH_PARENT：改成 WRAP_CONTENT 后 QQ 用 AT_MOST 量它，
+     *  卡片按自己的宽度排版、却按量到的宽度裁剪，真机上右侧一列按钮和链接图标会被卡片底切掉。 */
+    var keepWidth = false
     fun restore() {
         val container = host.get()
         if (container != null) {
@@ -155,7 +174,7 @@ private class ExternalStamp(host: android.view.ViewGroup) {
             val chLp = ch.layoutParams
             if (chLp != null) {
                 var changed = false
-                if (chLp.width == android.view.ViewGroup.LayoutParams.MATCH_PARENT) {
+                if (!keepWidth && !isArkCard(ch) && chLp.width == android.view.ViewGroup.LayoutParams.MATCH_PARENT) {
                     ch.setTag(MATCH_PARENT_RESTORE_TAG, true)
                     chLp.width = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
                     changed = true
@@ -213,12 +232,13 @@ fun messageTimestamps() {
     val tplContent = templateClass.getDeclaredMethod("b")
     val tplReceiver = cls("com.tencent.mobileqq.aio.msglist.holder.template.g")
     val tplSender = cls("com.tencent.mobileqq.aio.msglist.holder.template.l")
-    fun bindSlot(slotView: android.view.ViewGroup, item: Any?) {
+    fun bindSlot(slotView: android.view.ViewGroup, item: Any?, arkCard: Boolean = false) {
         val time = messageRecord(item)?.get("msgTime") as? Long ?: 0L
         val self = isSelfItem(item)
         externalStamps.getOrPut(slotView) { ExternalStamp(slotView) }.also {
             it.seconds = time
             it.self = self
+            it.keepWidth = arkCard
             it.apply()
         }
     }
@@ -228,7 +248,7 @@ fun messageTimestamps() {
             chain.proceed().also {
                 val slotView = runCatching { slot.invoke(chain.thisObject) as? android.view.ViewGroup }.getOrNull() ?: return@also
                 val item = chain.args.getOrNull(1) ?: runCatching { msgItem.invoke(chain.thisObject) }.getOrNull()
-                bindSlot(slotView, item)
+                bindSlot(slotView, item, arkCard = name.endsWith(".AIOArkContentComponent"))
             }
         }
     }

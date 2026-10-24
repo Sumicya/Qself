@@ -37,6 +37,17 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('AIOBubbleMsgItemVB', bind)
         self.assertIn('gated = false', bind)
 
+    def test_ark_card_keeps_native_width_when_stamp_is_added(self):
+        # 卡片 (Ark) 按自己的宽度整块绘制：把内容根改成 WRAP_CONTENT 会被 AT_MOST 量窄，
+        # 真机 26.10.24 截图里卡片右侧一列按钮与链接图标被卡片自身边界裁掉。宽度必须留在原生 MATCH_PARENT。
+        stamp = STYLE.split('private class ExternalStamp(', 1)[1].split('fun messageTimestamps()', 1)[0]
+        self.assertIn('var keepWidth = false', stamp)
+        self.assertIn('!keepWidth && !isArkCard(ch) && chLp.width == android.view.ViewGroup.LayoutParams.MATCH_PARENT', stamp)
+        helper = STYLE.split('private fun isArkCard(', 1)[1].split('private class ExternalStamp(', 1)[0]
+        self.assertIn('ArkApp', helper)
+        bind = STYLE.split('fun messageTimestamps()', 1)[1].split('private val inAioAvatarLoad', 1)[0]
+        self.assertIn('arkCard = name.endsWith(".AIOArkContentComponent")', bind)
+
     def test_avatar_radius_uses_native_roundrect_and_restores_saved_values(self):
         self.assertIn('"setCornerRadiusAndMode", Integer.TYPE, Integer.TYPE', STYLE)
         self.assertIn('com.tencent.qqnt.avatar.meta.b\\$a', STYLE)
