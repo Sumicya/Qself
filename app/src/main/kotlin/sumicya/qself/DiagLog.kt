@@ -73,7 +73,7 @@ private val uiKeywords = Regex(
     RegexOption.IGNORE_CASE,
 )
 
-private fun nowStamp(): String =
+internal fun nowStamp(): String =
     SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date())
 
 private fun pushBounded(deque: ConcurrentLinkedDeque<String>, counter: AtomicInteger, max: Int, line: String) {
@@ -278,6 +278,7 @@ fun buildFullDiagnosticReport(ctx: Context?, includeLogcat: Boolean = true): Str
             .append(" density=").append(dm.density).append(" scaledDensity=").append(dm.scaledDensity).append('\n')
     }
     append("Night Mode   : ").append(runCatching { night() }.getOrDefault(false)).append('\n')
+    append(runCatching { FrameMeter.snapshot() }.getOrDefault("帧率（真机） : 取快照失败")).append('\n')
     append("Switches     : ")
     features.forEach { f ->
         append(f.name).append('=').append(if (f.name in failed) "FAIL" else if (on(f.name)) "ON" else "OFF").append(' ')
@@ -368,18 +369,30 @@ private fun cleanupPriorExports(ctx: Context): Int {
     return removed
 }
 
-private fun writeLogFiles(ctx: Context, includeLogcat: Boolean, prebuiltReport: String? = null): List<String> {
+/**
+ * @param prebuiltReport 调用方已经合并好的报告；给了就不再读历史文件、不再合第二遍（19MB 的合并要跑好几秒）。
+ * @param priorLength 调用方读到的历史文件字节数，-1 表示没有历史文件；只用于写「合并」那一行说明。
+ */
+private fun writeLogFiles(
+    ctx: Context,
+    includeLogcat: Boolean,
+    prebuiltReport: String? = null,
+    priorLength: Int = -1,
+): List<String> {
     // 先读上一次的导出用于合并；filesDir 是本应用私有目录，无需任何存储权限即可读。
-    val prior = runCatching { File(ctx.filesDir, LOG_FILE_NAME).takeIf { it.isFile }?.readText() }.getOrNull()
+    val prior = if (prebuiltReport != null) null
+    else runCatching { File(ctx.filesDir, LOG_FILE_NAME).takeIf { it.isFile }?.readText() }.getOrNull()
     val fresh = prebuiltReport
         ?: runCatching { buildFullDiagnosticReport(ctx, includeLogcat = includeLogcat) }.getOrNull()
         ?: return emptyList()
-    val merged = runCatching { mergeDiagnosticReports(prior, fresh) }.getOrDefault(fresh)
+    val merged = if (prebuiltReport != null) fresh
+    else runCatching { mergeDiagnosticReports(prior, fresh) }.getOrDefault(fresh)
     val removed = cleanupPriorExports(ctx)
-    val mergeNote = if (prior == null) {
-        "首次导出，无历史文件可合并"
+    val knownPrior = prior?.length ?: priorLength
+    val mergeNote = if (knownPrior > 0) {
+        "已与上一次导出按小节合并去重（上次 $knownPrior 字节）"
     } else {
-        "已与上一次导出按小节合并去重（上次 ${prior.length} 字节）"
+        "首次导出，无历史文件可合并"
     }
     val content = merged.replace(
         "Qself Full QQ Diagnostic Report\n",
@@ -423,31 +436,41 @@ private fun writeLogFiles(ctx: Context, includeLogcat: Boolean, prebuiltReport: 
 
 fun exportFullQqLog(ctx: Context, currentActivity: Activity? = null) {
     currentActivity?.let { runCatching { captureActivitySnapshot(it, "button-export") } }
-    val prior = runCatching { File(ctx.filesDir, LOG_FILE_NAME).takeIf { it.isFile }?.readText() }.getOrNull()
-    val fullReport = mergeDiagnosticReports(prior, buildFullDiagnosticReport(ctx, includeLogcat = true))
-    // 1. 先复制核心诊断摘要+界面树+近期日志至系统剪贴板（限制在 320KB 以内确保 Android Binder 剪贴板零截断抛错）
-    val clipText = if (fullReport.length > 320_000) {
-        fullReport.take(200_000) + "\n...[中间省略，完整日志见 $LOG_FILE_NAME]...\n" + fullReport.takeLast(110_000)
-    } else fullReport
-    runCatching {
-        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        cm?.setPrimaryClip(ClipData.newPlainText("Qself Full QQ Log", clipText))
-    }
-    // 2. 只把本次相对上一次导出的新增记录镜像到 LSPosed 日志与 logcat -s QselfDiag，重复导出不再刷屏
-    val delta = runCatching { reportDeltaRecords(prior, fullReport) }.getOrDefault(0)
-    runCatching {
-        if (delta == 0) {
-            Log.i("QselfDiag", "[合并导出] 无新增记录，完整累计日志见 /sdcard/Download/$LOG_FILE_NAME")
-            xposed.log(Log.INFO, "QselfDiag", "[合并导出] 无新增记录，完整累计日志见 /sdcard/Download/$LOG_FILE_NAME", null)
-        } else {
-            Log.i("QselfDiag", "[合并导出] 新增 $delta 条记录")
-            xposed.log(Log.INFO, "QselfDiag", "[合并导出] 新增 $delta 条记录", null)
-        }
-    }
-    // 3. 后台写入 Download/qself-full-log.txt 与外部应用目录，并弹出提示与系统分享面板
+    // 上一次的导出实测已到 19MB：readText + 合并会把 QQ 主线程冻住好几秒（也是「点一下卡住」的来源之一），
+    // 整段挪到后台线程，主线程只留界面快照、Toast、授权弹窗和分享面板。
     ioExecutor.execute {
-        val paths = runCatching { writeLogFiles(ctx, includeLogcat = true, prebuiltReport = fullReport) }
-            .getOrDefault(emptyList())
+        val prior = runCatching { File(ctx.filesDir, LOG_FILE_NAME).takeIf { it.isFile }?.readText() }.getOrNull()
+        val fresh = runCatching { buildFullDiagnosticReport(ctx, includeLogcat = true) }.getOrNull()
+        if (fresh == null) {
+            mainHandler.post {
+                runCatching { Toast.makeText(ctx, "全量日志构建失败，见 logcat -s QselfDiag", Toast.LENGTH_LONG).show() }
+            }
+            return@execute
+        }
+        val fullReport = runCatching { mergeDiagnosticReports(prior, fresh) }.getOrDefault(fresh)
+        // 1. 先复制核心诊断摘要+界面树+近期日志至系统剪贴板（限制在 320KB 以内确保 Android Binder 剪贴板零截断抛错）
+        val clipText = if (fullReport.length > 320_000) {
+            fullReport.take(200_000) + "\n...[中间省略，完整日志见 $LOG_FILE_NAME]...\n" + fullReport.takeLast(110_000)
+        } else fullReport
+        runCatching {
+            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            cm?.setPrimaryClip(ClipData.newPlainText("Qself Full QQ Log", clipText))
+        }
+        // 2. 只把本次相对上一次导出的新增记录镜像到 LSPosed 日志与 logcat -s QselfDiag，重复导出不再刷屏
+        val delta = runCatching { reportDeltaRecords(prior, fullReport) }.getOrDefault(0)
+        runCatching {
+            if (delta == 0) {
+                Log.i("QselfDiag", "[合并导出] 无新增记录，完整累计日志见 /sdcard/Download/$LOG_FILE_NAME")
+                xposed.log(Log.INFO, "QselfDiag", "[合并导出] 无新增记录，完整累计日志见 /sdcard/Download/$LOG_FILE_NAME", null)
+            } else {
+                Log.i("QselfDiag", "[合并导出] 新增 $delta 条记录")
+                xposed.log(Log.INFO, "QselfDiag", "[合并导出] 新增 $delta 条记录", null)
+            }
+        }
+        // 3. 写入 Download/qself-full-log.txt 与外部应用目录（已经合并过，不再合第二遍），然后回主线程提示与分享
+        val paths = runCatching {
+            writeLogFiles(ctx, includeLogcat = false, prebuiltReport = fullReport, priorLength = prior?.length ?: -1)
+        }.getOrDefault(emptyList())
         val removed = lastMergeRemoved
         mainHandler.post {
             val primaryPath = paths.firstOrNull { it.contains("Download") } ?: paths.firstOrNull() ?: "剪贴板"

@@ -711,4 +711,63 @@ class ProtoTest {
         assertTrue(m.contains("=== Scene Snapshot: S99 ==="))
         assertFalse(m.contains("=== Scene Snapshot: S0 ==="))
     }
+
+    @Test fun trimRecordCutsTheMiddleAndIsIdempotent() {
+        val short = "03:00:01.000 短\n"
+        assertEquals(short, trimRecord(short))
+        // QQ 的 QLog 会吐 15KB 的整段 dump（Notification Channels / 配置解析结果），头尾才有信息量
+        val long = "03:00:01.000 HEAD" + "x".repeat(20000) + "TAIL\n"
+        val t = trimRecord(long)
+        assertTrue(t.length <= MAX_RECORD_CHARS + 64)
+        assertTrue(t.startsWith("03:00:01.000 HEAD"))
+        assertTrue(t.trimEnd().endsWith("TAIL"))
+        assertTrue(t.contains("…[截断 "))
+        // 幂等：掐过的记录再掐一次长度不变，否则合并去重会把同一条当成两条
+        assertEquals(t, trimRecord(t))
+    }
+
+    @Test fun capByBytesKeepsTheNewestAndAlwaysKeepsOne() {
+        val recs = (0 until 10).map { "%010d\n".format(it) } // 每条 11 字节
+        assertEquals(listOf(recs[7], recs[8], recs[9]), capByBytes(recs, 33))
+        assertEquals(recs, capByBytes(recs, 1000))
+        // 预算再小也至少保留最新一条，不会因为一条超长记录把整个小节清空
+        assertEquals(listOf(recs[9]), capByBytes(recs, 1))
+        assertEquals(emptyList<String>(), capByBytes(emptyList(), 100))
+    }
+
+    private fun frameCount(text: String): Long =
+        Regex("""累计 (\d+) 帧""").find(text)?.groupValues?.get(1)?.toLong() ?: -1L
+
+    @Test fun frameMeterCountsStallsClosesWindowsAndIgnoresHugeGaps() {
+        // 先喂一批不卡的帧，把上一轮窗口收干净（全不卡的窗口不记录）
+        repeat(FRAME_WINDOW_GAP + 30) { FrameMeter.feed(16f) }
+        assertFalse(FrameMeter.snapshot().contains("帧率窗口 "))
+        val n0 = frameCount(FrameMeter.snapshot())
+        assertTrue(n0 > 0)
+        // 回前台的第一帧间隔动辄几秒，不能算掉帧
+        FrameMeter.feed(5_000f)
+        assertEquals(n0, frameCount(FrameMeter.snapshot()))
+        // 5 帧卡顿之后再喂正常帧，窗口收口并记下这一段
+        repeat(5) { FrameMeter.feed(90f) }
+        repeat(FRAME_WINDOW_GAP + 5) { FrameMeter.feed(16f) }
+        val snap = FrameMeter.snapshot()
+        assertTrue(snap.contains("帧率窗口 "))
+        assertTrue(snap.contains("卡顿=5"))
+        assertTrue(snap.contains("掉帧="))
+        assertFalse(snap.contains("NaN"))
+        assertEquals(n0 + 5 + FRAME_WINDOW_GAP + 5, frameCount(snap))
+    }
+
+    @Test fun mergeDiagnosticReportsTrimsOverLongStreamingRecords() {
+        val pad = "z".repeat(20000)
+        val rep = "Qself Full QQ Diagnostic Report\n" +
+            "--- [6] All QQ QLog Stream (1) ---\n" +
+            "03:00:01.000 big $pad\n"
+        val m = mergeDiagnosticReports(rep, rep)
+        val line = m.lineSequence().first { it.startsWith("03:00:01.000 big") }
+        assertTrue(line.length <= MAX_RECORD_CHARS + 64)
+        assertTrue(line.contains("…[截断 "))
+        // 截断后仍是同一条记录：再合并一次不产生增量
+        assertEquals(0, reportDeltaRecords(m, mergeDiagnosticReports(m, rep)))
+    }
 }

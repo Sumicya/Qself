@@ -8,6 +8,15 @@ internal const val LOG_FILE_NAME = "qself-full-log.txt"
 internal const val LOG_FILE_PREFIX = "qself-full-log"
 internal const val MAX_MERGED_RECORDS = 12000
 internal const val MAX_MERGED_SNAPSHOTS = 16
+// 只按条数封顶不够：真机实测 [5] 一节 12000 条就有 13.8MB（整份日志 19MB），
+// 文件既不好传也不好读，导出时的 readText + 合并还会把 QQ 主线程冻住。
+// 再按字节封一次顶，超出的从最老的开始丢，永远留最新的一段。
+internal const val MAX_MERGED_SECTION_BYTES = 2_000_000
+// 单条记录的长度上限：QQ 的 QLog 偶尔吐 15KB 的 Notification Channels / 配置 dump，
+// 一条顶得上几十条正常日志，从中间掐断、保留头尾（堆栈的头和尾才有信息量）。
+internal const val MAX_RECORD_CHARS = 4096
+internal const val RECORD_TRIM_HEAD = 3072
+internal const val RECORD_TRIM_TAIL = 768
 internal val SECTION_HEADER = Regex("^--- \\[(\\d+)\\](.*) ---$")
 internal val RECORD_START = Regex("^\\d{2}:\\d{2}:\\d{2}\\.\\d{3} ")
 
@@ -54,6 +63,30 @@ internal fun splitRecords(body: String): List<String> {
 }
 
 internal fun timestampOf(record: String): String = record.take(12)
+
+/** 单条记录超长时从中间掐断，头尾都留着；已经掐过的再掐一次长度不变（幂等，合并去重不会因此重复）。 */
+internal fun trimRecord(record: String): String {
+    if (record.length <= MAX_RECORD_CHARS) return record
+    val body = record.trimEnd()
+    if (body.length <= MAX_RECORD_CHARS) return record
+    val cut = body.length - RECORD_TRIM_HEAD - RECORD_TRIM_TAIL
+    return body.substring(0, RECORD_TRIM_HEAD) +
+        "…[截断 " + cut + " 字符]…" +
+        body.substring(body.length - RECORD_TRIM_TAIL) + "\n"
+}
+
+/** 从最新一条往回累加字节，超出预算就停；返回仍按时间顺序排列的保留段，至少保留一条。 */
+internal fun capByBytes(records: List<String>, budget: Int): List<String> {
+    var used = 0
+    var first = records.size
+    while (first > 0) {
+        val len = records[first - 1].length
+        if (used + len > budget && first < records.size) break
+        used += len
+        first--
+    }
+    return if (first <= 0) records else records.subList(first, records.size)
+}
 
 internal fun headerWithCount(header: String, count: Int): String {
     val open = header.lastIndexOf('(')
@@ -112,7 +145,9 @@ internal fun mergeDiagnosticReports(old: String?, new: String): String {
                 for (r in splitRecords(section.body)) merged.putIfAbsent(r, r)
                 val all = merged.keys.toMutableList()
                 all.sortBy(::timestampOf)
-                val capped = if (all.size > MAX_MERGED_RECORDS) all.takeLast(MAX_MERGED_RECORDS) else all
+                val byCount = if (all.size > MAX_MERGED_RECORDS) all.takeLast(MAX_MERGED_RECORDS) else all
+                // 先掐长记录再按字节封顶：顺序反了的话，一条 15KB 的 dump 会把预算吃掉一大块。
+                val capped = capByBytes(byCount.map(::trimRecord), MAX_MERGED_SECTION_BYTES)
                 out.append(headerWithCount(section.header, capped.size)).append('\n')
                 capped.forEach { out.append(it) }
             }
