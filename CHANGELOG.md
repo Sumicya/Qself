@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-10-24（八）— 拆掉「不点导出也自己冒日志、还带 (1)」与帧率判据被抖动带塌两处真机缺陷
+
+- 日志不再自己往外吐（`DiagLog.kt`）：抓界面树的 `captureActivitySnapshot` / `captureViewRootSnapshot` 收尾都会调 `maybeAutoFlush`，而它每 2.5 秒就把整份日志写进 Download —— 主人不点导出也会自己冒出一个文件。现在自动落盘只写本应用私有目录（充当下次导出的累计底稿），间隔放宽到 60 秒；Download 那份只有点「导出全量日志」才写，同名直接覆盖。
+- 编号副本的源头拆掉（`DiagLog.kt`）：每次写文件都往 MediaStore 插一条同名 `qself-full-log.txt` 记录，Download 里已有同名文件时 MediaStore 每次另存一份 `qself-full-log (1).txt`、`(2).txt`…… 主人那儿堆到 `(9)` 就是这么来的，而 `cleanupPriorExports` 删不动 MediaStore 管的文件，于是「清理历史副本 4 个」每次导出都报。整块删除 MediaStore 写入，只保留直接文件覆盖。
+- 帧率周期不再被抖动带塌（`Perf.kt`）：真机日志（`26.10.24.10.3172`）报出「掉帧 35650（48%），错过同步 100840 次」——刷新周期取的是观测最小值，Choreographer 偶尔给出 1~5ms 的抖动，周期被带到 5ms 上下，8.2ms 的正常帧整片被判成掉帧。改成取环缓冲里落在 4~25ms 区间的帧间隔的 10 分位，每 120 帧重估一次；错过同步次数改成「帧长 ÷ 周期 − 1」。按真机分布复现：74530 帧，掉帧 230（0%）、错过同步 839 次、卡顿 30、最长 996ms、帧周期 8.2ms（约 122Hz）。
+- 测试：`ci/check.sh` 125 个类、66 个用例通过（新增 `frameMeterPeriodIgnoresSpuriousShortFrames`：偶发 1.2ms 抖动不得把周期带偏、正常帧不得被判成掉帧）。
+
 ## 2026-10-24（七）— 30 个开关按六组重排并统一动词（藏/去/屏蔽 收口成 隐藏/停止），分组与命名写成静态契约；帧率采样改按真机刷新周期判掉帧，界面树快照开始计时
 
 - 开关分组（`Qself.kt`、`Knob.kt`、`DiagLog.kt`）：30 个开关原先按添加顺序一列平铺，找不着也记不住。现在按「底栏与导航 5 / 输入与面板 3 / 消息 12 / 转发与账号 4 / 特效与上报 4 / 系统与诊断 2」六组摆，菜单里每组一个标题，导出日志的 `Switches` 也从一长条改成按组缩进。新增 `featuresByGroup()` 与 `featureGroupGaps()`：漏分组、重复分组、写了不存在的开关，安装时直接打进 Qself 日志，不靠肉眼核对。
@@ -38,15 +45,4 @@
   5. **可离线回归**：合并/去重逻辑整体抽到 `LogMerge.kt`，零 Android 依赖，可用真机日志在 JVM 上直接跑。`ProtoTest` 新增 3 条用例（并集去重与排序、增量统计、上限与快照淘汰），并用用户回传的 10 份日志按时间顺序逐份回放：`1.60MB → 4.36MB`（9 次再导出累计新增 `8340` 条），`[6] 全量 QQ QLog` 由单份上限 `3000` 条累计到 `9367` 条，`[3]` 快照由 4 块并到 15 块；重复喂同一份内容时增量 `0`、长度不变（幂等）。`tools/test_message_style.py` 增加契约断言：导出必须先合并再清理、只写 `qself-full-log.txt`、`LogMerge.kt` 不得引入 `import android`。
 - 顺带用这 10 份日志核对了上一版（`26.10.24.3.3165`）顶栏安全区修复，**已确认生效**：`MainResourceConfig#n orig=95px -> 0px (percent=0% shift=0dp)`（3 处）、`AIO 顶栏 outer 安全区 141px -> 0px`（`03:00:19.791`）、`FrameLayout 0x7f0a6cfa(5un) b=[0,0,1272,99]`（原 `167`）、`TitleAreaHeadLayout 0x7f0a3245(e3u) mar=[0,0,0,0]`（原 `[0,68,0,0]`）、`ClipSkinnableRecycleView 0x7f0a0e96(u3q) pad=[0,99,0,107]`（原 `167`）、`TitleAreaRightLayout 0x7f0a120a b=[0,0,1272,99]`。仍缺一张**真 AIO** 界面树：日志里所有 `AIO-Header*` 快照的活动名都还是 `SplashActivity`（即用户全程停在主页/启动页），需要进任意聊天窗口再导出一次才能拿到 AIO 顶栏真实树。
 - 按「旧图全清」清库：仓库不再保存任何图片，`docs/` 下此前那两张预览图全部删除，`README.md` / `CHANGELOG.md` / `docs/message-ui.md` / `bad/CHANGELOG-history.md` 中所有指向它们的链接与图片嵌入同步移除，不留失效引用；生成脚本 `tools/make_log_merge_preview.py`、`tools/make_safe_top_preview.py` 暂时保留待你确认是否一并删除，预览内容改为直接在回复里渲染。
-
-## 2026-10-24（三）— 按真机全量日志定位顶栏安全区残余根因并实装「顶栏安全区 / 顶栏上下微调」滑条
-
-- 针对用户回传的真机全量日志（三份 `qself-full-log.txt`，`26.10.24.2.3164`，OnePlus `PLC110` / Android 16 / `1272×2800` / `density 1.9761429`）逐行核对，定位「顶栏安全区还是没去」的真实根因并修复（`Looks.kt`、`Input.kt`、`Knob.kt`、`MessageStyle.kt`、`DiagLog.kt`、`ProtoTest.kt`、`tools/test_message_style.py`）：
-  - **日志实测证据**：`insets: statusBars=[0,141,0,0] navBars=[0,0,0,0]`、`statusBarColor=#00000000`、`winFlags=0x81810100`、`sysUiVis=0x700`；`TitleAreaHeadLayout 0x7f0a3245(e3u) mar=[0,68,0,0]`、`FrameLayout 0x7f0a6cfa(5un) b=[0,0,1272,167]`、`ClipSkinnableRecycleView 0x7f0a0e96(u3q) pad=[0,167,0,107]`、`MainResourceConfig#n -> 68`；AIO 侧 `QQBlurViewWrapper 0x7f0a0957` 与遮罩 `0x7f0a3715` 已 `vis=G alpha=0.0`、`AIOTitleRelativeLayout` 背景已是 `sumicya.qself.HeaderPillsDrawable`，说明背景/模糊/遮罩确已清除，残余的就是顶部预留高度本身。
-  - **根因：`reducedSafeTop` 自带「至少保留七成」下限**：旧实现 `minTop = origTop * 0.72f`、`baseTop = origTop - 16dp`，真机 `141px` 只能压到 `109px`（日志里 `reducedSafeTop=109`），`68px` 只能压到 `49px`，等于没去掉；同时主页完全依赖 `MainResourceConfig#n` 生效，而日志显示该钩子返回仍是 `68px`，顶栏容器与列表内边距因此纹丝不动。
-  - **改为纯比例策略并给到滑条（默认 `0%` 完全去掉）**：`reducedSafeTop(origTop, dp)` 现按 `safeTopPercent()`（`SAFE_TOP`，`0~100%`，默认 `0`）取百分比再加 `safeTopShiftDp()`（`SAFE_TOP_SHIFT`，`-24~+48dp`）的 dp 微调，删除 `0.72f` 下限，只保证非负且不超过 `origTop + 96dp`；`ProtoTest` 断言 `reducedSafeTop(141, 1.9761429f) == 0`、`reducedSafeTop(68, 1.9761429f) == 0`。
-  - **主页不再依赖 `MainResourceConfig#n`：新增 `HomeSafeArea` 三件套同 `delta` 上移**：把 `0x7f0a3245` 头像 `topMargin`（真机 `68px`）、`0x7f0a6cfa` 顶栏容器 `translationY` 与 `0x7f0a0e96` 会话列表 `paddingTop`（真机 `167px`）三者按同一个 `delta` 整体上移，命中三件套的页面不再叠加旧的 `-4dp` 子组件微调（避免顶栏被推到窗口上沿之外），关闭开关或 `resetHomeTopBars()` 时三者原样还原。
-  - **AIO 消息列表顶部内边距与顶栏联动**：真包 `AIOMsgListGroup.paddingTop = 238 = 141（状态栏）+ 97（标题栏）`，顶栏上移后若列表不动会空出一大段；新增 `aioSafeTopRemoved()`（`HeaderState.applyStyle` 在安全区换算变化时更新并触发 `refreshInputLayout()`），`MsgListUnderScroll.sync()` 据此把 `targetTop` 再减掉同样的像素数。
-  - **可核对的诊断增强**：`MainResourceConfig#n` 每次换算写入全量日志（`MainResourceConfig#n orig=…px -> …px (percent=…% shift=…dp)`），AIO `outer`/`root` 安全区换算同样落日志；AIO 顶栏 `onLayout` 完成且尺寸有效后（3 秒节流）自动抓一次带真实尺寸的视图树快照 `AIO-Header-LaidOut:*`（旧版只在预加载阶段抓到 `0×0` 空树）；诊断报告头新增 `SAFE_TOP` / `SAFE_TOP_SHIFT` 参数行。
-  - 同步删除上一版预览图并生成新预览图（`tools/make_safe_top_preview.py` 可复现），`README.md` / `docs/message-ui.md` 引用同步更新（面板滑条说明由 4 项改为 6 项）。
 

@@ -8,7 +8,6 @@ import android.content.ClipData
 import android.app.RecoverableSecurityException
 import android.content.ClipboardManager
 import android.content.ContentUris
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
@@ -59,6 +58,7 @@ private val ioExecutor = Executors.newSingleThreadExecutor { r ->
 }
 @Volatile
 private var lastAutoFlushMs = 0L
+private const val AUTO_FLUSH_MS = 60_000L   // 自动落盘的间隔：私有底稿最多一分钟一份
 /** 最近一次导出清理掉的历史副本数，供提示复用。 */
 @Volatile
 private var lastMergeRemoved = 0
@@ -264,14 +264,18 @@ private fun appendViewTree(
     }
 }
 
+/**
+ * 自动落盘：只写本应用私有目录（给下次导出做累计底稿），不碰 Download、不弹任何通知。
+ * 以前它每 2.5 秒就能往 Download 里写一整份日志，主人不点导出也会自己冒出来一个文件。
+ */
 private fun maybeAutoFlush(ctx: Context?) {
     if (ctx == null) return
     val now = System.currentTimeMillis()
-    if (now - lastAutoFlushMs < 2500L) return
+    if (now - lastAutoFlushMs < AUTO_FLUSH_MS) return
     lastAutoFlushMs = now
     val appCtx = ctx.applicationContext ?: ctx
     ioExecutor.execute {
-        runCatching { writeLogFiles(appCtx, includeLogcat = false) }
+        runCatching { writeLogFiles(appCtx, includeLogcat = false, privateOnly = true) }
     }
 }
 
@@ -391,6 +395,7 @@ private fun writeLogFiles(
     includeLogcat: Boolean,
     prebuiltReport: String? = null,
     priorLength: Int = -1,
+    privateOnly: Boolean = false,
 ): List<String> {
     // 先读上一次的导出用于合并；filesDir 是本应用私有目录，无需任何存储权限即可读。
     val prior = if (prebuiltReport != null) null
@@ -427,23 +432,16 @@ private fun writeLogFiles(
             savedPaths.add(f.absolutePath)
         }
     }
-    runCatching {
-        val dl = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), LOG_FILE_NAME)
-        dl.writeBytes(bytes)
-        savedPaths.add(dl.absolutePath)
-    }
-    runCatching {
-        val resolver = ctx.contentResolver
-        val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, LOG_FILE_NAME)
-            put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-        }
-        resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)?.let { itemUri ->
-            resolver.openOutputStream(itemUri)?.use { it.write(bytes) }
-            savedPaths.add("/sdcard/Download/$LOG_FILE_NAME")
+    if (!privateOnly) {
+        // 只有主人点了「导出全量日志」才往 Download 写；同名直接覆盖，不新建副本。
+        runCatching {
+            val dl = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), LOG_FILE_NAME)
+            dl.writeBytes(bytes)
+            savedPaths.add(dl.absolutePath)
         }
     }
+    // 以前这里还往 MediaStore 插一条同名记录：Download 里已有同名文件时，MediaStore 每次都另存一份
+    // qself-full-log (1).txt、(2).txt…… 主人那儿堆到 (9) 就是这么来的。直接文件覆盖就够了，这整块删掉。
     return savedPaths.distinct()
 }
 

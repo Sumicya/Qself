@@ -5,6 +5,9 @@ package sumicya.qself
 
 internal const val FRAME_BUDGET_MS = 16.7f   // 没测出刷新率时的兜底（60Hz 一帧）
 internal const val FRAME_MIN_MS = 1f         // 比这还短的间隔不是帧，是噪声
+internal const val FRAME_PERIOD_MIN = 4f     // 刷新周期只可能在 250Hz ~ 40Hz 之间，出了这个区间就是抖动
+internal const val FRAME_PERIOD_MAX = 25f
+internal const val FRAME_PERIOD_EVERY = 120L // 每采 120 帧重估一次刷新周期
 internal const val FRAME_STALL_MS = 50f      // 肉眼能明确感知的卡顿
 internal const val FRAME_RING = 600          // 环形缓冲：最近 600 帧（约 10 秒）
 internal const val FRAME_WINDOW_GAP = 30     // 连续 30 帧不卡就收口一段「操作窗口」
@@ -27,7 +30,7 @@ internal object FrameMeter {
         ring.fill(0f); ringIdx = 0; ringSize = 0; lastNanos = 0L
         frames = 0L; janky = 0L; stalls = 0L; missed = 0L; worst = 0f; sum = 0.0
         gap = 0; wFrames = 0; wJank = 0; wStall = 0; wWorst = 0f; wSum = 0.0; wStart = ""
-        windows.clear(); minDt = Float.NaN
+        windows.clear(); periodMs = FRAME_BUDGET_MS
     }
 
     private val ring = FloatArray(FRAME_RING)
@@ -47,7 +50,7 @@ internal object FrameMeter {
     private var wWorst = 0f
     private var wSum = 0.0
     private var gap = 0
-    private var minDt = Float.NaN   // 观测到的最短帧间隔 = 这台机器的刷新周期
+    private var periodMs = FRAME_BUDGET_MS   // 这台机器的刷新周期，测出来之前按 60Hz 兜底
     private val windows = ArrayDeque<String>(FRAME_MAX_WINDOWS)
     @Volatile private var installed = false
 
@@ -56,16 +59,8 @@ internal object FrameMeter {
     fun feed(dtMs: Float) {
         // 负数与超过 1 秒的间隔都不算：那是从后台回前台的第一帧，不是掉帧。
         if (dtMs <= 0f || dtMs > 1000f) return
-        // 刷新周期从观测里取：这台机器是 120Hz 时 16.7ms 的预算会把一半掉帧漏掉。
-        if (dtMs >= FRAME_MIN_MS && (minDt.isNaN() || dtMs < minDt)) minDt = dtMs
-        if (frames % FRAME_RING == 0L) {
-            var m = Float.NaN
-            for (i in 0 until ringSize) {
-                val v = ring[i]
-                if (v >= FRAME_MIN_MS && (m.isNaN() || v < m)) m = v
-            }
-            if (!m.isNaN()) minDt = m
-        }
+        // 刷新周期从观测里取：这台机器是 120Hz 时，16.7ms 的预算会把一半掉帧漏掉。
+        if (frames % FRAME_PERIOD_EVERY == 0L) refreshPeriod()
         frames++
         sum += dtMs
         ring[ringIdx] = dtMs
@@ -73,7 +68,7 @@ internal object FrameMeter {
         if (ringSize < FRAME_RING) ringSize++
         if (dtMs > jankBudget()) janky++
         // 掉帧只数帧数会低估：120Hz 上一帧 25ms 是错过两次同步，不是一个坏帧。
-        missed += (dtMs / jankBudget() * 1.5f).toInt().coerceAtLeast(1) - 1
+        missed += kotlin.math.round(dtMs / periodMs).toInt().coerceAtLeast(1) - 1
         if (dtMs > FRAME_STALL_MS) stalls++
         if (dtMs > worst) worst = dtMs
         if (wFrames == 0) wStart = synchronized(stampFormat) { stampFormat.format(java.util.Date()) }
@@ -85,11 +80,27 @@ internal object FrameMeter {
         if (gap >= FRAME_WINDOW_GAP) closeWindow()
     }
 
+    /**
+     * 重估刷新周期：取环缓冲里落在合理区间的帧间隔的 10 分位。
+     * 用最小值不行 —— Choreographer 偶尔会给出 1~5ms 的抖动，最小值一带偏，
+     * 掉帧线就跟着塌到 8ms 以下，8.2ms 的正常帧会被整片判成掉帧（真机日志里出现过 掉帧 48%）。
+     */
+    private fun refreshPeriod() {
+        val vals = ArrayList<Float>(ringSize)
+        for (i in 0 until ringSize) {
+            val v = ring[i]
+            if (v in FRAME_PERIOD_MIN..FRAME_PERIOD_MAX) vals.add(v)
+        }
+        if (vals.isEmpty()) return
+        vals.sort()
+        periodMs = vals[(vals.size * 0.1f).toInt().coerceIn(0, vals.size - 1)]
+    }
+
     /** 掉帧线：错过了一次垂直同步就算。60Hz 约 25ms，120Hz 约 12.5ms。 */
-    private fun jankBudget(): Float = (if (minDt.isNaN() || minDt < FRAME_MIN_MS) FRAME_BUDGET_MS else minDt) * 1.5f
+    private fun jankBudget(): Float = periodMs * 1.5f
 
     /** 观测到的刷新周期，测不出来就用 60Hz 兜底。 */
-    @Synchronized fun period(): Float = if (minDt.isNaN() || minDt < FRAME_MIN_MS) FRAME_BUDGET_MS else minDt
+    @Synchronized fun period(): Float = periodMs
 
     private fun closeWindow() {
         val n = wFrames

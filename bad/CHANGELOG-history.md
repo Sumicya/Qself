@@ -1,3 +1,14 @@
+## 2026-10-24（三）— 按真机全量日志定位顶栏安全区残余根因并实装「顶栏安全区 / 顶栏上下微调」滑条
+
+- 针对用户回传的真机全量日志（三份 `qself-full-log.txt`，`26.10.24.2.3164`，OnePlus `PLC110` / Android 16 / `1272×2800` / `density 1.9761429`）逐行核对，定位「顶栏安全区还是没去」的真实根因并修复（`Looks.kt`、`Input.kt`、`Knob.kt`、`MessageStyle.kt`、`DiagLog.kt`、`ProtoTest.kt`、`tools/test_message_style.py`）：
+  - **日志实测证据**：`insets: statusBars=[0,141,0,0] navBars=[0,0,0,0]`、`statusBarColor=#00000000`、`winFlags=0x81810100`、`sysUiVis=0x700`；`TitleAreaHeadLayout 0x7f0a3245(e3u) mar=[0,68,0,0]`、`FrameLayout 0x7f0a6cfa(5un) b=[0,0,1272,167]`、`ClipSkinnableRecycleView 0x7f0a0e96(u3q) pad=[0,167,0,107]`、`MainResourceConfig#n -> 68`；AIO 侧 `QQBlurViewWrapper 0x7f0a0957` 与遮罩 `0x7f0a3715` 已 `vis=G alpha=0.0`、`AIOTitleRelativeLayout` 背景已是 `sumicya.qself.HeaderPillsDrawable`，说明背景/模糊/遮罩确已清除，残余的就是顶部预留高度本身。
+  - **根因：`reducedSafeTop` 自带「至少保留七成」下限**：旧实现 `minTop = origTop * 0.72f`、`baseTop = origTop - 16dp`，真机 `141px` 只能压到 `109px`（日志里 `reducedSafeTop=109`），`68px` 只能压到 `49px`，等于没去掉；同时主页完全依赖 `MainResourceConfig#n` 生效，而日志显示该钩子返回仍是 `68px`，顶栏容器与列表内边距因此纹丝不动。
+  - **改为纯比例策略并给到滑条（默认 `0%` 完全去掉）**：`reducedSafeTop(origTop, dp)` 现按 `safeTopPercent()`（`SAFE_TOP`，`0~100%`，默认 `0`）取百分比再加 `safeTopShiftDp()`（`SAFE_TOP_SHIFT`，`-24~+48dp`）的 dp 微调，删除 `0.72f` 下限，只保证非负且不超过 `origTop + 96dp`；`ProtoTest` 断言 `reducedSafeTop(141, 1.9761429f) == 0`、`reducedSafeTop(68, 1.9761429f) == 0`。
+  - **主页不再依赖 `MainResourceConfig#n`：新增 `HomeSafeArea` 三件套同 `delta` 上移**：把 `0x7f0a3245` 头像 `topMargin`（真机 `68px`）、`0x7f0a6cfa` 顶栏容器 `translationY` 与 `0x7f0a0e96` 会话列表 `paddingTop`（真机 `167px`）三者按同一个 `delta` 整体上移，命中三件套的页面不再叠加旧的 `-4dp` 子组件微调（避免顶栏被推到窗口上沿之外），关闭开关或 `resetHomeTopBars()` 时三者原样还原。
+  - **AIO 消息列表顶部内边距与顶栏联动**：真包 `AIOMsgListGroup.paddingTop = 238 = 141（状态栏）+ 97（标题栏）`，顶栏上移后若列表不动会空出一大段；新增 `aioSafeTopRemoved()`（`HeaderState.applyStyle` 在安全区换算变化时更新并触发 `refreshInputLayout()`），`MsgListUnderScroll.sync()` 据此把 `targetTop` 再减掉同样的像素数。
+  - **可核对的诊断增强**：`MainResourceConfig#n` 每次换算写入全量日志（`MainResourceConfig#n orig=…px -> …px (percent=…% shift=…dp)`），AIO `outer`/`root` 安全区换算同样落日志；AIO 顶栏 `onLayout` 完成且尺寸有效后（3 秒节流）自动抓一次带真实尺寸的视图树快照 `AIO-Header-LaidOut:*`（旧版只在预加载阶段抓到 `0×0` 空树）；诊断报告头新增 `SAFE_TOP` / `SAFE_TOP_SHIFT` 参数行。
+  - 同步删除上一版预览图并生成新预览图（`tools/make_safe_top_preview.py` 可复现），`README.md` / `docs/message-ui.md` 引用同步更新（面板滑条说明由 4 项改为 6 项）。
+
 ## 2026-10-24（二）— 实装全量 QQ 日志与界面树快照录制引擎（`DiagLog.kt` / `全量日志`）及面板一键导出/复制
 
 - 针对用户请求（「写一版录全qq日志的我返日志给你」），新增全量诊断日志引擎 `DiagLog.kt` 并集成至 `Qself.kt`、`Hook.kt`、`Looks.kt`、`Knob.kt`（`tools/symbols.txt` 增至 702 条符号）：

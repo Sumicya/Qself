@@ -775,6 +775,18 @@ class ProtoTest {
         assertTrue("窗口：\n$win", win.contains("最长=60ms"))
     }
 
+    @Test fun frameMeterPeriodIgnoresSpuriousShortFrames() {
+        FrameMeter.reset()
+        repeat(200) { FrameMeter.feed(8.3f) }
+        FrameMeter.feed(1.2f)   // 偶发抖动：不能把刷新周期从 8.3ms 带塌，否则正常帧整片判成掉帧
+        repeat(FRAME_PERIOD_EVERY.toInt() + 10) { FrameMeter.feed(8.3f) }
+        val snap = FrameMeter.snapshot()
+        val head = snap.lineSequence().first { it.startsWith("帧率（真机）") }
+        assertTrue("周期被抖动带偏：\n$snap", snap.contains("帧周期 8.3ms"))
+        assertTrue("8.3ms 的正常帧被判成掉帧：\n$head", head.contains("掉帧 0（0%"))
+        assertTrue("错过同步不该有：\n$head", head.contains("错过同步 0 次"))
+    }
+
     @Test fun mergeDiagnosticReportsTrimsOverLongStreamingRecords() {
         val pad = "z".repeat(20000)
         val rep = "Qself Full QQ Diagnostic Report\n" +
