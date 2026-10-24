@@ -16,7 +16,20 @@ internal var frameEventSink: ((String) -> Unit)? = null
 
 private val stampFormat = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US)
 
+/** 小数一律按 US 格式写：别的 locale 会把 8.3 写成 8,3，日志与断言就对不上了。 */
+private fun fmt(pattern: String, value: Double): String = String.format(java.util.Locale.US, pattern, value)
+private fun fmt(pattern: String, value: Float): String = String.format(java.util.Locale.US, pattern, value)
+
 internal object FrameMeter {
+    /** 单测与热重载用：清空累计重新采样。两条用例共用同一个采样器，不重置就会互相污染。 */
+    @Synchronized
+    fun reset() {
+        ring.fill(0f); ringIdx = 0; ringSize = 0; lastNanos = 0L
+        frames = 0L; janky = 0L; stalls = 0L; missed = 0L; worst = 0f; sum = 0.0
+        gap = 0; wFrames = 0; wJank = 0; wStall = 0; wWorst = 0f; wSum = 0.0; wStart = ""
+        windows.clear(); minDt = Float.NaN
+    }
+
     private val ring = FloatArray(FRAME_RING)
     private var ringIdx = 0
     private var ringSize = 0
@@ -87,7 +100,7 @@ internal object FrameMeter {
         val start = wStart
         wFrames = 0; wJank = 0; wStall = 0; wWorst = 0f; wSum = 0.0; gap = 0; wStart = ""
         if (n < FRAME_WINDOW_MIN || (jank == 0 && stall == 0)) return
-        val line = "帧率窗口 $start 帧=$n 平均=${"%.1f".format(avg)}ms 掉帧=$jank(${"%.0f".format(jank * 100.0 / n)}%) 卡顿=$stall 最长=${"%.0f".format(worstMs)}ms"
+        val line = "帧率窗口 $start 帧=$n 平均=${fmt("%.1f", avg)}ms 掉帧=$jank(${fmt("%.0f", jank * 100.0 / n)}%) 卡顿=$stall 最长=${fmt("%.0f", worstMs)}ms"
         while (windows.size >= FRAME_MAX_WINDOWS) windows.removeFirst()
         windows.addLast(line)
         // 只把「真有卡顿」的窗口写进 Qself 事件流，正常滑动不刷屏。
@@ -101,10 +114,10 @@ internal object FrameMeter {
         val rAvg = if (recent.isNotEmpty()) recent.average() else 0.0
         val rJank = recent.count { it > jankBudget() }
         val head = if (frames == 0L) "帧率（真机） : 尚未采到帧（Choreographer 未安装或进程未绘制）" else buildString {
-            append("帧率（真机） : 累计 $frames 帧，平均 ${"%.1f".format(sum / frames)}ms，")
-            append("掉帧 $janky（${"%.0f".format(janky * 100.0 / frames)}%，错过同步 $missed 次），卡顿 $stalls，")
-            append("最长 ${"%.0f".format(worst)}ms；帧周期 ${"%.1f".format(period())}ms（约 ${"%.0f".format(1000f / period())}Hz），")
-            append("最近 $ringSize 帧平均 ${"%.1f".format(rAvg)}ms、掉帧 $rJank")
+            append("帧率（真机） : 累计 $frames 帧，平均 ${fmt("%.1f", sum / frames)}ms，")
+            append("掉帧 $janky（${fmt("%.0f", janky * 100.0 / frames)}%，错过同步 $missed 次），卡顿 $stalls，")
+            append("最长 ${fmt("%.0f", worst)}ms；帧周期 ${fmt("%.1f", period())}ms（约 ${fmt("%.0f", 1000f / period())}Hz），")
+            append("最近 $ringSize 帧平均 ${fmt("%.1f", rAvg)}ms、掉帧 $rJank")
         }
         if (windows.isEmpty()) return head
         return head + "\n" + windows.joinToString("\n")

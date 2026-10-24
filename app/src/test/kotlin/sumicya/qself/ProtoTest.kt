@@ -739,6 +739,8 @@ class ProtoTest {
         Regex("""累计 (\d+) 帧""").find(text)?.groupValues?.get(1)?.toLong() ?: -1L
 
     @Test fun frameMeterCountsStallsClosesWindowsAndIgnoresHugeGaps() {
+        // 两条帧率用例共用一个采样器，JUnit 的方法顺序不保证，先清空再喂
+        FrameMeter.reset()
         // 先喂一批不卡的帧，把上一轮窗口收干净（全不卡的窗口不记录）
         repeat(FRAME_WINDOW_GAP + 30) { FrameMeter.feed(16f) }
         assertFalse(FrameMeter.snapshot().contains("帧率窗口 "))
@@ -759,6 +761,7 @@ class ProtoTest {
     }
 
     @Test fun frameMeterDerivesJankBudgetFromTheObservedRefreshRate() {
+        FrameMeter.reset()
         // 120Hz 机器：好帧 8.3ms，掉帧线该是 12.5ms 而不是写死的 16.7ms
         repeat(200) { FrameMeter.feed(8.3f) }
         repeat(5) { FrameMeter.feed(60f) }
