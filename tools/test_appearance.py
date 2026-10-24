@@ -27,7 +27,7 @@ class AppearanceContractTest(unittest.TestCase):
         self.assertIn('getDeclaredMethod("U", cls("com.tencent.mobileqq.aio.input.adorn.e"))', INPUT)
         self.assertIn('hook(prepared, gated = false)', INPUT)
         self.assertIn('::inputLayout', (SRC / 'Qself.kt').read_text())
-        self.assertNotIn('putBoolean("TG输入栏", true)', INPUT)
+        self.assertNotIn('putBoolean("输入栏药丸", true)', INPUT)
 
     def test_editors_are_unique_and_setting_changes_refresh_them(self):
         self.assertIn('WeakHashMap<EditText, WeakReference<NativeInput>>()', INPUT)

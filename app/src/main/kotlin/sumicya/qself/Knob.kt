@@ -626,7 +626,19 @@ private fun sheet(anchor: View) {
     }
     val grid = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     val sheetTracker = MenuTouchTracker(grid) { true }
-    features.forEach { grid.addView(cell(it).also(sheetTracker::track), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)) }
+    // 开关按分组摆：30 个开关平铺一列等于没有顺序，找不着也记不住。
+    fun groupHeading(text: String) = TextView(ctx).apply {
+        this.text = text; textSize = 15f; setTextColor(ink); gravity = Gravity.START
+        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+        setPadding((6 * dp).toInt(), (16 * dp).toInt(), 0, (6 * dp).toInt())
+    }
+    for ((group, list) in featuresByGroup()) {
+        grid.addView(groupHeading(group))
+        list.forEach {
+            grid.addView(cell(it).also(sheetTracker::track),
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+    }
     val heading = TextView(ctx).apply {
         text = "Qself ${BuildConfig.VERSION_NAME}"; textSize = 15f; gravity = Gravity.CENTER; setTextColor(ink)
         minimumHeight = (40 * dp).toInt()
@@ -662,7 +674,7 @@ private fun sheet(anchor: View) {
         gravity = Gravity.START or Gravity.CENTER_VERTICAL
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
         setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
-        contentDescription = "消息内时间格式"
+        contentDescription = "消息时间格式"
     }
     grid.addView(format)
     grid.addView(TextView(ctx).apply {

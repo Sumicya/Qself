@@ -134,7 +134,7 @@ private class ExternalStamp(host: android.view.ViewGroup) {
     }
     fun apply() {
         val container = host.get() ?: return
-        if (!on("消息内时间")) {
+        if (!on("消息时间")) {
             restore()
             return
         }
@@ -247,7 +247,7 @@ fun messageTimestamps() {
         chain.proceed().also {
             val view = runCatching { slot.invoke(chain.thisObject) as? View }.getOrNull() ?: return@also
             val saved = timestampSlots.getOrPut(view) { view.visibility }
-            if (on("消息内时间")) {
+            if (on("消息时间")) {
                 if (view.visibility != View.GONE) timestampSlots[view] = view.visibility
                 view.visibility = View.GONE
             } else if (view.visibility == View.GONE && saved != View.GONE) {
@@ -570,7 +570,7 @@ private fun clearAtSpans(v: TextView): SpannableString {
 private var openMention: ((View, MentionRange) -> Unit)? = null
 private fun applyMentions(v: TextView) {
     val text = clearAtSpans(v)
-    if (on("消息显示At对象")) for (range in mentionRanges(text.toString(), mentions[v].orEmpty())) {
+    if (on("At可点")) for (range in mentionRanges(text.toString(), mentions[v].orEmpty())) {
         // 原有链接和宿主点击段优先；只补缺失的 @ 对象链接。
         if (text.getSpans(range.start, range.end, ClickableSpan::class.java).isNotEmpty()) continue
         text.setSpan(AtSpan { openMention?.invoke(it, range) }, range.start, range.end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -609,7 +609,7 @@ fun clickableMentions() {
     hook(cls("com.tencent.qqnt.aio.widget.SelectableTextView").getDeclaredMethod("onTouchEvent", MotionEvent::class.java), gated = false) { chain ->
         val v = chain.thisObject as? TextView ?: return@hook chain.proceed()
         val event = chain.getArg(0) as MotionEvent
-        if (!on("消息显示At对象") || v !in mentions) return@hook chain.proceed()
+        if (!on("At可点") || v !in mentions) return@hook chain.proceed()
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> mentionDown[v] = Triple(event.x, event.y, event.eventTime)
             MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> mentionDown.remove(v)
@@ -645,7 +645,7 @@ fun refreshMessageStyle() {
     externalStamps.values.toList().forEach { it.apply() }
     timestampSlots.entries.toList().forEach { (slot, saved) ->
         if (!slot.isAttachedToWindow) timestampSlots.remove(slot)
-        else slot.visibility = if (on("消息内时间")) View.GONE else saved
+        else slot.visibility = if (on("消息时间")) View.GONE else saved
     }
     corners.values.toList().forEach { it.apply() }
     mentions.keys.toList().forEach(::applyMentions)

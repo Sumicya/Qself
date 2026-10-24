@@ -24,7 +24,7 @@ private class PanelGlassState(val root: View) : ViewTreeObserver.OnPreDrawListen
         root.addOnAttachStateChangeListener(this)
     }
     fun sync() {
-        if (!on("TG输入栏") && !on("玻璃底栏")) {
+        if (!on("输入栏药丸") && !on("玻璃底栏")) {
             restore()
             return
         }
@@ -42,7 +42,7 @@ private class PanelGlassState(val root: View) : ViewTreeObserver.OnPreDrawListen
         panelGlasses.remove(root)
     }
     override fun onPreDraw(): Boolean {
-        if (on("TG输入栏") || on("玻璃底栏")) glass.sync()
+        if (on("输入栏药丸") || on("玻璃底栏")) glass.sync()
         return true
     }
     override fun onViewAttachedToWindow(v: View) = sync()
@@ -74,7 +74,7 @@ private class MsgListUnderScroll(
     private val origRecyclerBottom = recycler.paddingBottom
     private var active = false
     fun sync() {
-        val enabled = on("TG输入栏") || on("玻璃底栏")
+        val enabled = on("输入栏药丸") || on("玻璃底栏")
         if (!enabled) {
             restore()
             return
@@ -118,7 +118,7 @@ private class MsgListUnderScroll(
         val targetTop = if (on("玻璃底栏")) {
             (savedGroupTop - topReduction - aioSafeTopRemoved()).coerceAtLeast(0)
         } else origRecyclerTop
-        val targetBottom = if (on("TG输入栏")) savedGroupBottom else origRecyclerBottom
+        val targetBottom = if (on("输入栏药丸")) savedGroupBottom else origRecyclerBottom
         lastAppliedTop = targetTop
         lastAppliedBottom = targetBottom
         if (recycler.paddingTop != targetTop || recycler.paddingBottom != targetBottom) {
@@ -191,7 +191,7 @@ fun inputLayout() {
     val sendRadiusCompanion = cls("com.tencent.mobileqq.aio.input.inputbar.compat.e\$b")
     hook(sendRadiusCompanion.getDeclaredMethod("f", android.content.Context::class.java, Integer.TYPE, Integer.TYPE), gated = false) { chain ->
         val orig = chain.proceed()
-        if (!on("TG输入栏")) orig
+        if (!on("输入栏药丸")) orig
         else {
             val ctx = chain.args.getOrNull(0) as? android.content.Context
             val h = (chain.args.getOrNull(2) as? Number)?.toInt() ?: 0
@@ -210,21 +210,21 @@ fun inputLayout() {
         val rootView = (bindingOrView as? View) ?: runCatching { bindingOrView?.get("a") as? View }.getOrNull()
         rootView?.let { v ->
             val dec = inputDecorations.getOrPut(v) { InputDecoration(v, false) }
-            if (on("TG输入栏")) dec.apply() else dec.restore()
+            if (on("输入栏药丸")) dec.apply() else dec.restore()
             (v.parent as? View)?.let { p ->
                 val pDec = inputDecorations.getOrPut(p) { InputDecoration(p, false) }
-                if (on("TG输入栏")) pDec.apply() else pDec.restore()
+                if (on("输入栏药丸")) pDec.apply() else pDec.restore()
             }
         }
         for (fieldName in listOf("d", "f")) {
             (runCatching { bindingOrView?.get(fieldName) as? View }.getOrNull())?.let { v ->
                 val dec = inputDecorations.getOrPut(v) { InputDecoration(v, false) }
-                if (on("TG输入栏")) dec.apply() else dec.restore()
+                if (on("输入栏药丸")) dec.apply() else dec.restore()
             }
         }
         (runCatching { expDivider.get(target) as? View }.getOrNull())?.let { v ->
             val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
-            if (on("TG输入栏")) dec.apply() else dec.restore()
+            if (on("输入栏药丸")) dec.apply() else dec.restore()
         }
         val ed = runCatching { bindingOrView?.get("c") as? EditText }.getOrNull()
         val send = runCatching { bindingOrView?.get("i") as? View }.getOrNull()
@@ -249,7 +249,7 @@ fun inputLayout() {
         val binding = runCatching { topBlurBindingField.get(target) }.getOrNull() ?: return
         (runCatching { topBlurViewField.get(binding) as? View }.getOrNull())?.let { v ->
             val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
-            if (on("玻璃底栏") || on("TG输入栏")) dec.apply() else dec.restore()
+            if (on("玻璃底栏") || on("输入栏药丸")) dec.apply() else dec.restore()
         }
     }
     for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "d1", "f1", "g1")) {
@@ -271,7 +271,7 @@ fun inputLayout() {
         val binding = runCatching { topMaskBindingField.get(target) }.getOrNull() ?: return
         (runCatching { topMaskViewField.get(binding) as? View }.getOrNull())?.let { v ->
             val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
-            if (on("玻璃底栏") || on("TG输入栏")) dec.apply() else dec.restore()
+            if (on("玻璃底栏") || on("输入栏药丸")) dec.apply() else dec.restore()
         }
     }
     for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "e1", "f1", "g1")) {
@@ -293,7 +293,7 @@ fun inputLayout() {
         for (getter in listOfNotNull(getBottomBlurI1, getBottomBlurK1)) {
             (runCatching { getter.invoke(target) as? View }.getOrNull())?.let { v ->
                 val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
-                if (on("TG输入栏") || on("玻璃底栏")) dec.apply() else dec.restore()
+                if (on("输入栏药丸") || on("玻璃底栏")) dec.apply() else dec.restore()
             }
         }
     }
@@ -314,7 +314,7 @@ fun inputLayout() {
             hook(m.apply { isAccessible = true }, gated = false) { chain ->
                 chain.proceed().also {
                     val ev = chain.thisObject as? View ?: return@also
-                    if (on("TG输入栏") || on("玻璃底栏")) {
+                    if (on("输入栏药丸") || on("玻璃底栏")) {
                         runCatching {
                             ev.set("i", 0)
                             ev.set("m", 0)
@@ -328,7 +328,7 @@ fun inputLayout() {
     edgeTransparent.declaredMethods.firstOrNull { it.name == "drawChild" }?.let { m ->
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
             val ev = chain.thisObject as? View
-            if (ev != null && (on("TG输入栏") || on("玻璃底栏"))) {
+            if (ev != null && (on("输入栏药丸") || on("玻璃底栏"))) {
                 runCatching {
                     if ((ev.get("i") as? Int ?: 0) != 0) ev.set("i", 0)
                     if ((ev.get("m") as? Int ?: 0) != 0) ev.set("m", 0)
@@ -341,7 +341,7 @@ fun inputLayout() {
     edgeTransparent.declaredMethods.firstOrNull { it.name == "onInterceptTouchEvent" }?.let { m ->
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
             val ev = chain.thisObject as? View
-            if (ev != null && (on("TG输入栏") || on("玻璃底栏"))) {
+            if (ev != null && (on("输入栏药丸") || on("玻璃底栏"))) {
                 runCatching {
                     if ((ev.get("i") as? Int ?: 0) != 0) ev.set("i", 0)
                     if ((ev.get("m") as? Int ?: 0) != 0) ev.set("m", 0)
@@ -409,7 +409,7 @@ fun inputLayout() {
     val chatBgApi = cls("com.tencent.qqnt.aio.adapter.api.impl.AIOChatBackgroundApiImpl")
     chatBgApi.declaredMethods.firstOrNull { it.name == "setImmersiveBottomDrawable" }?.let { m ->
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            if (on("TG输入栏") || on("玻璃底栏")) {
+            if (on("输入栏药丸") || on("玻璃底栏")) {
                 val vg = chain.args.getOrNull(0) as? ViewGroup
                 chain.proceed(arrayOf(vg, android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)))
             } else chain.proceed()
@@ -418,7 +418,7 @@ fun inputLayout() {
     val quiImmersive = cls("com.tencent.mobileqq.qui.b")
     quiImmersive.declaredMethods.firstOrNull { it.name == "g" && it.parameterTypes.size == 3 }?.let { m ->
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            if (on("TG输入栏") || on("玻璃底栏")) {
+            if (on("输入栏药丸") || on("玻璃底栏")) {
                 val view = chain.args.getOrNull(0) as? View
                 val top = (chain.args.getOrNull(1) as? Number)?.toInt() ?: 0
                 chain.proceed(arrayOf(view, top, 0))
@@ -428,7 +428,7 @@ fun inputLayout() {
     val rfwImmersive = cls("com.tencent.richframework.compat.immersive.RFWNavigationBarImmersiveHelper")
     rfwImmersive.declaredMethods.firstOrNull { it.name == "fillNavigationBarBackgroundView" }?.let { m ->
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            if (on("TG输入栏") || on("玻璃底栏")) null else chain.proceed()
+            if (on("输入栏药丸") || on("玻璃底栏")) null else chain.proceed()
         }
     }
     val shortcutBar = cls("com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB")
@@ -437,13 +437,13 @@ fun inputLayout() {
         val target = vb ?: return
         (runCatching { getShortcutStrip.invoke(target) as? ViewGroup }.getOrNull())?.let { strip ->
             val dec = inputDecorations.getOrPut(strip) { InputDecoration(strip, false) }
-            if (on("TG输入栏")) dec.apply() else dec.restore()
+            if (on("输入栏药丸")) dec.apply() else dec.restore()
             (strip.parent as? View)?.let { p ->
                 val pDec = inputDecorations.getOrPut(p) { InputDecoration(p, false) }
-                if (on("TG输入栏")) pDec.apply() else pDec.restore()
+                if (on("输入栏药丸")) pDec.apply() else pDec.restore()
                 (p.parent as? View)?.let { gp ->
                     val gpDec = inputDecorations.getOrPut(gp) { InputDecoration(gp, false) }
-                    if (on("TG输入栏")) gpDec.apply() else gpDec.restore()
+                    if (on("输入栏药丸")) gpDec.apply() else gpDec.restore()
                 }
             }
             tgInput(strip)
@@ -464,7 +464,7 @@ fun inputLayout() {
             chain.proceed().also {
                 (chain.thisObject as? ViewGroup)?.let { strip ->
                     val dec = inputDecorations.getOrPut(strip) { InputDecoration(strip, false) }
-                    if (on("TG输入栏")) dec.apply() else dec.restore()
+                    if (on("输入栏药丸")) dec.apply() else dec.restore()
                     tgInput(strip)
                 }
             }
@@ -518,7 +518,7 @@ fun tgInput(edit: EditText, strip: ViewGroup? = null, sendBtn: View? = null) {
 }
 
 fun refreshInputLayout() {
-    val enabled = on("TG输入栏")
+    val enabled = on("输入栏药丸")
     inputDecorations.values.toList().forEach { if (enabled) it.apply() else it.restore() }
     msgListUnderScrolls.values.toList().forEach { it.sync() }
     panelGlasses.values.toList().forEach { it.sync() }
@@ -779,7 +779,7 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
     }
     fun sync() {
         val edit = edit.get() ?: return
-        if (!on("TG输入栏")) { restore(); return }
+        if (!on("输入栏药丸")) { restore(); return }
         decorations.forEach { it.apply() }
         if (edit.background !== glass) edit.background = glass
         if (edit.outlineProvider !== shape) edit.outlineProvider = shape
@@ -816,7 +816,7 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
         if (!applied) { applied = true; onGlobalLayout() }
     }
     override fun onGlobalLayout() {
-        if (!on("TG输入栏")) return
+        if (!on("输入栏药丸")) return
         edit.get()?.let {
             repositionSafeArea(it)
             val focus = it.hasFocus()
@@ -866,7 +866,7 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
         applied = false
     }
     override fun onPreDraw(): Boolean {
-        if (on("TG输入栏")) glass.sync()
+        if (on("输入栏药丸")) glass.sync()
         return true
     }
     override fun onViewAttachedToWindow(view: View) = Unit

@@ -87,7 +87,7 @@ class  com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContent
 member! com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent#d1
 member! com.tencent.mobileqq.aio.msglist.holder.component.avatar.AIOAvatarContentComponent#f1
 
-# ---------- 左滑回复不设限 Chat.kt（上游：卡片消息一律说支持回复）
+# ---------- 左滑回复 Chat.kt（上游：卡片消息一律说支持回复）
 class  com.tencent.mobileqq.ark.api.impl.ArkHelperImpl
 member! com.tencent.mobileqq.ark.api.impl.ArkHelperImpl#isSupportReply
 
@@ -152,7 +152,7 @@ field  com.tencent.mobileqq.quibadge.QUIBadge#mNum
 class  com.tencent.widget.d
 member! com.tencent.widget.d#d
 
-# ---------- 屏蔽红点引导：这些门方法一律答 false，红点和引导气泡就不出现
+# ---------- 隐藏红点引导：这些门方法一律答 false，红点和引导气泡就不出现
 class  com.tencent.mobileqq.troop.utils.api.impl.TroopUtilsApiImpl
 member! com.tencent.mobileqq.troop.utils.api.impl.TroopUtilsApiImpl#isShowRedPoint
 member! com.tencent.mobileqq.troop.utils.api.impl.TroopUtilsApiImpl#isShowKingTeamRedPoint
@@ -170,7 +170,7 @@ class  com.tencent.mobileqq.zplan.aio.impl.ZPlanBadgeManagerImpl
 member! com.tencent.mobileqq.zplan.aio.impl.ZPlanBadgeManagerImpl#isEntranceShow
 member! com.tencent.mobileqq.zplan.aio.impl.ZPlanBadgeManagerImpl#canShowTips
 
-# ---------- 去会员等级：资料卡的会员判定一律答 false，等级图标就不画
+# ---------- 隐藏会员等级：资料卡的会员判定一律答 false，等级图标就不画
 class  com.tencent.mobileqq.profilecard.component.content.ElegantProfileAccountLevelComponent
 member! com.tencent.mobileqq.profilecard.component.content.ElegantProfileAccountLevelComponent#isSuperVip
 member! com.tencent.mobileqq.profilecard.component.content.ElegantProfileAccountLevelComponent#isQQVip
@@ -281,7 +281,7 @@ member! com.tencent.mobileqq.quibadge.QUIBadge#onLayout
 member! com.tencent.mobileqq.quibadge.QUIBadge#onDraw
 field com.tencent.mobileqq.quibadge.QUIBadge#mViewType
 
-# ---------- 消息内时间 / At 对象 / 原生头像圆角 MessageStyle.kt
+# ---------- 消息时间 / At 对象 / 原生头像圆角 MessageStyle.kt
 class com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent
 member! com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent#d1
 member! com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent#f1

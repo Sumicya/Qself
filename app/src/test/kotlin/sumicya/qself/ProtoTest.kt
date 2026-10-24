@@ -758,6 +758,20 @@ class ProtoTest {
         assertEquals(n0 + 5 + FRAME_WINDOW_GAP + 5, frameCount(snap))
     }
 
+    @Test fun frameMeterDerivesJankBudgetFromTheObservedRefreshRate() {
+        // 120Hz 机器：好帧 8.3ms，掉帧线该是 12.5ms 而不是写死的 16.7ms
+        repeat(200) { FrameMeter.feed(8.3f) }
+        repeat(5) { FrameMeter.feed(60f) }
+        repeat(FRAME_WINDOW_GAP + 5) { FrameMeter.feed(8.3f) }
+        val snap = FrameMeter.snapshot()
+        assertTrue("周期没测出来：\n$snap", snap.contains("帧周期 8.3ms"))
+        assertTrue("刷新率没算出来：\n$snap", snap.contains("120Hz"))
+        val win = snap.lineSequence().filter { it.startsWith("帧率窗口 ") }.last()
+        assertTrue("窗口：\n$win", win.contains("掉帧=5"))
+        assertTrue("窗口：\n$win", win.contains("卡顿=5"))
+        assertTrue("窗口：\n$win", win.contains("最长=60ms"))
+    }
+
     @Test fun mergeDiagnosticReportsTrimsOverLongStreamingRecords() {
         val pad = "z".repeat(20000)
         val rep = "Qself Full QQ Diagnostic Report\n" +

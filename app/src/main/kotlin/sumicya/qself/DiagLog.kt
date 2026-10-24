@@ -163,6 +163,16 @@ fun captureViewRootSnapshot(view: View?, sceneTag: String) {
 }
 
 fun captureActivitySnapshot(activity: Activity, reason: String = "manual"): String {
+    // 这活儿只能在主线程干（要读视图树），所以把它自己花了多久记下来：
+    // 真机日志里出现过 972ms 的最长帧，不计时就只能靠猜是谁干的。
+    val costFrom = android.os.SystemClock.elapsedRealtime()
+    return runCatching { snapshotBody(activity, reason) }.also {
+        val cost = android.os.SystemClock.elapsedRealtime() - costFrom
+        if (cost >= 8) recordQselfEvent("界面树快照($reason) 耗时 ${cost}ms")
+    }.getOrElse { "Activity ${activity.javaClass.name}: 快照失败 ${it}" }
+}
+
+private fun snapshotBody(activity: Activity, reason: String): String {
     val decor = activity.window?.decorView ?: return "Activity ${activity.javaClass.name}: decorView=null"
     val key = activity.javaClass.name
     val dump = buildString(16384) {
@@ -279,9 +289,12 @@ fun buildFullDiagnosticReport(ctx: Context?, includeLogcat: Boolean = true): Str
     }
     append("Night Mode   : ").append(runCatching { night() }.getOrDefault(false)).append('\n')
     append(runCatching { FrameMeter.snapshot() }.getOrDefault("帧率（真机） : 取快照失败")).append('\n')
-    append("Switches     : ")
-    features.forEach { f ->
-        append(f.name).append('=').append(if (f.name in failed) "FAIL" else if (on(f.name)) "ON" else "OFF").append(' ')
+    append("Switches     :")
+    for ((group, list) in featuresByGroup()) {
+        append("\n  ").append(group).append("：")
+        list.forEach { f ->
+            append(f.name).append('=').append(if (f.name in failed) "FAIL" else if (on(f.name)) "ON" else "OFF").append(' ')
+        }
     }
     append('\n')
     store()?.let { p ->

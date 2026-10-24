@@ -1011,13 +1011,13 @@ private class RunLayout(val avatars: List<RunAvatar>, nicks: List<View>, content
         // 先更新昵称可见性，使 RowGeometry.apply() 能依据当前是否显示组首 ID 计算正文上边距；自己与他人在组首均显示 ID。
         nicks.forEach { it.apply(if (enabled && continued) View.GONE else null) }
         rowGeometry?.apply(self, continued, enabled)
-        val bubbleOn = on("统一气泡")
+        val bubbleOn = on("气泡统一")
         bubbles.forEach { it.apply(self, continued, continues, bubbleOn) }
         if (!enabled) avatars.forEach { it.restore() }
         else if (continued) avatars.forEach { it.hide() }
     }
     fun applyBubblesOnly() {
-        val bubbleOn = on("统一气泡")
+        val bubbleOn = on("气泡统一")
         bubbles.forEach { it.apply(self, compact, continues, bubbleOn) }
     }
     fun restore() = apply(false, false)
@@ -1383,29 +1383,29 @@ fun groupRuns() {
         val skinBgInfoClass = cls("com.tencent.mobileqq.aio.msglist.holder.skin.AIOBubbleSkinInfo\$BackgroundImageInfo")
         for (minGetter in listOf("f", "g")) {
             hook(skinBgInfoClass.getDeclaredMethod(minGetter)) { chain ->
-                if (on("统一气泡")) 0 else chain.proceed()
+                if (on("气泡统一")) 0 else chain.proceed()
             }
         }
         for (getterName in listOf("a", "b", "c", "d")) {
             hook(holderMarginClass.getDeclaredMethod(getterName)) { chain ->
-                if (on("连发合并") || on("统一气泡")) 0 else chain.proceed()
+                if (on("连发合并") || on("气泡统一")) 0 else chain.proceed()
             }
         }
         for (getterName in listOf("b", "c", "d", "e")) {
             hook(paddingType.getDeclaredMethod(getterName)) { chain ->
-                if (on("统一气泡")) 0 else chain.proceed()
+                if (on("气泡统一")) 0 else chain.proceed()
             }
         }
         for (getterName in listOf("j", "k", "l", "n", "o")) {
             hook(richPaddingType.getDeclaredMethod(getterName)) { chain ->
-                if (on("统一气泡")) 0 else chain.proceed()
+                if (on("气泡统一")) 0 else chain.proceed()
             }
         }
         hook(richPaddingType.getDeclaredMethod("m")) { chain ->
-            if (on("统一气泡")) (4 * android.content.res.Resources.getSystem().displayMetrics.density).roundToInt() else chain.proceed()
+            if (on("气泡统一")) (4 * android.content.res.Resources.getSystem().displayMetrics.density).roundToInt() else chain.proceed()
         }
         fun compactBubblePadding(target: Any) {
-            if (!on("统一气泡")) return
+            if (!on("气泡统一")) return
             // 外层 BubbleSurface 已设置统一的四周 5dp 内边距，内层 skin.padding 必须置 0 防止双重叠加。
             padLeft.setInt(target, 0)
             padRight.setInt(target, 0)
@@ -1418,7 +1418,7 @@ fun groupRuns() {
         hook(richPaddingCalc) { chain ->
             chain.proceed().also {
                 compactBubblePadding(chain.thisObject)
-                if (!on("统一气泡")) return@also
+                if (!on("气泡统一")) return@also
                 val density = android.content.res.Resources.getSystem().displayMetrics.density
                 richPadLeft.setInt(chain.thisObject, 0)
                 richPadRight.setInt(chain.thisObject, 0)
@@ -2070,7 +2070,7 @@ fun pttSpeedMemory() {
     val waveCls = cls("com.tencent.mobileqq.aio.msglist.holder.component.ptt.PttAudioWaveView")
     val setCanSlide = waveCls.getDeclaredMethod("setCanSupportSlide", java.lang.Boolean.TYPE).apply { isAccessible = true }
     waveCls.afterNew { view ->
-        if (on("语音倍速记忆")) runCatching { setCanSlide.invoke(view, true) }
+        if (on("语音倍速")) runCatching { setCanSlide.invoke(view, true) }
     }
     val mgrCls = cls("com.tencent.mobileqq.aio.msglist.holder.component.ptt.AIOPttAudioPlayerManager")
     val speedField = mgrCls.getDeclaredField("h").apply { isAccessible = true }
@@ -2079,7 +2079,7 @@ fun pttSpeedMemory() {
         val m = mgrCls.getDeclaredMethod(playName, String::class.java, Integer.TYPE, java.lang.Float.TYPE, java.lang.Long.TYPE)
             .apply { isAccessible = true }
         hook(m) { chain ->
-            if (!on("语音倍速记忆")) return@hook chain.proceed()
+            if (!on("语音倍速")) return@hook chain.proceed()
             val argSpeed = (chain.args.getOrNull(2) as? Number)?.toFloat() ?: 1.0f
             val saved = store()?.getFloat(PTT_SPEED_KEY, 1.0f) ?: 1.0f
             val effective = if (argSpeed != 1.0f) {
@@ -2099,11 +2099,11 @@ fun pttSpeedMemory() {
     val onComplete = mgrCls.getDeclaredMethod("C8", audioPlayerBase, String::class.java).apply { isAccessible = true }
     hook(onComplete) { chain ->
         val before = runCatching { speedField.getFloat(null) }.getOrDefault(1.0f)
-        if (on("语音倍速记忆") && before > 0.5f && before != 1.0f) {
+        if (on("语音倍速") && before > 0.5f && before != 1.0f) {
             store()?.edit()?.putFloat(PTT_SPEED_KEY, before)?.apply()
         }
         chain.proceed().also {
-            if (on("语音倍速记忆")) {
+            if (on("语音倍速")) {
                 val remembered = store()?.getFloat(PTT_SPEED_KEY, before) ?: before
                 if (remembered > 0.5f) runCatching { speedField.setFloat(null, remembered) }
             }

@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-10-24（七）— 30 个开关按六组重排并统一动词（藏/去/屏蔽 收口成 隐藏/停止），分组与命名写成静态契约；帧率采样改按真机刷新周期判掉帧，界面树快照开始计时
+
+- 开关分组（`Qself.kt`、`Knob.kt`、`DiagLog.kt`）：30 个开关原先按添加顺序一列平铺，找不着也记不住。现在按「底栏与导航 5 / 输入与面板 3 / 消息 12 / 转发与账号 4 / 特效与上报 4 / 系统与诊断 2」六组摆，菜单里每组一个标题，导出日志的 `Switches` 也从一长条改成按组缩进。新增 `featuresByGroup()` 与 `featureGroupGaps()`：漏分组、重复分组、写了不存在的开关，安装时直接打进 Qself 日志，不靠肉眼核对。
+- 开关改名，同一个意思只用同一个动词：`Monet取色→壁纸取色`、`藏频道动态→隐藏频道动态`、`TG输入栏→输入栏药丸`、`标题栏侧栏精简→侧栏精简`、`统一气泡→气泡统一`、`统一字体→字体统一`、`去头像挂件→隐藏头像挂件`、`消息内时间→消息时间`、`消息显示At对象→At可点`、`语音倍速记忆→语音倍速`、`左滑回复不设限→左滑回复`、`显示具体未读条数→未读实数`、`屏蔽红点引导→隐藏红点引导`、`去会员等级→隐藏会员等级`、`屏蔽轻互动→停止轻互动`、`屏蔽表情雨→停止表情雨`、`屏蔽统计上报→停止统计上报`、`屏蔽崩溃上报→停止崩溃上报`——藏东西一律叫「隐藏…」，停行为一律叫「停止…」。改名会重置这 18 个开关的偏好（默认全是开）。
+- 帧率采样按真机刷新周期判掉帧（`Perf.kt`）：真机日志（`26.10.24.8.3170`）显示累计 77374 帧、平均 12.5ms、各窗口平均 8.8~9.0ms —— 这台机器是 120Hz，写死的 16.7ms 预算会把一半掉帧漏掉。现在周期从观测到的最短帧间隔取（测不出来兜底 60Hz），掉帧线定在 1.5 个周期，并额外统计「错过同步次数」（120Hz 上一帧 25ms 是错过两次同步，不是一个坏帧）；日志头新增「帧周期 8.3ms（约 120Hz）」。
+- 界面树快照开始计时（`DiagLog.kt`）：真机日志里出现过 972ms 的最长帧，而快照必须在主线程读视图树，是首要嫌疑。现在每次快照结束把耗时写进 Qself 事件流（≥8ms 才记），下份日志能直接指认那 972ms 是不是它干的。
+- 测试：`ci/check.sh` 125 个类、65 个用例通过（新增 `frameMeterDerivesJankBudgetFromTheObservedRefreshRate`）；新增 `tools/test_switch_groups.py` 五项契约（每个开关恰好进一个组、组名不重复、菜单按组渲染而不是 `features.forEach` 平铺、禁用 屏蔽/藏/去 三种动词、名字不超过 6 个汉字）。
+
 ## 2026-10-24（六）— 全仓自查：给全量日志加字节预算与单条截断、导出整段挪离主线程、新增真机帧率采样，并按 selfs GLOBAL.md / REPOS.md 逐条核过工作流与文档
 
 - 全量日志体积收敛（真机 19MB → 稳定 6.1MB，`LogMerge.kt`）：只按 12000 条封顶不够 —— [5] 一节 12000 条实测 13.8MB（中位 167 字节、p99 15KB 的 Notification Channels / 配置 dump）。新增 `MAX_MERGED_SECTION_BYTES = 2,000,000`（从最老往回丢）、`trimRecord()`（单条超过 4096 字符从中间掐断、保留头尾，幂等）与 `capByBytes()`；同一份 19,368,750 字符的真机日志按新逻辑连续自合并三次，输出稳定在 6,109,393 → 6,111,191 → 6,111,783 字符，[5] 由 12000 条（13.8MB）降到 4188 条（1949KB）、[6] 降到 9851 条（1952KB），合并耗时 946ms / 359ms / 305ms。
@@ -41,12 +49,4 @@
   - **AIO 消息列表顶部内边距与顶栏联动**：真包 `AIOMsgListGroup.paddingTop = 238 = 141（状态栏）+ 97（标题栏）`，顶栏上移后若列表不动会空出一大段；新增 `aioSafeTopRemoved()`（`HeaderState.applyStyle` 在安全区换算变化时更新并触发 `refreshInputLayout()`），`MsgListUnderScroll.sync()` 据此把 `targetTop` 再减掉同样的像素数。
   - **可核对的诊断增强**：`MainResourceConfig#n` 每次换算写入全量日志（`MainResourceConfig#n orig=…px -> …px (percent=…% shift=…dp)`），AIO `outer`/`root` 安全区换算同样落日志；AIO 顶栏 `onLayout` 完成且尺寸有效后（3 秒节流）自动抓一次带真实尺寸的视图树快照 `AIO-Header-LaidOut:*`（旧版只在预加载阶段抓到 `0×0` 空树）；诊断报告头新增 `SAFE_TOP` / `SAFE_TOP_SHIFT` 参数行。
   - 同步删除上一版预览图并生成新预览图（`tools/make_safe_top_preview.py` 可复现），`README.md` / `docs/message-ui.md` 引用同步更新（面板滑条说明由 4 项改为 6 项）。
-
-## 2026-10-24（二）— 实装全量 QQ 日志与界面树快照录制引擎（`DiagLog.kt` / `全量日志`）及面板一键导出/复制
-
-- 针对用户请求（「写一版录全qq日志的我返日志给你」），新增全量诊断日志引擎 `DiagLog.kt` 并集成至 `Qself.kt`、`Hook.kt`、`Looks.kt`、`Knob.kt`（`tools/symbols.txt` 增至 702 条符号）：
-  1. **全量 `QLog` 拦截与调试级别解锁**：挂钩 `com.tencent.qphone.base.util.QLog#isColorLevel()` 返回 `true`（解锁 QQ 内部被 `if (QLog.isColorLevel())` 包裹的 UI/AIO/顶栏/底栏/皮肤调试日志）并拦截 `QLog#addLogItem(byte, String, int, String, Throwable)`，分双环缓冲保存最新 `3000` 条全量 `QLog` 与 `2500` 条 UI/AIO/顶栏/错误专项 `QLog`；
-  2. **全钩子调用轨迹与异常采样**：在 `Hook.kt` `hook(...)` 与 `log(...)` 中记录每个已挂钩方法的调用总次数（`hookCallCounts`）、前 10 次调用的 `this`/入参/返回值摘要以及全部钩子前后置异常与线程未捕获异常栈；
-  3. **主页 / AIO / 二级页完整 `DecorView` 视图树与安全区自动快照**：在 Activity 进入、AIO 顶栏绑定（`bindHeader`）、二级页 `QUISecNavBar` 绑定与主页顶栏（`homeTopBar`）刷新后自动抓取完整视图树（每个 View 的类名、资源 ID 十六进制与 entry 名、可见性、局部与屏幕坐标、`padding`/`margin`、`translation`、`clipChildren`/`clipToPadding`/`clipToOutline`、背景 Drawable 类型与颜色值、`EdgeTransparentView` `D/i/m` 与 `SkinnableRecycleView` `f` 状态），并在后台自动落盘；
-  4. **三通道零门槛一键导出（`导出全量日志`）**：在 Qself 设置面板底部新增「导出全量日志」按钮，点击即刻将诊断报告复制到系统剪贴板、写入 `/sdcard/Download/qself-full-log.txt` 与 `/sdcard/Android/data/com.tencent.mobileqq/files/qself-full-log.txt`、分段输出至 `LSPosed` 日志（`QselfDiag`）并拉起系统分享面板。
 

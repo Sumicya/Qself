@@ -223,7 +223,7 @@ private val watched = WeakHashMap<View, WeakReference<AppearanceObserver>>()
 private var preferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
 fun refreshLooks() {
-    if (!on("显示具体未读条数")) restoreBadgeLayouts() else refreshNativeBadges?.invoke()
+    if (!on("未读实数")) restoreBadgeLayouts() else refreshNativeBadges?.invoke()
     refreshAioHeaders()
     refreshSecNavBars()
     refreshSearchBars()
@@ -346,7 +346,7 @@ private fun trim(v: View, inDrawer: Boolean) {
         texts(v).any { t -> DRAWER.any { it in t } }
     val status = v is TextView && (v.text?.toString()?.trim() ?: "") in ONLINE &&
         v.height in 1..(40 * v.dp).toInt() && windowY(v) < 200 * v.dp
-    hide(v, on("标题栏侧栏精简") && (title || row || v.javaClass.simpleName == "WeatherSettingMeItemView") ||
+    hide(v, on("侧栏精简") && (title || row || v.javaClass.simpleName == "WeatherSettingMeItemView") ||
         on("隐藏在线状态") && status)
 }
 
@@ -488,7 +488,7 @@ private fun homeBar(bar: ViewGroup) {
     (bar.getChildAt(0) as? ViewGroup)?.let { strip ->
         for (i in 0 until strip.childCount) {
             val tab = strip.getChildAt(i)
-            hide(tab, on("藏频道动态") && texts(tab).any { "频道" in it || "动态" in it || "小世界" in it })
+            hide(tab, on("隐藏频道动态") && texts(tab).any { "频道" in it || "动态" in it || "小世界" in it })
             if (glass) {
                 floatStates[bar]?.tabs?.getOrPut(tab) { copyLayoutParams(tab.layoutParams) to
                     intArrayOf(tab.paddingLeft, tab.paddingTop, tab.paddingRight, tab.paddingBottom) }
@@ -1053,7 +1053,7 @@ fun exactCount() {
             val view = chain.thisObject as View
             val tab = bottomTab(view) ?: return@run
             val label = text.get(view) as? String
-            if (on("显示具体未读条数") && bottomNumericBadge(label, viewType.getInt(view))) {
+            if (on("未读实数") && bottomNumericBadge(label, viewType.getInt(view))) {
                 val layout = badgeLayouts.getOrPut(view) { BadgeLayout(view) }
                 // 用数字字形的实际高度，不以字号或 dp 猜测；从原始位置计算，重复布局不累积。
                 (paint.get(view) as Paint).getTextBounds("0123456789",0,10,glyphBounds)
@@ -1103,10 +1103,10 @@ fun exactCount() {
     hook(binding, gated = false) { chain ->
         val args = chain.args.toTypedArray()
         val view = args[0] as? View
-        chain.proceed(if (on("显示具体未读条数")) unclampedBadgeArgs(args) else args).also {
+        chain.proceed(if (on("未读实数")) unclampedBadgeArgs(args) else args).also {
             if (view != null) {
                 legacyBadgeCount(args)?.let { counts[view] = it } ?: counts.remove(view)
-                if (on("显示具体未读条数")) expand(view)
+                if (on("未读实数")) expand(view)
             }
         }
     }
@@ -1117,7 +1117,7 @@ fun exactCount() {
             beforeBinding(view)
             chain.proceed().also {
                 counts[view] = (chain.getArg(0) as Number).toLong()
-                if (on("显示具体未读条数")) expand(view)
+                if (on("未读实数")) expand(view)
             }
         }
     }
@@ -1727,7 +1727,7 @@ private fun resetAioHeaders() {
 
 private fun aioHeader() {
     // 真包 AIOUtil#b(a) / #A(a) 在未设置自定义聊天背景时返回 false，驱动 AIOTitleVM->UpdateVasTheme(false) 设 #25272d 顶栏安全区底色与分割线、
-    // 驱动 AIOMsgListVB#K3/#L3 将 M2() paddingTop 设为 238px 硬裁切消息列表；开启玻璃底栏或 TG输入栏时统一返回 true 切入全屏透明叠层模式。
+    // 驱动 AIOMsgListVB#K3/#L3 将 M2() paddingTop 设为 238px 硬裁切消息列表；开启玻璃底栏或输入栏药丸时统一返回 true 切入全屏透明叠层模式。
     runCatching {
         val aioUtil = cls("com.tencent.mobileqq.aio.utils.AIOUtil")
         val aioCtx = cls("com.tencent.aio.api.runtime.a")
@@ -1735,7 +1735,7 @@ private fun aioHeader() {
             aioUtil.declaredMethods.firstOrNull { it.name == mName && it.parameterTypes.size == 1 && it.parameterTypes[0] == aioCtx }?.let { m ->
                 hook(m.apply { isAccessible = true }, gated = false) { chain ->
                     val orig = chain.proceed()
-                    if (on("玻璃底栏") || on("TG输入栏")) true else orig
+                    if (on("玻璃底栏") || on("输入栏药丸")) true else orig
                 }
             }
         }
@@ -1932,7 +1932,7 @@ private fun aioHeader() {
             if (bar.touchDelegate != null) bar.touchDelegate = null
             // 清理或收纳标题栏内动态 inflate 的铭牌/火花/VIP 装饰，保留功能性的听筒图标（0x7f0a1630）。
             for (id in intArrayOf(0x7f0a7836, 0x7f0a7831, 0x7f0a0d74, 0x7f0a0d75)) {
-                bar.findViewById<View>(id)?.let { state.collapseBadge(it, on("标题栏侧栏精简")) }
+                bar.findViewById<View>(id)?.let { state.collapseBadge(it, on("侧栏精简")) }
             }
             val earIcon = bar.findViewById<View>(0x7f0a1630)?.takeIf { it.visibility == View.VISIBLE && it.measuredWidth > 0 }
             val earW = if (earIcon != null) earIcon.measuredWidth + (4 * dp).roundToInt() else 0
@@ -2723,7 +2723,7 @@ private class SearchBarState(val bar: ViewGroup) {
         }
     }
     fun applyStyle() {
-        if (!on("玻璃底栏") && !on("TG输入栏")) { restore(); return }
+        if (!on("玻璃底栏") && !on("输入栏药丸")) { restore(); return }
         bar.background = null
         inputBg?.let {
             if (it.outlineProvider !== shape) it.outlineProvider = shape

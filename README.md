@@ -23,27 +23,27 @@
 - 藏掉「频道」「动态」「小世界」页签
 - 聊天标题栏去掉一起听 / 一起看 / 群游戏那排；侧栏去掉打卡、天气、等级、会员、装扮、钱包一类的入口（数据源和视图两头都拦）
 - 隐藏好友聊天标题栏那行在线状态（在线 / 手机在线 / WiFi在线 / 忙碌 / 隐身…）
-- 统一气泡、统一字体、去头像挂件；开启统一气泡时，全部消息气泡保持四角全圆角（`17dp`，不切直角，与头像圆角滑块解耦），气泡四边内边距严格统一为 `5dp`（归零 `skin.padding.j` `a,b,c,d=0` 与 `skin.padding.h` `j,k,l,n,o=0, m=4dp`，递归清零内层包装视图冗余内边距、四向 `margin` 与 `57dp × 65dp` 最小宽高锁，并关闭 `TextView` 与 `FasterTextView#mIncludePad` 的 `includeFontPadding`）；被回复消息彻底清除 `0x7f0a5c31` 外框与左部竖条，与回复正文融为单一外层玻璃气泡，覆盖 `BaseMixContentComponent#C2`/`s2`、`AIOReplyComponent#C2`/`s2`/`K3`/`L3`、`AIOTextContentComponent#Z1`/`n2`、`TextMsgContent#H` 与 `AIOUnsuportContentComponent#Y1`；已移除“昵称只留名字”，保留 QQ 原昵称装饰。
-- **屏蔽红点引导**：群红点、王者小队、群头衔、游戏中心红点、乐吧引导气泡、资料卡引导、虚拟形象角标一律不亮
-- **去会员等级**：资料卡上 SVIP / VIP / 大会员 / 大会员年费那排图标不画
+- 气泡统一、字体统一、隐藏头像挂件；开启气泡统一时，全部消息气泡保持四角全圆角（`17dp`，不切直角，与头像圆角滑块解耦），气泡四边内边距严格统一为 `5dp`（归零 `skin.padding.j` `a,b,c,d=0` 与 `skin.padding.h` `j,k,l,n,o=0, m=4dp`，递归清零内层包装视图冗余内边距、四向 `margin` 与 `57dp × 65dp` 最小宽高锁，并关闭 `TextView` 与 `FasterTextView#mIncludePad` 的 `includeFontPadding`）；被回复消息彻底清除 `0x7f0a5c31` 外框与左部竖条，与回复正文融为单一外层玻璃气泡，覆盖 `BaseMixContentComponent#C2`/`s2`、`AIOReplyComponent#C2`/`s2`/`K3`/`L3`、`AIOTextContentComponent#Z1`/`n2`、`TextMsgContent#H` 与 `AIOUnsuportContentComponent#Y1`；已移除“昵称只留名字”，保留 QQ 原昵称装饰。
+- **隐藏红点引导**：群红点、王者小队、群头衔、游戏中心红点、乐吧引导气泡、资料卡引导、虚拟形象角标一律不亮
+- **隐藏会员等级**：资料卡上 SVIP / VIP / 大会员 / 大会员年费那排图标不画
 
 聊天
 - 防撤回：私聊、群聊、重连补发的撤回都吞掉，被撤回的那条压成半透明，会话里插一条「xx 尝试撤回一条消息」灰字；本机主动点击「撤回」时直接放行原生撤回流程，不拦截自身撤回。
-- **消息内时间（置于消息容器外部下方以适配全部消息）**：通过 `AIOBubbleMsgItemVB#k1` 与全部内容组件 `d1` 将自定义格式时间（`ExternalStamp`）直接挂载于消息槽容器 `msgContent`（`0x7f0a11b9` `BubbleLayoutCompatPress` 垂直 `LinearLayout`）底部外侧（他人消息左对齐 `START`、自己消息右对齐 `END`），并将同容器兄弟内容根的 `MATCH_PARENT` 宽度转为 `WRAP_CONTENT`（避免 `LinearLayout.measureVertical` 的 `forceUniformWidth` 将图片、表情、转发卡片或短文本水平压窄为时间戳宽度），统一适配文字、图片、文件、引用、混排、语音、表情、卡片、视频、合并转发与不支持消息等全部类型，同时折叠会话顶部 `AIOTimestampComponent` 时间分隔槽。默认 `HH:mm`，在菜单「消息外观」输入自定义格式（内附左对齐格式码说明：`yyyy/yy` 年、`MM` 月、`dd` 日、`E` 星期、`HH` 24时、`hh` 12时、`a` 上下午、`mm` 分、`ss` 秒、`SSS` 毫秒，单引号包裹文字）。时间不会混入正文、复制内容或输入框，也不破坏气泡与卡片内部子 View 树；关闭、复用与热重载均完整还原。各类型实际视觉效果仍待真机验收。
+- **消息时间（置于消息容器外部下方以适配全部消息）**：通过 `AIOBubbleMsgItemVB#k1` 与全部内容组件 `d1` 将自定义格式时间（`ExternalStamp`）直接挂载于消息槽容器 `msgContent`（`0x7f0a11b9` `BubbleLayoutCompatPress` 垂直 `LinearLayout`）底部外侧（他人消息左对齐 `START`、自己消息右对齐 `END`），并将同容器兄弟内容根的 `MATCH_PARENT` 宽度转为 `WRAP_CONTENT`（避免 `LinearLayout.measureVertical` 的 `forceUniformWidth` 将图片、表情、转发卡片或短文本水平压窄为时间戳宽度），统一适配文字、图片、文件、引用、混排、语音、表情、卡片、视频、合并转发与不支持消息等全部类型，同时折叠会话顶部 `AIOTimestampComponent` 时间分隔槽。默认 `HH:mm`，在菜单「消息外观」输入自定义格式（内附左对齐格式码说明：`yyyy/yy` 年、`MM` 月、`dd` 日、`E` 星期、`HH` 24时、`hh` 12时、`a` 上下午、`mm` 分、`ss` 秒、`SSS` 毫秒，单引号包裹文字）。时间不会混入正文、复制内容或输入框，也不破坏气泡与卡片内部子 View 树；关闭、复用与热重载均完整还原。各类型实际视觉效果仍待真机验收。
 - **原生消息菜单纵向列表与设置面板随指高亮**：按 NagramXF `ActionBarPopupWindow` + `ActionBarMenuSubItem` 将 QQ 原生消息长按菜单 `QQCustomMenuExpandableLayout`（`p` / `l` / `H` / `G`）重排为 12dp 圆角玻璃纵向列表（行高 48dp、左右内边距 18dp、上下内边距清零、20dp 图标 + 12dp 间距 + 16sp 完整不截断文案、6dp 圆角按压高亮，隐藏原生暗色 `S: QQBlurViewWrapper` 与直接子级分割线 `View`，保持聊天列表 `T: mSourceView` 可见且 `C = 220dp` 不裁高），并与模块设置面板共用单有效项随指高亮、跨项移动、项外取消且松手不触发动作、展开态纵滑交还 `ScrollView`；「删除」「撤回」「结束进程」统一标记为警示红图文与按压态（待真机手势复验）。
 - **消息显示 At 对象**：点按群消息中的 `@名字` 打开对应资料卡；按元素顺序定位重复名字，保留原链接及正常长按/滑动。UID 无缓存映射时明确提示，`@全体成员` 不当作个人资料卡。
 - **头像圆角（普通聊天与聊天记录同步生效）**：菜单「消息外观」调整 0～50%；0% 为直角，50% 为圆形，默认 20%（仅控制头像，不联动气泡圆角）。同时拦截普通聊天 `RoundRectImageView#draw` 下的 `QQProAvatarDrawable#z`（跳过 `proavatar.j#b` / `proavatar.mask.a#a` 的 360° 圆形 `Path.addArc` 遮罩）、`com.tencent.mobileqq.proavatar.e$a#a`、`com.tencent.qqnt.avatar.meta.b$a#b`、`com.tencent.qqnt.avatar.b$a#i` 与 `BaseImageUtil#getCircleFaceBitmap`，交由 `RoundRectImageView#setCornerRadiusAndMode` 按圆角半径裁剪；切换或拖动滑块时清空 `m` 缓存重刷，关闭还原原半径与模式。
 - 连发合并（他人居左、自己居右含组首 ID、灰字居中、单条顶对齐、连发粘性浮动、长按头像 `@` 微震反馈、气泡圆角与边距滑条）：仅对气泡收发模板（`template.g` / `template.l`）套用行几何，居中灰字提示（`template.m` / `sm1.z`）保持原生居中且撤回变灰字时自动解绑；他人消息居左（头像左距 8dp、气泡左距 6dp、清零 `holder.c` / `nickSlot` / `MainNickNameBlock` / `contentSlot` 水平内边距使全类型组件共线于 `51dp`）、自己消息保持原生居右与右侧头像并在每组连发首条右对齐显示头衔+昵称 ID（续条折叠，全类型共线于 `right - 54dp`）；`RunLayout.apply` 在续条绑定时即刻隐藏重复原生头像，同发送人同日连续消息不再受 5 分钟断组限制，长按连发浮绘头像或原生头像触发 `@` 时附带 `HapticFeedbackConstants.LONG_PRESS` 轻触感反馈（`AIOAvatarContentComponent#w1`），且面板支持「气泡圆角」`0~32dp`（默认 `17dp`）与「气泡边距」`0~16dp`（默认 `5dp`）滑条实时调节。**尚无本轮设备复验，本次实现与离线检查不等于效果验收。**
 - **双击消息快速回应（`双击回应`）**：拦截 `TextPreviewApiImpl#openTextPreview` 与 `TextPreviewApiNtImpl#openTextPreview`，双击消息时通过 `AIOEmoReplyApiImpl#setEmojiLikes` 直接给该条消息贴上快捷回应表情（👍 `76`），不再弹出全屏文字预览页。
-- **语音倍速播放记忆与进度条直拖（`语音倍速记忆`）**：挂钩 `AIOPttAudioPlayerManager`（`h:F`、`w`、`E`、`C8`）跨条记忆用户上次选择的语音播放倍速（不被单条播放完成后的 `C8` 重置回 `1.0x`），并在 `PttAudioWaveView` 构造时开启 `setCanSupportSlide(true)` 支持直接横向拖动语音波形进度条。
+- **语音倍速播放记忆与进度条直拖（`语音倍速`）**：挂钩 `AIOPttAudioPlayerManager`（`h:F`、`w`、`E`、`C8`）跨条记忆用户上次选择的语音播放倍速（不被单条播放完成后的 `C8` 重置回 `1.0x`），并在 `PttAudioWaveView` 构造时开启 `setCanSupportSlide(true)` 支持直接横向拖动语音波形进度条。
 - **回复不@**：回复消息时不再往输入框插「@昵称 」
 - **转发不限人数**：修正私有方法反射访问，转发选人不再卡 9 个；调用 QQ 原生搜索勾选同步及顶部计数刷新。仍需设备验证实际发送端限制。
-- **左滑回复不设限**：卡片 (Ark) 消息也能左滑回复
+- **左滑回复**：卡片 (Ark) 消息也能左滑回复
 - 转发页一直显示好友 / 群 / 多选入口
 
 以上三条加防撤回那批都是从上游 [QAuxiliary](https://github.com/cinit/QAuxiliary) 同步过来的思路，落点重新按 9.2.10 的真 dex 核过。
 - 「+」面板只留正经附件，一起派对、礼物、直播间之类剔掉
-- 屏蔽轻互动特效与表情雨
+- 停止轻互动特效与表情雨
 
 自由化
 - 网页一律走系统 WebView，不加载 X5

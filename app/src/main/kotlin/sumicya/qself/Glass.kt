@@ -406,7 +406,7 @@ private fun wash(c: Int, accent: Int?): Int {
 
 /** NagramX 那套 Monet：系统动态色跟壁纸走。开关关了返回 null，调用方用写死的中性色。 */
 fun monet(night: Boolean, alpha: Int): Int? =
-    if (!on("Monet取色")) null else runCatching {
+    if (!on("壁纸取色")) null else runCatching {
         val id = if (night) android.R.color.system_accent1_200 else android.R.color.system_accent1_600
         Resources.getSystem().getColor(id, null) and 0x00FFFFFF or (alpha shl 24)
     }.getOrNull()

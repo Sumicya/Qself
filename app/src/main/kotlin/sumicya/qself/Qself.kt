@@ -19,38 +19,67 @@ class Feature(val name: String, val main: Boolean, val desc: String, val install
 
 val features = listOf(
     Feature("玻璃底栏", true, "底栏浮成一颗玻璃胶囊", {}),
-    Feature("Monet取色", true, "玻璃的颜色跟壁纸走", {}),
-    Feature("藏频道动态", true, "底栏藏掉频道/动态/小世界", {}),
-    Feature("TG输入栏", true, "原生输入框与发送按钮独立药丸化，保留全部按钮", ::inputLayout),
-    Feature("标题栏侧栏精简", true, "藏一起听/一起看和侧栏会员那排", ::drawerMenu),
-    Feature("统一气泡", true, "充值气泡归零，按默认画", ::plainBubble),
-    Feature("统一字体", true, "魔法字体归零", ::plainFont),
-    Feature("去头像挂件", true, "消息头像不画挂件", ::noPendant),
+    Feature("壁纸取色", true, "玻璃的颜色跟壁纸走", {}),
+    Feature("隐藏频道动态", true, "底栏藏掉频道/动态/小世界", {}),
+    Feature("输入栏药丸", true, "原生输入框与发送按钮独立药丸化，保留全部按钮", ::inputLayout),
+    Feature("侧栏精简", true, "藏一起听/一起看和侧栏会员那排", ::drawerMenu),
+    Feature("气泡统一", true, "充值气泡归零，按默认画", ::plainBubble),
+    Feature("字体统一", true, "魔法字体归零", ::plainFont),
+    Feature("隐藏头像挂件", true, "消息头像不画挂件", ::noPendant),
     Feature("防撤回", true, "撤回的消息留下，插灰字", ::antiRecall),
-    Feature("消息内时间", true, "消息容器外下方绘制自定义格式时间，适配全部消息类型", ::messageTimestamps),
+    Feature("消息时间", true, "消息容器外下方绘制自定义格式时间，适配全部消息类型", ::messageTimestamps),
     Feature("头像圆角", true, "聊天头像圆角比例可调，关闭恢复原样", ::customAvatarCorners),
-    Feature("消息显示At对象", true, "点按群消息中的 @名字 打开对应资料卡", ::clickableMentions),
+    Feature("At可点", true, "点按群消息中的 @名字 打开对应资料卡", ::clickableMentions),
     Feature("连发合并", true, "他人左对齐、自己右对齐、灰字居中；单条顶对齐，连发头像随组浮动并支持长按@微震，全圆角气泡", ::groupRuns),
     Feature("双击回应", true, "双击消息直接贴上快捷回应表情，不弹全屏文字预览", ::doubleTapReaction),
-    Feature("语音倍速记忆", true, "记住语音播放倍速且不被单条播完重置，波形条支持直接拖动", ::pttSpeedMemory),
+    Feature("语音倍速", true, "记住语音播放倍速且不被单条播完重置，波形条支持直接拖动", ::pttSpeedMemory),
     Feature("回复不@", true, "回复不往输入框插 @昵称", ::replyNoAt),
     Feature("转发多选", true, "转发页常显多选入口", ::multiForward),
     Feature("转发不限人数", true, "转发选人不再卡 9 个", ::noForwardLimit),
-    Feature("左滑回复不设限", true, "卡片消息也能左滑回复", ::replyAnyMsg),
+    Feature("左滑回复", true, "卡片消息也能左滑回复", ::replyAnyMsg),
     Feature("隐藏在线状态", true, "昵称下那行在线状态藏掉", {}),
-    Feature("显示具体未读条数", true, "角标不再停在 99+", ::exactCount),
+    Feature("未读实数", true, "角标不再停在 99+", ::exactCount),
     Feature("+面板精简", true, "+ 面板只留正经附件", ::plusPanel),
-    Feature("屏蔽红点引导", true, "红点和引导气泡不亮", ::noRedDot),
-    Feature("去会员等级", true, "资料卡不画 SVIP/VIP 图标", ::plainCard),
-    Feature("屏蔽轻互动", true, "轻互动特效不播", ::noLightInteraction),
-    Feature("屏蔽表情雨", true, "表情雨不下", ::noEmojiRain),
+    Feature("隐藏红点引导", true, "红点和引导气泡不亮", ::noRedDot),
+    Feature("隐藏会员等级", true, "资料卡不画 SVIP/VIP 图标", ::plainCard),
+    Feature("停止轻互动", true, "轻互动特效不播", ::noLightInteraction),
+    Feature("停止表情雨", true, "表情雨不下", ::noEmojiRain),
     Feature("系统WebView", false, "网页走系统 WebView，不加载 X5", ::systemWebView),
-    Feature("屏蔽统计上报", false, "灯塔统计空转", ::noTelemetry),
-    Feature("屏蔽崩溃上报", false, "不初始化 Bugly", ::noCrashReport),
+    Feature("停止统计上报", false, "灯塔统计空转", ::noTelemetry),
+    Feature("停止崩溃上报", false, "不初始化 Bugly", ::noCrashReport),
     Feature("全量日志", false, "录制 QQ 全量 QLog、钩子轨迹与界面树快照，支持一键导出/复制", ::fullQqLogger),
 )
 
 val featureDefaults = features.associate { it.name to it.default }
+
+/** 菜单与日志的分组：从外到内排（底栏 → 输入 → 消息 → 账号 → 杂项 → 系统），名字一律说清「开了会怎样」。 */
+val featureGroups = listOf(
+    "底栏与导航" to listOf("玻璃底栏", "壁纸取色", "隐藏频道动态", "未读实数", "隐藏红点引导"),
+    "输入与面板" to listOf("输入栏药丸", "+面板精简", "侧栏精简"),
+    "消息" to listOf("连发合并", "消息时间", "气泡统一", "字体统一", "头像圆角", "隐藏头像挂件", "防撤回",
+        "At可点", "双击回应", "语音倍速", "回复不@", "左滑回复"),
+    "转发与账号" to listOf("转发多选", "转发不限人数", "隐藏在线状态", "隐藏会员等级"),
+    "特效与上报" to listOf("停止轻互动", "停止表情雨", "停止统计上报", "停止崩溃上报"),
+    "系统与诊断" to listOf("系统WebView", "全量日志"),
+)
+
+/** 按分组顺序摊平；漏进分组表的开关归到「其他」，绝不在菜单里凭空消失。 */
+fun featuresByGroup(): List<Pair<String, List<Feature>>> {
+    val byName = features.associateBy { it.name }
+    val grouped = featureGroups.map { (g, names) -> g to names.mapNotNull { byName[it] } }
+    val used = featureGroups.flatMap { it.second }.toSet()
+    val rest = features.filter { it.name !in used }
+    return if (rest.isEmpty()) grouped else grouped + ("其他" to rest)
+}
+
+/** 分组表与功能表对不上的地方，安装时直接报出来，不靠肉眼核对。 */
+fun featureGroupGaps(): List<String> {
+    val all = features.map { it.name }
+    val grouped = featureGroups.flatMap { it.second }
+    return (all - grouped.toSet()).map { "开关没进任何分组：$it" } +
+        (grouped.toSet() - all.toSet()).map { "分组里有不存在的开关：$it" } +
+        grouped.groupBy { it }.filter { it.value.size > 1 }.keys.map { "开关被分进多个组：$it" }
+}
 
 /** libxposed 入口。功能默认开启；配置入口在 QQ 主页独立设置短胶囊中，实际生效受对象生命周期限制。 */
 class Qself : XposedModule() {
@@ -110,6 +139,7 @@ class Qself : XposedModule() {
         frameEventSink = ::recordQselfEvent
         runCatching { FrameMeter.install() }.onFailure { log("帧率采样安装失败", it) }
         log(report.toString())
+        featureGroupGaps().forEach { log(it) }
     }
 }
 
