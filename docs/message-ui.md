@@ -15,12 +15,6 @@
 | 头像圆角 | 普通聊天（`RoundRectImageView#draw` 下拦截 `QQProAvatarDrawable#z` 跳过 `proavatar.j#b` / `proavatar.mask.a#a` 的 360° 圆形 `Path.addArc` 遮罩，结合 `proavatar.e$a#a`、`meta.b$a#b`、`b$a#i` 与 `BaseImageUtil#getCircleFaceBitmap`）与聊天记录统一走 `RoundRectImageView`，0～50%，默认 20% | 0% 为直角，50% 为圆形（仅作用于头像，不联动气泡）；关闭清空 `m` 缓存重刷并还原原值 |
 | 头像定位 | 单条独立消息保持原生顶对齐不居中（`runAvatarBounds` 在 `merged == false` 时返回 `null`，避免异步高度变化跳动与向下侵入）；仅连发多条消息（`>= 2`）按组上下边界 `[groupTop + h/2, max(groupTop + h/2, groupBottom - h/2)]` 粘性滚动合并 | 不代表全部真实列表回收/滚动问题已经验收 |
 
-## 需求对齐渲染预览图
-
-![顶栏安全区真机日志定位与「顶栏安全区」滑条实装预览](preview-safe-top-slider-and-aio-diagnosis.png)
-
-![全量日志导出合并去重与导出前清理预览](preview-log-merge-and-cleanup.png)
-
 设置入口：菜单内部「消息外观」。自定义格式单行输入，不再加字符长度硬限制；非法格式不写入偏好。面板提供头像圆角（`0~50%`）、玻璃模糊（`0~15dp`）、气泡圆角（`0~32dp`）、气泡边距（`0~16dp`）、顶栏安全区（`0~100%`，默认 `0%` 完全去掉）、顶栏上下微调（`-24~+48dp`）共 6 项滑条，「恢复默认」同步还原全部参数。顶栏安全区滑条驱动 `safeTopPercent()` / `safeTopShiftDp()` → `reducedSafeTop()`，AIO 顶栏内边距、消息列表顶部内边距、主页 `HomeSafeArea` 三件套与二级页 `QUISecNavBar` 全部按同一 `delta` 上移。消息内时间、At 对象、头像圆角、双击回应、语音倍速记忆、页面过渡动效分别有开关；头像连发浮绘与长按 `@` 微震由「连发合并」控制。
 
 ## 上游核对与取舍
