@@ -103,6 +103,8 @@ private class MsgListUnderScroll(
     private val origRecyclerTop = recycler.paddingTop
     private val origRecyclerBottom = recycler.paddingBottom
     private var watching = false
+    /** 是否已经接管过这块消息区：没接管过就不要在 restore 里改回别的几何。 */
+    private var active = false
     /** 为「从 y=0 铺下来」自己加过的位移，关开关时按这个数还回去。 */
     private var shiftedBy = 0f
 
