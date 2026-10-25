@@ -14,6 +14,36 @@ import java.util.WeakHashMap
 private val inputs = WeakHashMap<EditText, WeakReference<NativeInput>>()
 private val inputDecorations = WeakHashMap<View, InputDecoration>()
 private val msgListUnderScrolls = WeakHashMap<ViewGroup, MsgListUnderScroll>()
+
+/**
+ * 底部浮层（输入药丸 + 发送按钮 + 快捷栏）在窗口里占掉的高度（px，从浮层最上沿算到窗口底）。
+ *
+ * 真包把输入区画在消息列表之上：安全区实色背景一去，消息列表底部就再没有任何让位，最后一条消息
+ * 的卡片按钮和它下面的时间会直接压到输入栏、快捷栏底下，屏幕最下面那一行还被窗口边界切掉。
+ * 这里量的是浮层自身高度，消息列表的下内边距取它和原生值的较大者。
+ */
+@Volatile
+private var aioBottomOverlayPx = 0
+
+/** 浮层最上沿到窗口底的距离；[root] 为窗口根视图（消息列表与输入区共用的那棵视图树）。 */
+private fun bottomOverlayPx(root: View, anchor: View, dp: Float): Int {
+    if (root.height <= 0 || dp <= 0f) return 0
+    fun topOf(v: View): Int {
+        val a = IntArray(2); val b = IntArray(2)
+        v.getLocationInWindow(a); root.getLocationInWindow(b)
+        return a[1] - b[1]
+    }
+    val limit = root.height * 2 / 5
+    var top = topOf(anchor)
+    var cur: View? = anchor.parent as? View
+    var guard = 0
+    while (cur != null && cur !== root && guard++ < 6) {
+        val h = cur.height
+        if (h in 1..limit) top = minOf(top, topOf(cur))
+        cur = cur.parent as? View
+    }
+    return (root.height - top + (6 * dp).toInt()).coerceIn(0, limit)
+}
 private val panelGlasses = WeakHashMap<View, PanelGlassState>()
 
 private class PanelGlassState(val root: View) : ViewTreeObserver.OnPreDrawListener, View.OnAttachStateChangeListener {
@@ -72,7 +102,38 @@ private class MsgListUnderScroll(
     private val origRecyclerClipChildren = recycler.clipChildren
     private val origRecyclerTop = recycler.paddingTop
     private val origRecyclerBottom = recycler.paddingBottom
+    private val origGroupMargins = (group.layoutParams as? ViewGroup.MarginLayoutParams)
+        ?.let { intArrayOf(it.topMargin, it.bottomMargin) }
+    private var bleedTop = -1
+    private var bleedBottom = -1
     private var active = false
+
+    /**
+     * 让消息区铺满整个窗口：上边负外边距 = 顶栏高度、下边负外边距 = 输入浮层高度，
+     * 顶部/底部内边距同步补上同样的像素。静止时最后一条消息的位置不变，
+     * 但滚动时消息会从玻璃胶囊和输入药丸底下穿过，顶栏与输入区不再各自压一条空白背景带。
+     */
+    private fun applyBleed(top: Int, bottom: Int) {
+        if (top == bleedTop && bottom == bleedBottom) return
+        bleedTop = top
+        bleedBottom = bottom
+        val lp = group.layoutParams as? ViewGroup.MarginLayoutParams
+        if (lp != null && origGroupMargins != null) {
+            lp.topMargin = origGroupMargins[0] - top
+            lp.bottomMargin = origGroupMargins[1] - bottom
+            group.layoutParams = lp
+            // 祖先一旦裁子视图，上移/下延的这段就被父容器剪掉，等于没铺。
+            var parent: ViewGroup? = group.parent as? ViewGroup
+            var guard = 0
+            while (parent != null && guard++ < 5) {
+                if (parent.clipChildren) parent.clipChildren = false
+                if (parent.clipToPadding) parent.clipToPadding = false
+                parent = parent.parent as? ViewGroup
+            }
+        } else {
+            group.translationY = -top.toFloat()
+        }
+    }
     fun sync() {
         val enabled = on("输入栏药丸") || on("玻璃底栏")
         if (!enabled) {
@@ -115,10 +176,18 @@ private class MsgListUnderScroll(
         if (recycler.background != null) recycler.background = null
         val topReduction = (14 * group.dp).toInt()
         // 顶栏安全区被去掉多少，消息列表顶部内边距就跟着减多少（真包 238 = 141 状态栏 + 97 标题栏）。
-        val targetTop = if (on("玻璃底栏")) {
+        val baseTop = if (on("玻璃底栏")) {
             (savedGroupTop - topReduction - aioSafeTopRemoved()).coerceAtLeast(0)
         } else origRecyclerTop
-        val targetBottom = if (on("输入栏药丸")) savedGroupBottom else origRecyclerBottom
+        // 底部浮层（输入药丸 + 快捷栏）压在最上面，列表底部必须让开它的高度，否则最后一行按钮与时间被吞掉。
+        val overlay = if (on("输入栏药丸") || on("玻璃底栏")) aioBottomOverlayPx else 0
+        val baseBottom = if (on("输入栏药丸")) maxOf(savedGroupBottom, overlay) else origRecyclerBottom
+        // 布局上移/下延多少，内边距就补多少，静止位置保持不变。
+        val bleedTopNow = if (on("玻璃底栏")) aioHeaderBand() else 0
+        val bleedBottomNow = if (on("输入栏药丸")) aioBottomOverlayPx else 0
+        applyBleed(bleedTopNow, bleedBottomNow)
+        val targetTop = maxOf(baseTop, bleedTopNow)
+        val targetBottom = maxOf(baseBottom, bleedBottomNow)
         lastAppliedTop = targetTop
         lastAppliedBottom = targetBottom
         if (recycler.paddingTop != targetTop || recycler.paddingBottom != targetBottom) {
@@ -130,6 +199,18 @@ private class MsgListUnderScroll(
         active = false
         lastAppliedTop = -1
         lastAppliedBottom = -1
+        if (bleedTop != 0 || bleedBottom != 0) {
+            val lp = group.layoutParams as? ViewGroup.MarginLayoutParams
+            if (lp != null && origGroupMargins != null) {
+                lp.topMargin = origGroupMargins[0]
+                lp.bottomMargin = origGroupMargins[1]
+                group.layoutParams = lp
+            } else {
+                group.translationY = 0f
+            }
+            bleedTop = -1
+            bleedBottom = -1
+        }
         group.clipToPadding = origGroupClipToPad
         group.clipChildren = origGroupClipChildren
         group.setPadding(group.paddingLeft, savedGroupTop, group.paddingRight, savedGroupBottom)
@@ -815,10 +896,24 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
         }
         if (!applied) { applied = true; onGlobalLayout() }
     }
+    /** 量一次底部浮层高度并让消息列表让位；高度没变就不碰列表，避免每帧触发重排。 */
+    private fun syncBottomOverlay(edit: EditText) {
+        val rootView = edit.rootView ?: return
+        val ime = runCatching {
+            edit.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.ime())?.bottom ?: 0
+        }.getOrDefault(0)
+        // 键盘弹出时列表跟着窗口一起缩，再补内边距会多留一大段空白。
+        val need = if (ime > 0) 0 else bottomOverlayPx(rootView, edit, edit.dp)
+        if (need == aioBottomOverlayPx) return
+        aioBottomOverlayPx = need
+        recordQselfEvent("输入浮层高度 ${need}px，消息列表底部让位")
+        msgListUnderScrolls.values.toList().forEach { it.sync() }
+    }
     override fun onGlobalLayout() {
         if (!on("输入栏药丸")) return
         edit.get()?.let {
             repositionSafeArea(it)
+            syncBottomOverlay(it)
             val focus = it.hasFocus()
             if (focused != focus) sync()
         }
@@ -838,6 +933,10 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
     private fun restore() {
         if (!applied) return
         focusAnimator?.cancel(); focusAnimator = null
+        if (aioBottomOverlayPx != 0) {
+            aioBottomOverlayPx = 0
+            msgListUnderScrolls.values.toList().forEach { it.sync() }
+        }
         edit.get()?.let {
             it.background = background; it.outlineProvider = outline; it.clipToOutline = clip
             it.setPadding(origPadding[0], origPadding[1], origPadding[2], origPadding[3])

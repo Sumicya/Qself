@@ -1928,9 +1928,14 @@ private fun aioHeader() {
         chain.proceed().also {
             val bar = chain.thisObject as? ViewGroup ?: return@also
             val state = aioHeaders[bar] ?: return@also
-            if (!on("玻璃底栏")) return@also
+            if (!on("玻璃底栏")) { aioHeaderBandPx = 0; return@also }
             val w = bar.width; val h = bar.height
             if (w <= 0 || h <= 0) return@also
+            if (aioHeaderBandPx != h) {
+                aioHeaderBandPx = h
+                recordQselfEvent("AIO 顶栏高度 ${h}px，消息区上移同样高度从胶囊下穿过")
+                refreshInputLayout()
+            }
             // 顶栏真正完成布局后抓一次带真实尺寸的 AIO 视图树（此前只在预加载阶段抓到 0×0 的空树）。
             aioLayoutSnapshot(bar)
             val dp = bar.dp
@@ -1945,8 +1950,6 @@ private fun aioHeader() {
             val unreadW = unread?.measuredWidth ?: 0
             val rightViews = listOfNotNull(state.right3(), state.right2, state.right1).filter { it.visibility == View.VISIBLE && it.measuredWidth > 0 }
             val tail = state.titleTailTv?.takeIf { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() }
-            val titleTextW = ((state.titleTv?.paint?.measureText(state.titleTv.text?.toString().orEmpty())?.toInt()) ?: (state.titleTv?.measuredWidth ?: 0)) +
-                (if (tail != null) tail.measuredWidth + (2 * dp).roundToInt() else 0) + earW
             val flipper = state.centerFlipper()?.takeIf { it.visibility == View.VISIBLE }
             val sub1 = state.centerSub1()
             val sub2 = state.centerSub2()
@@ -1960,14 +1963,29 @@ private fun aioHeader() {
                 state.avatar, state.leftBtn, state.unreadBadge, state.titleTv, state.titleTailTv,
                 earIcon, state.subIcon, flipper, sub1, sub2, state.right1, state.right2, state.right3(), multiRoot
             )
+            // 真包的群名不一定落在 sm1.u#o（uTitle）里：把「未知子视图」一律 GONE，会把群名连同装饰一起藏掉，
+            // 顶栏就只剩头像和那串未读数。这里只收无文字、不可点的装饰；带文字的 TextView 留下来当标题候选。
+            val extraTexts = ArrayList<TextView>()
             if (multiRoot?.visibility != View.VISIBLE) {
                 for (i in 0 until bar.childCount) {
                     val ch = bar.getChildAt(i)
-                    if (ch !in knownChildren && !knownChildren.any { k -> (k as? ViewGroup)?.indexOfChild(ch) ?: -1 >= 0 }) {
-                        state.collapseBadge(ch, true)
+                    if (ch in knownChildren || knownChildren.any { k -> ((k as? ViewGroup)?.indexOfChild(ch) ?: -1) >= 0 }) continue
+                    val direct = ch as? TextView
+                    val nested = (ch as? ViewGroup)?.let { g ->
+                        (0 until g.childCount).map(g::getChildAt).filterIsInstance<TextView>()
+                            .firstOrNull { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() }
                     }
+                    val text = direct?.takeIf { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() } ?: nested
+                    if (text != null) extraTexts.add(text) else state.collapseBadge(ch, true)
                 }
             }
+            val titleEmpty = state.titleTv?.text.isNullOrEmpty()
+            val nameTv = if (titleEmpty) extraTexts.firstOrNull() else state.titleTv
+            val extraTitleW = if (nameTv != null && nameTv !== state.titleTv) {
+                ((nameTv.paint?.measureText(nameTv.text?.toString().orEmpty())?.toInt()) ?: nameTv.measuredWidth).coerceAtLeast(0)
+            } else 0
+            val titleTextW = (if (titleEmpty) extraTitleW else ((state.titleTv?.paint?.measureText(state.titleTv.text?.toString().orEmpty())?.toInt()) ?: (state.titleTv?.measuredWidth ?: 0))) +
+                (if (tail != null) tail.measuredWidth + (2 * dp).roundToInt() else 0) + earW
             val geom = nagramHeaderLayout(w, h, dp, unreadW, rightViews.size, titleTextW, subW, hasAvatar = true)
             state.lastGeom = geom
             state.lastRightViews = rightViews
@@ -2023,6 +2041,21 @@ private fun aioHeader() {
                     val ey = ty + (th - eh) / 2
                     val gap = (4 * dp).roundToInt()
                     ear.layout(curRight + gap, ey, curRight + gap + ew, ey + eh)
+                }
+            }
+            // 群名落在未知子视图里时，用同一套 42dp 头像 + 左对齐标题的位置把它摆正，别留一条空顶栏。
+            if (titleEmpty) {
+                nameTv?.let { tv ->
+                    val tw = minOf(extraTitleW + (2 * dp).roundToInt(), maxTitleW).coerceAtLeast((8 * dp).roundToInt())
+                    val th = tv.measuredHeight.coerceAtLeast((22 * dp).roundToInt())
+                    tv.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    tv.measure(
+                        View.MeasureSpec.makeMeasureSpec(tw, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(th, View.MeasureSpec.EXACTLY),
+                    )
+                    val ty = if (hasSub) geom.centerPill.top + (4 * dp).roundToInt() else geom.centerPill.centerY() - th / 2
+                    tv.layout(geom.textLeft, ty, geom.textLeft + tw, ty + th)
+                    if (night() && tv.currentTextColor != 0xFFF5F7FA.toInt()) tv.setTextColor(0xFFF5F7FA.toInt())
                 }
             }
             if (hasSub) {
@@ -2481,6 +2514,16 @@ private val homeTopAppliedRootBgs = WeakHashMap<ViewGroup, android.graphics.draw
 private var aioSafeTopRemovedPx = 0
 
 internal fun aioSafeTopRemoved(): Int = aioSafeTopRemovedPx
+
+/**
+ * AIO 顶栏整条的高度（px，从窗口上沿到顶栏下沿）。顶栏本身透明、三颗玻璃胶囊浮在上面，
+ * 消息区要让这条高度「让出来又铺进去」：布局上移同样像素、内边距补同样像素，
+ * 于是静止时位置不变，滚动时消息从胶囊底下穿过，顶栏不再是一条空白背景带。
+ */
+@Volatile
+private var aioHeaderBandPx = 0
+
+internal fun aioHeaderBand(): Int = aioHeaderBandPx
 
 /** AIO 顶栏完成布局后 3 秒内只抓一次带真实尺寸的视图树，避免每帧都 dump。 */
 private var aioSnapshotAt = 0L
