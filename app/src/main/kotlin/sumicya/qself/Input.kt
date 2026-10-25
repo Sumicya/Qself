@@ -102,38 +102,16 @@ private class MsgListUnderScroll(
     private val origRecyclerClipChildren = recycler.clipChildren
     private val origRecyclerTop = recycler.paddingTop
     private val origRecyclerBottom = recycler.paddingBottom
-    private val origGroupMargins = (group.layoutParams as? ViewGroup.MarginLayoutParams)
-        ?.let { intArrayOf(it.topMargin, it.bottomMargin) }
-    private var bleedTop = -1
-    private var bleedBottom = -1
-    private var active = false
+    private var watching = false
+    /** 为「从 y=0 铺下来」自己加过的位移，关开关时按这个数还回去。 */
+    private var shiftedBy = 0f
 
-    /**
-     * 让消息区铺满整个窗口：上边负外边距 = 顶栏高度、下边负外边距 = 输入浮层高度，
-     * 顶部/底部内边距同步补上同样的像素。静止时最后一条消息的位置不变，
-     * 但滚动时消息会从玻璃胶囊和输入药丸底下穿过，顶栏与输入区不再各自压一条空白背景带。
-     */
-    private fun applyBleed(top: Int, bottom: Int) {
-        if (top == bleedTop && bottom == bleedBottom) return
-        bleedTop = top
-        bleedBottom = bottom
-        val lp = group.layoutParams as? ViewGroup.MarginLayoutParams
-        if (lp != null && origGroupMargins != null) {
-            lp.topMargin = origGroupMargins[0] - top
-            lp.bottomMargin = origGroupMargins[1] - bottom
-            group.layoutParams = lp
-            // 祖先一旦裁子视图，上移/下延的这段就被父容器剪掉，等于没铺。
-            var parent: ViewGroup? = group.parent as? ViewGroup
-            var guard = 0
-            while (parent != null && guard++ < 5) {
-                if (parent.clipChildren) parent.clipChildren = false
-                if (parent.clipToPadding) parent.clipToPadding = false
-                parent = parent.parent as? ViewGroup
-            }
-        } else {
-            group.translationY = -top.toFloat()
-        }
+    /** 顶栏透明：消息区从窗口最上沿铺下来，滚动时从玻璃胶囊底下穿过；内边距取顶栏真实底边。 */
+    private val preDraw = ViewTreeObserver.OnPreDrawListener {
+        if (on("玻璃底栏") || on("输入栏药丸")) syncGeometry()
+        true
     }
+
     fun sync() {
         val enabled = on("输入栏药丸") || on("玻璃底栏")
         if (!enabled) {
@@ -174,42 +152,69 @@ private class MsgListUnderScroll(
         if (recycler.clipToPadding) recycler.clipToPadding = false
         if (recycler.clipChildren) recycler.clipChildren = false
         if (recycler.background != null) recycler.background = null
-        val topReduction = (14 * group.dp).toInt()
-        // 顶栏安全区被去掉多少，消息列表顶部内边距就跟着减多少（真包 238 = 141 状态栏 + 97 标题栏）。
-        val baseTop = if (on("玻璃底栏")) {
-            (savedGroupTop - topReduction - aioSafeTopRemoved()).coerceAtLeast(0)
+        watch(true)
+        syncGeometry()
+    }
+
+    /**
+     * 消息区几何：
+     *
+     * - 顶栏透明、三颗胶囊浮着，消息应该从窗口最上沿铺下来（滚动时从胶囊底下穿过）。
+     *   真包里 QQ 只按标题栏高度把列表上移一次（`AIOMsgListGroup trans=-99`）+ 同样的 `paddingTop`，
+     *   状态栏那 141px 收掉后容器高度不一定跟着缩，这里按实际屏幕位置兜底对到 y=0：
+     *   先量「消息区顶部离窗口上沿还有多少」，再把这差值减掉。
+     * - 顶部内边距直接取标题栏底边（日志实测 141+99 → 240；收起状态栏后 99），
+     *   不再用「原内边距 - 去掉的安全区」这种容易和 QQ 自己的重排叠在一起的账。
+     * - 底部内边距按消息区实际底边到输入浮层顶端的距离算，最后一行按钮和时间不会被输入栏吞掉。
+     */
+    private fun syncGeometry() {
+        if (recycler.height <= 0) return
+        val rootView = group.rootView ?: return
+        val at = IntArray(2)
+        if (on("玻璃底栏") && aioHeaderBottom() > 0) {
+            group.getLocationInWindow(at)
+            if (at[1] != 0) {
+                group.translationY -= at[1].toFloat()
+                shiftedBy += at[1].toFloat()
+                group.getLocationInWindow(at)
+            }
+        } else {
+            at[1] = group.top
+        }
+        val groupTop = at[1]
+        val groupBottom = groupTop + group.height
+        val headerBottom = aioHeaderBottom()
+        val targetTop = if (on("玻璃底栏") && headerBottom > 0) {
+            (headerBottom - groupTop).coerceAtLeast(0)
         } else origRecyclerTop
-        // 底部浮层（输入药丸 + 快捷栏）压在最上面，列表底部必须让开它的高度，否则最后一行按钮与时间被吞掉。
-        val overlay = if (on("输入栏药丸") || on("玻璃底栏")) aioBottomOverlayPx else 0
-        val baseBottom = if (on("输入栏药丸")) maxOf(savedGroupBottom, overlay) else origRecyclerBottom
-        // 布局上移/下延多少，内边距就补多少，静止位置保持不变。
-        val bleedTopNow = if (on("玻璃底栏")) aioHeaderBand() else 0
-        val bleedBottomNow = if (on("输入栏药丸")) aioBottomOverlayPx else 0
-        applyBleed(bleedTopNow, bleedBottomNow)
-        val targetTop = maxOf(baseTop, bleedTopNow)
-        val targetBottom = maxOf(baseBottom, bleedBottomNow)
+        val targetBottom = if (on("输入栏药丸") || on("玻璃底栏")) {
+            // 输入浮层占掉的那段里，减去消息区自身已经盖住的部分，剩下的才是要留的内边距。
+            val covered = (rootView.height - groupBottom).coerceAtLeast(0)
+            maxOf(origRecyclerBottom, aioBottomOverlayPx - covered).coerceAtLeast(0)
+        } else origRecyclerBottom
         lastAppliedTop = targetTop
         lastAppliedBottom = targetBottom
         if (recycler.paddingTop != targetTop || recycler.paddingBottom != targetBottom) {
             recycler.setPadding(recycler.paddingLeft, targetTop, recycler.paddingRight, targetBottom)
         }
     }
+
+    private fun watch(start: Boolean) {
+        if (start == watching) return
+        val vto = group.viewTreeObserver
+        if (!vto.isAlive) return
+        if (start) vto.addOnPreDrawListener(preDraw) else vto.removeOnPreDrawListener(preDraw)
+        watching = start
+    }
     fun restore() {
         if (!active) return
         active = false
         lastAppliedTop = -1
         lastAppliedBottom = -1
-        if (bleedTop != 0 || bleedBottom != 0) {
-            val lp = group.layoutParams as? ViewGroup.MarginLayoutParams
-            if (lp != null && origGroupMargins != null) {
-                lp.topMargin = origGroupMargins[0]
-                lp.bottomMargin = origGroupMargins[1]
-                group.layoutParams = lp
-            } else {
-                group.translationY = 0f
-            }
-            bleedTop = -1
-            bleedBottom = -1
+        watch(false)
+        if (shiftedBy != 0f) {
+            group.translationY -= shiftedBy
+            shiftedBy = 0f
         }
         group.clipToPadding = origGroupClipToPad
         group.clipChildren = origGroupClipChildren

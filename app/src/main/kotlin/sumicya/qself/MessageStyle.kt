@@ -34,7 +34,7 @@ internal const val TIME_FORMAT_GUIDE =
     "格式码（左对齐显示）：yyyy/yy 年 · MM/M 月 · dd/d 日 · E 星期 · HH/H 0-23时 · kk/k 1-24时 · hh/h 1-12时 · KK/K 0-11时 · a 上下午 · mm/m 分 · ss/s 秒 · SSS/S 毫秒；文字用单引号包裹"
 
 internal const val SAFE_TOP_GUIDE =
-    "顶栏安全区：0% 完全去掉（顶栏与消息顶到窗口最上沿，本机状态栏 141px 预留但不绘制），100% 保持 QQ 原样；下面的「顶栏上下微调」在百分比之外再按 dp 上移（负）或下移（正），用于状态栏确实可见的机型把顶栏压回状态栏下方。"
+    "系统状态栏已随玻璃顶栏一起藏掉，QQ 预留的那 141px 不再占位：百分比滑条只在状态栏被系统放回来时生效，0% 完全去掉（顶栏与消息顶到窗口最上沿）、100% 保持 QQ 原样；下面的「顶栏上下微调」在百分比之外再按 dp 上移（负）或下移（正），给状态栏真出现时留一条退路。"
 
 private val INVALID_FORMATTER = Any()
 private val timeFormatterCache = java.util.concurrent.ConcurrentHashMap<Pair<String, Locale>, Any>()

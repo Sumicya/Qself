@@ -49,7 +49,7 @@ private fun easing() = PathInterpolator(0.2f, 0f, 0f, 1f)
 fun motionDuration(milliseconds: Long): Long = if (ValueAnimator.areAnimatorsEnabled()) milliseconds else 0L
 
 private fun safeTopText(percent: Int, shiftDp: Int) =
-    "顶栏安全区：$percent%（0% 完全去掉 / 100% 保持 QQ 原样） · 顶栏上下微调：${if (shiftDp > 0) "+" else ""}${shiftDp}dp"
+    "顶栏安全区：$percent%（状态栏已藏掉，仅在它被系统放回来时生效） · 顶栏上下微调：${if (shiftDp > 0) "+" else ""}${shiftDp}dp"
 
 /** 只用于模块自己创建的按钮，不替换 QQ 原控件的触摸监听器。 */
 private fun View.pressMotion(kernel: Glass? = null) {

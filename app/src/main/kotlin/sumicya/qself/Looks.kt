@@ -11,7 +11,9 @@ import android.app.Activity
 import android.app.Instrumentation
 import android.content.SharedPreferences
 import android.view.ViewTreeObserver
+import android.view.Window
 import android.view.WindowInsets
+import android.view.WindowInsetsController
 import java.lang.ref.WeakReference
 import android.view.View
 import android.view.ViewGroup
@@ -43,7 +45,17 @@ fun looks() {
         }.onFailure { log("底栏原生绑定读取失败，不猜测手势目标", it) }.getOrNull()
     }
     hook(Instrumentation::class.java.getMethod("callActivityOnResume", Activity::class.java)) { chain ->
-        chain.proceed().also { watch((chain.getArg(0) as Activity).window.decorView) }
+        chain.proceed().also {
+            val activity = chain.getArg(0) as Activity
+            watch(activity.window?.decorView ?: return@also)
+            syncStatusBar(activity)
+        }
+    }
+    // QQ 弹窗、切页、键盘收起都会把状态栏放回来；每次窗口重新拿到焦点都再按开关同步一遍。
+    hook(Activity::class.java.getDeclaredMethod("onWindowFocusChanged", Boolean::class.javaPrimitiveType), gated = false) { chain ->
+        chain.proceed().also {
+            (chain.thisObject as? Activity)?.let(::syncStatusBar)
+        }
     }
     hook(ViewGroup::class.java.getDeclaredMethod("dispatchDraw", Canvas::class.java)) { chain ->
         val source = chain.thisObject as? ViewGroup
@@ -234,6 +246,72 @@ fun refreshLooks() {
     watched.values.mapNotNull { it.get() }.forEach { it.refresh() }
 }
 
+/**
+ * 系统状态栏：QQ 给 AIO 顶栏预留 141px（`0x7f0a6bc6 padTop=141`，真机日志 1272x2800 statusBars=[0,141,0,0]），
+ * 那 141px 里只有系统画的时钟/电量，玻璃胶囊浮在它下面 —— 顶栏到胶囊之间永远空一条。
+ * 玻璃底栏开启时把状态栏整个藏掉，这 141px 归零，标题栏直接顶到屏幕最上沿。
+ * 状态栏被系统或 QQ 重新显示时，每次 Activity 拿到焦点、每次布局都再藏一遍。
+ */
+@Volatile
+private var systemStatusBarHiddenFlag = false
+/** 最近一次真的调用 hide/show 的时间，避免和系统来回抢。 */
+private var statusBarTouchedAt = 0L
+private val statusBarWindows = WeakHashMap<Window, Boolean>()
+
+internal fun systemStatusBarHidden(): Boolean = systemStatusBarHiddenFlag
+
+private fun Window.statusBarsVisible(): Boolean = runCatching {
+    decorView.rootWindowInsets?.isVisible(WindowInsets.Type.statusBars()) ?: true
+}.getOrDefault(true)
+
+/** 藏掉/还原系统状态栏；[hide] 由「玻璃底栏」开关决定。 */
+private fun applyStatusBar(window: Window?, hide: Boolean) {
+    if (window == null) return
+    systemStatusBarHiddenFlag = hide
+    statusBarWindows[window] = true
+    lastStatusBarWindow = WeakReference(window)
+    val visible = window.statusBarsVisible()
+    if (visible == !hide) return
+    val now = android.os.SystemClock.uptimeMillis()
+    if (now - statusBarTouchedAt < 200L) return
+    statusBarTouchedAt = now
+    runCatching {
+        val controller = window.insetsController ?: return@runCatching
+        if (hide) {
+            controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsets.Type.statusBars())
+        } else {
+            controller.show(WindowInsets.Type.statusBars())
+        }
+        recordQselfEvent(if (hide) "系统状态栏已藏掉（顶栏那 141px 收掉）" else "系统状态栏已还原")
+    }.onFailure { log("状态栏切换失败，保持原样", it) }
+}
+
+/** 当前窗口按开关同步一次状态栏；QQ 每次恢复前台都调。 */
+private fun syncStatusBar(activity: Activity?) {
+    applyStatusBar(activity?.window, on("玻璃底栏"))
+}
+
+private var lastStatusBarWindow: WeakReference<Window>? = null
+private var statusBarCheckedAt = 0L
+
+/**
+ * 聊天页每帧一次的廉价巡检：最多每 500ms 读一次 insets，发现状态栏被 QQ 或系统放回来就再藏一遍。
+ * 直接在 preDraw 里读 `rootWindowInsets` 每次都会新建对象，120Hz 下不值当。
+ */
+private fun enforceStatusBar() {
+    if (!on("玻璃底栏")) return
+    val now = android.os.SystemClock.uptimeMillis()
+    if (now - statusBarCheckedAt < 500L) return
+    statusBarCheckedAt = now
+    applyStatusBar(lastStatusBarWindow?.get(), true)
+}
+
+/** decor 的 context 外面包着 ContextThemeWrapper，逐层剥到 Activity。 */
+private fun activityOf(context: android.content.Context?): Activity? =
+    generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext?.takeIf { base -> base !== it } }
+        .filterIsInstance<Activity>().firstOrNull()
+
 private fun watch(decor: View) {
     if (preferenceListener == null) store()?.let { prefs ->
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> refreshLooks() }
@@ -263,6 +341,7 @@ private class AppearanceObserver(decor: View) : ViewTreeObserver.OnGlobalLayoutL
         if (!dirty) { cancelledOnce = false; return true }
         dirty = false
         val wasRequested = decor.isLayoutRequested
+        if (on("玻璃底栏")) activityOf(decor.context)?.let(::syncStatusBar)
         walk(decor, false)
         if (!wasRequested && decor.isLayoutRequested && !cancelledOnce) {
             cancelledOnce = true
@@ -1302,7 +1381,9 @@ internal fun safeTopShiftDp(): Int = (store()?.getInt(SAFE_TOP_SHIFT, 0) ?: 0).c
 internal fun reducedSafeTop(origTop: Int, dp: Float, offsetDp: Float = Float.NaN): Int {
     if (origTop <= 0) return 0
     val shiftDp = if (offsetDp.isNaN()) safeTopShiftDp().toFloat() else offsetDp
-    val keep = (origTop * safeTopPercent() / 100f).roundToInt() + (shiftDp * dp).roundToInt()
+    // 状态栏已被藏掉：QQ 那 141px 预留在屏幕上就是一条空白，百分比滑条不再乘，只留 dp 微调。
+    val percent = if (systemStatusBarHidden()) 0 else safeTopPercent()
+    val keep = (origTop * percent / 100f).roundToInt() + (shiftDp * dp).roundToInt()
     return keep.coerceIn(0, origTop + (96 * dp).roundToInt())
 }
 
@@ -1459,6 +1540,7 @@ private class HeaderState(
     }
     val preDraw = ViewTreeObserver.OnPreDrawListener {
         if (on("玻璃底栏")) {
+            enforceStatusBar()
             val o = outer
             val r = root
             if (bar.background !== pills || o?.background != null || r?.background != null ||
@@ -1599,7 +1681,7 @@ private class HeaderState(
                 // 安全区一去掉，标题栏就被推到 y=0，里面的按钮会落到状态栏底下（真机：状态栏 0~141px，
                 // 返回键跑到 y=26）。把去掉的那段补成标题栏自己的内容内边距，玻璃板从 y=0 铺满顶部，
                 // 按钮仍留在状态栏以下，两边不相撞。
-                compensateTitleSafeTop(bar, aioSafeTopRemovedPx)
+                compensateTitleSafeTop(bar, aioTopCompensation())
             }
         }
         root?.takeIf { it !== outer }?.let { r ->
@@ -1698,6 +1780,8 @@ private val topBlurs = WeakHashMap<View, Int>()
 private val topMasks = WeakHashMap<View, Pair<Int, android.graphics.drawable.Drawable?>>()
 
 private fun refreshAioHeaders() {
+    // 开关一动：藏着就藏、关了就还，顶栏安全区随新口径重算。
+    statusBarWindows.keys.toList().forEach { w -> applyStatusBar(w, on("玻璃底栏")) }
     aioHeaders.values.toList().forEach { it.applyStyle() }
     topBlurs.entries.toList().forEach { (view, vis) ->
         view.visibility = if (on("玻璃底栏")) View.GONE else vis
@@ -1717,6 +1801,9 @@ private fun refreshAioHeaders() {
 }
 
 private fun resetAioHeaders() {
+    statusBarWindows.keys.toList().forEach { applyStatusBar(it, false) }
+    statusBarWindows.clear()
+    aioHeaderBottomPx = 0
     aioHeaders.values.toList().forEach { it.dispose() }
     aioHeaders.clear()
     topBlurs.entries.toList().forEach { (view, vis) -> view.visibility = vis; view.alpha = 1f }
@@ -1920,7 +2007,7 @@ private fun aioHeader() {
             val bar = chain.thisObject as? ViewGroup ?: return@also
             if (!on("玻璃底栏") || bar !in aioHeaders) return@also
             // 标题栏高度 = 50dp + 补进去的安全区高度，不然补的内边距会把按钮挤出可视区。
-            val minH = (50 * bar.dp).roundToInt() + aioSafeTopRemovedPx
+            val minH = (50 * bar.dp).roundToInt() + aioTopCompensation()
             if (bar.measuredHeight in 1 until minH) setMeasured.invoke(bar, bar.measuredWidthAndState, minH)
         }
     }
@@ -1928,12 +2015,17 @@ private fun aioHeader() {
         chain.proceed().also {
             val bar = chain.thisObject as? ViewGroup ?: return@also
             val state = aioHeaders[bar] ?: return@also
-            if (!on("玻璃底栏")) { aioHeaderBandPx = 0; return@also }
+            if (!on("玻璃底栏")) { aioHeaderBottomPx = 0; return@also }
             val w = bar.width; val h = bar.height
             if (w <= 0 || h <= 0) return@also
-            if (aioHeaderBandPx != h) {
-                aioHeaderBandPx = h
-                recordQselfEvent("AIO 顶栏高度 ${h}px，消息区上移同样高度从胶囊下穿过")
+            // 顶栏的底边（窗口坐标）= 标题栏当前位置 + 自身高度。状态栏藏掉后它就是 99px，
+            // 消息列表顶部内边距与「从 y=0 铺下来」的上移量都按这个数算。
+            val where = IntArray(2)
+            bar.getLocationInWindow(where)
+            val headerBottom = where[1] + h
+            if (aioHeaderBottomPx != headerBottom) {
+                aioHeaderBottomPx = headerBottom
+                recordQselfEvent("AIO 顶栏底边 ${headerBottom}px（标题栏 y=${where[1]} 高=$h），消息区从 y=0 铺下来")
                 refreshInputLayout()
             }
             // 顶栏真正完成布局后抓一次带真实尺寸的 AIO 视图树（此前只在预加载阶段抓到 0×0 的空树）。
@@ -1963,28 +2055,15 @@ private fun aioHeader() {
                 state.avatar, state.leftBtn, state.unreadBadge, state.titleTv, state.titleTailTv,
                 earIcon, state.subIcon, flipper, sub1, sub2, state.right1, state.right2, state.right3(), multiRoot
             )
-            // 真包的群名不一定落在 sm1.u#o（uTitle）里：把「未知子视图」一律 GONE，会把群名连同装饰一起藏掉，
-            // 顶栏就只剩头像和那串未读数。这里只收无文字、不可点的装饰；带文字的 TextView 留下来当标题候选。
-            val extraTexts = ArrayList<TextView>()
             if (multiRoot?.visibility != View.VISIBLE) {
                 for (i in 0 until bar.childCount) {
                     val ch = bar.getChildAt(i)
-                    if (ch in knownChildren || knownChildren.any { k -> ((k as? ViewGroup)?.indexOfChild(ch) ?: -1) >= 0 }) continue
-                    val direct = ch as? TextView
-                    val nested = (ch as? ViewGroup)?.let { g ->
-                        (0 until g.childCount).map(g::getChildAt).filterIsInstance<TextView>()
-                            .firstOrNull { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() }
+                    if (ch !in knownChildren && !knownChildren.any { k -> ((k as? ViewGroup)?.indexOfChild(ch) ?: -1) >= 0 }) {
+                        state.collapseBadge(ch, true)
                     }
-                    val text = direct?.takeIf { it.visibility == View.VISIBLE && !it.text.isNullOrEmpty() } ?: nested
-                    if (text != null) extraTexts.add(text) else state.collapseBadge(ch, true)
                 }
             }
-            val titleEmpty = state.titleTv?.text.isNullOrEmpty()
-            val nameTv = if (titleEmpty) extraTexts.firstOrNull() else state.titleTv
-            val extraTitleW = if (nameTv != null && nameTv !== state.titleTv) {
-                ((nameTv.paint?.measureText(nameTv.text?.toString().orEmpty())?.toInt()) ?: nameTv.measuredWidth).coerceAtLeast(0)
-            } else 0
-            val titleTextW = (if (titleEmpty) extraTitleW else ((state.titleTv?.paint?.measureText(state.titleTv.text?.toString().orEmpty())?.toInt()) ?: (state.titleTv?.measuredWidth ?: 0))) +
+            val titleTextW = ((state.titleTv?.paint?.measureText(state.titleTv.text?.toString().orEmpty())?.toInt()) ?: (state.titleTv?.measuredWidth ?: 0)) +
                 (if (tail != null) tail.measuredWidth + (2 * dp).roundToInt() else 0) + earW
             val geom = nagramHeaderLayout(w, h, dp, unreadW, rightViews.size, titleTextW, subW, hasAvatar = true)
             state.lastGeom = geom
@@ -2041,21 +2120,6 @@ private fun aioHeader() {
                     val ey = ty + (th - eh) / 2
                     val gap = (4 * dp).roundToInt()
                     ear.layout(curRight + gap, ey, curRight + gap + ew, ey + eh)
-                }
-            }
-            // 群名落在未知子视图里时，用同一套 42dp 头像 + 左对齐标题的位置把它摆正，别留一条空顶栏。
-            if (titleEmpty) {
-                nameTv?.let { tv ->
-                    val tw = minOf(extraTitleW + (2 * dp).roundToInt(), maxTitleW).coerceAtLeast((8 * dp).roundToInt())
-                    val th = tv.measuredHeight.coerceAtLeast((22 * dp).roundToInt())
-                    tv.gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                    tv.measure(
-                        View.MeasureSpec.makeMeasureSpec(tw, View.MeasureSpec.EXACTLY),
-                        View.MeasureSpec.makeMeasureSpec(th, View.MeasureSpec.EXACTLY),
-                    )
-                    val ty = if (hasSub) geom.centerPill.top + (4 * dp).roundToInt() else geom.centerPill.centerY() - th / 2
-                    tv.layout(geom.textLeft, ty, geom.textLeft + tw, ty + th)
-                    if (night() && tv.currentTextColor != 0xFFF5F7FA.toInt()) tv.setTextColor(0xFFF5F7FA.toInt())
                 }
             }
             if (hasSub) {
@@ -2516,14 +2580,21 @@ private var aioSafeTopRemovedPx = 0
 internal fun aioSafeTopRemoved(): Int = aioSafeTopRemovedPx
 
 /**
- * AIO 顶栏整条的高度（px，从窗口上沿到顶栏下沿）。顶栏本身透明、三颗玻璃胶囊浮在上面，
- * 消息区要让这条高度「让出来又铺进去」：布局上移同样像素、内边距补同样像素，
- * 于是静止时位置不变，滚动时消息从胶囊底下穿过，顶栏不再是一条空白背景带。
+ * 顶栏内容要往下让的像素数：状态栏还在时等于「QQ 预留的状态栏高度减去我们压掉的量」，
+ * 按钮因此停在状态栏以下；状态栏被本模块藏掉后这段让位本身就是空白，一律让 0，
+ * 标题栏直接顶到屏幕最上沿。
+ */
+private fun aioTopCompensation(): Int = if (systemStatusBarHidden()) 0 else aioSafeTopRemovedPx
+
+/**
+ * AIO 标题栏底边在窗口里的 y（px）。顶栏本身透明、三颗玻璃胶囊浮在上面：
+ * 消息区从窗口最上沿铺下来（滚动时从胶囊底下穿过），顶部内边距取这条底边，
+ * 于是收起状态栏后不再留一条空白背景带，最后一条消息也不会顶到胶囊上。
  */
 @Volatile
-private var aioHeaderBandPx = 0
+private var aioHeaderBottomPx = 0
 
-internal fun aioHeaderBand(): Int = aioHeaderBandPx
+internal fun aioHeaderBottom(): Int = aioHeaderBottomPx
 
 /** AIO 顶栏完成布局后 3 秒内只抓一次带真实尺寸的视图树，避免每帧都 dump。 */
 private var aioSnapshotAt = 0L

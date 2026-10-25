@@ -37,6 +37,32 @@ class MessageStyleContractTest(unittest.TestCase):
         self.assertIn('AIOBubbleMsgItemVB', bind)
         self.assertIn('gated = false', bind)
 
+    def test_status_bar_is_hidden_and_header_sits_at_window_top(self):
+        # 真机日志：statusBars=[0,141,0,0]、顶栏容器 padTop=141、标题栏 y=141 高=99 → 屏幕最上面
+        # 141px 只有系统状态栏，玻璃胶囊浮在它下面。玻璃底栏开启时整条状态栏藏掉，这 141px 归零。
+        looks_src = (SRC / 'Looks.kt').read_text()
+        self.assertIn('WindowInsets.Type.statusBars()', looks_src)
+        self.assertIn('BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE', looks_src)
+        self.assertIn('controller.hide(WindowInsets.Type.statusBars())', looks_src)
+        self.assertIn('controller.show(WindowInsets.Type.statusBars())', looks_src)
+        # 状态栏藏掉后，安全区百分比不再生效（否则顶栏还留着那条 141px 空白）
+        reduced = looks_src.split('internal fun reducedSafeTop(', 1)[1].split('private class HeaderPillsDrawable', 1)[0]
+        self.assertIn('val percent = if (systemStatusBarHidden()) 0 else safeTopPercent()', reduced)
+        self.assertIn('aioTopCompensation()', looks_src)
+        # 每次到前台、拿到焦点、布局变化都要再藏一遍（QQ 会自己把状态栏放回来）
+        self.assertIn('callActivityOnResume', looks_src)
+        self.assertIn('onWindowFocusChanged', looks_src)
+
+    def test_message_list_starts_under_the_floating_header(self):
+        inp_src = (SRC / 'Input.kt').read_text()
+        self.assertIn('aioHeaderBottom()', inp_src)
+        self.assertIn('group.getLocationInWindow(at)', inp_src)
+        # 顶栏透明：消息区对齐到窗口 y=0，顶部内边距取标题栏底边，不再用负外边距硬拉
+        self.assertIn('(headerBottom - groupTop).coerceAtLeast(0)', inp_src)
+        self.assertNotIn('applyBleed', inp_src)
+        # 底部让位按消息区实际底边算，输入浮层不会吞掉最后一行
+        self.assertIn('aioBottomOverlayPx - covered', inp_src)
+
     def test_ark_card_keeps_native_width_when_stamp_is_added(self):
         # 卡片 (Ark) 按自己的宽度整块绘制：把内容根改成 WRAP_CONTENT 会被 AT_MOST 量窄，
         # 真机 26.10.24 截图里卡片右侧一列按钮与链接图标被卡片自身边界裁掉。宽度必须留在原生 MATCH_PARENT。
