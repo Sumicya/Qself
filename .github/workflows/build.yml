@@ -100,7 +100,13 @@ jobs:
       - name: 测试与出包
         run: |
           set -o pipefail
-          ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug 2>&1 | tee build.log
+          # 出包日志只有 Actions 页面能看，网页日志拿不到时排查全靠这一步：
+          # 失败时把 Kotlin 编译错误 / 断言失败行摘成 annotation（api 可读），最多 20 条。
+          if ! ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug 2>&1 | tee build.log; then
+            grep -aE "^(e|w): |> Task .* FAILED|^[[:space:]]*[0-9]+ tests? completed|AssertionError|Exception in thread" build.log | head -20 \
+              | while IFS= read -r line; do printf '::error::%s\n' "${line//[%\r\n]/?}"; done
+            exit 1
+          fi
       - name: Check libxposed packaging
         run: |
           APK=$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name 'Qself-*.apk' -print -quit)
