@@ -1337,11 +1337,9 @@ internal fun safeTopShiftDp(): Int = (store()?.getInt(SAFE_TOP_SHIFT, 0) ?: 0).c
 internal fun reducedSafeTop(origTop: Int, dp: Float, offsetDp: Float = Float.NaN, edgePx: Int = -1): Int {
     if (origTop <= 0) return 0
     val shiftDp = if (offsetDp.isNaN()) safeTopShiftDp().toFloat() else offsetDp
-    val edge = when {
-        edgePx >= 0 -> minOf(edgePx, origTop)
-        topInsetPx > 0 -> minOf(topInsetPx, origTop)
-        else -> origTop
-    }
+    // 量到 0 表示这一帧没有状态栏／挖孔（全屏页），此时按 QQ 原值走，绝不把内容推到 y=0。
+    val measured = if (edgePx >= 0) edgePx else topInsetPx
+    val edge = if (measured > 0) minOf(measured, origTop) else origTop
     return (edge + shiftDp * dp).roundToInt().coerceIn(0, origTop + (96 * dp).roundToInt())
 }
 
