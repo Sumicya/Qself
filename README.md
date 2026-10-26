@@ -105,6 +105,7 @@ app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop�
 tools/symbols.txt    落点表：代码依赖的每一个名字
 tools/dexcheck.py    拿真 dex 逐条核落点，顺带 lint 源码里没登记的名字
 tools/dexq.py        最小反汇编器：按签名找落点（上游用 DexKit 在运行时搜，这里离线搜）
+tools/report_links.py 汇报用的链接块：提交 / CI 运行 / 产物 / 对比 / 规范 SHA，全是从 git、gh 现取
 ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
 ```
 
