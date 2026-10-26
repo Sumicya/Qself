@@ -55,19 +55,6 @@ def git_out(*args):
 
 # 取号核对：号源只有 git 提交数一处（规范 c5ac12d:55），这里把两条命令的输出打出来，让日志能独立核对。
 # 只 actions 档需要：releases 档不取号。
-def check_history():
-    since = datetime.now(CST).strftime("%Y-%m-%dT00:00:00+08:00")
-    head = git_out("rev-parse", "HEAD")
-    total = git_out("rev-list", "--count", "HEAD")
-    daily = git_out("rev-list", "--count", f"--since={since}", "HEAD")
-    shallow = git_out("rev-parse", "--is-shallow-repository")
-    print(f"取号核对：head={head} 总序号={total} 当日序号={daily} 浅克隆={shallow}"
-          f"（浅克隆为 true 时这两个数不可信）")
-    print(f"取号命令原文：git rev-list --count HEAD ／ git rev-list --count --since={since} HEAD")
-    if shallow != "false" or not all((head, total, daily)):
-        raise SystemExit("完整历史或取号失败，停止清理")
-
-
 def gh(*args):
     p = subprocess.run(["gh", *args], capture_output=True, text=True)
     if p.returncode != 0:
@@ -159,7 +146,6 @@ if SCOPE == "releases":
     clean_releases()
     finish()
     raise SystemExit(0)
-check_history()
 
 runs = list_all(f"repos/{REPO}/actions/runs?per_page=100", ".workflow_runs")
 run_by_id = {r["id"]: r for r in runs}
@@ -208,28 +194,25 @@ if SEGMENTS >= 5:
                                   f"删 {a['name']}（id={a['id']} rn={rn}）"))
     survivors = [(a, ws, seg) for a, ws, seg in survivors if a["id"] not in dup_ids]
 
-# 判据四：逐 head 核对总提交数；失败硬退出，不用现存最大号猜测。
-counts = {}
-quota = []
-keep_a = []
+# 判据四：号源口径 —— 产物名末段总序号必须等于其来源运行的 run_number（版本口径已改为 CI 运行数）。
+quota, old_style = [], []
 for a, ws, seg in survivors:
-    sha = a["workflow_run"]["head_sha"]
-    if sha not in counts:
-        value = git_out("rev-list", "--count", sha)
-        if value is None:
-            gh("api", f"repos/{REPO}/commits/{sha}")  # 明确核实该提交可达
-            subprocess.run(["git", "fetch", "origin", sha], check=True)
-            value = git_out("rev-list", "--count", sha)
-        if not value or not value.isdigit():
-            raise SystemExit(f"取不到 head {sha} 的提交数")
-        counts[sha] = int(value)
-    expected = counts[sha]
-    print(f"五条判据扫描：{a['name']} id={a['id']} 段数={len(seg)} 来源=非PR "
-          f"重复=通过 head={sha} 总提交数={expected} 名字总序号={seg[-1]}")
-    if not seg[-1].isdigit() or int(seg[-1]) != expected:
-        drop_a.append((a, ws, f"号源口径：总序号 {seg[-1]} ≠ head {sha} 提交数 {expected}"))
-    else:
+    rn = run_by_id.get(a["workflow_run"]["id"], {}).get("run_number")
+    print(f"五条判据扫描：{a['name']} id={a['id']} 来源运行 run_number={rn} 名字总序号={seg[-1]}")
+    if rn is not None and seg[-1].isdigit() and int(seg[-1]) == rn:
         quota.append((a, ws))
+    else:
+        old_style.append((a, ws, f"号源口径：名字总序号 {seg[-1]} ≠ 来源运行 run_number {rn}"))
+if quota:
+    for a, ws, why in old_style:
+        drop_a.append((a, ws, why))
+else:
+    # 过渡期：全仓还没有一个满足新口径的产物时，暂留最新 1 个旧产物，等新口径产物上传后再清零。
+    old_style.sort(key=lambda t: (t[0]["created_at"], t[0]["id"]), reverse=True)
+    quota = [(a, ws) for a, ws, _ in old_style[:1]]
+    for a, ws, why in old_style[1:]:
+        drop_a.append((a, ws, why))
+keep_a = []
 for i, (a, ws) in enumerate(sorted(quota, key=lambda t: (t[0]["created_at"], t[0]["id"]), reverse=True)):
     if i < KEEP:
         keep_a.append((a, ws, "数量：全仓最新 5 个"))
