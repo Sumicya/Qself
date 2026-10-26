@@ -178,7 +178,9 @@ private class MsgListUnderScroll(
         val at = IntArray(2)
         if (on("玻璃底栏") && aioHeaderBottom() > 0) {
             group.getLocationInWindow(at)
-            val want = minOf(topInsetPx(), aioHeaderBottom())
+            val inset = topInsetPx()
+            // 还没量到下沿时不要往 y=0 拉：退回 QQ 自己的位置，宁可不动也不要叠进状态栏。
+            val want = if (inset > 0) minOf(inset, aioHeaderBottom()) else aioHeaderBottom()
             val delta = at[1] - want
             if (delta != 0) {
                 group.translationY -= delta.toFloat()
