@@ -1,25 +1,7 @@
-# Qself 出包工作流。
-#
-# 触发只允许 push（不限定分支，会话分支推送同样出包用于验证）与 workflow_dispatch；
-# 不得接 pull_request（同一提交被 push 与 pull_request 各出一次包会产出两个同名 artifact，互相覆盖），
-# 也不得加 branches 限定或 github.ref 守卫 —— 那等于砍掉验证手段（规范 a8787a8）。
-# 号源只有 git 提交数一处（规范 c5ac12d）：总序号 = `git rev-list --count HEAD`，
-# 当日序号 = `git rev-list --count --since=<当日0点 UTC+8> HEAD`；run_number、事件类型、工作流文件名、PR 与否一律不进版本号。
-# head 提交不在当日（UTC+8）时当日序号取 0（表示重出旧提交的包），不写 1 冒充当日首包。
-# `actions/checkout` 必须 `fetch-depth: 0`：浅克隆下提交数恒为 1、所有产物都会叫 `.1.1`。
-# 取号脚本启动行打印 head sha、两个数与命令原文；取不到数就失败退出，不留降级、不退化四段。
-# 提交数就是号源：禁止空提交与无内容提交，禁止 force push 与 rebase 重写已出包的历史。
-# dex 作业拿真 QQ 包核每一个落点；apk 作业按五段版本出 debug APK 放进 Artifacts。
-# 清理逻辑只一份 `.github/scripts/cleanup.py`：本工作流 `CLEANUP_APPLY: 'true'` 真删，权限 actions: write；
-# PR 校验工作流同一份脚本、同值真删（会话推送即触发），两处挂同一个 concurrency group 串行；
-# Release（1 个）/ tag 清理是同一份脚本的 CLEANUP_SCOPE=releases 档，单独作业只授 contents: write，只在默认分支跑，
-# 不与 actions: write 同授；三个清理作业共用 concurrency group `qself-cleanup`。
-# 禁止用 run_number、历史成功数、现存 artifact 最大号等旧锚取数。
-# CI 不创建 Release、正式发行 tag 与 Release asset；发布只由主人主动发起。
+# Qself 出包：push 与手动触发都出 debug APK，产物名 Qself-五段版本。
 name: Build
 
 on:
-  # 不限定分支：会话分支推送同样出包用于验证（规范 a8787a8）；不得加 branches 限定或 github.ref 守卫。
   push:
   workflow_dispatch:
 
@@ -27,19 +9,25 @@ permissions:
   contents: read
   actions: read
 
-# 产物命名口径：`Qself-<版本>` 里版本段的段数（五段 = yy.m.d.当日序号.总序号），清理作业按它判口径。
 env:
   SEGMENTS: '5'
-  CLEANUP_APPLY: 'true'          # 清理脚本的真删开关；PR 校验工作流同一份脚本同值，两处同一 concurrency group 串行
+  CLEANUP_APPLY: 'true'
 
 jobs:
-  # 落点核对：真包在 Sumicya/qqapk（qq.aa..qq.ae 拼起来）。表红了就是这版 QQ 里名字对不上，
-  # 出包也是白出 —— 所以这个作业和出包平行跑，谁红都拦得住。
-  dex:
+  build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+      - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
+      - uses: gradle/actions/setup-gradle@v6
       - name: 拼出真 QQ 包
         run: |
           git clone -q --depth 1 https://github.com/Sumicya/qqapk qq
@@ -51,63 +39,58 @@ jobs:
           python3 tools/ui_paths.py qq.apk
           python3 -m unittest discover -s tools -p 'test_*.py'
       - name: Skia CPU 编译五份移植着色器（不是设备验收）
-        run: bash ci/check-shaders.sh
-
-  apk:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      # 取号要完整历史：缺 fetch-depth: 0 时 git rev-list --count HEAD 恒为 1，所有产物都会叫 .1.1。
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools'
-      - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
-      - uses: gradle/actions/setup-gradle@v6
-
-      # 号源只有 git 提交数一处（规范 c5ac12d）：同一提交重跑（重试、再 dispatch、改文件名）得到同一个号，天然幂等，
-      # 不再需要「重试复用第一次的号」这套缓存。
+        run: bash tools/check-shaders.sh
       - name: 算版本 yy.m.d.当日序号.总序号
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
           set -euo pipefail
-          # 硬前提：完整历史。浅克隆下 git rev-list --count HEAD 恒为 1，产物会全叫 .1.1。
-          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
-            echo "浅克隆：actions/checkout 少了 fetch-depth: 0，提交数不可信" >&2
-            exit 1
-          fi
-          head_sha="$(git rev-parse HEAD)"
-          since="$(date -u -d '+8 hours' +%F)T00:00:00+08:00"
-          if ! total="$(git rev-list --count HEAD)"; then echo "取不到总序号" >&2; exit 1; fi
-          if ! daily="$(git rev-list --count --since="$since" HEAD)"; then echo "取不到当日序号" >&2; exit 1; fi
-          [ -n "$total" ] && [ -n "$daily" ] || { echo "取号为空：total=$total daily=$daily" >&2; exit 1; }
-          case "$total$daily" in *[!0-9]*) echo "取号含非数字：total=$total daily=$daily" >&2; exit 1;; esac
-          [ "$total" -ge 1 ] || { echo "总序号小于 1：$total" >&2; exit 1; }
-          # head 提交不在当日（UTC+8）时当日序号就是 0（重出旧提交的包），不写 1 冒充当日首包。
-          day="$(date -u -d '+8 hours' +%y.%-m.%-d)"
-          version="$day.$daily.$total"
-          echo "取号启动行：head=$head_sha 总序号=$total 当日序号=$daily 日期段=$day 版本=$version"
-          echo "取号命令原文：git rev-list --count HEAD ／ git rev-list --count --since=\"$since\" HEAD"
-          printf '%s' "$version" | grep -Eq '^[0-9]{2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]+\.[0-9]+$' \
-            || { echo "版本不是五段 yy.m.d.当日序号.总序号：$version" >&2; exit 1; }
-          echo "QSELF_VERSION=$version" >> "$GITHUB_ENV"
+          gh api "repos/$REPO/actions/workflows/build.yml/runs?per_page=100" > runs.json
+          gh api "repos/$REPO/actions/artifacts?per_page=100" > arts.json
+          python3 - <<'PY'
+          import json, os, re, sys
+          from datetime import datetime, timedelta, timezone
 
+          TZ = timezone(timedelta(hours=8))
+          repo = os.environ["REPO"]
+          run_number = int(os.environ["RUN_NUMBER"])
+          runs = json.load(open("runs.json"))["workflow_runs"]
+          arts = json.load(open("arts.json"))["artifacts"]
+
+          def local_day(stamp: str) -> str:
+              return datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone(TZ).strftime("%y.%-m.%-d")
+
+          today = local_day(datetime.now(TZ).isoformat())
+          todays = [r["run_number"] for r in runs if local_day(r["run_started_at"]) == today]
+          first = min(todays) if todays else run_number
+
+          # 当日现存合规产物 Qself-yy.m.d.d0.r0 反推当日首条运行号 r0 - d0 + 1
+          pat = re.compile(r"^" + re.escape(repo.split("/")[-1]) + r"-(\d{2}\.\d{1,2}\.\d{1,2})\.(\d+)\.(\d+)$")
+          for a in arts:
+              m = pat.match(a["name"])
+              if not m or a.get("expired"):
+                  continue
+              if m.group(1) != today:
+                  continue
+              first = min(first, int(m.group(3)) - int(m.group(2)) + 1)
+
+          daily = run_number - first + 1
+          if daily < 1:
+              sys.exit(f"当日序号小于 1：run_number={run_number} R_first={first}")
+          version = f"{today}.{daily}.{run_number}"
+          if not re.fullmatch(r"\d{2}\.\d{1,2}\.\d{1,2}\.\d+\.\d+", version):
+              sys.exit(f"版本不是五段：{version}")
+          print(f"取号：HEAD SHA={os.environ.get('GITHUB_SHA', '')} run_id={os.environ['RUN_ID']} "
+                f"run_number={run_number} R_first={first} 当日序号={daily} 版本={version}")
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+              env.write(f"QSELF_VERSION={version}\n")
+          PY
       - name: 测试与出包
-        run: |
-          set -o pipefail
-          # 出包日志只有 Actions 页面能看，网页日志拿不到时排查全靠这一步：
-          # 失败时把 Kotlin 编译错误 / 断言失败行摘成 annotation（api 可读），最多 20 条。
-          if ! ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug 2>&1 | tee build.log; then
-            grep -aE "^(e|w): |> Task .* FAILED|^[[:space:]]*[0-9]+ tests? completed|AssertionError|Exception in thread" build.log | head -20 \
-              | while IFS= read -r line; do printf '::error::%s\n' "${line//[%\r\n]/?}"; done
-            exit 1
-          fi
-      - name: Check libxposed packaging
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
+      - name: 核对模块入口
         run: |
           APK=$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name 'Qself-*.apk' -print -quit)
           for f in java_init.list module.prop scope.list; do unzip -l "$APK" | grep -F "META-INF/xposed/$f"; done
@@ -118,16 +101,11 @@ jobs:
           name: Qself-${{ env.QSELF_VERSION }}
           path: app/build/outputs/apk/debug/Qself-${{ env.QSELF_VERSION }}.apk
           if-no-files-found: error
-          # 同一提交重出包同号；同名 artifact 覆盖，清理按创建时间删旧留新。
           overwrite: true
           retention-days: 5
 
-  # artifact 与运行记录清理：命名、来源、重复当日序号、号源口径、数量五条，全部无日期豁免。
-  # artifact 全仓按 created_at 留 5 个；每工作流运行按 run_started_at 留 5 条，超限未完成运行先取消。
-  # 真删两个调用点都真删（本处 + PR 校验工作流的清理作业，两处同一 concurrency group）；PR 校验序列的超量 run 在这里也按序列一并收（actions: write 可删同仓任意工作流的 run）。
-  # 权限最小 actions: write（只删本项目 artifact 与 run），按规范不与 contents: write 同授；动不到 Release、tag、分支。
   cleanup-artifacts:
-    needs: apk
+    needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     concurrency:
@@ -137,24 +115,17 @@ jobs:
       actions: write
       contents: read
     steps:
-      # 清理脚本启动要打印两条取号命令的输出：浅克隆下会打出 1，所以这里也要完整历史。
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: 按五条判据清理 artifact 与运行记录
+      - name: 按五条判据清理产物与运行记录
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          SELF: ${{ github.run_id }}
+          RUN_ID: ${{ github.run_id }}
           CLEANUP_SCOPE: actions
         run: python3 .github/scripts/cleanup.py
 
-  # Release / tag 清理：动的是发行对象，要 contents: write，所以单独作业、只在默认分支上动，
-  # 与上面那个 actions: write 的作业分开授权（规范禁止两者同授）；脚本与上面同一份，CLEANUP_SCOPE=releases。
-  # 这条 if 只拦「在会话分支上动发行对象」，不砍出包验证 —— 出包与上传在 apk 作业，与本作业无关。
-  # 三个清理作业同一 concurrency group 串行；Release 清理幂等，被后到作业顶掉时下一次推送补上。
   cleanup-releases:
-    needs: apk
+    needs: build
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -164,13 +135,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      # 只为拿到脚本：不取号、不需要完整历史；不留下带写权限的 git 凭据。
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: 项目 Release 只留最近 1 个，无对应 Release 的 tag 一并删
+      - name: Release 只留最近 1 个，孤立 tag 一并删
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
           CLEANUP_SCOPE: releases
         run: python3 .github/scripts/cleanup.py

@@ -101,6 +101,15 @@ class Glass(
     }
 
     override fun draw(canvas: Canvas) {
+        val started = System.nanoTime()
+        try {
+            drawInner(canvas)
+        } finally {
+            CostMeter.add(COST_GLASS, started)
+        }
+    }
+
+    private fun drawInner(canvas: Canvas) {
         val b = bounds
         if (b.isEmpty) return
         kernel?.let { it.draw(canvas, b, drawableAlpha, drawableColorFilter); return }
@@ -171,6 +180,9 @@ class Glass(
     }
 
     private val levelsScratch = ArrayList<Pair<ViewGroup, View>>(8)
+    private val bandGlobal = RectF()
+    private val bandMatrix = Matrix()
+    private val siblingClip = RectF()
     private val overlapMatrix = Matrix()
     private val overlapRect = RectF()
     private val paintMatrix = Matrix()
@@ -182,6 +194,14 @@ class Glass(
     }
 
     internal fun recordBehind(rc: Canvas, useTightBounds: Boolean = false) {
+        // 底色只可能从玻璃板正下方那一带透出来。圈出这一带的全局矩形，逐个兄弟视图裁到它里面再画：
+        // 否则消息列表会被整张重画一遍（真机 122Hz 下这就是帧预算的大头）。
+        val margin = if (kernel != null) 40 * dp else pad.toFloat()
+        bandGlobal.set(bounds)
+        if (bandGlobal.isEmpty || !useTightBounds) bandGlobal.set(0f, 0f, host.width.toFloat(), host.height.toFloat())
+        bandGlobal.inset(-margin, -margin)
+        host.transformMatrixToGlobal(bandMatrix)
+        bandMatrix.mapRect(bandGlobal)
         levelsScratch.clear()
         var child: View = host
         while (true) {
@@ -212,6 +232,11 @@ class Glass(
         val save = rc.save()
         rc.concat(transform)
         rc.clipRect(0, 0, v.width, v.height)
+        if (!bandGlobal.isEmpty) {
+            siblingClip.set(bandGlobal)
+            transform.mapRect(siblingClip)
+            if (siblingClip.intersect(0f, 0f, v.width.toFloat(), v.height.toFloat())) rc.clipRect(siblingClip)
+        }
         if (!background) rc.translate(-v.scrollX.toFloat(), -v.scrollY.toFloat())
         if (v.alpha < 1f) {
             val layerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { alpha = (v.alpha * 255f).toInt() }

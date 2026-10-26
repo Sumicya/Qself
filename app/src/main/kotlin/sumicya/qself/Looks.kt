@@ -13,7 +13,6 @@ import android.content.SharedPreferences
 import android.view.ViewTreeObserver
 import android.view.Window
 import android.view.WindowInsets
-import android.view.WindowInsetsController
 import java.lang.ref.WeakReference
 import android.view.View
 import android.view.ViewGroup
@@ -47,19 +46,17 @@ fun looks() {
     hook(Instrumentation::class.java.getMethod("callActivityOnResume", Activity::class.java)) { chain ->
         chain.proceed().also {
             val activity = chain.getArg(0) as Activity
-            watch(activity.window?.decorView ?: return@also)
-            syncStatusBar(activity)
-        }
-    }
-    // QQ 弹窗、切页、键盘收起都会把状态栏放回来；每次窗口重新拿到焦点都再按开关同步一遍。
-    hook(Activity::class.java.getDeclaredMethod("onWindowFocusChanged", Boolean::class.javaPrimitiveType), gated = false) { chain ->
-        chain.proceed().also {
-            (chain.thisObject as? Activity)?.let(::syncStatusBar)
+            val decor = activity.window?.decorView ?: return@also
+            watch(decor)
+            noteTopInsets(decor)
+            restoreStatusBar(activity)
         }
     }
     hook(ViewGroup::class.java.getDeclaredMethod("dispatchDraw", Canvas::class.java)) { chain ->
+        // 这个钩子每个 ViewGroup 每帧都过一遍（真机日志 23.7 万次/5 小时），先用字段读判掉绝大多数。
         val source = chain.thisObject as? ViewGroup
-        val glass = (source?.takeIf { it in floatStates }?.background as? Glass) ?: floatStates[source]?.glass
+        val background = source?.background
+        val glass = if (background is Glass) background else floatStates[source]?.glass
         if (glass?.drawKernelContent(chain.getArg(0) as Canvas) == true) null else chain.proceed()
     }
     hook(ViewGroup::class.java.getDeclaredMethod("dispatchTouchEvent", MotionEvent::class.java)) { chain ->
@@ -106,7 +103,7 @@ fun looks() {
             val out = if (on("玻璃底栏") && orig > 0 && ctx != null) {
                 reducedSafeTop(orig, ctx.resources.displayMetrics.density)
             } else orig
-            recordQselfEvent("MainResourceConfig#n orig=${orig}px -> ${out}px (percent=${safeTopPercent()}% shift=${safeTopShiftDp()}dp)")
+            recordQselfEvent("MainResourceConfig#n orig=${orig}px -> ${out}px（下沿=${topInsetPx}px，下移=${safeTopShiftDp()}dp）")
             out
         }
         hook(resCfgCls.getDeclaredMethod("p", android.content.Context::class.java, android.graphics.drawable.Drawable::class.java), gated = false) { chain ->
@@ -247,70 +244,36 @@ fun refreshLooks() {
 }
 
 /**
- * 系统状态栏：QQ 给 AIO 顶栏预留 141px（`0x7f0a6bc6 padTop=141`，真机日志 1272x2800 statusBars=[0,141,0,0]），
- * 那 141px 里只有系统画的时钟/电量，玻璃胶囊浮在它下面 —— 顶栏到胶囊之间永远空一条。
- * 玻璃底栏开启时把状态栏整个藏掉，这 141px 归零，标题栏直接顶到屏幕最上沿。
- * 状态栏被系统或 QQ 重新显示时，每次 Activity 拿到焦点、每次布局都再藏一遍。
+ * 顶部下沿：状态栏照常显示（用户实测它会自己冒出来，不该被藏），但顶栏内容不能跑到它上面去。
+ * 这里量出 `max(状态栏高, 摄像头挖孔下沿)`，作为顶栏内容的硬下界 —— 滑条压到底也停在摄像头下面。
+ * 每次窗口恢复前台、每次全局布局刷新一次；不每帧读 insets（每次都会新建对象）。
  */
 @Volatile
-private var systemStatusBarHiddenFlag = false
-/** 最近一次真的调用 hide/show 的时间，避免和系统来回抢。 */
-private var statusBarTouchedAt = 0L
-private val statusBarWindows = WeakHashMap<Window, Boolean>()
+private var topInsetPx = 0
 
-internal fun systemStatusBarHidden(): Boolean = systemStatusBarHiddenFlag
+internal fun topInsetPx(): Int = topInsetPx
 
-private fun Window.statusBarsVisible(): Boolean = runCatching {
-    decorView.rootWindowInsets?.isVisible(WindowInsets.Type.statusBars()) ?: true
-}.getOrDefault(true)
-
-/** 藏掉/还原系统状态栏；[hide] 由「玻璃底栏」开关决定。 */
-private fun applyStatusBar(window: Window?, hide: Boolean) {
-    if (window == null) return
-    systemStatusBarHiddenFlag = hide
-    statusBarWindows[window] = true
-    lastStatusBarWindow = WeakReference(window)
-    val visible = window.statusBarsVisible()
-    if (visible == !hide) return
-    val now = android.os.SystemClock.uptimeMillis()
-    if (now - statusBarTouchedAt < 200L) return
-    statusBarTouchedAt = now
-    runCatching {
-        val controller = window.insetsController ?: return@runCatching
-        if (hide) {
-            controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            controller.hide(WindowInsets.Type.statusBars())
-        } else {
-            controller.show(WindowInsets.Type.statusBars())
-        }
-        recordQselfEvent(if (hide) "系统状态栏已藏掉（顶栏那 141px 收掉）" else "系统状态栏已还原")
-    }.onFailure { log("状态栏切换失败，保持原样", it) }
+private fun noteTopInsets(view: View?) {
+    val insets = view?.rootWindowInsets ?: return
+    val status = runCatching { insets.getInsets(WindowInsets.Type.statusBars()).top }.getOrDefault(0)
+    val cutout = runCatching { insets.getInsets(WindowInsets.Type.displayCutout()).top }.getOrDefault(0)
+    // 两个都读到 0 时保留上次的值：全屏页可能把状态栏让成 0，不能因此把顶栏推回 y=0。
+    if (status > 0 || cutout > 0) topInsetPx = maxOf(status, cutout)
 }
-
-/** 当前窗口按开关同步一次状态栏；QQ 每次恢复前台都调。 */
-private fun syncStatusBar(activity: Activity?) {
-    applyStatusBar(activity?.window, on("玻璃底栏"))
-}
-
-private var lastStatusBarWindow: WeakReference<Window>? = null
-private var statusBarCheckedAt = 0L
 
 /**
- * 聊天页每帧一次的廉价巡检：最多每 500ms 读一次 insets，发现状态栏被 QQ 或系统放回来就再藏一遍。
- * 直接在 preDraw 里读 `rootWindowInsets` 每次都会新建对象，120Hz 下不值当。
+ * 退出本模块上一版「把状态栏藏掉」的现场：状态栏现在必须可见。只在恢复前台时看一眼，
+ * 不可见就 show 回来一次，不做每帧巡检，也不跟系统来回抢。
  */
-private fun enforceStatusBar() {
-    if (!on("玻璃底栏")) return
-    val now = android.os.SystemClock.uptimeMillis()
-    if (now - statusBarCheckedAt < 500L) return
-    statusBarCheckedAt = now
-    applyStatusBar(lastStatusBarWindow?.get(), true)
+private fun restoreStatusBar(activity: Activity?) {
+    val window = activity?.window ?: return
+    runCatching {
+        val shown = window.decorView.rootWindowInsets?.isVisible(WindowInsets.Type.statusBars()) ?: true
+        if (shown) return@runCatching
+        window.insetsController?.show(WindowInsets.Type.statusBars())
+        recordQselfEvent("系统状态栏不是可见状态，已还原（本模块不再藏状态栏）")
+    }.onFailure { log("状态栏还原失败，保持原样", it) }
 }
-
-/** decor 的 context 外面包着 ContextThemeWrapper，逐层剥到 Activity。 */
-private fun activityOf(context: android.content.Context?): Activity? =
-    generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext?.takeIf { base -> base !== it } }
-        .filterIsInstance<Activity>().firstOrNull()
 
 private fun watch(decor: View) {
     if (preferenceListener == null) store()?.let { prefs ->
@@ -341,7 +304,7 @@ private class AppearanceObserver(decor: View) : ViewTreeObserver.OnGlobalLayoutL
         if (!dirty) { cancelledOnce = false; return true }
         dirty = false
         val wasRequested = decor.isLayoutRequested
-        if (on("玻璃底栏")) activityOf(decor.context)?.let(::syncStatusBar)
+        noteTopInsets(decor)
         walk(decor, false)
         if (!wasRequested && decor.isLayoutRequested && !cancelledOnce) {
             cancelledOnce = true
@@ -1359,32 +1322,27 @@ internal fun nagramHeaderLayout(
     )
 }
 
-/** 顶部安全区内边距压缩计算：保留状态栏时钟安全下界，避免胶囊上移时越出父容器上界被裁切。 */
-/** 顶栏安全区：QQ 真包按状态栏高度（本例 `statusBars=[0,141,0,0]`）给 AIO / 主页 / 二级页顶栏容器留出 paddingTop。 */
-internal const val SAFE_TOP = "safe_top_percent"
-/** 顶栏安全区之外的 dp 微调（正数下移、负数上移）。 */
+/** 顶栏在「状态栏／摄像头下沿」之外再往下让的 dp（0–48，正数下移）。 */
 internal const val SAFE_TOP_SHIFT = "safe_top_shift_dp"
-/** 「顶栏安全区」滑条缺省 0%：完全去掉，内容顶到窗口最上沿。 */
-internal fun safeTopPercent(): Int = (store()?.getInt(SAFE_TOP, 0) ?: 0).coerceIn(0, 100)
-internal fun safeTopShiftDp(): Int = (store()?.getInt(SAFE_TOP_SHIFT, 0) ?: 0).coerceIn(-48, 96)
+internal fun safeTopShiftDp(): Int = (store()?.getInt(SAFE_TOP_SHIFT, 0) ?: 0).coerceIn(0, 96)
 
 /**
- * 顶栏安全区高度（px）。[origTop] 是 QQ 原本预留的顶部空间（AIO 为 `getStatusBarHeight()`，主页为 `MainResourceConfig#n()`，二级页为 `QUISecNavBar` 根内边距）。
+ * 顶栏顶部内边距。[origTop] 是 QQ 原本预留的顶部空间（AIO 为 `getStatusBarHeight()`，
+ * 主页为 `MainResourceConfig#n()`，二级页为 `QUISecNavBar` 根内边距）。
  *
- * - `percent = 0`   → 完全去掉安全区（本设备状态栏实际不绘制，141px 预留是纯浪费）；
- * - `percent = 100` → 保持 QQ 原样；
- * - `shiftDp` 为百分比之外的 dp 微调，缺省取「顶栏上移」滑条的值。
- *
- * 不再设「至少保留七成」的比例下限（旧下限会把 141px 只压到 109px，等于没去掉），
- * 也不再对结果做人为夹紧（只保证非负且不超过 QQ 预留值 + 96dp 的上移/下移余量）。
+ * 状态栏照常显示，顶栏就停在 `max(状态栏高, 摄像头挖孔下沿)` 这条线上 —— 用户要的是
+ * 「摄像头下面或者原始位置」，不是顶到 y=0 被挖孔压住；[SAFE_TOP_SHIFT] 只在这条线以下再往下让。
+ * 还没量到下沿时退回 QQ 原值，绝不把内容推到屏幕最上沿。
  */
-internal fun reducedSafeTop(origTop: Int, dp: Float, offsetDp: Float = Float.NaN): Int {
+internal fun reducedSafeTop(origTop: Int, dp: Float, offsetDp: Float = Float.NaN, edgePx: Int = -1): Int {
     if (origTop <= 0) return 0
     val shiftDp = if (offsetDp.isNaN()) safeTopShiftDp().toFloat() else offsetDp
-    // 状态栏已被藏掉：QQ 那 141px 预留在屏幕上就是一条空白，百分比滑条不再乘，只留 dp 微调。
-    val percent = if (systemStatusBarHidden()) 0 else safeTopPercent()
-    val keep = (origTop * percent / 100f).roundToInt() + (shiftDp * dp).roundToInt()
-    return keep.coerceIn(0, origTop + (96 * dp).roundToInt())
+    val edge = when {
+        edgePx >= 0 -> minOf(edgePx, origTop)
+        topInsetPx > 0 -> minOf(topInsetPx, origTop)
+        else -> origTop
+    }
+    return (edge + shiftDp * dp).roundToInt().coerceIn(0, origTop + (96 * dp).roundToInt())
 }
 
 private class HeaderPillsDrawable(private val host: View) : android.graphics.drawable.Drawable() {
@@ -1539,8 +1497,16 @@ private class HeaderState(
         setOnClickListener { titleTv?.performClick() }
     }
     val preDraw = ViewTreeObserver.OnPreDrawListener {
+        val started = System.nanoTime()
+        try {
+            headerPreDraw()
+        } finally {
+            CostMeter.add(COST_HEADER, started)
+        }
+        true
+    }
+    private fun headerPreDraw() {
         if (on("玻璃底栏")) {
-            enforceStatusBar()
             val o = outer
             val r = root
             if (bar.background !== pills || o?.background != null || r?.background != null ||
@@ -1552,7 +1518,6 @@ private class HeaderState(
                 pills.sync()
             }
         }
-        true
     }
     init {
         bar.viewTreeObserver.addOnPreDrawListener(preDraw)
@@ -1674,7 +1639,7 @@ private class HeaderState(
                 if (lastAppliedOuterTop != reducedTop) {
                     lastAppliedOuterTop = reducedTop
                     aioSafeTopRemovedPx = (orig[1] - reducedTop).coerceAtLeast(0)
-                    recordQselfEvent("AIO 顶栏 outer 安全区 ${orig[1]}px -> ${reducedTop}px (percent=${safeTopPercent()}% shift=${safeTopShiftDp()}dp)")
+                    recordQselfEvent("AIO 顶栏 outer 顶部 ${orig[1]}px -> ${reducedTop}px（状态栏/摄像头下沿=${topInsetPx}px，下移=${safeTopShiftDp()}dp）")
                     refreshInputLayout()
                 }
                 if (o.paddingTop != reducedTop || o.paddingBottom != 0) o.setPadding(orig[0], reducedTop, orig[2], 0)
@@ -1693,7 +1658,7 @@ private class HeaderState(
                 val reducedTop = reducedSafeTop(orig[1], bar.dp)
                 if (lastAppliedRootTop != reducedTop) {
                     lastAppliedRootTop = reducedTop
-                    recordQselfEvent("AIO 顶栏 root 安全区 ${orig[1]}px -> ${reducedTop}px (percent=${safeTopPercent()}% shift=${safeTopShiftDp()}dp)")
+                    recordQselfEvent("AIO 顶栏 root 顶部 ${orig[1]}px -> ${reducedTop}px（下沿=${topInsetPx}px，下移=${safeTopShiftDp()}dp）")
                 }
                 if (r.paddingTop != reducedTop || r.paddingBottom != 0) r.setPadding(orig[0], reducedTop, orig[2], 0)
             }
@@ -1780,8 +1745,6 @@ private val topBlurs = WeakHashMap<View, Int>()
 private val topMasks = WeakHashMap<View, Pair<Int, android.graphics.drawable.Drawable?>>()
 
 private fun refreshAioHeaders() {
-    // 开关一动：藏着就藏、关了就还，顶栏安全区随新口径重算。
-    statusBarWindows.keys.toList().forEach { w -> applyStatusBar(w, on("玻璃底栏")) }
     aioHeaders.values.toList().forEach { it.applyStyle() }
     topBlurs.entries.toList().forEach { (view, vis) ->
         view.visibility = if (on("玻璃底栏")) View.GONE else vis
@@ -1801,8 +1764,6 @@ private fun refreshAioHeaders() {
 }
 
 private fun resetAioHeaders() {
-    statusBarWindows.keys.toList().forEach { applyStatusBar(it, false) }
-    statusBarWindows.clear()
     aioHeaderBottomPx = 0
     aioHeaders.values.toList().forEach { it.dispose() }
     aioHeaders.clear()
@@ -2584,7 +2545,7 @@ internal fun aioSafeTopRemoved(): Int = aioSafeTopRemovedPx
  * 按钮因此停在状态栏以下；状态栏被本模块藏掉后这段让位本身就是空白，一律让 0，
  * 标题栏直接顶到屏幕最上沿。
  */
-private fun aioTopCompensation(): Int = if (systemStatusBarHidden()) 0 else aioSafeTopRemovedPx
+private fun aioTopCompensation(): Int = aioSafeTopRemovedPx
 
 /**
  * AIO 标题栏底边在窗口里的 y（px）。顶栏本身透明、三颗玻璃胶囊浮在上面：
@@ -2651,7 +2612,7 @@ private fun aioGeometry(bar: View) {
             "标题栏y=${screenTop(title)} 高=${title?.height ?: -1} 消息区y=${screenTop(msgArea)} " +
             "返回键y=${screenTop(back)} 已去掉安全区=${aioSafeTopRemovedPx}px " +
             "fitsSystemWindows祖先=${fit?.javaClass?.simpleName ?: "无"}(padTop=${fit?.paddingTop ?: -1}) " +
-            "(percent=${safeTopPercent()}% shift=${safeTopShiftDp()}dp)",
+            "(下移=${safeTopShiftDp()}dp)",
     )
 }
 
@@ -2689,7 +2650,7 @@ private fun homeSafeArea(bar: ViewGroup) {
     if (lp != null && lp.topMargin != target) {
         lp.topMargin = target
         state.head.layoutParams = lp
-        recordQselfEvent("homeSafeArea 顶栏安全区 ${state.origHeadTop}px -> ${target}px (delta=$delta, percent=${safeTopPercent()}%, shift=${safeTopShiftDp()}dp)")
+        recordQselfEvent("homeSafeArea 顶栏顶部 ${state.origHeadTop}px -> ${target}px（delta=$delta，下移=${safeTopShiftDp()}dp）")
     }
     val ty = state.origContainerTy - delta
     if (state.container.translationY != ty) state.container.translationY = ty

@@ -612,17 +612,17 @@ class ProtoTest {
         assertEquals(636, (noRight.textLeft + noRight.textRight) / 2)
         assertTrue(noRight.centerPill.top >= 0)
 
-        // 顶栏安全区：默认 0% 完全去掉（旧实现的 0.72f 下限会把 141px 只压到 109px，等于没去掉）。
-        assertEquals(0, safeTopPercent())
+        // 顶栏停在状态栏／摄像头下沿（真机 141px），不是顶到 y=0：滑条只在它以下再往下让。
         assertEquals(0, safeTopShiftDp())
-        assertEquals(0, reducedSafeTop(141, 1.9761429f))
-        assertEquals(0, reducedSafeTop(68, 1.9761429f))
+        assertEquals(141, reducedSafeTop(141, 1.9761429f, edgePx = 141))
+        assertEquals(172, reducedSafeTop(141, 1.9761429f, 15.75f, edgePx = 141))  // 15.75dp × 1.976 ≈ 31px
+        assertEquals(200, reducedSafeTop(141, 1.9761429f, 30f, edgePx = 141))     // 30dp × 1.976 ≈ 59px
+        // 下沿比 QQ 预留值还高时，按 QQ 的原值走：绝不把内容推到屏幕最上沿。
+        assertEquals(100, reducedSafeTop(100, 1.9761429f, edgePx = 141))
+        // 没量到下沿（全屏页把状态栏让成 0）时退回 QQ 原值，同样不顶到 0。
+        assertEquals(141, reducedSafeTop(141, 1.9761429f, edgePx = 0))
         assertEquals(0, reducedSafeTop(0, 1.953125f))
-        // 百分比之外还能按 dp 微调（正下负上），且结果不会为负、不会超过 QQ 预留值 + 96dp。
-        assertEquals(31, reducedSafeTop(141, 1.9761429f, 15.75f))   // 15.75dp × 1.976 ≈ 31px
-        assertEquals(59, reducedSafeTop(141, 1.9761429f, 30f))      // 30dp × 1.976 ≈ 59px
-        assertEquals(0, reducedSafeTop(141, 1.9761429f, -40f))
-        assertEquals(331, reducedSafeTop(141, 1.9761429f, 400f))    // 夹紧到 141 + 96dp = 331px
+        assertEquals(331, reducedSafeTop(141, 1.9761429f, 400f, edgePx = 141))    // 夹紧到 141 + 96dp = 331px
 
         assertEquals(-85.5f, centeredBarTranslationX(1272, 460, 1.953125f, rtl = false))
         assertEquals(85.5f, centeredBarTranslationX(1272, 460, 1.953125f, rtl = true))

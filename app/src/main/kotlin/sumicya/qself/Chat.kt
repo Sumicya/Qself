@@ -1617,6 +1617,15 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
         invalidateSelf()
     }
     override fun onPreDraw(): Boolean {
+        val started = System.nanoTime()
+        try {
+            return sample()
+        } finally {
+            CostMeter.add(COST_AVATAR, started)
+        }
+    }
+
+    private fun sample(): Boolean {
         val clip = tmpClip
         clip.setEmpty()
         if (!on("连发合并") || !host.getLocalVisibleRect(clip)) {

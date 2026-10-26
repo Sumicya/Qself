@@ -48,8 +48,8 @@ private fun easing() = PathInterpolator(0.2f, 0f, 0f, 1f)
 
 fun motionDuration(milliseconds: Long): Long = if (ValueAnimator.areAnimatorsEnabled()) milliseconds else 0L
 
-private fun safeTopText(percent: Int, shiftDp: Int) =
-    "顶栏安全区：$percent%（状态栏已藏掉，仅在它被系统放回来时生效） · 顶栏上下微调：${if (shiftDp > 0) "+" else ""}${shiftDp}dp"
+private fun safeTopText(shiftDp: Int) =
+    "顶栏再下移：${shiftDp}dp（顶栏固定停在状态栏／摄像头下沿，这里只往下让，不会顶到 y=0）"
 
 /** 只用于模块自己创建的按钮，不替换 QQ 原控件的触摸监听器。 */
 private fun View.pressMotion(kernel: Glass? = null) {
@@ -771,41 +771,11 @@ private fun sheet(anchor: View) {
         })
     }
     grid.addView(bubblePadSeek)
-    val safeTopLabel = TextView(ctx).apply {
-        textSize = 13f; setTextColor(ink)
-        gravity = Gravity.START
-        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
-    }
     grid.addView(TextView(ctx).apply {
         text = "顶栏"; textSize = 13.5f; setTextColor(sub)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
         setPadding((6 * dp).toInt(), (14 * dp).toInt(), 0, (2 * dp).toInt())
-    })
-    grid.addView(safeTopLabel)
-    val safeTopSeek = android.widget.SeekBar(ctx).apply {
-        max = 100; progress = prefs.getInt(SAFE_TOP, 0).coerceIn(0, 100)
-        safeTopLabel.text = safeTopText(progress, prefs.getInt(SAFE_TOP_SHIFT, 0))
-        contentDescription = "顶栏安全区保留百分比"
-        setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(bar: android.widget.SeekBar, value: Int, user: Boolean) {
-                safeTopLabel.text = safeTopText(value, prefs.getInt(SAFE_TOP_SHIFT, 0))
-            }
-            override fun onStartTrackingTouch(bar: android.widget.SeekBar) = Unit
-            override fun onStopTrackingTouch(bar: android.widget.SeekBar) {
-                prefs.edit().putInt(SAFE_TOP, bar.progress).apply()
-                refreshLooks(); card.invalidate()
-            }
-        })
-    }
-    grid.addView(safeTopSeek)
-    grid.addView(TextView(ctx).apply {
-        text = SAFE_TOP_GUIDE
-        textSize = 11.5f; setTextColor(sub)
-        gravity = Gravity.START
-        textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (2 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
     })
     val safeShiftLabel = TextView(ctx).apply {
         textSize = 13f; setTextColor(ink)
@@ -815,16 +785,16 @@ private fun sheet(anchor: View) {
     }
     grid.addView(safeShiftLabel)
     val safeShiftSeek = android.widget.SeekBar(ctx).apply {
-        max = 72; progress = prefs.getInt(SAFE_TOP_SHIFT, 0).coerceIn(-24, 48) + 24
-        safeShiftLabel.text = safeTopText(prefs.getInt(SAFE_TOP, 0), progress - 24)
-        contentDescription = "顶栏上下微调"
+        max = 48; progress = prefs.getInt(SAFE_TOP_SHIFT, 0).coerceIn(0, 48)
+        safeShiftLabel.text = safeTopText(progress)
+        contentDescription = "顶栏再下移"
         setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(bar: android.widget.SeekBar, value: Int, user: Boolean) {
-                safeShiftLabel.text = safeTopText(prefs.getInt(SAFE_TOP, 0), value - 24)
+                safeShiftLabel.text = safeTopText(value)
             }
             override fun onStartTrackingTouch(bar: android.widget.SeekBar) = Unit
             override fun onStopTrackingTouch(bar: android.widget.SeekBar) {
-                prefs.edit().putInt(SAFE_TOP_SHIFT, bar.progress - 24).apply()
+                prefs.edit().putInt(SAFE_TOP_SHIFT, bar.progress).apply()
                 refreshLooks(); card.invalidate()
             }
         })
@@ -876,11 +846,11 @@ private fun sheet(anchor: View) {
             features.forEach { edit.putBoolean(it.name, it.default) }
             edit.putString(TIME_PATTERN, "HH:mm").putInt(AVATAR_RADIUS, 20).putInt(GLASS_BLUR, 1)
                 .putInt(BUBBLE_CORNER, 17).putInt(BUBBLE_PADDING, 5)
-                .putInt(SAFE_TOP, 0).putInt(SAFE_TOP_SHIFT, 0)
+                .putInt(SAFE_TOP_SHIFT, 0)
             edit.apply(); format.setText("HH:mm"); radiusSeek.progress = 20; blurSeek.progress = 1
             bubbleCornerSeek.progress = 17; bubblePadSeek.progress = 5
-            safeTopSeek.progress = 0; safeShiftSeek.progress = 24
-            safeTopLabel.text = safeTopText(0, 0); safeShiftLabel.text = safeTopText(0, 0)
+            safeShiftSeek.progress = 0
+            safeShiftLabel.text = safeTopText(0)
             paints.forEach { it() }; refreshLooks(); card.invalidate()
         })
         addView(button("结束进程") {

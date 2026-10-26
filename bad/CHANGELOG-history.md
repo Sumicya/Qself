@@ -1,3 +1,14 @@
+## 2026-10-24（五）— 真机核对导出合并去重与清理生效，纠正「SplashActivity=主页」误判，新增 AIO 顶栏一行几何账
+
+- 用回传的 2 份真机日志（均为 `26.10.24.4.3166`，`4713064` 字节，md5 同为 `c1b7b505dc0ea524e79f0d5738104a3d`，同一份文件的两个副本）核对上一版的合并与清理，**确认已生效**：
+  - 报告头直接写明：`合并 : 已与上一次导出按小节合并去重（上次 4513568 字节）；导出前清理历史副本 4 个，同名文件只保留 qself-full-log.txt`。
+  - `[4]` Qself 事件里留下 4 条连续导出记录：`2153653 → 3342740 → 4236862 → 4372001 → 4513568` 字节，每次导出前都清掉 `4` 个副本（`getExternalFilesDir` / `externalCacheDir` / `filesDir` / Download 四个落盘位置各一份），证明反复导出只会累加内容、不会再堆编号文件。
+  - 合并后单文件小节账：`[3]` 视图树快照 `10` 块、`[4]` Qself 事件 `1290` 条、`[5]` UI/AIO/错误 `QLog` `3764` 条、`[6]` 全量 `QLog` `9161` 条，共 `4.71MB`。
+- **纠正上一轮的误判**：`AIO-Header:*` 快照的活动名是 `SplashActivity` **不代表当时停在主页** —— QQ NT 的聊天页就是以 `SplashActivity` 作为主 Activity 承载的，快照里 `AIOTitleRelativeLayout 0x7f0a6c15`、`AIOEditText 0x7f0a2c94(input)`、`AIOInputSendBtn 0x7f0a61c0(send_btn)`、`AIOAnimationContainer 0x7f0a02b5`、`ChatFragmentRootView` 全都在同一棵树里，是**真的 AIO**。上一轮据此让用户「进任意聊天窗口再导出一次」是错误指令，那一趟白跑了。
+- 新增 `Looks.kt` `aioGeometry(bar)`：开启「全量日志」时随 AIO 顶栏布局快照（3 秒节流）打**一行几何账** —— `状态栏高度 / 顶栏容器 paddingTop / 标题栏屏幕 y 与高 / 消息区屏幕 y / 返回键屏幕 y / 已去掉的安全区像素 / 仍开着 fitsSystemWindows 的祖先类名与 paddingTop / 当前 percent 与 shift`。只读，不改任何布局；`tools/test_message_style.py` 增加契约断言。
+- 顺带在真包 `classes4.dex` 里定位到 `com.tencent.aio.part.fitwindow.vb.FitSystemWindowVB#onCreateView` 会调用 `View#setFitsSystemWindows(...)`（QQ 把系统窗口内边距贴回 AIO 内容区的入口，此前全仓未挂钩也未记录）。本次**只把它读出来记进几何账**，是否要动等真机 `SAFE_TOP=0%` 的日志出来再定，不臆测。
+- 真机当前设置核对：`SAFE_TOP=80` / `SAFE_TOP_SHIFT=0` 时，主页顶栏内容落在屏幕 `y=61..160`（头像 `0x7f0a3245` `mar=[0,61,0,0]`，会话列表 `0x7f0a0e96 pad=[0,160,0,107]`，搜索框 `y=160`），AIO 顶栏外层 `0x7f0a6bc6 padTop=113`、`AIOTitleRelativeLayout` 落在 `y=113..212`、返回键 `y=139..186`；`MainResourceConfig#n orig=95px -> 76px`。同一份日志里 `sysUiVis=0x700`（`LOW_PROFILE|HIDE_NAVIGATION|FULLSCREEN`）且 10-23 那批截图顶部 `0..63px` 全为空，说明这台机上状态栏是隐藏的、顶部并没有系统图标要避让——`0%` 并不会撞状态栏，想让顶栏更贴屏幕上沿直接用「顶栏安全区」百分比或「顶栏上下微调」即可。
+
 ## 2026-10-24（四）— 全量日志导出改为「合并去重 + 导出前清理」，反复导出只留一个 qself-full-log.txt
 
 - 用户回传 10 份真机日志（均为 `26.10.24.3.3165`，OnePlus `PLC110` / Android 16 / `1272×2800` / `density 1.9761429`，采集区间 `03:00:07.750` → `03:00:57.427`，其中 `qself-full-log.txt` 与 `(9).txt` 字节完全相同）后指出「清理和 log 合并是不是没做」。逐行核对结论：**确实一个字都没做** —— 仓库里只有 CI 侧的 `cleanup-artifacts`（GitHub 只保留最新 5 个构建产物，与手机无关），设备端没有任何清理与合并代码；`writeLogFiles` 每次都用同一个 `DISPLAY_NAME = qself-full-log.txt` 往 MediaStore 插入**新行**，系统自动把重名文件改名成 `(1)(2)…`，于是点 10 次就堆出 10 个副本，且每份都只保留最后一次采集的环缓冲内容、老记录白白丢掉。

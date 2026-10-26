@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-10-26（十）— 顶栏回到摄像头下沿（不再藏状态栏）、修掉主线程三万分之一秒级的日志开销与玻璃底图整屏重画，并按新版 GLOBAL.md 清掉被禁工具
+
+- 顶栏位置按主人的话改口（`Looks.kt`、`Input.kt`、`Knob.kt`）：上一版把系统状态栏整个藏掉、顶栏顶到 `y=0`，主人判定「不是顶到 y=0 是摄像头下面或者原始位置」「状态栏没说要消失 实测可以冒出」。撤掉 `insetsController.hide(statusBars)` 那套机器（连同每 500ms 巡检），改量为 `max(状态栏高, 摄像头挖孔下沿)`（真机 `141px`）当硬下界：顶栏固定停在这条线以下，滑条从「安全区百分比」改成「顶栏再下移 0–48dp」，压到底也只会停在摄像头下面。消息区上沿同样对齐这条线，顶部内边距取标题栏真实底边（`141+99=240`），滚动时仍从玻璃胶囊底下穿过。留在旧版本被藏掉状态栏的现场，恢复前台时还原一次。
+- 帧率（主人实测进聊天只有 `30fps`）：日志里 `帧率窗口` 长期 `平均 24.9~27.1ms`（约 `37~40fps`），而同期 `ViewGroup#dispatchDraw` 钩子被调 `236926` 次。两处真实开销已改：① `DiagLog.nowStamp()` 原先每条日志都 `new SimpleDateFormat`（一次约 10µs），全量日志开着时 QQ 一秒上千行，改成每线程复用一个实例；② 录制端不再对每一行跑 `uiKeywords` 正则，「UI/AIO/错误」小节改为导出时从同一份记录里筛。玻璃底图也不再整屏重画：`Glass.recordBehind()` 把每个兄弟视图裁到「玻璃板正下方那一带（`bounds` 加边距）」再画，之前消息列表会被整张重画一遍。
+- 帧耗时归因（`Perf.kt`）：新增 `CostMeter`，只记「玻璃合成 / 头像浮绘 / 消息几何 / 顶栏」四个环节的纳秒数与次数，不分配对象；每 60 帧往事件流写一行「帧耗时 最近 60 帧 x.xms（yy fps）；「某环」z.zms/次」，导出时另有一行汇总。帧率只有总数时只能猜是谁拖慢的，有这一行才能指着某一环说话。
+- 按新版 `GLOBAL.md`（`f8f51cf5`）清工具：删掉被点名的 Agent 汇报辅助脚本 `tools/report_links.py` 与其测试、七份读源码做字符串匹配的伪测试、两份 `make_*_preview.py` 生图脚本、`.github/scripts/test_cleanup.py`、`TODO.md`、`docs/design-principles.md`；`ci/` 目录并入 `tools/`（`check.sh`、`check-shaders.sh`）。工作流按 C1–C6 重排：`build.yml` 三作业（`build` / `cleanup-artifacts` / `cleanup-releases`）、`pr-check.yml` 两作业（`check` / `cleanup-artifacts`），顶部注释不超过 5 行，去掉私加的 `::error::` 注解步骤，清理作业统一传 `RUN_ID`。
+- 版本口径换成 CI 运行数（同一份规范）：总序号取 `github.run_number`，当日序号按「当日现存 `build.yml` 运行最小 `run_number`」与「当日合规产物名反推 `r0-d0+1`」取小值锚定，同一 run 重试不换号；不再用 `git rev-list --count`，也不再需要完整历史。
+
 ## 2026-10-24（九）— 面板「消息外观」按四组重排并钉死滑条与标题的配对，群聊顶栏去掉安全区后改为组件重定位而非相撞
 
 - 面板「消息外观」重排（`Knob.kt`）：气泡边距的滑条原先被 `grid.addView` 加在整节最后，和它自己的标题隔着一整片顶栏滑条；现在按「消息（头像 / 气泡）→ 玻璃 → 顶栏 → 时间格式」四组排，小组内标题紧跟对应滑条。新增契约（`tools/test_switch_groups.py`）：六条滑条必须紧跟自己的标题、四个小组顺序固定，再挪错位就红。
@@ -28,15 +36,4 @@
 - 真机帧率采样（`Perf.kt`）：`FrameMeter` 借 `Choreographer` 每帧只记一个时间戳，导出日志头给出「累计帧数 / 平均帧长 / 掉帧率 / 卡顿帧数 / 最长帧 / 最近 600 帧」，并把连续卡顿的「操作窗口」（不少于 20 帧、末尾 30 帧无卡顿即收口，最多留 12 段）写进 Qself 事件流；事件出口用 `frameEventSink` 注入，帧率统计在没有 Android 的 JVM 上也能单测。「卡不卡」从此有真机数字，不再靠自评。
 - 规范核对（`Sumicya/selfs` `GLOBAL.md` / `REPOS.md` @ `f4033232`）：两个工作流 `Build` / `PR check` 触发分离且 `SEGMENTS` / `CLEANUP_APPLY` 同值、共用 `concurrency group`、`fetch-depth: 0`、artifact `Qself-版本` / `retention-days: 5` / `if-no-files-found: error`、Release 与 tag 的删除只授 `contents: write`；实测 Release 0 个（上限 1）、artifact 5 个（上限 5）、每个工作流 5 条运行（上限 5）。CHANGELOG 只留最新 5 条，其余 7 条移入 `bad/CHANGELOG-history.md`；README 六个二级章节顺序与固定末行核对通过，无图片与徽章。
 - 测试：`ci/check.sh` 编译 125 个类、64 个用例通过（新增 `trimRecordCutsTheMiddleAndIsIdempotent`、`capByBytesKeepsTheNewestAndAlwaysKeepsOne`、`mergeDiagnosticReportsTrimsOverLongStreamingRecords`、`frameMeterCountsStallsClosesWindowsAndIgnoresHugeGaps`）。
-
-## 2026-10-24（五）— 真机核对导出合并去重与清理生效，纠正「SplashActivity=主页」误判，新增 AIO 顶栏一行几何账
-
-- 用回传的 2 份真机日志（均为 `26.10.24.4.3166`，`4713064` 字节，md5 同为 `c1b7b505dc0ea524e79f0d5738104a3d`，同一份文件的两个副本）核对上一版的合并与清理，**确认已生效**：
-  - 报告头直接写明：`合并 : 已与上一次导出按小节合并去重（上次 4513568 字节）；导出前清理历史副本 4 个，同名文件只保留 qself-full-log.txt`。
-  - `[4]` Qself 事件里留下 4 条连续导出记录：`2153653 → 3342740 → 4236862 → 4372001 → 4513568` 字节，每次导出前都清掉 `4` 个副本（`getExternalFilesDir` / `externalCacheDir` / `filesDir` / Download 四个落盘位置各一份），证明反复导出只会累加内容、不会再堆编号文件。
-  - 合并后单文件小节账：`[3]` 视图树快照 `10` 块、`[4]` Qself 事件 `1290` 条、`[5]` UI/AIO/错误 `QLog` `3764` 条、`[6]` 全量 `QLog` `9161` 条，共 `4.71MB`。
-- **纠正上一轮的误判**：`AIO-Header:*` 快照的活动名是 `SplashActivity` **不代表当时停在主页** —— QQ NT 的聊天页就是以 `SplashActivity` 作为主 Activity 承载的，快照里 `AIOTitleRelativeLayout 0x7f0a6c15`、`AIOEditText 0x7f0a2c94(input)`、`AIOInputSendBtn 0x7f0a61c0(send_btn)`、`AIOAnimationContainer 0x7f0a02b5`、`ChatFragmentRootView` 全都在同一棵树里，是**真的 AIO**。上一轮据此让用户「进任意聊天窗口再导出一次」是错误指令，那一趟白跑了。
-- 新增 `Looks.kt` `aioGeometry(bar)`：开启「全量日志」时随 AIO 顶栏布局快照（3 秒节流）打**一行几何账** —— `状态栏高度 / 顶栏容器 paddingTop / 标题栏屏幕 y 与高 / 消息区屏幕 y / 返回键屏幕 y / 已去掉的安全区像素 / 仍开着 fitsSystemWindows 的祖先类名与 paddingTop / 当前 percent 与 shift`。只读，不改任何布局；`tools/test_message_style.py` 增加契约断言。
-- 顺带在真包 `classes4.dex` 里定位到 `com.tencent.aio.part.fitwindow.vb.FitSystemWindowVB#onCreateView` 会调用 `View#setFitsSystemWindows(...)`（QQ 把系统窗口内边距贴回 AIO 内容区的入口，此前全仓未挂钩也未记录）。本次**只把它读出来记进几何账**，是否要动等真机 `SAFE_TOP=0%` 的日志出来再定，不臆测。
-- 真机当前设置核对：`SAFE_TOP=80` / `SAFE_TOP_SHIFT=0` 时，主页顶栏内容落在屏幕 `y=61..160`（头像 `0x7f0a3245` `mar=[0,61,0,0]`，会话列表 `0x7f0a0e96 pad=[0,160,0,107]`，搜索框 `y=160`），AIO 顶栏外层 `0x7f0a6bc6 padTop=113`、`AIOTitleRelativeLayout` 落在 `y=113..212`、返回键 `y=139..186`；`MainResourceConfig#n orig=95px -> 76px`。同一份日志里 `sysUiVis=0x700`（`LOW_PROFILE|HIDE_NAVIGATION|FULLSCREEN`）且 10-23 那批截图顶部 `0..63px` 全为空，说明这台机上状态栏是隐藏的、顶部并没有系统图标要避让——`0%` 并不会撞状态栏，想让顶栏更贴屏幕上沿直接用「顶栏安全区」百分比或「顶栏上下微调」即可。
 

@@ -37,15 +37,11 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 private const val MAX_QSELF_EVENTS = 1500
-private const val MAX_UI_QLOGS = 2500
 private const val MAX_ALL_QLOGS = 3000
 private const val MAX_HOOK_SAMPLE_PER_METHOD = 10
 
 private val qselfEvents = ConcurrentLinkedDeque<String>()
 private val qselfEventCount = AtomicInteger(0)
-
-private val uiQLogs = ConcurrentLinkedDeque<String>()
-private val uiQLogCount = AtomicInteger(0)
 
 private val allQLogs = ConcurrentLinkedDeque<String>()
 private val allQLogCount = AtomicInteger(0)
@@ -73,8 +69,15 @@ private val uiKeywords = Regex(
     RegexOption.IGNORE_CASE,
 )
 
-internal fun nowStamp(): String =
-    SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date())
+/**
+ * 时间戳：每天上万条日志都走这里，绝不能在调用点 new SimpleDateFormat（一次约 10µs，
+ * 全量日志开着时单这一项就能吃掉主线程的帧预算）。每个线程复用一个实例。
+ */
+private val stampFormat = object : ThreadLocal<SimpleDateFormat>() {
+    override fun initialValue() = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
+}
+
+internal fun nowStamp(): String = stampFormat.get()!!.format(Date())
 
 private fun pushBounded(deque: ConcurrentLinkedDeque<String>, counter: AtomicInteger, max: Int, line: String) {
     deque.addLast(line)
@@ -307,7 +310,6 @@ fun buildFullDiagnosticReport(ctx: Context?, includeLogcat: Boolean = true): Str
             .append(" GLASS_BLUR=").append(p.getInt(GLASS_BLUR, 1))
             .append(" BUBBLE_CORNER=").append(p.getInt(BUBBLE_CORNER, 17))
             .append(" BUBBLE_PADDING=").append(p.getInt(BUBBLE_PADDING, 5))
-            .append(" SAFE_TOP=").append(p.getInt(SAFE_TOP, 0))
             .append(" SAFE_TOP_SHIFT=").append(p.getInt(SAFE_TOP_SHIFT, 0))
             .append('\n')
     }
@@ -327,8 +329,10 @@ fun buildFullDiagnosticReport(ctx: Context?, includeLogcat: Boolean = true): Str
     }
     append("\n--- [4] Qself Events & Hook Samples (").append(qselfEvents.size).append(") ---\n")
     qselfEvents.forEach { append(it).append('\n') }
-    append("\n--- [5] UI / AIO / Header / Error QLog Stream (").append(uiQLogs.size).append(") ---\n")
-    uiQLogs.forEach { append(it).append('\n') }
+    // UI/AIO/顶栏/错误那一节在导出时从同一份记录里筛：录制端只存一条，不跑正则。
+    val ui = allQLogs.filter { uiKeywords.containsMatchIn(it) }
+    append("\n--- [5] UI / AIO / Header / Error QLog Stream (").append(ui.size).append(") ---\n")
+    ui.forEach { append(it).append('\n') }
     append("\n--- [6] All QQ QLog Stream (").append(allQLogs.size).append(") ---\n")
     allQLogs.forEach { append(it).append('\n') }
     if (includeLogcat) {
@@ -557,10 +561,9 @@ fun fullQqLogger() {
                             .append(msg)
                         if (tr != null) append('\n').append(Log.getStackTraceString(tr))
                     }
+                    // 这里只存一条，不再对每行跑关键词正则：QQ 一秒上千行，正则比日志本身还贵。
+                    // 「UI/AIO/错误」那一节改为导出时从同一份记录里筛（见 buildReport）。
                     pushBounded(allQLogs, allQLogCount, MAX_ALL_QLOGS, line)
-                    if (lvByte >= 5 || tr != null || uiKeywords.containsMatchIn(tag) || uiKeywords.containsMatchIn(msg)) {
-                        pushBounded(uiQLogs, uiQLogCount, MAX_UI_QLOGS, line)
-                    }
                 }
             }
             chain.proceed()

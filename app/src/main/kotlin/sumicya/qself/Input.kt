@@ -110,7 +110,12 @@ private class MsgListUnderScroll(
 
     /** 顶栏透明：消息区从窗口最上沿铺下来，滚动时从玻璃胶囊底下穿过；内边距取顶栏真实底边。 */
     private val preDraw = ViewTreeObserver.OnPreDrawListener {
-        if (on("玻璃底栏") || on("输入栏药丸")) syncGeometry()
+        val started = System.nanoTime()
+        try {
+            if (on("玻璃底栏") || on("输入栏药丸")) syncGeometry()
+        } finally {
+            CostMeter.add(COST_LIST, started)
+        }
         true
     }
 
@@ -161,12 +166,10 @@ private class MsgListUnderScroll(
     /**
      * 消息区几何：
      *
-     * - 顶栏透明、三颗胶囊浮着，消息应该从窗口最上沿铺下来（滚动时从胶囊底下穿过）。
-     *   真包里 QQ 只按标题栏高度把列表上移一次（`AIOMsgListGroup trans=-99`）+ 同样的 `paddingTop`，
-     *   状态栏那 141px 收掉后容器高度不一定跟着缩，这里按实际屏幕位置兜底对到 y=0：
-     *   先量「消息区顶部离窗口上沿还有多少」，再把这差值减掉。
-     * - 顶部内边距直接取标题栏底边（日志实测 141+99 → 240；收起状态栏后 99），
-     *   不再用「原内边距 - 去掉的安全区」这种容易和 QQ 自己的重排叠在一起的账。
+     * - 状态栏照常显示，消息区不进到它下面：上沿对齐 `topInsetPx()`（状态栏与摄像头挖孔的下沿，
+     *   真机 141）。全屏页把它让成 0 时按 0 算，此时列表从窗口最上沿铺下来。
+     * - 顶部内边距直接取标题栏真实底边（日志实测 141+99 → 240），减去消息区自己的上沿。
+     *   于是消息从胶囊底下滚过，又不和状态栏叠在一起。
      * - 底部内边距按消息区实际底边到输入浮层顶端的距离算，最后一行按钮和时间不会被输入栏吞掉。
      */
     private fun syncGeometry() {
@@ -175,9 +178,11 @@ private class MsgListUnderScroll(
         val at = IntArray(2)
         if (on("玻璃底栏") && aioHeaderBottom() > 0) {
             group.getLocationInWindow(at)
-            if (at[1] != 0) {
-                group.translationY -= at[1].toFloat()
-                shiftedBy += at[1].toFloat()
+            val want = minOf(topInsetPx(), aioHeaderBottom())
+            val delta = at[1] - want
+            if (delta != 0) {
+                group.translationY -= delta.toFloat()
+                shiftedBy += delta.toFloat()
                 group.getLocationInWindow(at)
             }
         } else {

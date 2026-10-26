@@ -14,6 +14,44 @@ internal const val FRAME_WINDOW_GAP = 30     // 连续 30 帧不卡就收口一�
 internal const val FRAME_WINDOW_MIN = 20     // 短于此的窗口不记（零星两帧不算一次操作）
 internal const val FRAME_MAX_WINDOWS = 12
 
+/**
+ * 每帧耗时归因：只记「哪个环节花了多久」，不进日志、不分配对象，导出时汇总成一行。
+ * 帧率只有总数时只能猜是谁拖慢的；有这一行才能指着某一环说「就是它」。
+ */
+internal const val COST_GLASS = 0
+internal const val COST_AVATAR = 1
+internal const val COST_LIST = 2
+internal const val COST_HEADER = 3
+
+internal object CostMeter {
+    private val names = arrayOf("玻璃合成", "头像浮绘", "消息几何", "顶栏")
+    private val nanos = LongArray(names.size)
+    private val counts = LongArray(names.size)
+
+    /** 主线程专用：这批计数只在绘制/布局里加减，不跨线程。 */
+    fun add(slot: Int, startNanos: Long) {
+        if (slot !in names.indices) return
+        nanos[slot] += System.nanoTime() - startNanos
+        counts[slot]++
+    }
+
+    fun reset() { nanos.fill(0); counts.fill(0) }
+
+    /** 取走本段统计并清零：给「最近一段」的归因行用，均值只算这一段。 */
+    fun take(): String {
+        val text = line()
+        reset()
+        return text
+    }
+
+    fun line(): String {
+        val parts = names.indices.filter { counts[it] > 0 }.map { i ->
+            "「${names[i]}」${fmt("%.2f", nanos[i] / 1e6 / counts[i])}ms/次（${counts[i]} 次）"
+        }
+        return if (parts.isEmpty()) "" else "耗时归因（主线程）：" + parts.joinToString("；")
+    }
+}
+
 /** 事件出口由宿主注入：帧率统计就不需要 Android 类也能在 JVM 上单测。 */
 internal var frameEventSink: ((String) -> Unit)? = null
 
@@ -31,6 +69,8 @@ internal object FrameMeter {
         frames = 0L; janky = 0L; stalls = 0L; missed = 0L; worst = 0f; sum = 0.0
         gap = 0; wFrames = 0; wJank = 0; wStall = 0; wWorst = 0f; wSum = 0.0; wStart = ""
         windows.clear(); periodMs = FRAME_BUDGET_MS
+        reportFrames = 0; reportSum = 0.0
+        CostMeter.reset()
     }
 
     private val ring = FloatArray(FRAME_RING)
@@ -52,6 +92,8 @@ internal object FrameMeter {
     private var gap = 0
     private var periodMs = FRAME_BUDGET_MS   // 这台机器的刷新周期，测出来之前按 60Hz 兜底
     private val windows = ArrayDeque<String>(FRAME_MAX_WINDOWS)
+    private var reportFrames = 0
+    private var reportSum = 0.0
     @Volatile private var installed = false
 
     /** 记一帧的真实间隔（毫秒）。纯计算，JVM 单测可以直接灌数。 */
@@ -77,6 +119,19 @@ internal object FrameMeter {
         if (dtMs > jankBudget()) wJank++
         if (dtMs > FRAME_STALL_MS) { wStall++; gap = 0 } else gap++
         if (dtMs > wWorst) wWorst = dtMs
+        // 每 60 帧吐一行归因：帧间隔归帧间隔，各环节花多久归各环节，谁在吃预算一眼可见。
+        reportFrames++
+        reportSum += dtMs
+        if (reportFrames >= 60) {
+            val avg = reportSum / reportFrames
+            reportFrames = 0
+            reportSum = 0.0
+            val cost = CostMeter.take()
+            frameEventSink?.invoke(
+                "帧耗时 最近 60 帧 ${fmt("%.1f", avg)}ms（${fmt("%.0f", 1000.0 / avg)}fps）" +
+                    if (cost.isEmpty()) "" else "；" + cost,
+            )
+        }
         if (gap >= FRAME_WINDOW_GAP) closeWindow()
     }
 
@@ -130,6 +185,8 @@ internal object FrameMeter {
             append("最长 ${fmt("%.0f", worst)}ms；帧周期 ${fmt("%.1f", period())}ms（约 ${fmt("%.0f", 1000f / period())}Hz），")
             append("最近 $ringSize 帧平均 ${fmt("%.1f", rAvg)}ms、掉帧 $rJank")
         }
+        val cost = CostMeter.line()
+        if (cost.isNotEmpty()) return (head + "\n" + cost + windows.joinToString("") { "\n" + it })
         if (windows.isEmpty()) return head
         return head + "\n" + windows.joinToString("\n")
     }

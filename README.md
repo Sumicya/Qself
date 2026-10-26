@@ -67,7 +67,7 @@
 本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）出 APK。
 当前仓库不保存签名私钥；debug APK 使用 Android 默认 debug 签名，正式签名需由仓库外的安全签名环境提供。
 失败日志以 GitHub Actions 原始日志为准。
-本地没有 Android SDK 时用 `ci/check.sh` 做类型检查 + 跑 ProtoTest（第一次会拉工具链到 `~/.cache/qself-tc`）。
+本地没有 Android SDK 时用 `tools/check.sh` 做类型检查 + 跑 ProtoTest（第一次会拉工具链到 `~/.cache/qself-tc`）。
 版本号 `yy.m.d.当日序号.总序号`，按 git 提交数取，由 `build.yml` 在 CI 里算。
 
 ### 核落点
@@ -104,14 +104,14 @@ app/src/test/kotlin/sumicya/qself/ProtoTest.kt   协议、分组、间距、菜�
 app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop、作用域
 tools/symbols.txt    落点表：代码依赖的每一个名字
 tools/dexcheck.py    拿真 dex 逐条核落点，顺带 lint 源码里没登记的名字
+tools/ui_paths.py    真包字段读写与调用边；只做静态核对
 tools/dexq.py        最小反汇编器：按签名找落点（上游用 DexKit 在运行时搜，这里离线搜）
-tools/report_links.py 汇报用的链接块：提交 / CI 运行 / 产物 / 对比 / 规范 SHA，全是从 git、gh 现取
-ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
+tools/check.sh       无 SDK 时的类型检查 + 跑 ProtoTest
 ```
 
 ## 项目限制
 
-聊天页整体整改的已确认要求和未完成项见 [待办](TODO.md)。QQ 原生消息菜单与设置面板已接入单有效项随指高亮、跨项移动、项外取消与危险操作警示色，全类型消息时间与顶部时间条折叠已接线，但手势、浮动头像及各类消息视觉效果仍待真机验收。
+QQ 原生消息菜单与设置面板已接入单有效项随指高亮、跨项移动、项外取消与危险操作警示色，全类型消息时间与顶部时间条折叠已接线，但手势、浮动头像及各类消息视觉效果仍待真机验收。
 
 ### 写法
 

@@ -32,7 +32,7 @@ REPO = os.environ["REPO"]
 SCOPE = os.environ.get("CLEANUP_SCOPE", "actions").strip()
 if SCOPE not in ("actions", "releases"):
     raise SystemExit(f"CLEANUP_SCOPE 只能是 actions 或 releases，收到 {SCOPE!r}")
-SELF = int(os.environ["SELF"]) if SCOPE == "actions" else 0   # releases 档不清运行记录，不需要
+SELF = int(os.environ["RUN_ID"]) if SCOPE == "actions" else 0   # releases 档不清运行记录，不需要
 SEGMENTS = int(os.environ["SEGMENTS"])
 APPLY = os.environ.get("CLEANUP_APPLY", "false").strip().lower() == "true"
 PREFIX = "Qself-"
@@ -43,7 +43,7 @@ CST = timezone(timedelta(hours=8))
 TODAY = datetime.now(CST).strftime("%Y-%m-%d")
 VERB = "删" if APPLY else "将删"
 print(f"cleanup.py 启动参数：SCOPE={SCOPE} SEGMENTS={SEGMENTS} CLEANUP_APPLY={'true' if APPLY else 'false'} "
-      f"PREFIX={PREFIX} KEEP={KEEP} SELF={SELF} TODAY={TODAY} REPO={REPO}")
+      f"PREFIX={PREFIX} KEEP={KEEP} RUN_ID={SELF} TODAY={TODAY} REPO={REPO}")
 print("删除失败分级口径：DELETE 403 → ::warning:: 降级不红；403 以外 → ::error:: 累积，脚本末尾红 job")
 
 
