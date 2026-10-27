@@ -14,7 +14,9 @@
 - 通知现代化（新增 `Notify.kt`，开关在「系统与诊断」）：`NotificationManager#notify` 落盘前把 QQ 的消息通知换成
   `BigTextStyle`，标题保留、正文展开成完整内容，并打开时间显示；带自定义 `RemoteViews` 的通知一律放行不动，
   改动通过 `chain.proceed(新参数)` 回填，不重调 `notify`，无递归风险。
-- 文档：README 源码清单补 `Notify.kt`（十四个文件），「项目限制」下补四条只有真机才能判的待办。
+- 工作流（`.github/workflows/build.yml`）：两个清理作业补 `if: always()`。此前只写 `needs: build`，构建一红清理整体跳过，
+  失败运行只吃号不清理，保留上限当场失效。
+- 文档：README 源码清单补 `Notify.kt`（十四个文件），「项目限制」补上只有真机能判的三项与 Ark 卡片的已知越界。
 
 ## 2026-10-26（十）— 顶栏回到摄像头下沿（不再藏状态栏）、修掉主线程三万分之一秒级的日志开销与玻璃底图整屏重画，并按新版 GLOBAL.md 清掉被禁工具
 
