@@ -286,11 +286,15 @@ private fun watch(decor: View) {
     watched[decor] = WeakReference(AppearanceObserver(decor))
 }
 
+/** 整树遍历的最小间隔：藏东西的规则不需要逐帧精度。 */
+private const val WALK_MIN_GAP_MS = 200L
+
 private class AppearanceObserver(decor: View) : ViewTreeObserver.OnGlobalLayoutListener,
     ViewTreeObserver.OnPreDrawListener, View.OnAttachStateChangeListener {
     private val root = WeakReference(decor)
     private var dirty = true
     private var cancelledOnce = false
+    private var lastWalkAt = 0L
     init {
         decor.viewTreeObserver.addOnGlobalLayoutListener(this)
         decor.viewTreeObserver.addOnPreDrawListener(this)
@@ -302,6 +306,11 @@ private class AppearanceObserver(decor: View) : ViewTreeObserver.OnGlobalLayoutL
     override fun onPreDraw(): Boolean {
         val decor = root.get() ?: return true
         if (!dirty) { cancelledOnce = false; return true }
+        // 滚动时 RecyclerView 每帧都会触发全局布局，逐帧整树遍历等于每帧几百个视图各查一遍文案。
+        // 规则只影响「藏不藏东西」，200ms 一次足够，dirty 会保持到下一次真正遍历。
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastWalkAt < WALK_MIN_GAP_MS) return true
+        lastWalkAt = now
         dirty = false
         val wasRequested = decor.isLayoutRequested
         noteTopInsets(decor)
@@ -344,8 +353,16 @@ fun resetLooks() {
     resetHomeTopBars()
 }
 
+/** 一轮遍历内复用的开关值：每个视图各查一次 SharedPreferences 是纯浪费。 */
+private var sideTrimOn = true
+private var onlineHideOn = true
+
 private fun walk(v: View, inDrawer: Boolean) {
-    if (v.parent == null && v is ViewGroup) syncStatusBarTintViews(v)
+    if (v.parent == null && v is ViewGroup) {
+        sideTrimOn = on("侧栏精简")
+        onlineHideOn = on("隐藏在线状态")
+        syncStatusBarTintViews(v)
+    }
     val name = v.javaClass.name
     when {
         name.endsWith(".QQTabLayout") -> { homeBar(v as ViewGroup); return }
@@ -380,16 +397,19 @@ private val ONLINE = setOf(
 )
 
 private fun trim(v: View, inDrawer: Boolean) {
-    val desc = v.contentDescription?.toString().orEmpty()
+    if (!sideTrimOn && !onlineHideOn) return
+    val dp = v.dp
+    val shortRow = v.height in 1..(72 * dp).toInt()
+    val desc = if (shortRow) v.contentDescription?.toString().orEmpty() else ""
     // 聊天标题栏右上角那排：有 contentDescription、矮、贴着窗口顶。
-    val title = desc.length in 1..10 && TITLE.any { it in desc } && v.height in 1..(72 * v.dp).toInt() && windowY(v) < 160 * v.dp
+    val title = shortRow && desc.length in 1..10 && TITLE.any { it in desc } && windowY(v) < 160 * dp
     // 侧栏里一行行可点的：打卡、天气、等级、会员、装扮……（文案多半带「我的」前缀，所以用包含）
-    val row = inDrawer && v.isClickable && v.height in 1..(96 * v.dp).toInt() &&
+    val row = inDrawer && v.isClickable && v.height in 1..(96 * dp).toInt() &&
         texts(v).any { t -> DRAWER.any { it in t } }
-    val status = v is TextView && (v.text?.toString()?.trim() ?: "") in ONLINE &&
-        v.height in 1..(40 * v.dp).toInt() && windowY(v) < 200 * v.dp
-    hide(v, on("侧栏精简") && (title || row || v.javaClass.simpleName == "WeatherSettingMeItemView") ||
-        on("隐藏在线状态") && status)
+    val status = v is TextView && v.height in 1..(40 * dp).toInt() &&
+        (v.text?.toString()?.trim() ?: "") in ONLINE && windowY(v) < 200 * dp
+    hide(v, sideTrimOn && (title || row || v.javaClass.simpleName == "WeatherSettingMeItemView") ||
+        onlineHideOn && status)
 }
 
 private val hidden = WeakHashMap<View, Int>()
@@ -403,7 +423,12 @@ fun hide(v: View, on: Boolean) {
     }
 }
 
-fun windowY(v: View) = IntArray(2).also(v::getLocationInWindow)[1]
+private val windowYLoc = IntArray(2)
+
+fun windowY(v: View): Int {
+    v.getLocationInWindow(windowYLoc)
+    return windowYLoc[1]
+}
 
 /** 一个视图「写着什么」：自己的 contentDescription 加上里面（4 层内）每个 TextView 的字。 */
 fun texts(v: View, depth: Int = 4): List<String> {
@@ -1346,6 +1371,8 @@ internal fun reducedSafeTop(origTop: Int, dp: Float, offsetDp: Float = Float.NaN
 private class HeaderPillsDrawable(private val host: View) : android.graphics.drawable.Drawable() {
     private val sharedScene = android.graphics.RenderNode("qself-header-scene")
     private var sharedSceneReady = false
+    private var sceneDraws = 0
+    private var sceneRecordDraw = -1
     private val sharedOverride: (Canvas) -> Boolean = { rc ->
         if (sharedSceneReady) {
             rc.drawRenderNode(sharedScene)
@@ -1406,7 +1433,11 @@ private class HeaderPillsDrawable(private val host: View) : android.graphics.dra
     override fun draw(canvas: Canvas) {
         val count = (if (!leftRect.isEmpty) 1 else 0) + (if (!centerRect.isEmpty) 1 else 0) + (if (!rightRect.isEmpty) 1 else 0)
         if (count == 0) return
-        val hw = canvas.isHardwareAccelerated && host.width > 0 && host.height > 0 && count >= 2
+        // 三颗胶囊共用一份底图，但这块底图要重画整个顶栏带（含背后的消息列表）。
+        // 每帧重录等于把列表画三遍，这里每两帧录一次：滚动时最多差一帧，肉眼看不出来。
+        sceneDraws++
+        val hw = canvas.isHardwareAccelerated && host.width > 0 && host.height > 0 && count >= 2 &&
+            (sceneDraws - sceneRecordDraw >= 2 || !sharedSceneReady)
         if (hw) {
             val pad = (40 * host.dp).toInt()
             val w = host.width
@@ -1417,6 +1448,7 @@ private class HeaderPillsDrawable(private val host: View) : android.graphics.dra
                 sc.translate(pad.toFloat(), pad.toFloat())
                 backGlass.recordBehind(sc, useTightBounds = false)
                 sharedSceneReady = true
+                sceneRecordDraw = sceneDraws
             } finally {
                 sharedScene.endRecording()
             }
@@ -1462,6 +1494,9 @@ private class HeaderState(
     val rootBg = root?.background
     val outerBg = outer?.background
     val parentBg = (root?.parent as? View)?.background
+    /** 从顶栏一直到 decor 的整条祖先链底色：顶部那块「背景板」就藏在其中某个容器上。 */
+    private val ancestorBgs = LinkedHashMap<View, android.graphics.drawable.Drawable?>()
+    private var ancestorScanned = false
     var origOuterPad = outer?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
     var lastAppliedOuterTop = -1
     var origRootPad = root?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
@@ -1626,6 +1661,17 @@ private class HeaderState(
         root?.background = null
         outer?.background = null
         (root?.parent as? View)?.background = null
+        // 顶部背景板：不只顶栏自己，整条祖先链上任何一层的不透明底色都会把顶上那条盖住，
+        // 让消息和壁纸透不上来。逐层清空并记住原值，关开关时按原样还回去。
+        if (!ancestorScanned) {
+            ancestorScanned = true
+            var p: View? = bar.parent as? View
+            while (p != null && p !is android.widget.FrameLayout) {
+                ancestorBgs[p] = p.background
+                p = p.parent as? View
+            }
+        }
+        for (v in ancestorBgs.keys) if (v.background != null) v.background = null
         // 动态捕获 AIOTitleVB#Y1 / #A1 延后设置的 statusBarHeight（140px）并按 reducedSafeTop 压缩顶部内边距。
         outer?.let { o ->
             if (o.paddingTop != lastAppliedOuterTop && o.paddingTop > 0) {
@@ -1696,6 +1742,9 @@ private class HeaderState(
         root?.background = rootBg
         outer?.background = outerBg
         (root?.parent as? View)?.background = parentBg
+        for ((v, bg) in ancestorBgs) v.background = bg
+        ancestorBgs.clear()
+        ancestorScanned = false
         outer?.let { o -> origOuterPad?.let { o.setPadding(it[0], it[1], it[2], it[3]) } }
         root?.takeIf { it !== outer }?.let { r -> origRootPad?.let { r.setPadding(it[0], it[1], it[2], it[3]) } }
         if (dividerLine != null && dividerVis != null) dividerLine.visibility = dividerVis

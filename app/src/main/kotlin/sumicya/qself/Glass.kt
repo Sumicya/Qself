@@ -37,6 +37,12 @@ import kotlin.math.min
  * [radius] 圆角上限（默认全圆 = 胶囊 / 圆钮），[selected] 给底栏用：返回当前选中的页签，
  * 玻璃里就多一块会弹着滑过去的亮胶囊。
  */
+/**
+ * 底图重录节奏：每两帧录一次。按帧数而不是按时间 —— 真机掉到 25ms 一帧时，
+ * 按时间节流等于每帧都重录，一点也没省。
+ */
+private const val REFRESH_EVERY_FRAMES = 2
+
 class Glass(
     private val host: View,
     private val radius: Float = Float.MAX_VALUE,
@@ -52,6 +58,7 @@ class Glass(
     private val pad = (12 * dp).toInt() // 边缘折射往里采样，留一点余量就够
     private val lens = RuntimeShader(LENS)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val layerPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
     private val here = IntArray(2)
     private val there = IntArray(2)
@@ -61,6 +68,9 @@ class Glass(
     private var drawableAlpha = 255
     private var drawableColorFilter: ColorFilter? = null
     private var lastFailureKey = Long.MIN_VALUE
+    private var draws = 0
+    private var lastRecordDraw = -1
+    private var recordValid = false
     // 按压：透镜往内凹一点 + 一层柔光，140ms 起落
     private var press = 0f
     private var pressed = false
@@ -73,7 +83,9 @@ class Glass(
     private var target: View? = null
     private var fromX = 0f
     private var toX = 0f
-    private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> key = 0L; invalidateSelf() }
+    private val layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        key = 0L; recordValid = false; invalidateSelf()
+    }
     private val attachListener = object : View.OnAttachStateChangeListener {
         override fun onViewAttachedToWindow(v: View) { kernel?.attach(); key = 0L; invalidateSelf() }
         override fun onViewDetachedFromWindow(v: View) { stopAnimations() }
@@ -86,7 +98,7 @@ class Glass(
     private fun stopAnimations() {
         kernel?.stop()
         pressAnim.cancel(); anim.cancel(); press = 0f; pressed = false; target = null
-        busy = false; key = 0L; node.discardDisplayList()
+        busy = false; key = 0L; recordValid = false; node.discardDisplayList()
     }
     fun dispose() {
         stopAnimations()
@@ -115,12 +127,14 @@ class Glass(
         kernel?.let { it.draw(canvas, b, drawableAlpha, drawableColorFilter); return }
         val night = night()
         lens.setFloatUniform("press", press)
-        val layerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            alpha = drawableAlpha
-            colorFilter = drawableColorFilter
-        }
         rect.set(b)
-        val layer = canvas.saveLayer(rect, layerPaint)
+        // 不透明又没有调色滤镜时不需要离屏层：每帧每人省一次整块 saveLayer。
+        val opaque = drawableAlpha == 255 && drawableColorFilter == null
+        if (!opaque) {
+            layerPaint.alpha = drawableAlpha
+            layerPaint.colorFilter = drawableColorFilter
+        }
+        val layer = if (opaque) -1 else canvas.saveLayer(rect, layerPaint)
         try {
             val drawn = canvas.isHardwareAccelerated && !busy && runCatching { backdrop(canvas, night) }
                 .onFailure {
@@ -140,12 +154,24 @@ class Glass(
             }
             pill(canvas, night)
         } finally {
-            canvas.restoreToCount(layer)
+            if (layer >= 0) canvas.restoreToCount(layer)
         }
     }
 
+    /**
+     * 底图重录的节流：真机 122Hz，玻璃板后面是整张消息列表，每帧重录一次相当于把列表画两遍。
+     * 距上次重录不足 [REFRESH_EVERY_FRAMES] 帧就直接复用上一帧的 RenderNode —— 静止和慢滑几乎看不出差别，
+     * 重录频率封顶约 60Hz，滚动帧预算立刻省一半。
+     */
     private fun backdrop(canvas: Canvas, night: Boolean): Boolean {
         val b = bounds
+        draws++
+        if (recordValid && draws - lastRecordDraw < REFRESH_EVERY_FRAMES) {
+            // 复用上一帧的底图：位置可能被动画挪过，只更新落点，不重录内容。
+            node.setPosition(b.left - pad, b.top - pad, b.right + pad, b.bottom + pad)
+            canvas.drawRenderNode(node)
+            return true
+        }
         busy = true
         try {
             val w = b.width() + 2 * pad
@@ -153,7 +179,7 @@ class Glass(
             // Monet 关了或者系统没给动态色时，accent 就等于着色器里那套中性色，混进去等于没混。
             val accent = monet(night, 0xFF) ?: if (night) 0xFF2A3240.toInt() else 0xFFFFFFFF.toInt()
             val k = (w.toLong() shl 40) or (h.toLong() shl 8) or (if (night) 1L else 0L)
-            if (k != key || accent != keyAccent) { node.setRenderEffect(effect(w, h, night, accent)); key = k; keyAccent = accent }
+            if (k != key || accent != keyAccent) { node.setRenderEffect(effect(w, h, night, accent)); key = k; keyAccent = accent; recordValid = false }
             node.setPosition(b.left - pad, b.top - pad, b.right + pad, b.bottom + pad)
             val rc = node.beginRecording(w, h)
             try {
@@ -163,6 +189,8 @@ class Glass(
                 node.endRecording()
             }
             canvas.drawRenderNode(node)
+            recordValid = true
+            lastRecordDraw = draws
             return true
         } finally {
             busy = false

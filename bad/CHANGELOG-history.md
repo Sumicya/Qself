@@ -1,3 +1,11 @@
+## 2026-10-24（六）— 全仓自查：给全量日志加字节预算与单条截断、导出整段挪离主线程、新增真机帧率采样，并按 selfs GLOBAL.md / REPOS.md 逐条核过工作流与文档
+
+- 全量日志体积收敛（真机 19MB → 稳定 6.1MB，`LogMerge.kt`）：只按 12000 条封顶不够 —— [5] 一节 12000 条实测 13.8MB（中位 167 字节、p99 15KB 的 Notification Channels / 配置 dump）。新增 `MAX_MERGED_SECTION_BYTES = 2,000,000`（从最老往回丢）、`trimRecord()`（单条超过 4096 字符从中间掐断、保留头尾，幂等）与 `capByBytes()`；同一份 19,368,750 字符的真机日志按新逻辑连续自合并三次，输出稳定在 6,109,393 → 6,111,191 → 6,111,783 字符，[5] 由 12000 条（13.8MB）降到 4188 条（1949KB）、[6] 降到 9851 条（1952KB），合并耗时 946ms / 359ms / 305ms。
+- 导出不再冻住主线程（`DiagLog.kt`）：原先 `exportFullQqLog` 在主线程 `readText()` 19MB 的历史文件并合并，随后 `writeLogFiles` 又把同一份历史文件再读一遍、再合并一遍。现在读历史 + 构建 + 合并 + 写盘整段进 `ioExecutor`，`prebuiltReport` / `priorLength` 直通，主线程只剩界面快照、Toast、授权弹窗与分享面板。
+- 真机帧率采样（`Perf.kt`）：`FrameMeter` 借 `Choreographer` 每帧只记一个时间戳，导出日志头给出「累计帧数 / 平均帧长 / 掉帧率 / 卡顿帧数 / 最长帧 / 最近 600 帧」，并把连续卡顿的「操作窗口」（不少于 20 帧、末尾 30 帧无卡顿即收口，最多留 12 段）写进 Qself 事件流；事件出口用 `frameEventSink` 注入，帧率统计在没有 Android 的 JVM 上也能单测。「卡不卡」从此有真机数字，不再靠自评。
+- 规范核对（`Sumicya/selfs` `GLOBAL.md` / `REPOS.md` @ `f4033232`）：两个工作流 `Build` / `PR check` 触发分离且 `SEGMENTS` / `CLEANUP_APPLY` 同值、共用 `concurrency group`、`fetch-depth: 0`、artifact `Qself-版本` / `retention-days: 5` / `if-no-files-found: error`、Release 与 tag 的删除只授 `contents: write`；实测 Release 0 个（上限 1）、artifact 5 个（上限 5）、每个工作流 5 条运行（上限 5）。CHANGELOG 只留最新 5 条，其余 7 条移入 `bad/CHANGELOG-history.md`；README 六个二级章节顺序与固定末行核对通过，无图片与徽章。
+- 测试：`ci/check.sh` 编译 125 个类、64 个用例通过（新增 `trimRecordCutsTheMiddleAndIsIdempotent`、`capByBytesKeepsTheNewestAndAlwaysKeepsOne`、`mergeDiagnosticReportsTrimsOverLongStreamingRecords`、`frameMeterCountsStallsClosesWindowsAndIgnoresHugeGaps`）。
+
 ## 2026-10-24（五）— 真机核对导出合并去重与清理生效，纠正「SplashActivity=主页」误判，新增 AIO 顶栏一行几何账
 
 - 用回传的 2 份真机日志（均为 `26.10.24.4.3166`，`4713064` 字节，md5 同为 `c1b7b505dc0ea524e79f0d5738104a3d`，同一份文件的两个副本）核对上一版的合并与清理，**确认已生效**：

@@ -1577,6 +1577,8 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
         if (!enabled) { cancelPressed(); commitFrame(emptyList(), viewport) }
         invalidateSelf()
     }
+    private val contentToHost = Matrix()
+
     private fun inHost(view: View) = Matrix().also {
         view.transformMatrixToGlobal(it)
         it.postConcat(toHost)
@@ -1596,6 +1598,17 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
         return tmpContentRect.takeIf {
             it.left.isFinite() && it.top.isFinite() && it.right.isFinite() && it.bottom.isFinite() && !it.isEmpty
         }
+    }
+
+    /** 只取纵向上下界时不必造 Matrix，也就省掉每帧每行的一次分配。 */
+    private fun boundsInHost(view: View, out: RectF): Boolean {
+        if (view.width <= 0 || view.height <= 0) return false
+        contentToHost.reset()
+        view.transformMatrixToGlobal(contentToHost)
+        contentToHost.postConcat(toHost)
+        out.set(0f, 0f, view.width.toFloat(), view.height.toFloat())
+        contentToHost.mapRect(out)
+        return out.left.isFinite() && out.top.isFinite() && out.bottom.isFinite()
     }
     private fun commitFrame(next: List<Face>, clip: Rect) {
         // 改 Kotlin 坐标不会让硬件 overlay 的 display list 自动失效，必须显式提交重绘。
@@ -1666,8 +1679,8 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
                     state.layout.contents.mapNotNull { it.get() }.filter { it.isAttachedToWindow && it.visibility != View.GONE }
                 }
                 for (content in bodyViews) {
-                    val rect = contentBoundsInHost(content) ?: continue
-                    top = minOf(top, rect.top); bottom = maxOf(bottom, rect.bottom)
+                    if (!boundsInHost(content, tmpContentRect)) continue
+                    top = minOf(top, tmpContentRect.top); bottom = maxOf(bottom, tmpContentRect.bottom)
                 }
                 if (top.isFinite() && bottom.isFinite()) {
                     val center = (top + bottom) / 2

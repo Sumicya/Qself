@@ -62,6 +62,9 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     private val tabLens = RuntimeShader(ROUNDED_RECT_REFRACTION_SHADER)
     private val tabContent = RenderNode("ksu-tab-content")
     private val combined = RenderNode("ksu-combined-backdrop")
+    private var frames = 0
+    private var lastSceneFrame = -1
+    private var lastCombinedFrame = -1
     private val neutralTint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val tint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val coordinates = Matrix()
@@ -291,8 +294,14 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     private fun prepare(bounds: Rect) {
         val w = bounds.width(); val h = bounds.height(); val pad = (40*dp).toInt()
         scene.setPosition(-pad,-pad,w+pad,h+pad)
-        val sc = scene.beginRecording(w+2*pad,h+2*pad)
-        try { sc.translate(pad-bounds.left.toFloat()-panel(),pad-bounds.top.toFloat()); behind(sc) } finally { scene.endRecording() }
+        // 底图重录要遍历背后的兄弟视图（聊天页就是整张消息列表）。真机 122Hz 下每帧录一次
+        // 等于把列表画两遍，这里改成每两帧录一次：滚动最多差一帧，肉眼看不出来，帧预算省一半。
+        frames++
+        if (lastSceneFrame < 0 || frames - lastSceneFrame >= 2) {
+            val sc = scene.beginRecording(w+2*pad,h+2*pad)
+            try { sc.translate(pad-bounds.left.toFloat()-panel(),pad-bounds.top.toFloat()); behind(sc) } finally { scene.endRecording() }
+            lastSceneFrame = frames
+        }
         val blurRadius = (glassBlurDp()*dp).coerceAtLeast(.1f)
         val key = (w.toLong() shl 32) or (h.toLong() and 0xFFFFL) or ((blurRadius * 100f).toLong() shl 16)
         if (baseKey != key) {
@@ -366,31 +375,38 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
         val w = bounds.width(); val h = bounds.height(); val pad = (40*dp).toInt()
         val p = progress.value.coerceIn(0f,1f)
         prepare(bounds)
-        captureTabs(w,h,pad)
+        // 页签内容与合成底图同样按两帧一次的节奏重录；中间的帧只用上一份。
+        val refresh = frames - lastCombinedFrame >= 2 || lastCombinedFrame < 0
+        if (refresh) captureTabs(w,h,pad)
         tabSurface.setPosition(-pad,-pad,w+pad,ceil(56*dp).toInt()+pad)
         val tb = tabSurface.beginRecording(w+2*pad,ceil(56*dp+2*pad).toInt())
         try { tb.translate(pad.toFloat(),pad-4*dp); tb.drawRenderNode(scene) } finally { tabSurface.endRecording() }
         combined.setPosition(-pad,-pad,w+pad,h+pad)
-        val cc = combined.beginRecording(w+2*pad,h+2*pad)
-        try {
-            cc.translate(pad.toFloat(),pad.toFloat()); cc.drawRenderNode(scene)
-            material(cc,tabSurface,RectF(0f,4*dp,w.toFloat(),60*dp),panel())
-            tint.colorFilter = PorterDuffColorFilter(monet(night(),0xFF) ?: if(night()) 0xFF0091FF.toInt() else 0xFF0088FF.toInt(), PorterDuff.Mode.SRC_IN)
-            val layer = cc.saveLayer(null,tint)
+        if (refresh) {
+            val cc = combined.beginRecording(w+2*pad,h+2*pad)
             try {
-                val factor = 1f + .2f * p
-                for (tab in tabs()) {
-                    coordinates.reset(); tab.transformMatrixToGlobal(coordinates); host.transformMatrixToLocal(coordinates)
-                    val rect = RectF(0f,0f,tab.width.toFloat(),tab.height.toFloat()).also(coordinates::mapRect)
-                    val save = cc.save()
-                    try {
-                        cc.scale(factor,factor,rect.centerX(),rect.centerY())
-                        cc.clipRect(rect.left,-pad.toFloat(),rect.right,h+pad.toFloat())
-                        cc.drawRenderNode(tabContent)
-                    } finally { cc.restoreToCount(save) }
-                }
-            } finally { cc.restoreToCount(layer) }
-        } finally { combined.endRecording() }
+                cc.translate(pad.toFloat(),pad.toFloat()); cc.drawRenderNode(scene)
+                material(cc,tabSurface,RectF(0f,4*dp,w.toFloat(),60*dp),panel())
+                tint.colorFilter = PorterDuffColorFilter(monet(night(),0xFF) ?: if(night()) 0xFF0091FF.toInt() else 0xFF0088FF.toInt(), PorterDuff.Mode.SRC_IN)
+                val layer = cc.saveLayer(null,tint)
+                try {
+                    val factor = 1f + .2f * p
+                    for (tab in tabs()) {
+                        coordinates.reset(); tab.transformMatrixToGlobal(coordinates); host.transformMatrixToLocal(coordinates)
+                        val rect = RectF(0f,0f,tab.width.toFloat(),tab.height.toFloat()).also(coordinates::mapRect)
+                        val save = cc.save()
+                        try {
+                            cc.scale(factor,factor,rect.centerX(),rect.centerY())
+                            cc.clipRect(rect.left,-pad.toFloat(),rect.right,h+pad.toFloat())
+                            cc.drawRenderNode(tabContent)
+                        } finally { cc.restoreToCount(save) }
+                    }
+                } finally { cc.restoreToCount(layer) }
+            } finally {
+                combined.endRecording()
+                lastCombinedFrame = frames
+            }
+        }
         val layer = canvas.saveLayer(RectF(bounds).apply { inset(-pad.toFloat(),-pad.toFloat()) },null)
         try {
             canvas.translate(bounds.left.toFloat()+panel(),bounds.top.toFloat())

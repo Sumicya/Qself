@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## 2026-10-26（十一）— 顶栏顶部背景板整条清掉、聊天帧率按「每两帧重录」和「遍历节流」两处真开销收，新增通知现代化
+
+- 顶部背景板（`Looks.kt`）：主人指出顶上那条背景板挡着。原先只清了顶栏自己和 `root`／`outer`／父容器四层底色，
+  中间任意一层容器的不透明底色都会把顶上整条盖住。现在从顶栏一路往上扫到 `decor`，逐层清空并记住原值，
+  关开关时按原样还回去，消息与壁纸能透上来。
+- 聊天帧率（`Glass.kt`、`KernelBar.kt`、`Looks.kt`、`Chat.kt`）：真机日志里进聊天后的窗口长期 `24.9~27.1ms`（约 `37~40fps`），
+  而玻璃板的底图是「把背后整棵子树重画一遍」。四处改：① 玻璃底图与顶栏三胶囊的共享底图、输入区 KernelSU 底图、
+  底栏合成底图，全部改成**每两帧重录一次**（按帧不按时间 —— 25ms 一帧时按时间节流等于没节流）；
+  ② 不透明且无滤镜时不再为每颗胶囊开 `saveLayer`；③ `AppearanceObserver` 的整树遍历从「每次全局布局都走一遍」
+  改成最快 200ms 一次，`trim()` 先按最便宜的判据出局、`windowY()` 复用同一个数组、开关值一轮只读一次
+  （原来每个视图各查一次 `SharedPreferences`）；④ 连发头像的正文上下界改用复用矩阵，不再每帧每行 `new Matrix()`。
+- 通知现代化（新增 `Notify.kt`，开关在「系统与诊断」）：`NotificationManager#notify` 落盘前把 QQ 的消息通知换成
+  `BigTextStyle`，标题保留、正文展开成完整内容，并打开时间显示；带自定义 `RemoteViews` 的通知一律放行不动，
+  改动通过 `chain.proceed(新参数)` 回填，不重调 `notify`，无递归风险。
+- 文档：README 源码清单补 `Notify.kt`（十四个文件），「项目限制」下补四条只有真机才能判的待办。
+
 ## 2026-10-26（十）— 顶栏回到摄像头下沿（不再藏状态栏）、修掉主线程三万分之一秒级的日志开销与玻璃底图整屏重画，并按新版 GLOBAL.md 清掉被禁工具
 
 - 顶栏位置按主人的话改口（`Looks.kt`、`Input.kt`、`Knob.kt`）：上一版把系统状态栏整个藏掉、顶栏顶到 `y=0`，主人判定「不是顶到 y=0 是摄像头下面或者原始位置」「状态栏没说要消失 实测可以冒出」。撤掉 `insetsController.hide(statusBars)` 那套机器（连同每 500ms 巡检），改量为 `max(状态栏高, 摄像头挖孔下沿)`（真机 `141px`）当硬下界：顶栏固定停在这条线以下，滑条从「安全区百分比」改成「顶栏再下移 0–48dp」，压到底也只会停在摄像头下面。消息区上沿同样对齐这条线，顶部内边距取标题栏真实底边（`141+99=240`），滚动时仍从玻璃胶囊底下穿过。留在旧版本被藏掉状态栏的现场，恢复前台时还原一次。
@@ -28,12 +44,4 @@
 - 帧率采样按真机刷新周期判掉帧（`Perf.kt`）：真机日志（`26.10.24.8.3170`）显示累计 77374 帧、平均 12.5ms、各窗口平均 8.8~9.0ms —— 这台机器是 120Hz，写死的 16.7ms 预算会把一半掉帧漏掉。现在周期从观测到的最短帧间隔取（测不出来兜底 60Hz），掉帧线定在 1.5 个周期，并额外统计「错过同步次数」（120Hz 上一帧 25ms 是错过两次同步，不是一个坏帧）；日志头新增「帧周期 8.3ms（约 120Hz）」。
 - 界面树快照开始计时（`DiagLog.kt`）：真机日志里出现过 972ms 的最长帧，而快照必须在主线程读视图树，是首要嫌疑。现在每次快照结束把耗时写进 Qself 事件流（≥8ms 才记），下份日志能直接指认那 972ms 是不是它干的。
 - 测试：`ci/check.sh` 125 个类、65 个用例通过（新增 `frameMeterDerivesJankBudgetFromTheObservedRefreshRate`）；新增 `tools/test_switch_groups.py` 五项契约（每个开关恰好进一个组、组名不重复、菜单按组渲染而不是 `features.forEach` 平铺、禁用 屏蔽/藏/去 三种动词、名字不超过 6 个汉字）。
-
-## 2026-10-24（六）— 全仓自查：给全量日志加字节预算与单条截断、导出整段挪离主线程、新增真机帧率采样，并按 selfs GLOBAL.md / REPOS.md 逐条核过工作流与文档
-
-- 全量日志体积收敛（真机 19MB → 稳定 6.1MB，`LogMerge.kt`）：只按 12000 条封顶不够 —— [5] 一节 12000 条实测 13.8MB（中位 167 字节、p99 15KB 的 Notification Channels / 配置 dump）。新增 `MAX_MERGED_SECTION_BYTES = 2,000,000`（从最老往回丢）、`trimRecord()`（单条超过 4096 字符从中间掐断、保留头尾，幂等）与 `capByBytes()`；同一份 19,368,750 字符的真机日志按新逻辑连续自合并三次，输出稳定在 6,109,393 → 6,111,191 → 6,111,783 字符，[5] 由 12000 条（13.8MB）降到 4188 条（1949KB）、[6] 降到 9851 条（1952KB），合并耗时 946ms / 359ms / 305ms。
-- 导出不再冻住主线程（`DiagLog.kt`）：原先 `exportFullQqLog` 在主线程 `readText()` 19MB 的历史文件并合并，随后 `writeLogFiles` 又把同一份历史文件再读一遍、再合并一遍。现在读历史 + 构建 + 合并 + 写盘整段进 `ioExecutor`，`prebuiltReport` / `priorLength` 直通，主线程只剩界面快照、Toast、授权弹窗与分享面板。
-- 真机帧率采样（`Perf.kt`）：`FrameMeter` 借 `Choreographer` 每帧只记一个时间戳，导出日志头给出「累计帧数 / 平均帧长 / 掉帧率 / 卡顿帧数 / 最长帧 / 最近 600 帧」，并把连续卡顿的「操作窗口」（不少于 20 帧、末尾 30 帧无卡顿即收口，最多留 12 段）写进 Qself 事件流；事件出口用 `frameEventSink` 注入，帧率统计在没有 Android 的 JVM 上也能单测。「卡不卡」从此有真机数字，不再靠自评。
-- 规范核对（`Sumicya/selfs` `GLOBAL.md` / `REPOS.md` @ `f4033232`）：两个工作流 `Build` / `PR check` 触发分离且 `SEGMENTS` / `CLEANUP_APPLY` 同值、共用 `concurrency group`、`fetch-depth: 0`、artifact `Qself-版本` / `retention-days: 5` / `if-no-files-found: error`、Release 与 tag 的删除只授 `contents: write`；实测 Release 0 个（上限 1）、artifact 5 个（上限 5）、每个工作流 5 条运行（上限 5）。CHANGELOG 只留最新 5 条，其余 7 条移入 `bad/CHANGELOG-history.md`；README 六个二级章节顺序与固定末行核对通过，无图片与徽章。
-- 测试：`ci/check.sh` 编译 125 个类、64 个用例通过（新增 `trimRecordCutsTheMiddleAndIsIdempotent`、`capByBytesKeepsTheNewestAndAlwaysKeepsOne`、`mergeDiagnosticReportsTrimsOverLongStreamingRecords`、`frameMeterCountsStallsClosesWindowsAndIgnoresHugeGaps`）。
 
