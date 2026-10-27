@@ -787,6 +787,30 @@ class ProtoTest {
         assertTrue("错过同步不该有：\n$head", head.contains("错过同步 0 次"))
     }
 
+    @Test fun notificationExpandsTruncatedPreviewToFullBody() {
+        val n = notificationText("张三", null, "  明天下午三点在图书馆门口见，带上那份合同和身份证复印件  ")
+        assertEquals("张三", n?.title)
+        assertEquals("明天下午三点在图书馆门口见，带上那份合同和身份证复印件", n?.body)
+        // QQ 已经自己塞了大文本时优先用它，而不是被截断的小正文。
+        assertEquals("完整长文", notificationText("张三", "完整长文", "完整长…")?.body)
+    }
+
+    @Test fun notificationLeavesExpandedOrEmptyNotificationsAlone() {
+        // 大文本与正文一致，说明这条本来就是展开态，重建只是白跑一遍 builder。
+        assertEquals(null, notificationText("张三", "同一段", "同一段"))
+        // 没有正文可展开（只有标题，或什么都没有）：换样式没有意义。
+        assertEquals(null, notificationText("张三", null, null))
+        assertEquals(null, notificationText(null, "  ", "  "))
+    }
+
+    @Test fun notificationClampsOverlongTitleAndBody() {
+        val n = notificationText("题".repeat(500), null, "文".repeat(2000))
+        assertEquals(MODERN_TITLE_MAX, n?.title?.length)
+        assertEquals(MODERN_BODY_MAX, n?.body?.length)
+        assertEquals(120, MODERN_TITLE_MAX)
+        assertEquals(400, MODERN_BODY_MAX)
+    }
+
     @Test fun mergeDiagnosticReportsTrimsOverLongStreamingRecords() {
         val pad = "z".repeat(20000)
         val rep = "Qself Full QQ Diagnostic Report\n" +

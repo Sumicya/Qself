@@ -44,7 +44,7 @@ val features = listOf(
     Feature("隐藏会员等级", true, "资料卡不画 SVIP/VIP 图标", ::plainCard),
     Feature("停止轻互动", true, "轻互动特效不播", ::noLightInteraction),
     Feature("停止表情雨", true, "表情雨不下", ::noEmojiRain),
-    Feature("通知现代化", false, "QQ 消息通知换成大文本样式，长消息在锁屏上不再只剩半句", ::modernNotifications),
+    Feature("通知现代化", true, "QQ 消息通知换成大文本样式，长消息在锁屏上不再只剩半句", ::modernNotifications),
     Feature("系统WebView", false, "网页走系统 WebView，不加载 X5", ::systemWebView),
     Feature("停止统计上报", false, "灯塔统计空转", ::noTelemetry),
     Feature("停止崩溃上报", false, "不初始化 Bugly", ::noCrashReport),

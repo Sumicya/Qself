@@ -12,8 +12,8 @@ import android.app.Notification
  * 那种通知的排版在 QQ 自己的布局里，重建只会把它弄坏。改动通过 `chain.proceed(新参数)` 回填，
  * 不重新调 notify，所以没有递归风险。
  */
-private const val MODERN_TITLE_MAX = 120
-private const val MODERN_BODY_MAX = 400
+internal const val MODERN_TITLE_MAX = 120
+internal const val MODERN_BODY_MAX = 400
 
 fun modernNotifications() {
     val manager = android.app.NotificationManager::class.java
@@ -46,19 +46,37 @@ fun modernNotifications() {
 private fun modernize(context: android.content.Context, n: Notification): Notification? = runCatching {
     if (n.contentView != null) return null            // 自定义布局：不是我们该动的
     val extras = n.extras ?: return null
-    val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
-    val big = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()?.trim().orEmpty()
-    val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.trim().orEmpty()
-    val body = big.ifEmpty { text }
-    if (body.isEmpty() && title.isEmpty()) return null
-    // 已经是展开样式（正文完整且没被截断）就不动，避免每次重发都重建一遍。
-    if (big.isNotEmpty() && big == text) return null
+    val text = notificationText(
+        extras.getCharSequence(Notification.EXTRA_TITLE),
+        extras.getCharSequence(Notification.EXTRA_BIG_TEXT),
+        extras.getCharSequence(Notification.EXTRA_TEXT),
+    ) ?: return null
     val builder = Notification.Builder.recoverBuilder(context, n)
-    val style = Notification.BigTextStyle().bigText(body.take(MODERN_BODY_MAX))
-    runCatching { style.setBigContentTitle(title.take(MODERN_TITLE_MAX)) }
+    val style = Notification.BigTextStyle().bigText(text.body)
+    if (text.title.isNotEmpty()) runCatching { style.setBigContentTitle(text.title) }
     builder.setStyle(style)
     // 时间戳原来被 QQ 关掉了，锁屏上看不出是哪条；打开并按通知自带的 when 显示。
     builder.setShowWhen(true)
     if (n.`when` > 0L) builder.setWhen(n.`when`)
     builder.build()
 }.onFailure { log("通知现代化失败，按原样发出", it) }.getOrNull()
+
+/** 一条通知换成什么文字；`null` 表示按原样发。 */
+internal data class NotifyText(val title: String, val body: String)
+
+/**
+ * 纯决策：该不该改、改成什么。Android 侧的 builder 不在里面，便于直接跑单测。
+ *
+ * - 正文取「大文本，没有就取正文」；两者都空说明没有可展开的内容，返回 `null`。
+ * - 大文本与正文一模一样，说明这条已经是展开态（QQ 自己就用 BigTextStyle），重建只是白跑一遍 builder，返回 `null`。
+ * - 标题与正文各自截断到上限：通知栏本身也是截断显示，超长内容只会拖慢 `recoverBuilder`。
+ */
+internal fun notificationText(title: CharSequence?, bigText: CharSequence?, text: CharSequence?): NotifyText? {
+    val t = title?.toString()?.trim().orEmpty()
+    val big = bigText?.toString()?.trim().orEmpty()
+    val small = text?.toString()?.trim().orEmpty()
+    val body = big.ifEmpty { small }
+    if (body.isEmpty()) return null
+    if (big.isNotEmpty() && big == small) return null
+    return NotifyText(t.take(MODERN_TITLE_MAX), body.take(MODERN_BODY_MAX))
+}
