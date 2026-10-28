@@ -12,7 +12,7 @@
 ## 功能
 
 外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
-- 首页底栏按 [KernelSU 固定源码](https://github.com/tiann/KernelSU/tree/3186a2fe2107f7170e06dab7aa157eb10ae7759f/manager/app/src/main/java/me/weishu/kernelsu/ui/component) 与 [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass/tree/65ab177e90e5c1d8c62e70cf7755841982da65f6) `InteractiveHighlight` 移植到原生 View：64dp 栏 / 最小 76dp 页签 / 56dp 指示器、默认 `1dp` 模糊（可在面板通过「玻璃模糊」`0~15dp` 滑条实时调节）、按压色散、**全仓零描边（`Paint.Style.STROKE` 全部撤除）**、长按/触摸驱动 `INTERACTIVE_HIGHLIGHT_SHADER` + `BlendMode.PLUS` 径向柔光高光（`0.08f * hp` 底光 + `0.15f * hp` `smoothstep(r, r*0.5, d)` 径向高光，`r = min(w, h) * 1.5f`）和解析弹簧。`BarState` 持久持有 `Glass` 并在 `settle(bar)`、`layoutListener` 与 `OnPreDraw` 中强制守护 `64dp` 高度与 `strip` 四周 `4dp` 对称内边距（防 `TabFrameControllerImpl#checkEnableTabAnim` 将底栏重置回 `54dp` 导致 `56dp` 选中胶囊向下溢出），`fit(tab)` 清零 `TabView` 四向内边距并将 `customView` 设为 `MATCH_PARENT × MATCH_PARENT`（`56dp`）、`TabDragAnimationView` `paddingTop = 8dp`、`mTabTextView` `bottomMargin = 4dp`，使未读数、图标与文字三层垂直分离且水平居中于页签中心，同时通过 `centeredBarTranslationX` 与 `drawListener` 同步 `knob(bar)` 使 `[底栏 + 12dp 间距 + Qself 按钮]` 整体在屏幕水平正中；右侧设置短胶囊 `MenuGlyph` 重写 `setTintList` 并按深浅色自动取色（浅色 `#1C1C1E` / 深色 `#FFFFFF` / Monet 强调色），且与底栏统一采用 `10dp` 柔和阴影（浅色 `0x1A000000` / 深色 `0x33000000`）。**未获本轮设备复验，不宣称一比一验收完成**；差异与证据见 [移植记录](docs/kernel-port.md)。
+- 首页底栏按 [KernelSU 固定源码](https://github.com/tiann/KernelSU/tree/3186a2fe2107f7170e06dab7aa157eb10ae7759f/manager/app/src/main/java/me/weishu/kernelsu/ui/component) 与 [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass/tree/65ab177e90e5c1d8c62e70cf7755841982da65f6) `InteractiveHighlight` 移植到原生 View：64dp 栏 / 最小 76dp 页签 / 56dp 指示器、默认 `1dp` 模糊（可在面板通过「玻璃模糊」`0~15dp` 滑条实时调节）、按压色散、**全仓零描边（`Paint.Style.STROKE` 全部撤除）**、长按/触摸驱动 `INTERACTIVE_HIGHLIGHT_SHADER` + `BlendMode.PLUS` 径向柔光高光（`0.08f * hp` 底光 + `0.15f * hp` `smoothstep(r, r*0.5, d)` 径向高光，`r = min(w, h) * 1.5f`）和解析弹簧。`BarState` 持久持有 `Glass` 并在 `settle(bar)`、`layoutListener` 与 `OnPreDraw` 中强制守护 `64dp` 高度与 `strip` 四周 `4dp` 对称内边距（防 `TabFrameControllerImpl#checkEnableTabAnim` 将底栏重置回 `54dp` 导致 `56dp` 选中胶囊向下溢出），`fit(tab)` 清零 `TabView` 四向内边距并将 `customView` 设为 `MATCH_PARENT × MATCH_PARENT`（`56dp`）、`TabDragAnimationView` `paddingTop = 8dp`、`mTabTextView` `bottomMargin = 4dp`，使未读数、图标与文字三层垂直分离且水平居中于页签中心，同时通过 `centeredBarTranslationX` 与 `drawListener` 同步 `knob(bar)` 使 `[底栏 + 12dp 间距 + Qself 按钮]` 整体在屏幕水平正中；右侧设置短胶囊 `MenuGlyph` 重写 `setTintList` 并按深浅色自动取色（浅色 `#1C1C1E` / 深色 `#FFFFFF` / Monet 强调色），且与底栏统一采用 `10dp` 柔和阴影（浅色 `0x1A000000` / 深色 `0x33000000`）。**未获本轮设备复验，不宣称一比一验收完成**。
 - **聊天顶栏、主页顶栏与二级页三胶囊布局（按 NagramXF `ActionBar.java` + `ChatActivity.java` 彻底剥离顶栏安全区背景、胶囊外间隙触摸直通与消息全屏穿底）**：照 NagramXF `ActionBar.setupGlass` + `ChatAvatarContainer`（`p = 6dp`、`s = 46dp`、`r = 23dp`、通过 `reducedSafeTop` 动态缩减 `sm1.u#k` / `sm1.u#a` / `QUISecNavBar#x()` / `MainResourceConfig#n` 顶部安全区高度）接入 `AIOUtil#b`/`A`/`C`/`D`（强制全屏透明叠层模式）、`AIOTitleVB`（`sm1.u` / `sm1.v` / `sm1.w` / `CenterVB`，覆盖 `H1`/`I1`/`w1`/`P1`/`X1`/`Y1`/`Z1`/`z1`/`A1`/`D1`/`C1`/`R1`/`S1`/`W1`/`h1`/`l1` 拦截 UI Handler 异步重设 `#25272d` 实色背景并隐藏 `sm1.u#d` `dividerLine` 与 `sm1.u#q` `upMask`）、`TopBlurVB`（`com.tencent.mobileqq.aio.reserve1.blur.f` `d: sm1.t -> a: QQBlurViewWrapper`）、`MaskVB`（`com.tencent.mobileqq.aio.reserve1.mask.b` `d: sm1.y -> a: View`）、`AIOMsgListGroup` + `EdgeTransparentView`（`h`）+ `AIORefreshLayout`（`AbsMsgListVB#m1`）+ `AIORecycleView`（`AIOMsgListVB#S2`）（全链路解裁切并清零 `EdgeTransparentView` 的 `i`/`m`/`D` 渐隐擦除，使消息全屏 `y = 0..2800` 顺滑滚过悬浮胶囊与状态栏下方）、`ViewGroup.dispatchTouchEvent`（胶囊外间隙直接返回 `false` 透传给底层消息列表滑动）、主页 `MainResourceConfig#n`/`p` + `TitleAreaHeadLayout#k` + `SimpleModeHelper#u`/`A`（隐藏 `0x7f0a6596` `mStatusTitleDivider`）+ `SkinnableRecycleView#dispatchDraw`（`f = false`）与二级页导航栏 `QUISecNavBar`（`SecNavBarState`，覆盖 `S`/`T`/`U`/`W`/`X`/`C`/`Q`/`R`/`Z`/`updateView`/`setBlur`/`setTitleBlurAlpha` 并清除 `Z` 按钮圆底），关闭或重置完整还原（待真机验收）。**顶栏安全区滑条**：`reducedSafeTop` 旧实现带 `origTop * 0.72f` 下限，真机 `statusBars=[0,141,0,0]` 时只能把 141px 压到 109px（等于没去掉），现已改为纯比例策略（见下条）。
 - **顶栏再下移（面板滑条 `0~48dp`，默认 `0dp` 即 QQ 原始位置；读取时上限 `96dp`）**：`reducedSafeTop(origTop, dp, offsetDp, edgePx)` 以状态栏／摄像头下沿为上限：`origTop` 比下沿小就按 QQ 原值走，量不到下沿（全屏页把状态栏让成 `0`）时同样退回原值，绝不把顶栏压到 `y = 0`；微调只在本值基础上往下加 `dp`。`ProtoTest` 断言 `reducedSafeTop(141, 1.9761429f, edgePx = 141) == 141`、`(+15.75dp) == 172`、`(+30dp) == 200`、`(origTop = 100, edgePx = 141) == 100`、`(edgePx = 0) == 141`、`(0) == 0`，`+400dp` 夹紧到 `141 + 96dp = 331px`。状态栏照常显示，不靠隐藏状态栏或把顶栏顶到 `y = 0` 换空间；上一版「顶栏安全区百分比」滑条已删除，`safeTopPercent()` 不再存在。主页 `Conversation` 的 `0x7f0a3245` 头像 `topMargin`、`0x7f0a6cfa` 顶栏容器 `translationY` 与 `0x7f0a0e96` 会话列表 `paddingTop` 由 `homeSafeArea` 同步同一个 `delta`，AIO 消息列表顶部内边距经 `aioSafeTopRemoved()` 同步减去同一段（真包 `238 = 141 + 97`）；每次安全区换算写一行全量日志（`MainResourceConfig#n orig=…px -> …px`、`AIO 顶栏 outer 顶部 …px -> …px`）便于真机核对。`26.10.24.3.3165` 那批真机日志对应的是「一路压到 0」的旧策略，已被本条取代。
 - **原生表情 / 相册 / 「+」附件面板玻璃化（`PanelGlassState`）与共享轴切换过渡（`页面过渡动效`）**：接入 `com.tencent.mobileqq.aio.panel.emoticon.c#onCreateView`、`com.tencent.mobileqq.aio.panel.photo.PhotoPanelVB#onCreateView` 与 `com.tencent.mobileqq.aio.panel.b#onCreateView`，将底部弹出的表情、相册与「+」附件面板容器替换为 `20dp` 圆角无描边液态玻璃材质；在 `TabFrameControllerImpl#updateUIAfterTabChange` 与 `AIOMsgListVB#onCreateView` 中实装纯 `RenderThread` 共享 X 轴微缩淡入切换过渡（`runSwitchTransition`，按新旧 Tab 索引差计算 `±18dp` 方向、`scale 0.985 -> 1.0`、`alpha 0.74 -> 1.0`、`PathInterpolator(0.22f, 1f, 0.36f, 1f)`，无 Y 轴下展开）。
@@ -51,13 +51,6 @@
 - 灯塔 (beacon) 与 StatisticCollector 的统计上报空转
 - 不初始化崩溃上报
 - **全量日志录制与一键导出（`全量日志` / `DiagLog.kt` / `LogMerge.kt`）**：挂钩 `com.tencent.qphone.base.util.QLog#isColorLevel`（开启 QQ 内部 UI/AIO/顶栏/底栏调试日志）与 `QLog#addLogItem(byte, String, int, String, Throwable)`，双环缓冲记录全量 QQ `QLog`、UI/AIO/顶栏专项 `QLog`、全部 Qself 钩子调用频次与前 10 次入参/返回值样本、未捕获崩溃栈、当前进程 `logcat -d`，并在主页/AIO/二级页自动抓取完整 `DecorView` 视图树快照（含每个 View 的类名、资源 ID、屏幕坐标、`padding`/`margin`、`clip`、背景 Drawable 颜色与 `EdgeTransparentView`/`SkinnableRecycleView` 内部状态）；设置面板底部提供「导出全量日志（合并去重）」按钮，一键复制到剪贴板、写入 `/sdcard/Download/qself-full-log.txt` 与 `/sdcard/Android/data/com.tencent.mobileqq/files/qself-full-log.txt` 并拉起系统分享面板。**反复导出只产生一个文件**：每次导出先把上一次的 `qself-full-log.txt` 读回，按小节合并去重（`[3]` 视图树快照按标题取并集、`[4][5][6]` 流式记录整条去重后按时间戳排序、上限 12000 条），环缓冲被挤掉的老记录会被捞回来；随后按 `DISPLAY_NAME LIKE 'qself-full-log%'` 清掉 MediaStore Downloads 里包括 `(1)(2)…` 在内的全部历史副本（别的应用写入的副本会弹一次系统授权框），最后只写回一个 `qself-full-log.txt`，报告头会写明「上次 N 字节 / 清理 M 个」；`LSPosed` 日志与 `logcat -s QselfDiag` 只吐本次新增记录数，重复导出不再刷屏（回放验证：真机 10 份日志逐份合并后单文件 4.36MB，`[6] 全量 QQ QLog` 由单份 3000 条累计到 9367 条）。
-
-### 设计取向
-
-观感、比例、粗细这类由主人拍板的事项记在 [设计取向](docs/design-principles.md)（待主人审定）。当前生效的几条：
-顶栏停在状态栏／摄像头下沿或 QQ 原始位置，状态栏照常显示；顶栏连同它到窗口顶之间的容器都不留不透明底色；
-玻璃、气泡、底栏不加静态描边，不为省帧削弱材质；玻璃浮在上层、消息整片穿底滚过，底板与卡片左右边对齐；
-底部安全区给消息列表让位，不吞按钮；帧率必须在代码里真修，不接受只给归因。
 
 ## 安装与使用
 
@@ -110,12 +103,14 @@ app/src/main/kotlin/sumicya/qself/
   Notify.kt     通知现代化：QQ 消息通知换成本代大文本样式
   Perf.kt       Choreographer 帧率采样与每帧耗时归因，导出日志里的卡顿数字
 app/src/test/kotlin/sumicya/qself/ProtoTest.kt   协议、分组、间距、菜单尺寸等纯逻辑回归
+app/src/test/python/                         反汇编与字段解码工具的纯函数回归（unittest）
 app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop、作用域
 tools/symbols.txt    落点表：代码依赖的每一个名字
 tools/dexcheck.py    拿真 dex 逐条核落点，顺带 lint 源码里没登记的名字
 tools/ui_paths.py    真包字段读写与调用边；只做静态核对
 tools/dexq.py        最小反汇编器：按签名找落点（上游用 DexKit 在运行时搜，这里离线搜）
 tools/check.sh       无 SDK 时的类型检查 + 跑 ProtoTest
+tools/check-shaders.sh + check_kernel_shaders.py   用 Skia 138 CPU 编译五份移植着色器（不是设备验收）
 ```
 
 ## 项目限制

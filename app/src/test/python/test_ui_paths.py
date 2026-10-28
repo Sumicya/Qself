@@ -1,4 +1,10 @@
 """UI 证据检查器的字段读写解码回归；真包完整签名/调用边由 CI 直接检查。"""
+import sys
+from pathlib import Path
+
+# 工具在 tools/，测试进标准测试目录；把工具目录挂上 import 路径再导入被测纯函数。
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+
 import struct
 from types import SimpleNamespace
 import unittest

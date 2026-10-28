@@ -1,4 +1,10 @@
 """DEX class_data 的 direct/virtual 差分索引必须分别从 0 开始。"""
+import sys
+from pathlib import Path
+
+# 工具在 tools/，测试进标准测试目录；把工具目录挂上 import 路径再导入被测纯函数。
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools"))
+
 import struct
 import unittest
 from types import SimpleNamespace
