@@ -106,12 +106,20 @@ private const val MATCH_PARENT_RESTORE_TAG = 0x51534D50
  * 卡片 (Ark) 内容根：Ark 按自己的宽度排版、整块绘制，宽度必须由原生 MATCH_PARENT 决定。
  * 一旦被改成 WRAP_CONTENT，QQ 用 AT_MOST 量它，卡片视图比它实际画的内容窄，右侧一列按钮与链接图标会被卡片自身边界裁掉。
  */
-private fun isArkCard(v: android.view.View): Boolean {
+/**
+ * Ark 卡片的类名特征：`…msglist.holder.component.ark.*`、`ArkApp*`、`ArkView*`。
+ * 单独拎成纯函数，`ProtoTest` 直接用真机出现过的类名跑断言。
+ */
+internal fun looksLikeArkCard(className: String): Boolean =
+    className.contains(".ark.", ignoreCase = true) ||
+        className.contains("ArkApp", ignoreCase = true) ||
+        className.contains("ArkView", ignoreCase = true)
+
+internal fun isArkCard(v: android.view.View): Boolean {
     var cur: android.view.View? = v
     var depth = 0
     while (cur != null && depth < 4) {
-        val name = cur.javaClass.name
-        if (name.contains(".ark.", true) || name.contains("ArkApp", true) || name.contains("ArkView", true)) return true
+        if (looksLikeArkCard(cur.javaClass.name)) return true
         cur = (cur as? android.view.ViewGroup)?.takeIf { it.childCount > 0 }?.getChildAt(0)
         depth++
     }

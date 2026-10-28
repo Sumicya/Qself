@@ -378,6 +378,9 @@ private class BubbleSurface(
     }
     private val hiddenQuoteBars = ArrayList<Pair<WeakReference<View>, Int>>()
     private val savedQuoteMsgMargins = WeakHashMap<View, IntArray>()
+    // 气泡宿主的裁剪开关：只对 Ark 卡片改，其余消息保持 QQ 原值，关闭时原样还原。
+    private var savedClipChildren: Boolean? = null
+    private var savedClipToPadding: Boolean? = null
     private var active = false
     private var drawable: NagramBubbleDrawable? = null
     private var lastChildCount = -1
@@ -408,6 +411,16 @@ private class BubbleSurface(
         }
         if (v.minimumWidth != 0) v.minimumWidth = 0
         if (v.minimumHeight != 0) v.minimumHeight = 0
+        // Ark 卡片按自己的宽度排版、整块绘制，真机上右侧成排按钮会画到底板外面（截图实测多出约 19px），
+        // 底板就是这颗气泡的边界。只对含 Ark 卡片的气泡打开裁剪，其余消息与头像浮绘不受影响。
+        if (v is ViewGroup && isArkCard(v)) {
+            if (savedClipChildren == null) {
+                savedClipChildren = v.clipChildren
+                savedClipToPadding = v.clipToPadding
+            }
+            if (!v.clipChildren) v.clipChildren = true
+            if (!v.clipToPadding) v.clipToPadding = true
+        }
         if (v is android.widget.TextView && v.includeFontPadding) v.includeFontPadding = false
         setFasterIncludePad(v, false)
         val qView = quote.get()
@@ -495,6 +508,10 @@ private class BubbleSurface(
             it.setPadding(savedSurfacePadding[0], savedSurfacePadding[1], savedSurfacePadding[2], savedSurfacePadding[3])
             it.minimumWidth = savedSurfaceMin[0]
             it.minimumHeight = savedSurfaceMin[1]
+            (it as? ViewGroup)?.let { group ->
+                savedClipChildren?.let { c -> group.clipChildren = c }
+                savedClipToPadding?.let { p -> group.clipToPadding = p }
+            }
             if (it is android.widget.TextView && savedSurfaceIncludePad != null) it.includeFontPadding = savedSurfaceIncludePad
             savedSurfaceFasterPad?.let { pad -> setFasterIncludePad(it, pad) }
         }

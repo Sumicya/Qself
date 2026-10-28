@@ -787,6 +787,17 @@ class ProtoTest {
         assertTrue("错过同步不该有：\n$head", head.contains("错过同步 0 次"))
     }
 
+    @Test fun arkCardIsRecognisedByItsClassName() {
+        // 真机撞见过的三类：内容组件包名、ArkApp 视图、ArkView 包装。
+        assertTrue(looksLikeArkCard("com.tencent.mobileqq.aio.msglist.holder.component.ark.AIOArkContentComponent"))
+        assertTrue(looksLikeArkCard("com.tencent.mobileqq.ark.ArkAppRootLayout"))
+        assertTrue(looksLikeArkCard("com.tencent.mobileqq.widget.ArkView"))
+        // 普通消息的容器不能被当成卡片：误判会把正文气泡也套上裁剪。
+        assertFalse(looksLikeArkCard("android.widget.LinearLayout"))
+        assertFalse(looksLikeArkCard("com.tencent.mobileqq.aio.msglist.holder.component.text.AIOTextContentComponent"))
+        assertFalse(looksLikeArkCard("com.tencent.fastertextview.wrapper.a"))
+    }
+
     @Test fun notificationExpandsTruncatedPreviewToFullBody() {
         val n = notificationText("张三", null, "  明天下午三点在图书馆门口见，带上那份合同和身份证复印件  ")
         assertEquals("张三", n?.title)

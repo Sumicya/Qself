@@ -52,6 +52,13 @@
 - 不初始化崩溃上报
 - **全量日志录制与一键导出（`全量日志` / `DiagLog.kt` / `LogMerge.kt`）**：挂钩 `com.tencent.qphone.base.util.QLog#isColorLevel`（开启 QQ 内部 UI/AIO/顶栏/底栏调试日志）与 `QLog#addLogItem(byte, String, int, String, Throwable)`，双环缓冲记录全量 QQ `QLog`、UI/AIO/顶栏专项 `QLog`、全部 Qself 钩子调用频次与前 10 次入参/返回值样本、未捕获崩溃栈、当前进程 `logcat -d`，并在主页/AIO/二级页自动抓取完整 `DecorView` 视图树快照（含每个 View 的类名、资源 ID、屏幕坐标、`padding`/`margin`、`clip`、背景 Drawable 颜色与 `EdgeTransparentView`/`SkinnableRecycleView` 内部状态）；设置面板底部提供「导出全量日志（合并去重）」按钮，一键复制到剪贴板、写入 `/sdcard/Download/qself-full-log.txt` 与 `/sdcard/Android/data/com.tencent.mobileqq/files/qself-full-log.txt` 并拉起系统分享面板。**反复导出只产生一个文件**：每次导出先把上一次的 `qself-full-log.txt` 读回，按小节合并去重（`[3]` 视图树快照按标题取并集、`[4][5][6]` 流式记录整条去重后按时间戳排序、上限 12000 条），环缓冲被挤掉的老记录会被捞回来；随后按 `DISPLAY_NAME LIKE 'qself-full-log%'` 清掉 MediaStore Downloads 里包括 `(1)(2)…` 在内的全部历史副本（别的应用写入的副本会弹一次系统授权框），最后只写回一个 `qself-full-log.txt`，报告头会写明「上次 N 字节 / 清理 M 个」；`LSPosed` 日志与 `logcat -s QselfDiag` 只吐本次新增记录数，重复导出不再刷屏（回放验证：真机 10 份日志逐份合并后单文件 4.36MB，`[6] 全量 QQ QLog` 由单份 3000 条累计到 9367 条）。
 
+### 设计取向
+
+观感、比例、粗细这类由主人拍板的事项记在 [设计取向](docs/design-principles.md)（待主人审定）。当前生效的几条：
+顶栏停在状态栏／摄像头下沿或 QQ 原始位置，状态栏照常显示；顶栏连同它到窗口顶之间的容器都不留不透明底色；
+玻璃、气泡、底栏不加静态描边，不为省帧削弱材质；玻璃浮在上层、消息整片穿底滚过，底板与卡片左右边对齐；
+底部安全区给消息列表让位，不吞按钮；帧率必须在代码里真修，不接受只给归因。
+
 ## 安装与使用
 
 1. Actions 里下载最新一次构建的 APK（或 `gh run download -R Sumicya/Qself`），安装
@@ -115,8 +122,9 @@ tools/check.sh       无 SDK 时的类型检查 + 跑 ProtoTest
 
 QQ 原生消息菜单与设置面板已接入单有效项随指高亮、跨项移动、项外取消与危险操作警示色，全类型消息时间与顶部时间条折叠已接线，但手势、浮动头像及各类消息视觉效果仍待真机验收。
 
-顶栏落点、聊天帧率、通知样式的最终观感只有真机能判。Ark 模板卡片（右侧成排蓝框按钮那种）右边缘比底板多出约 `19px`，
-属 QQ 卡片内部排版，本模块未介入。通知现代化只作用于没有自定义 `RemoteViews` 的通知。
+顶栏落点、聊天帧率、通知样式的最终观感只有真机能判。Ark 模板卡片（右侧成排蓝框按钮那种）按自己的宽度整块绘制，
+真机上右边缘曾比底板多出约 `19px`；现在对含卡片的气泡打开 `clipChildren`/`clipToPadding`，把越界收回底板，
+其余消息与头像浮绘不动，关闭开关时还原 QQ 原值 —— 效果待真机验收。通知现代化只作用于没有自定义 `RemoteViews` 的通知。
 
 ### 写法
 
