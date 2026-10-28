@@ -62,6 +62,9 @@ fun looks() {
         if (glass?.drawKernelContent(chain.getArg(0) as Canvas) == true) null else chain.proceed()
     }
     hook(ViewGroup::class.java.getDeclaredMethod("dispatchTouchEvent", MotionEvent::class.java)) { chain ->
+        // 手势窗口：按下开一段、抬起收一段。最外层先收到事件，所以同一次触摸只会开一段，
+        // 子 View 的重复事件在 noteTouch 里按 gOpen 忽略。
+        FrameMeter.noteTouch((chain.getArg(0) as? MotionEvent)?.actionMasked ?: -1)
         val source = chain.thisObject as? ViewGroup
         if (source != null && on("玻璃底栏")) {
             aioHeaders[source]?.let { header ->

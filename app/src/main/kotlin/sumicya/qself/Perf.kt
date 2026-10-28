@@ -13,6 +13,10 @@ internal const val FRAME_RING = 600          // 环形缓冲：最近 600 帧（
 internal const val FRAME_WINDOW_GAP = 30     // 连续 30 帧不卡就收口一段「操作窗口」
 internal const val FRAME_WINDOW_MIN = 20     // 短于此的窗口不记（零星两帧不算一次操作）
 internal const val FRAME_MAX_WINDOWS = 12
+internal const val FRAME_GESTURE_MIN = 20    // 少于 20 帧的触摸不算一次滑动（点一下也画几帧，不能刷屏）
+internal const val TOUCH_DOWN = 0            // MotionEvent.ACTION_DOWN，用原始值让 JVM 单测不必碰 android 类
+internal const val TOUCH_UP = 1              // MotionEvent.ACTION_UP
+internal const val TOUCH_CANCEL = 3          // MotionEvent.ACTION_CANCEL
 
 /**
  * 每帧耗时归因：只记「哪个环节花了多久」，不进日志、不分配对象，导出时汇总成一行。
@@ -60,6 +64,7 @@ private val stampFormat = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.L
 /** 小数一律按 US 格式写：别的 locale 会把 8.3 写成 8,3，日志与断言就对不上了。 */
 private fun fmt(pattern: String, value: Double): String = String.format(java.util.Locale.US, pattern, value)
 private fun fmt(pattern: String, value: Float): String = String.format(java.util.Locale.US, pattern, value)
+private fun frameStamp(): String = synchronized(stampFormat) { stampFormat.format(java.util.Date()) }
 
 internal object FrameMeter {
     /** 单测与热重载用：清空累计重新采样。两条用例共用同一个采样器，不重置就会互相污染。 */
@@ -69,6 +74,7 @@ internal object FrameMeter {
         frames = 0L; janky = 0L; stalls = 0L; missed = 0L; worst = 0f; sum = 0.0
         gap = 0; wFrames = 0; wJank = 0; wStall = 0; wWorst = 0f; wSum = 0.0; wStart = ""
         windows.clear(); periodMs = FRAME_BUDGET_MS
+        gOpen = false; gFrames = 0; gJank = 0; gStall = 0; gWorst = 0f; gSum = 0.0; gStart = ""; gLast = ""
         reportFrames = 0; reportSum = 0.0
         CostMeter.reset()
     }
@@ -94,6 +100,15 @@ internal object FrameMeter {
     private val windows = ArrayDeque<String>(FRAME_MAX_WINDOWS)
     private var reportFrames = 0
     private var reportSum = 0.0
+    // 手势窗口：按下到抬起之间单独攒一份，抬手无条件写一行，滑动一次就有一次可读帧率。
+    private var gOpen = false
+    private var gFrames = 0
+    private var gJank = 0
+    private var gStall = 0
+    private var gWorst = 0f
+    private var gSum = 0.0
+    private var gStart = ""
+    private var gLast = ""
     @Volatile private var installed = false
     @Volatile private var drewSinceCallback = false
     @Volatile private var drawSignalSeen = false
@@ -116,12 +131,28 @@ internal object FrameMeter {
         missed += kotlin.math.round(dtMs / periodMs).toInt().coerceAtLeast(1) - 1
         if (dtMs > FRAME_STALL_MS) stalls++
         if (dtMs > worst) worst = dtMs
-        if (wFrames == 0) wStart = synchronized(stampFormat) { stampFormat.format(java.util.Date()) }
+        if (wFrames == 0) wStart = frameStamp()
         wFrames++
         wSum += dtMs
         if (dtMs > jankBudget()) wJank++
-        if (dtMs > FRAME_STALL_MS) { wStall++; gap = 0 } else gap++
         if (dtMs > wWorst) wWorst = dtMs
+        if (gOpen) {
+            gFrames++
+            gSum += dtMs
+            if (dtMs > jankBudget()) gJank++
+            if (dtMs > FRAME_STALL_MS) gStall++
+            if (dtMs > gWorst) gWorst = dtMs
+        }
+        if (dtMs > FRAME_STALL_MS) {
+            wStall++
+            gap = 0
+        } else {
+            gap++
+            // 卡顿段一结束就收口：一直滑的时候 stall 会把 gap 反复清零，等「连续 30 帧不卡」再收口等于永远等不到，
+            // 真机日志里最卡的那几段就是这样丢的（导出的窗口全是 帧=30 掉帧=1 的静止画面）。
+            // 窗口至少有 FRAME_WINDOW_MIN 帧才值得记，否则轻度卡顿会把窗口切成一堆碎片。
+            if (wStall > 0 && wFrames >= FRAME_WINDOW_MIN) closeWindow()
+        }
         // 每 60 帧吐一行归因：帧间隔归帧间隔，各环节花多久归各环节，谁在吃预算一眼可见。
         reportFrames++
         reportSum += dtMs
@@ -188,10 +219,14 @@ internal object FrameMeter {
             append("最长 ${fmt("%.0f", worst)}ms；帧周期 ${fmt("%.1f", period())}ms（约 ${fmt("%.0f", 1000f / period())}Hz），")
             append("最近 $ringSize 帧平均 ${fmt("%.1f", rAvg)}ms、掉帧 $rJank")
         }
+        // 「最近手势」放头部：滑动一次就有一行，进程重启前也能看到上一个进程留下的结论在事件流里。
+        val sb = StringBuilder(head)
+        sb.append('\n').append("最近手势 : ").append(
+            gLast.ifEmpty { "本进程还没有滑动记录（按下到抬起算一段，抬手即写入事件流）" })
         val cost = CostMeter.line()
-        if (cost.isNotEmpty()) return (head + "\n" + cost + windows.joinToString("") { "\n" + it })
-        if (windows.isEmpty()) return head
-        return head + "\n" + windows.joinToString("\n")
+        if (cost.isNotEmpty()) sb.append('\n').append(cost)
+        windows.forEach { sb.append('\n').append(it) }
+        return sb.toString()
     }
 
     /** 主线程装一次，之后每帧只记一个时间戳，开销可忽略。 */
@@ -237,6 +272,31 @@ internal object FrameMeter {
     }
 
     @Volatile private var waker: Any? = null
+
+    /**
+     * 触摸只用来切「手势窗口」：按下开一段，抬起或取消收一段。
+     * 每一段都无条件写一行到事件流——要回答的是「我刚滑这一下多少 fps」，
+     * 不能靠「有掉帧才记、还要连续 30 帧不卡才收口」的窗口碰运气。
+     */
+    @Synchronized
+    fun noteTouch(action: Int) {
+        when (action) {
+            TOUCH_DOWN -> {
+                gOpen = true
+                gFrames = 0; gJank = 0; gStall = 0; gWorst = 0f; gSum = 0.0
+                gStart = frameStamp()
+            }
+            TOUCH_UP, TOUCH_CANCEL -> {
+                if (!gOpen) return
+                gOpen = false
+                if (gFrames < FRAME_GESTURE_MIN) return
+                val avg = gSum / gFrames
+                gLast = "$gStart-${frameStamp()} 帧=$gFrames 平均=${fmt("%.1f", avg)}ms（${fmt("%.0f", 1000.0 / avg)}fps）" +
+                    " 掉帧=$gJank(${fmt("%.0f", gJank * 100.0 / gFrames)}%) 卡顿=$gStall 最长=${fmt("%.0f", gWorst)}ms"
+                frameEventSink?.invoke("帧率手势 $gLast")
+            }
+        }
+    }
 
     /** 界面画了一帧：唤醒采样。由 `ViewGroup#dispatchDraw` 钩子调用，主线程。 */
     fun noteDraw() {

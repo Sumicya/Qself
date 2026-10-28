@@ -787,6 +787,49 @@ class ProtoTest {
         assertTrue("错过同步不该有：\n$head", head.contains("错过同步 0 次"))
     }
 
+    @Test fun frameMeterRecordsOneLinePerGestureAndSkipsTaps() {
+        FrameMeter.reset()
+        repeat(200) { FrameMeter.feed(8.3f) }          // 先测出 120Hz 周期，掉帧线才落在 12.45ms
+        var emitted = ""
+        frameEventSink = { emitted = it }
+        try {
+            FrameMeter.noteTouch(TOUCH_DOWN)
+            repeat(120) { FrameMeter.feed(8.3f) }
+            repeat(3) { FrameMeter.feed(60f) }          // 三帧卡顿
+            FrameMeter.noteTouch(TOUCH_UP)
+            val line = FrameMeter.snapshot().lineSequence().first { it.startsWith("最近手势 : ") }
+            assertTrue("手势没记到：\n$line", line.contains("帧=123"))
+            assertTrue("掉帧数不对：\n$line", line.contains("掉帧=3"))
+            assertTrue("卡顿数不对：\n$line", line.contains("卡顿=3"))
+            assertTrue("最长帧不对：\n$line", line.contains("最长=60ms"))
+            assertTrue("没算出 fps：\n$line", line.contains("fps）"))
+            // 同一段手势还要无条件进事件流：导出日志里滑动一次就有一行，不必等窗口碰运气收口
+            assertTrue("手势没进事件流：\n$emitted", emitted.startsWith("帧率手势 ") && emitted.contains("帧=123"))
+        } finally {
+            frameEventSink = null
+        }
+        // 点一下只画两三帧，不算一次滑动，不许刷屏
+        FrameMeter.reset()
+        FrameMeter.noteTouch(TOUCH_DOWN)
+        repeat(3) { FrameMeter.feed(8.3f) }
+        FrameMeter.noteTouch(TOUCH_UP)
+        assertTrue("短触摸也记成了手势", FrameMeter.snapshot().contains("本进程还没有滑动记录"))
+    }
+
+    @Test fun frameMeterClosesTheWindowAtTheStallInsteadOfThirtyFramesLater() {
+        FrameMeter.reset()
+        // 200 帧后每 30 帧收一次空窗口（无掉帧不入库），恰好在第 180 帧收过一次，此时窗口里已有 20 帧
+        repeat(200) { FrameMeter.feed(8.3f) }
+        // 卡一帧，下一帧正常：卡顿段一结束窗口就要收口，否则一直滑的时候 gap 被反复清零，这段卡顿永远不进日志
+        FrameMeter.feed(90f)
+        FrameMeter.feed(8.3f)
+        val win = FrameMeter.snapshot().lineSequence().lastOrNull { it.startsWith("帧率窗口 ") }
+        assertTrue("卡顿当下没有收口", win != null)
+        assertTrue("窗口内容不对：\n$win", win!!.contains("卡顿=1"))
+        assertTrue("窗口内容不对：\n$win", win.contains("最长=90ms"))
+        assertTrue("窗口帧数不对：\n$win", win.contains("帧=${FRAME_WINDOW_MIN + 2} "))
+    }
+
     @Test fun arkCardIsRecognisedByItsClassName() {
         // 真机撞见过的三类：内容组件包名、ArkApp 视图、ArkView 包装。
         assertTrue(looksLikeArkCard("com.tencent.mobileqq.aio.msglist.holder.component.ark.AIOArkContentComponent"))

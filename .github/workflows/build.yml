@@ -3,6 +3,12 @@ name: Build
 
 on:
   push:
+    paths-ignore:
+      - '**.md'        # 含 README、CHANGELOG 等全部 Markdown 文档
+      - 'docs/**'
+      - 'bad/**'
+      - 'LICENSE'
+      - '.gitignore'
   workflow_dispatch:
 
 permissions:
