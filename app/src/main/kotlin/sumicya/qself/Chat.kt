@@ -378,9 +378,8 @@ private class BubbleSurface(
     }
     private val hiddenQuoteBars = ArrayList<Pair<WeakReference<View>, Int>>()
     private val savedQuoteMsgMargins = WeakHashMap<View, IntArray>()
-    // 气泡宿主的裁剪开关：只对 Ark 卡片改，其余消息保持 QQ 原值，关闭时原样还原。
-    private var savedClipChildren: Boolean? = null
-    private var savedClipToPadding: Boolean? = null
+    // Ark 卡片画到底板外面的像素数：记下来好在关闭或复用时还原右侧内边距。
+    private var arkOverflowPx = 0
     private var active = false
     private var drawable: NagramBubbleDrawable? = null
     private var lastChildCount = -1
@@ -411,16 +410,9 @@ private class BubbleSurface(
         }
         if (v.minimumWidth != 0) v.minimumWidth = 0
         if (v.minimumHeight != 0) v.minimumHeight = 0
-        // Ark 卡片按自己的宽度排版、整块绘制，真机上右侧成排按钮会画到底板外面（截图实测多出约 19px），
-        // 底板就是这颗气泡的边界。只对含 Ark 卡片的气泡打开裁剪，其余消息与头像浮绘不受影响。
-        if (v is ViewGroup && isArkCard(v)) {
-            if (savedClipChildren == null) {
-                savedClipChildren = v.clipChildren
-                savedClipToPadding = v.clipToPadding
-            }
-            if (!v.clipChildren) v.clipChildren = true
-            if (!v.clipToPadding) v.clipToPadding = true
-        }
+        // Ark 卡片按自己排版后的宽度整块绘制，真机上右侧成排按钮会画到底板外面（截图逐像素量到 19px）。
+        // 裁掉会把按钮右边缘切掉，比现状更难看；正确做法是让底板长到卡片那么宽，见 [fitArkOverflow]。
+        if (v is ViewGroup && isArkCard(v)) v.post { fitArkOverflow(v, pad) }
         if (v is android.widget.TextView && v.includeFontPadding) v.includeFontPadding = false
         setFasterIncludePad(v, false)
         val qView = quote.get()
@@ -508,10 +500,7 @@ private class BubbleSurface(
             it.setPadding(savedSurfacePadding[0], savedSurfacePadding[1], savedSurfacePadding[2], savedSurfacePadding[3])
             it.minimumWidth = savedSurfaceMin[0]
             it.minimumHeight = savedSurfaceMin[1]
-            (it as? ViewGroup)?.let { group ->
-                savedClipChildren?.let { c -> group.clipChildren = c }
-                savedClipToPadding?.let { p -> group.clipToPadding = p }
-            }
+            (it as? ViewGroup)?.let { group -> restoreArkOverflow(group) }
             if (it is android.widget.TextView && savedSurfaceIncludePad != null) it.includeFontPadding = savedSurfaceIncludePad
             savedSurfaceFasterPad?.let { pad -> setFasterIncludePad(it, pad) }
         }
@@ -555,6 +544,55 @@ private class BubbleSurface(
         }
         hiddenQuoteBars.clear()
     }
+    /**
+     * 把底板补到 Ark 卡片实际画到的宽度。
+     *
+     * 真机截图逐像素量过：底板 x=105..1078、卡片蓝框 x=107..1097，左侧对齐，右侧多出 19px ——
+     * 卡片按自己排版后的宽度画，画到了底板外面。裁掉会把按钮右边切掉，所以改成给气泡加右侧内边距
+     * （气泡是 `WRAP_CONTENT`，加右内边距等于把底板加宽）。补完再量一次：还在溢出说明卡片按固定宽度
+     * 画、加宽不解决问题，那就退回原值，不折腾也不留隐患；两种情况都写一行日志，下次导出能核对。
+     */
+    private fun fitArkOverflow(v: ViewGroup, pad: Int) {
+        if (!active || arkOverflowPx != 0) return
+        val over = arkOverflow(v)
+        if (over <= 0 || over > (40 * v.dp).toInt()) return
+        arkOverflowPx = over
+        v.setPadding(pad, pad, pad + over, pad)
+        v.post {
+            if (!active) return@post
+            if (arkOverflow(v) > 0) {
+                arkOverflowPx = 0
+                v.setPadding(pad, pad, pad, pad)
+                recordQselfEvent("Ark 底板补齐无效，已退回（溢 ${over}px）")
+            } else {
+                recordQselfEvent("Ark 底板已按卡片宽度补齐 ${over}px")
+            }
+        }
+    }
+
+    private fun restoreArkOverflow(v: ViewGroup) {
+        arkOverflowPx = 0
+    }
+
+    /** 子树里画到最右边的像素减去气泡自身宽度；量不到（还没布局）就是 0。 */
+    private fun arkOverflow(root: ViewGroup): Int {
+        val w = root.width
+        if (w <= 0) return 0
+        var maxRight = 0
+        fun walk(g: ViewGroup, base: Int, depth: Int) {
+            if (depth > 6) return
+            for (i in 0 until g.childCount) {
+                val c = g.getChildAt(i)
+                if (c.visibility == View.GONE) continue
+                val left = base + c.left
+                if (left + c.width > maxRight) maxRight = left + c.width
+                if (c is ViewGroup) walk(c, left, depth + 1)
+            }
+        }
+        walk(root, 0, 0)
+        return maxRight - w
+    }
+
     companion object {
         private var fasterCls: Class<*>? = null
         private var fasterPadField: java.lang.reflect.Field? = null

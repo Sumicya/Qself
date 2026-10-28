@@ -54,6 +54,8 @@ fun looks() {
     }
     hook(ViewGroup::class.java.getDeclaredMethod("dispatchDraw", Canvas::class.java)) { chain ->
         // 这个钩子每个 ViewGroup 每帧都过一遍（真机日志 23.7 万次/5 小时），先用字段读判掉绝大多数。
+        // 帧率采样靠这一次调用判断「界面真的画了」，空闲时就不再去抢垂直同步。
+        FrameMeter.noteDraw()
         val source = chain.thisObject as? ViewGroup
         val background = source?.background
         val glass = if (background is Glass) background else floatStates[source]?.glass

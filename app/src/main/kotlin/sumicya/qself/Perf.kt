@@ -95,6 +95,9 @@ internal object FrameMeter {
     private var reportFrames = 0
     private var reportSum = 0.0
     @Volatile private var installed = false
+    @Volatile private var drewSinceCallback = false
+    @Volatile private var drawSignalSeen = false
+    @Volatile private var loopPosted = false
 
     /** 记一帧的真实间隔（毫秒）。纯计算，JVM 单测可以直接灌数。 */
     @Synchronized
@@ -198,17 +201,48 @@ internal object FrameMeter {
         if (android.os.Looper.myLooper() == looper) attach() else android.os.Handler(looper).post { attach() }
     }
 
+    /**
+     * 只在界面真的画了一帧时才取下一帧。
+     *
+     * 原来的循环无论界面动不动都每帧重投一次回调：屏幕静止时也把进程钉在最高刷新率上，
+     * 真机日志里 14 分钟攒出 101132 帧（14 × 60 × 122 ≈ 102000，正好等于「一直空转」），
+     * 「累计帧数」因此不是画了多少帧，而是跑了多久 —— 数字好看，但不是事实。
+     * 现在由 [noteDraw] 在真正绘制时唤醒，空闲就停；没接过绘制通知时退回老的自循环，避免依赖别的钩子。
+     */
     private fun attach() {
         if (installed) return
         installed = true
-        val cb = object : android.view.Choreographer.FrameCallback {
+        val choreographer = android.view.Choreographer.getInstance()
+        val callback = object : android.view.Choreographer.FrameCallback {
             override fun doFrame(frameTimeNanos: Long) {
-                android.view.Choreographer.getInstance().postFrameCallback(this)
+                loopPosted = false
                 val last = lastNanos
                 lastNanos = frameTimeNanos
                 if (last != 0L) feed((frameTimeNanos - last) / 1_000_000f)
+                val drew = drewSinceCallback
+                drewSinceCallback = false
+                // 画过就接着取下一帧；没画过且已经能从绘制钩子收到通知，就停下来等下一次绘制。
+                if (drew || !drawSignalSeen) {
+                    loopPosted = true
+                    choreographer.postFrameCallback(this)
+                } else {
+                    lastNanos = 0L   // 空闲后的第一帧间隔不是帧耗时，不能算进去
+                }
             }
         }
-        android.view.Choreographer.getInstance().postFrameCallback(cb)
+        // 唤醒器存成 Any：JVM 单测里没有 Choreographer，字段带上 FrameCallback 类型会在类加载时就炸。
+        waker = { if (!loopPosted) { loopPosted = true; choreographer.postFrameCallback(callback) } }
+        loopPosted = true
+        choreographer.postFrameCallback(callback)
+    }
+
+    @Volatile private var waker: Any? = null
+
+    /** 界面画了一帧：唤醒采样。由 `ViewGroup#dispatchDraw` 钩子调用，主线程。 */
+    fun noteDraw() {
+        drawSignalSeen = true
+        drewSinceCallback = true
+        @Suppress("UNCHECKED_CAST")
+        (waker as? () -> Unit)?.invoke()
     }
 }

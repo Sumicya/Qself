@@ -36,6 +36,7 @@ fun modernNotifications() {
             val n = chain.args.lastOrNull() as? Notification
             val ctx = chain.thisObject as? android.content.Context
             val better = if (n == null || ctx == null) null else modernize(ctx, n)
+            count(better != null, n)
             if (better == null) chain.proceed()
             else chain.proceed(chain.args.dropLast(1).toTypedArray() + better)
         }
@@ -60,6 +61,25 @@ private fun modernize(context: android.content.Context, n: Notification): Notifi
     if (n.`when` > 0L) builder.setWhen(n.`when`)
     builder.build()
 }.onFailure { log("通知现代化失败，按原样发出", it) }.getOrNull()
+
+/**
+ * 通知计账：真机上「这条功能到底有没有生效」只能靠数字回答。
+ * 每 100 条写一行到 Qself 事件流，下次导出日志直接能核；不逐条记，免得刷屏。
+ */
+private var seen = 0
+private var changed = 0
+private var custom = 0
+private var noText = 0
+
+private fun count(ok: Boolean, n: Notification?) {
+    seen++
+    if (ok) changed++
+    else if (n?.contentView != null) custom++
+    else noText++
+    if (seen % 100 == 0) {
+        recordQselfEvent("通知现代化：共 $seen 条，换样式 $changed，自定义布局跳过 $custom，无可展开 $noText")
+    }
+}
 
 /** 一条通知换成什么文字；`null` 表示按原样发。 */
 internal data class NotifyText(val title: String, val body: String)
