@@ -4,7 +4,9 @@
 
 - 测试归位：`tools/test_dexq.py`、`tools/test_ui_paths.py` 是本仓反汇编与字段解码的真纯函数回归（真二进制夹具，
   不读业务源码做字符串匹配），按「单元测试只放项目标准测试目录」迁到 `app/src/test/python/`，导入路径指向 `tools/`；
-  `pr-check.yml` 的单测步骤同步改路径，8 条断言在新位置全过。
+  `build.yml` 与 `pr-check.yml` 的单测步骤同步改路径（`tools/` 下已无测试文件，Python 3.12 的 `unittest`
+  在「一条都没跑到」时退出码为 5，`build` 为此红过一轮，本轮已修）；`tools/check.sh` 也接上这两条回归，
+  本地自检与 CI 同口径。8 条断言在新位置全过。
 - 文档收敛：删除 `docs/` 下四个文件。`design-principles.md` 按规范仅 `Selffont` 维护；`apk-analysis.md`、
   `kernel-port.md`、`message-ui.md` 属未经主人要求的过程文档。README 里指向它们的两处引用同提交清掉，
   「源码结构」补上 Python 测试与着色器检查两行，不留指向已删文件的链接。

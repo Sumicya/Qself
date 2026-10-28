@@ -45,3 +45,5 @@ rm -rf "$T/t"
 kotlinc/bin/kotlinc -jvm-target 21 -cp android.jar -d "$T/t" "$R"/app/src/main/kotlin/sumicya/qself/*.kt "$R"/app/src/test/kotlin/sumicya/qself/*.kt kstub/junit.kt kstub/run.kt $JAVA bc/sumicya/qself/BuildConfig.java 2>&1 | tee "$T/compile-all.log"
 echo "compiled: $(find "$T/t/sumicya/qself" -type f -name '*.class' | wc -l) classes"
 java -cp "$T/t:$T/kotlinc/lib/kotlin-stdlib.jar" RunKt
+# CI 的落点核对照样跑这两条 Python 回归：本地漏掉它们，推送后才发现等于拿 CI 当编译器。
+cd "$R" && python3 -m unittest discover -s app/src/test/python -p 'test_*.py'
