@@ -837,12 +837,14 @@ class ProtoTest {
         MainThreadMeter.record(12.0, "")
         val into = DoubleArray(2)
         MainThreadMeter.take(into)
-        assertEquals(56.0, into[0])
-        assertEquals(3.0, into[1])
+        // 浮点必须走带 delta 的三参重载：JUnit 4.13 起两参 assertEquals(double, double) 的源码
+        // 就是一句 fail("Use assertEquals(expected, actual, delta)…")，跟数值对不对无关，写一次红一次。
+        assertEquals(56.0, into[0], 1e-9)
+        assertEquals(3.0, into[1], 1e-9)
         // 取走之后这一段必须清零，否则同一个窗口会被重复计一遍
         MainThreadMeter.take(into)
-        assertEquals(0.0, into[0])
-        assertEquals(0.0, into[1])
+        assertEquals(0.0, into[0], 1e-9)
+        assertEquals(0.0, into[1], 1e-9)
         val line = MainThreadMeter.summary()
         assertTrue("没算出总条数：\n$line", line.contains("共 3 条消息"))
         assertTrue("没点名最慢的那条：\n$line", line.contains("≥32ms 的 1 条"))

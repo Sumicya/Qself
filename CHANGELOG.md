@@ -45,6 +45,15 @@
 - 清理脚本（`cleanup.py`）：项目名前缀不再写死，改由 `REPO` 推导（`REPO.split("/")[-1] + "-"`）；artifact 名
   不合前缀的理由串改用前缀变量；两处 docstring 与一处过期注释（号源仍写「git 提交数」）同步改掉。行为等价：
   本仓 `REPO=Sumicya/Qself` 推导值仍是 `Qself-`，现存产物名与 `run_number` 的 join 结论一个不变。
+- CI 单测修复（`ProtoTest.kt`、`tools/check.sh`）：`Build` 与 `PR check` 在 `ee83218b` 上双双红在
+  `mainThreadMeterNamesTheWorstMessageAndKeepsPerFrameTotals`，报 `java.lang.AssertionError at ProtoTest.kt:840`，
+  而 `take()` 的算术是整数纳秒除以 `1e6`，本地两套编译器（2.2.20 / 2.4.20）都算得出 `56.0`。取 JUnit 4.13.2 的
+  `Assert.java` 原文核对：两参 `assertEquals(double, double)` 先转成 `assertEquals(null, expected, actual)`，
+  落到 `assertEquals(String, double, double)`，而那一支的实现只有一句
+  `fail("Use assertEquals(expected, actual, delta) to compare floating-point numbers")` —— **与数值无关，
+  写了就必红**；本地替身把这四个数当对象比，所以一路全绿。四处改成带容差的三参
+  `assertEquals(56.0, into[0], 1e-9)`；`tools/check.sh` 的 JUnit 替身按真包语义补齐「两参浮点断言 = 编译错误 +
+  delta 三参重载」，本地再写两参直接红在编译期（已实测：改回两参后 `check.sh` 退出码 1）。74 条全过。
 
 ## 2026-10-27（十一）— 顶栏顶部背景板整条清掉、聊天帧率按「每两帧重录」和「遍历节流」两处真开销收，新增通知现代化
 

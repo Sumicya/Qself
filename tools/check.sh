@@ -24,6 +24,15 @@ object Assert {
     @JvmStatic fun assertTrue(msg: String, b: Boolean) { if (!b) throw AssertionError(msg) }
     @JvmStatic fun assertFalse(msg: String, b: Boolean) { if (b) throw AssertionError(msg) }
     @JvmStatic fun assertEquals(a: Any?, b: Any?) { if (a != b) throw AssertionError("expected $a, got $b") }
+    // 替身必须和 JUnit 4.13.2 语义一致：两参 assertEquals(double, double) 在真包里就是一句 fail(...)，
+    // 不看数值。这里升成编译错误 —— 本地一写就红，别再把「本地全绿、CI 必红」留到推送后才发现。
+    @Deprecated("JUnit 4.13 起两参浮点断言一律失败，用 assertEquals(expected, actual, delta)",
+        level = DeprecationLevel.ERROR)
+    @JvmStatic fun assertEquals(a: Double, b: Double): Unit =
+        throw AssertionError("Use assertEquals(expected, actual, delta) to compare floating-point numbers")
+    @JvmStatic fun assertEquals(a: Double, b: Double, delta: Double) {
+        if (a.compareTo(b) != 0 && Math.abs(a - b) > delta) throw AssertionError("expected $a ±$delta, got $b")
+    }
     @JvmStatic fun assertSame(a: Any?, b: Any?) { if (a !== b) throw AssertionError("expected same") }
     @JvmStatic fun assertArrayEquals(a: ByteArray, b: ByteArray) { if (!a.contentEquals(b)) throw AssertionError("arrays differ: ${a.toList()} vs ${b.toList()}") }
 }
