@@ -56,6 +56,173 @@ internal object CostMeter {
     }
 }
 
+internal const val MSG_SLOW_MS = 32.0        // 单条主线程消息超过它就算一次「卡」
+internal const val MSG_SAMPLE_STEP_MS = 20L  // 看门狗巡一次的间隔
+internal const val MSG_SAMPLE_GAP_MS = 80.0  // 同一条卡消息两次抓栈的最小间隔（毫秒）
+internal const val MSG_STACK_FRAMES = 4      // 一条栈只留前 4 个业务帧，长栈读不动
+
+/**
+ * 主线程消息计时 + 卡顿当场抓栈。
+ *
+ * 帧间隔只说明「这一帧没出来」，说不清「谁不让它出来」：主线程真的在跑代码，和主线程闲着但渲染管线堵住，
+ * 在帧率数字上长得一模一样。这里量两件事：
+ *  ① 每帧主线程花在消息里多少毫秒 —— 和帧间隔一比就知道是不是主线程瓶颈；
+ *  ② 超过 [MSG_SLOW_MS] 的消息，由看门狗线程[MSG_SAMPLE_STEP_MS]一巡，当场抓主线程栈，
+ *     把「卡 300ms」写成「卡在 com.tencent.xxx#yyy ← ...」。
+ * 热路径只多两次 nanoTime 和两个字段写入；字符串只在慢消息上才拼。
+ */
+internal object MainThreadMeter {
+    @Volatile private var startNanos = 0L          // 0 = 两条消息之间，看门狗据此判断有没有卡着
+    @Volatile private var currentWhat = 0
+    @Volatile private var currentCallback: Class<*>? = null
+
+    private var depth = 0                          // 只在主线程读写：嵌套 Looper.loop 只算最外层
+    private var totalNanos = 0L
+    private var totalCount = 0
+    private var slowCount = 0
+    private var worstMs = 0.0
+    private var worstWhere = ""
+
+    private var frameNanos = 0L                    // 上一帧以来的一段，喂给帧率窗口
+    private var frameCount = 0
+
+    private var lastSampleMs = 0.0
+    private val samples = ArrayDeque<String>(MSG_STACK_FRAMES)
+    private var watchdog: Thread? = null
+
+    fun reset() {
+        startNanos = 0L; currentWhat = 0; currentCallback = null
+        depth = 0; totalNanos = 0; totalCount = 0; slowCount = 0; worstMs = 0.0; worstWhere = ""
+        frameNanos = 0; frameCount = 0; lastSampleMs = 0.0; samples.clear()
+    }
+
+    /** 一条消息开始。不分配对象：只存 what 与回调类，名字等真卡了再拼。 */
+    fun enter(what: Int, callback: Class<*>?) {
+        if (depth == 0) {
+            currentWhat = what
+            currentCallback = callback
+            startNanos = System.nanoTime()
+        }
+        depth++
+    }
+
+    fun exit() {
+        if (depth == 0) return
+        depth--
+        if (depth > 0) return
+        val t0 = startNanos
+        startNanos = 0L
+        if (t0 == 0L) return
+        val ms = (System.nanoTime() - t0) / 1e6
+        val where = if (ms >= MSG_SLOW_MS) messageLabel(currentWhat, currentCallback) else ""
+        currentCallback = null
+        record(ms, where)
+    }
+
+    /** 纯函数入口：单测直接灌数，不碰计时与 Android 类。 */
+    fun record(ms: Double, where: String) {
+        val nanos = (ms * 1_000_000).toLong()
+        totalNanos += nanos
+        totalCount++
+        frameNanos += nanos
+        frameCount++
+        if (ms > worstMs) { worstMs = ms; worstWhere = where }
+        if (ms >= MSG_SLOW_MS) slowCount++
+    }
+
+    /** 取走上一帧以来的一段（[0]=毫秒，[1]=条数）并清零。不分配对象。 */
+    fun take(into: DoubleArray) {
+        into[0] = frameNanos / 1e6
+        into[1] = frameCount.toDouble()
+        frameNanos = 0L
+        frameCount = 0
+    }
+
+    /** 导出用的一行：有数据才写，没装钩子就返回空串。 */
+    fun summary(): String {
+        if (totalCount == 0) return ""
+        val sb = StringBuilder()
+        sb.append("主线程 : 共 ${totalCount} 条消息，平均每帧 ")
+            .append(fmt("%.1f", totalNanos / 1e6 / totalCount)).append("ms 一条")
+        if (slowCount > 0) {
+            sb.append("；≥").append(fmt("%.0f", MSG_SLOW_MS)).append("ms 的 $slowCount 条，最慢 ")
+                .append(fmt("%.0f", worstMs)).append("ms 在 ").append(worstWhere)
+        }
+        if (samples.isNotEmpty()) sb.append('\n').append("卡顿栈 : ").append(samples.joinToString("\n         "))
+        return sb.toString()
+    }
+
+    private fun messageLabel(what: Int, callback: Class<*>?): String =
+        (callback?.name ?: "(无回调)") + "#what=" + what
+
+    /**
+     * 看门狗：主线程有消息卡着就抓栈。
+     * 用独立线程而不是在主线程里抓 —— 主线程正卡着，它自己没机会抓自己。
+     */
+    fun startWatchdog() {
+        if (watchdog != null) return
+        val main = android.os.Looper.getMainLooper().thread
+        val thread = Thread({
+            while (!Thread.currentThread().isInterrupted) {
+                try {
+                    Thread.sleep(MSG_SAMPLE_STEP_MS)
+                } catch (e: InterruptedException) {
+                    return@Thread
+                }
+                val t0 = startNanos
+                if (t0 == 0L) { lastSampleMs = 0.0; continue }
+                val ms = (System.nanoTime() - t0) / 1e6
+                if (ms < MSG_SLOW_MS || ms - lastSampleMs < MSG_SAMPLE_GAP_MS) continue
+                lastSampleMs = ms
+                val frames = runCatching { main.stackTrace }.getOrDefault(emptyArray())
+                val where = culprit(frames)
+                if (samples.size >= MSG_STACK_FRAMES) samples.removeFirst()
+                if (where !in samples) samples.addLast(where)
+                frameEventSink?.invoke("主线程卡 ${fmt("%.0f", ms)}ms 在 $where")
+            }
+        }, "Qself-StallWatch")
+        thread.isDaemon = true
+        thread.start()
+        watchdog = thread
+    }
+}
+
+/**
+ * 装主线程消息钩子。counted = false：这条钩子每条消息都会走一遍（每秒上千次），
+ * 不能进事件流的钩子计数，否则事件流被它刷满，真正要看的钩子反倒被挤掉。
+ * 只认主线程：后台 Handler 的消息与帧率无关，混进来还会把嵌套深度搅乱。
+ */
+fun stallWatch() {
+    val main = android.os.Looper.getMainLooper().thread
+    val dispatch = android.os.Handler::class.java
+        .getDeclaredMethod("dispatchMessage", android.os.Message::class.java)
+    hook(dispatch, gated = false, counted = false) { chain ->
+        if (Thread.currentThread() !== main) return@hook chain.proceed()
+        val msg = chain.getArg(0) as? android.os.Message
+        MainThreadMeter.enter(msg?.what ?: -1, msg?.callback?.javaClass)
+        try {
+            chain.proceed()
+        } finally {
+            MainThreadMeter.exit()
+        }
+    }
+    MainThreadMeter.startWatchdog()
+}
+
+/** 从栈里挑出真正干活的帧：跳掉 android./java./kotlin. 这些谁都会过的壳。纯函数，可单测。 */
+internal fun culprit(frames: Array<StackTraceElement>): String {
+    val out = ArrayList<String>(MSG_STACK_FRAMES)
+    for (f in frames) {
+        val c = f.className
+        if (c.startsWith("android.") || c.startsWith("java.") || c.startsWith("kotlin.") ||
+            c.startsWith("dalvik.") || c.startsWith("com.android.") || c.startsWith("sun.")
+        ) continue
+        out.add(c + "#" + f.methodName)
+        if (out.size >= MSG_STACK_FRAMES) break
+    }
+    return if (out.isEmpty()) "(栈里全是系统帧)" else out.joinToString(" ← ")
+}
+
 /** 事件出口由宿主注入：帧率统计就不需要 Android 类也能在 JVM 上单测。 */
 internal var frameEventSink: ((String) -> Unit)? = null
 
@@ -75,6 +242,8 @@ internal object FrameMeter {
         gap = 0; wFrames = 0; wJank = 0; wStall = 0; wWorst = 0f; wSum = 0.0; wStart = ""
         windows.clear(); periodMs = FRAME_BUDGET_MS
         gOpen = false; gFrames = 0; gJank = 0; gStall = 0; gWorst = 0f; gSum = 0.0; gStart = ""; gLast = ""
+        wMainMs = 0.0; wMainN = 0.0
+        MainThreadMeter.reset()
         reportFrames = 0; reportSum = 0.0
         CostMeter.reset()
     }
@@ -109,6 +278,9 @@ internal object FrameMeter {
     private var gSum = 0.0
     private var gStart = ""
     private var gLast = ""
+    private val msgDrain = DoubleArray(2)      // [0]=毫秒 [1]=条数，每帧取一次，不分配对象
+    private var wMainMs = 0.0
+    private var wMainN = 0.0
     @Volatile private var installed = false
     @Volatile private var drewSinceCallback = false
     @Volatile private var drawSignalSeen = false
@@ -121,6 +293,10 @@ internal object FrameMeter {
         if (dtMs <= 0f || dtMs > 1000f) return
         // 刷新周期从观测里取：这台机器是 120Hz 时，16.7ms 的预算会把一半掉帧漏掉。
         if (frames % FRAME_PERIOD_EVERY == 0L) refreshPeriod()
+        // 上一帧以来主线程在消息里花了多少：和帧间隔一比，就知道这帧是主线程忙掉的还是等出来的。
+        MainThreadMeter.take(msgDrain)
+        wMainMs += msgDrain[0]
+        wMainN += msgDrain[1]
         frames++
         sum += dtMs
         ring[ringIdx] = dtMs
@@ -198,9 +374,13 @@ internal object FrameMeter {
         val worstMs = wWorst
         val avg = if (n > 0) wSum / n else 0.0
         val start = wStart
+        val mainMs = wMainMs
+        val mainN = wMainN
         wFrames = 0; wJank = 0; wStall = 0; wWorst = 0f; wSum = 0.0; gap = 0; wStart = ""
+        wMainMs = 0.0; wMainN = 0.0
         if (n < FRAME_WINDOW_MIN || (jank == 0 && stall == 0)) return
-        val line = "帧率窗口 $start 帧=$n 平均=${fmt("%.1f", avg)}ms 掉帧=$jank(${fmt("%.0f", jank * 100.0 / n)}%) 卡顿=$stall 最长=${fmt("%.0f", worstMs)}ms"
+        val main = if (mainN > 0) " 主线程=均${fmt("%.1f", mainMs / n)}ms/帧（${mainN.toInt()} 条消息）" else ""
+        val line = "帧率窗口 $start 帧=$n 平均=${fmt("%.1f", avg)}ms 掉帧=$jank(${fmt("%.0f", jank * 100.0 / n)}%) 卡顿=$stall 最长=${fmt("%.0f", worstMs)}ms$main"
         while (windows.size >= FRAME_MAX_WINDOWS) windows.removeFirst()
         windows.addLast(line)
         // 只把「真有卡顿」的窗口写进 Qself 事件流，正常滑动不刷屏。
@@ -221,6 +401,8 @@ internal object FrameMeter {
         }
         // 「最近手势」放头部：滑动一次就有一行，进程重启前也能看到上一个进程留下的结论在事件流里。
         val sb = StringBuilder(head)
+        val main = MainThreadMeter.summary()
+        if (main.isNotEmpty()) sb.append('\n').append(main)
         sb.append('\n').append("最近手势 : ").append(
             gLast.ifEmpty { "本进程还没有滑动记录（按下到抬起算一段，抬手即写入事件流）" })
         val cost = CostMeter.line()

@@ -27,6 +27,21 @@
   `帧=30 掉帧=1(3%) 最长=16ms`，就是这个原因；改成卡顿段一结束就收口（窗口至少 20 帧），卡顿与前后文一起落盘；
   ③ 导出头部新增「最近手势」一行，本进程还没滑动就直说。`ProtoTest` 新增 2 条（手势成行且短触摸不记、
   卡顿段结束即收口），72 条全过。
+- 主线程归因（`Perf.kt`、`Hook.kt`、`Qself.kt`）：帧间隔只说「这一帧没出来」，说不清「谁不让它出来」。
+  新增 `MainThreadMeter`：装 `Handler#dispatchMessage` 计时（`counted=false`，不进钩子事件流；只认主线程），
+  每帧取走主线程耗时写进窗口行 `主线程=均 X.Xms/帧（N 条消息）`；单条消息超过 `32ms` 由看门狗线程每 `20ms`
+  一巡、当场抓主线程栈，跳掉 `android.`/`java.`/`kotlin.` 这些壳取前 4 个业务帧。导出头部新增 `主线程`
+  与 `卡顿栈` 两行 —— 主线程忙满一帧和主线程闲着但渲染管线堵住，从此分得开。
+  热路径只多两次 `nanoTime` 和两个字段写入，字符串只在慢消息上才拼。`ProtoTest` 新增 2 条
+  （按帧聚合与点名最慢消息、跳系统帧取业务帧），74 条全过。
+- dex 核对（不靠真机日志）：真包 `389.6 MB` / `37` 个 dex，`tools/dexcheck.py --apk /tmp/qq.apk --lint`
+  跑出 **702 条符号 0 条对不上**，现有钩子落点在当前 QQ 版本上仍然成立。查 `FPSCalculator` 一系：
+  `com.tencent.mobileqq.fpsreport.FPSXListView`／`FPSSwipListView`／`FPSSlideDetectListView` 分别继承
+  `com.tencent.widget.XListView`／`SwipListView`／`SlideDetectListView`（全是旧 `ListView` 系），而 AIO 的列表是
+  `androidx.recyclerview.widget.AIORecycleView`（`RecyclerView` 派生），`AIOMsgListVB` 也不是它们。
+  dex 里没找到给 AIO 记 FPS 的实现，所以这项数字只能自采，没有现成结论可抄。
+  另外 `AIORecycleView#dispatchDraw` 自己就在 `save()`/`restore()` 里按 `getChildCount()` 逐个子 View 走一遍
+  （由 `com.tencent.aio.pref.a#j` 开关控制），这是「帧时间随可见消息条数涨」的候选，已列入下一步量测。
 - 清理脚本（`cleanup.py`）：项目名前缀不再写死，改由 `REPO` 推导（`REPO.split("/")[-1] + "-"`）；artifact 名
   不合前缀的理由串改用前缀变量；两处 docstring 与一处过期注释（号源仍写「git 提交数」）同步改掉。行为等价：
   本仓 `REPO=Sumicya/Qself` 推导值仍是 `Qself-`，现存产物名与 `run_number` 的 join 结论一个不变。

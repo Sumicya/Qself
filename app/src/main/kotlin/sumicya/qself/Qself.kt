@@ -139,6 +139,8 @@ class Qself : XposedModule() {
         // 帧率采样：每帧只记一个时间戳，导出日志里才有「卡不卡」的真机数字，而不是自评。
         frameEventSink = ::recordQselfEvent
         runCatching { FrameMeter.install() }.onFailure { log("帧率采样安装失败", it) }
+        // 主线程消息计时：帧率只说「没出帧」，这一项说「谁不让出帧」——慢消息当场抓栈。
+        runCatching { stallWatch() }.onFailure { log("主线程计时安装失败", it) }
         log(report.toString())
         featureGroupGaps().forEach { log(it) }
     }

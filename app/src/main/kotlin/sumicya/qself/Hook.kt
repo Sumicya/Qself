@@ -78,7 +78,7 @@ private class SafeChain(private val delegate: Chain) : Chain by delegate {
  * 装钩子。libxposed 默认（PROTECTIVE）只兜住 proceed 前抛出的异常；
  * SafeChain 同时兜住 proceed 后（如 .also 块内）抛出的钩子异常并退回原返回值，防止把异常抛回宿主导致崩溃。
  */
-fun hook(target: Executable, gated: Boolean = true, body: (Chain) -> Any?): XposedInterface.HookHandle {
+fun hook(target: Executable, gated: Boolean = true, counted: Boolean = true, body: (Chain) -> Any?): XposedInterface.HookHandle {
     val name = if (gated) feature else null
     val sig = "${target.declaringClass.name}#${target.name}"
     val isQLogSelf = target.declaringClass.name == "com.tencent.qphone.base.util.QLog"
@@ -87,7 +87,8 @@ fun hook(target: Executable, gated: Boolean = true, body: (Chain) -> Any?): Xpos
         val safe = SafeChain(chain)
         try {
             val res = body(safe)
-            if (!isQLogSelf) {
+            // counted=false 给「每条消息都会走」的钩子用：省掉一次查表与一次参数摘要分配，也不占事件流。
+            if (counted && !isQLogSelf) {
                 runCatching { recordHookInvocation(sig, safe.thisObject, safe.args, res) }
             }
             res

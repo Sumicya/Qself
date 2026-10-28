@@ -830,6 +830,41 @@ class ProtoTest {
         assertTrue("窗口帧数不对：\n$win", win.contains("帧=${FRAME_WINDOW_MIN + 2} "))
     }
 
+    @Test fun mainThreadMeterNamesTheWorstMessageAndKeepsPerFrameTotals() {
+        MainThreadMeter.reset()
+        MainThreadMeter.record(3.0, "")
+        MainThreadMeter.record(41.0, "com.tencent.mobileqq.aio.msglist.b#what=113")
+        MainThreadMeter.record(12.0, "")
+        val into = DoubleArray(2)
+        MainThreadMeter.take(into)
+        assertEquals(56.0, into[0])
+        assertEquals(3.0, into[1])
+        // 取走之后这一段必须清零，否则同一个窗口会被重复计一遍
+        MainThreadMeter.take(into)
+        assertEquals(0.0, into[0])
+        assertEquals(0.0, into[1])
+        val line = MainThreadMeter.summary()
+        assertTrue("没算出总条数：\n$line", line.contains("共 3 条消息"))
+        assertTrue("没点名最慢的那条：\n$line", line.contains("≥32ms 的 1 条"))
+        assertTrue("没写出最慢耗时：\n$line", line.contains("最慢 41ms 在 com.tencent.mobileqq.aio.msglist.b#what=113"))
+    }
+
+    @Test fun culpritSkipsFrameworkFramesAndKeepsBusinessOnes() {
+        val stack = arrayOf(
+            StackTraceElement("android.view.Choreographer", "doFrame", null, 0),
+            StackTraceElement("android.os.Handler", "dispatchMessage", null, 0),
+            StackTraceElement("com.tencent.mobileqq.aio.msglist.b", "a", null, 0),
+            StackTraceElement("com.tencent.qqnt.kernel.nativeinterface.MsgRecord", "doParse", null, 0),
+            StackTraceElement("java.lang.reflect.Method", "invoke", null, 0),
+            StackTraceElement("sumicya.qself.PerfKt", "stallWatch", null, 0),
+        )
+        val where = culprit(stack)
+        assertTrue("没跳过系统帧：\n$where", where.startsWith("com.tencent.mobileqq.aio.msglist.b#a"))
+        assertTrue("没带上下一个业务帧：\n$where", where.contains("com.tencent.qqnt.kernel.nativeinterface.MsgRecord#doParse"))
+        assertFalse("把系统帧写进去了：\n$where", where.contains("android."))
+        assertEquals("(栈里全是系统帧)", culprit(arrayOf(StackTraceElement("android.view.View", "draw", null, 0))))
+    }
+
     @Test fun arkCardIsRecognisedByItsClassName() {
         // 真机撞见过的三类：内容组件包名、ArkApp 视图、ArkView 包装。
         assertTrue(looksLikeArkCard("com.tencent.mobileqq.aio.msglist.holder.component.ark.AIOArkContentComponent"))
