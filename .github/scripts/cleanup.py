@@ -6,7 +6,7 @@
 - `actions`（默认）：artifact 与运行记录。权限 `actions: write` + `contents: read`。
   PR 校验工作流 `pr-check.yml` 与出包工作流 `build.yml` 各一个作业，`CLEANUP_APPLY='true'` 真删。
   会话推送即触发；真删的调用点必须会话可达，否则清理一次也不会发生（规范 b0594d3）。
-- `releases`：Release 只留最近 1 个，无保留 Release 对应的 `Qself-` tag 一并删。权限只授 `contents: write`，
+- `releases`：Release 只留最近 1 个，无保留 Release 对应的本项目前缀 tag 一并删。权限只授 `contents: write`，
   只在出包工作流 `build.yml` 里、默认分支上跑；不取号，不需要完整历史。
 
 三个清理作业共用同一个 `concurrency` group `qself-cleanup` 串行，避免并发删同一对象。
@@ -35,7 +35,7 @@ if SCOPE not in ("actions", "releases"):
 SELF = int(os.environ["RUN_ID"]) if SCOPE == "actions" else 0   # releases 档不清运行记录，不需要
 SEGMENTS = int(os.environ["SEGMENTS"])
 APPLY = os.environ.get("CLEANUP_APPLY", "false").strip().lower() == "true"
-PREFIX = "Qself-"
+PREFIX = REPO.split("/")[-1] + "-"  # 项目名前缀由 REPO 推导，不写死
 KEEP = 5                       # 全仓 artifact 5 个、每工作流 run 5 条
 KEEP_RELEASES = 1              # Release 1 个，tag 与 Release 同口径
 NEED = "contents: write" if SCOPE == "releases" else "actions: write"
@@ -53,7 +53,7 @@ def git_out(*args):
     return p.stdout.strip() if p.returncode == 0 else None
 
 
-# 取号核对：号源只有 git 提交数一处（规范 c5ac12d:55），这里把两条命令的输出打出来，让日志能独立核对。
+# 取号核对：号源只有 github.run_number 一处，这里把两条命令的输出打出来，让日志能独立核对。
 # 只 actions 档需要：releases 档不取号。
 def gh(*args):
     p = subprocess.run(["gh", *args], capture_output=True, text=True)
@@ -115,7 +115,7 @@ def finish():
 
 
 def clean_releases():
-    """Release 只留最近 1 个；tag 与 Release 同口径：无保留 Release 对应的 Qself- tag 一并删。"""
+    """Release 只留最近 1 个；tag 与 Release 同口径：无保留 Release 对应的本项目前缀 tag 一并删。"""
     rels = sorted((r for r in list_all(f"repos/{REPO}/releases?per_page=100", ".")
                    if r["tag_name"].startswith(PREFIX)),
                   key=lambda r: (r["created_at"], r["id"]), reverse=True)
@@ -164,7 +164,7 @@ for a in sorted(arts, key=lambda x: (x["created_at"], x["id"]), reverse=True):
     r = run_by_id.get(a["workflow_run"]["id"])
     ws = (r or {}).get("path", "(未知来源)")
     if not name.startswith(PREFIX):
-        drop_a.append((a, ws, "口径：名不是 Qself- 前缀"))
+        drop_a.append((a, ws, f"口径：名不是 {PREFIX} 前缀"))
     elif len(seg) != SEGMENTS or not all(part.isdigit() for part in seg):
         drop_a.append((a, ws, f"口径：段数={len(seg)} 要求={SEGMENTS}，各段须为数字"))
     elif r and r["event"] == "pull_request":
