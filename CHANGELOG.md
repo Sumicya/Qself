@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## 2026-10-31（十五）— 状态栏安全区自己变成渐变，页面不再每帧取消重绘
+
+- 状态栏渐变（`Looks.kt`）：以前 `0..顶栏底边` 那条带子显形的是窗口底色，顶上是一块实心的
+  `#FF0F1113`，和下面的内容之间是一条硬边。现在把渐变挂在**顶栏容器自己的背景**上——
+  主页是 `0x7f0a6cfa`（`b=[0,0,1272,194]`、原本透明、在列表之后绘制），聊天页是标题栏外层
+  `sm1.u#k`；内容从消息区滚上来时在顶栏底下淡出，标题按钮与胶囊仍在它之上。**没有第二层、没有描边**，
+  也没有在列表上再叠一层：整块就是那层容器背景。
+- 曲线取 `1 - smoothstep`：顶端不透明度 `255`、底端 `0`，且两端斜率都为 0 —— 只做线性渐变的话，
+  底端会在容器下沿留一条斜率突变（马赫带），眼睛能看出「到这儿为止」的界线。13 个停靠点喂给同一个
+  `LinearGradient`，仍然是单层。
+- 底色不是写死的：`fadeColorBehind()` 先看同父容器里排在它前面、铺满整块的实心 `ColorDrawable`，
+  再退到窗口根底色、`DecorView` 底色，最后才是夜间/日间常量；挂载时写一行
+  `状态栏渐变 : 挂到 <类名>@0x<id> 高=…px 底色=#… 来源=…`，来源对不上就能当场看出来。
+- 客观读数：`StatusFadeDrawable` 在尺寸或底色变化时，把这条渐变**交给 Skia 真正渲染**成 1×`h` 的
+  位图再逐行读回 alpha，写一行 `状态栏渐变 : 高=194px … Skia 读数 相邻行不透明度最大差=n/255
+  亮度上限=n/255 阈值=6`。亮度是各通道的凸组合，所以相邻行亮度差的上限就是相邻行不透明度差 ——
+  这条把「截图 x=1100、y=0..194 相邻行亮度差 < 6/255」从主观判断变成可读的数字。
+- 帧率（`Looks.kt`）：真机日志里每秒数十条 `VRI performTraversals: cancelAndRedraw,
+  mLastPerformTraversalsSkipDrawReason predraw_sumicya.qself.LooksKt$$ExternalSyntheticLambdaNN`，
+  两处 `onPreDraw` 在「规则刚改过布局」时 `return false` 取消当前帧。取消一帧等于让整棵树再走一遍
+  `measure/layout`，而两处规则本身都是幂等的、晚一帧生效看不出来。两处都改成不取消（`BarState`
+  的 `preDrawPasses` 与 `AppearanceObserver` 的 `cancelledOnce` 随之删除），把布局请求交给下一次遍历。
+- 自证：`statusFadeAlpha` / `statusFadeColors` / `statusFadeAlphaAt` 抽成纯函数并加 2 条单测（77 → 79 条），
+  钉住首尾精确值、单调性、两端斜率中段最陡、以及真机 194px 高时相邻行不透明度差 `worst < 6/255`；
+  `tools/check.sh` 编译 136 个类、79 条测试全过，`dexcheck lint bad = 0`，`Looks.kt` 无新增编译告警。
+
 ## 2026-10-30（十四）— 全部页面进入改成「从点按处展开」，返回手势跟手收拢
 
 - 先修一个没人发现的事实：`pageAnimations()` 从写出来那天起就没有在 `looks()` 里被调用过，等于上一版
@@ -130,11 +156,3 @@
 - 文档：README 源码清单补 `Notify.kt`（十四个文件），「项目限制」补上只有真机能判的三项与 Ark 卡片的现状；
   「自由化」补通知现代化条目；顶栏安全区那段按现行实现重写——上一版百分比滑条与 `safeTopPercent()` 已不存在，
   现行是「固定停在状态栏／摄像头下沿 + 面板滑条 `0~48dp` 只往下让」，并写明 `26.10.24.3.3165` 那批日志属旧策略。
-
-## 2026-10-26（十）— 顶栏回到摄像头下沿（不再藏状态栏）、修掉主线程三万分之一秒级的日志开销与玻璃底图整屏重画，并按新版 GLOBAL.md 清掉被禁工具
-
-- 顶栏位置按主人的话改口（`Looks.kt`、`Input.kt`、`Knob.kt`）：上一版把系统状态栏整个藏掉、顶栏顶到 `y=0`，主人判定「不是顶到 y=0 是摄像头下面或者原始位置」「状态栏没说要消失 实测可以冒出」。撤掉 `insetsController.hide(statusBars)` 那套机器（连同每 500ms 巡检），改量为 `max(状态栏高, 摄像头挖孔下沿)`（真机 `141px`）当硬下界：顶栏固定停在这条线以下，滑条从「安全区百分比」改成「顶栏再下移 0–48dp」，压到底也只会停在摄像头下面。消息区上沿同样对齐这条线，顶部内边距取标题栏真实底边（`141+99=240`），滚动时仍从玻璃胶囊底下穿过。留在旧版本被藏掉状态栏的现场，恢复前台时还原一次。
-- 帧率（主人实测进聊天只有 `30fps`）：日志里 `帧率窗口` 长期 `平均 24.9~27.1ms`（约 `37~40fps`），而同期 `ViewGroup#dispatchDraw` 钩子被调 `236926` 次。两处真实开销已改：① `DiagLog.nowStamp()` 原先每条日志都 `new SimpleDateFormat`（一次约 10µs），全量日志开着时 QQ 一秒上千行，改成每线程复用一个实例；② 录制端不再对每一行跑 `uiKeywords` 正则，「UI/AIO/错误」小节改为导出时从同一份记录里筛。玻璃底图也不再整屏重画：`Glass.recordBehind()` 把每个兄弟视图裁到「玻璃板正下方那一带（`bounds` 加边距）」再画，之前消息列表会被整张重画一遍。
-- 帧耗时归因（`Perf.kt`）：新增 `CostMeter`，只记「玻璃合成 / 头像浮绘 / 消息几何 / 顶栏」四个环节的纳秒数与次数，不分配对象；每 60 帧往事件流写一行「帧耗时 最近 60 帧 x.xms（yy fps）；「某环」z.zms/次」，导出时另有一行汇总。帧率只有总数时只能猜是谁拖慢的，有这一行才能指着某一环说话。
-- 按新版 `GLOBAL.md`（`f8f51cf5`）清工具：删掉被点名的 Agent 汇报辅助脚本 `tools/report_links.py` 与其测试、七份读源码做字符串匹配的伪测试、两份 `make_*_preview.py` 生图脚本、`.github/scripts/test_cleanup.py`、`TODO.md`、`docs/design-principles.md`；`ci/` 目录并入 `tools/`（`check.sh`、`check-shaders.sh`）。工作流按 C1–C6 重排：`build.yml` 三作业（`build` / `cleanup-artifacts` / `cleanup-releases`）、`pr-check.yml` 两作业（`check` / `cleanup-artifacts`），顶部注释不超过 5 行，去掉私加的 `::error::` 注解步骤，清理作业统一传 `RUN_ID`。
-- 版本口径换成 CI 运行数（同一份规范）：总序号取 `github.run_number`，当日序号按「当日现存 `build.yml` 运行最小 `run_number`」与「当日合规产物名反推 `r0-d0+1`」取小值锚定，同一 run 重试不换号；不再用 `git rev-list --count`，也不再需要完整历史。

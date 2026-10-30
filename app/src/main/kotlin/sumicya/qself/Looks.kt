@@ -310,7 +310,6 @@ private class AppearanceObserver(decor: View) : ViewTreeObserver.OnGlobalLayoutL
     ViewTreeObserver.OnPreDrawListener, View.OnAttachStateChangeListener {
     private val root = WeakReference(decor)
     private var dirty = true
-    private var cancelledOnce = false
     private var lastWalkAt = 0L
     init {
         decor.viewTreeObserver.addOnGlobalLayoutListener(this)
@@ -322,22 +321,18 @@ private class AppearanceObserver(decor: View) : ViewTreeObserver.OnGlobalLayoutL
     override fun onGlobalLayout() { dirty = true }
     override fun onPreDraw(): Boolean {
         val decor = root.get() ?: return true
-        if (!dirty) { cancelledOnce = false; return true }
+        if (!dirty) return true
         // 滚动时 RecyclerView 每帧都会触发全局布局，逐帧整树遍历等于每帧几百个视图各查一遍文案。
         // 规则只影响「藏不藏东西」，200ms 一次足够，dirty 会保持到下一次真正遍历。
         val now = android.os.SystemClock.uptimeMillis()
         if (now - lastWalkAt < WALK_MIN_GAP_MS) return true
         lastWalkAt = now
         dirty = false
-        val wasRequested = decor.isLayoutRequested
         noteTopInsets(decor)
         walk(decor, false)
-        if (!wasRequested && decor.isLayoutRequested && !cancelledOnce) {
-            cancelledOnce = true
-            dirty = true
-            return false
-        }
-        cancelledOnce = false
+        // 规则改出来的布局请求交给下一次遍历；这里不取消当前帧 —— 取消会让整棵树再走一遍，
+        // 真机日志里那条 cancelAndRedraw（predraw_sumicya.qself…）就是它。
+        if (decor.isLayoutRequested) dirty = true
         return true
     }
     fun dispose() {
@@ -355,6 +350,7 @@ private class AppearanceObserver(decor: View) : ViewTreeObserver.OnGlobalLayoutL
 }
 
 fun resetLooks() {
+    resetStatusFades()
     watched.values.mapNotNull { it.get() }.forEach { it.dispose() }
     watched.clear()
     preferenceListener?.let { store()?.unregisterOnSharedPreferenceChangeListener(it) }
@@ -514,7 +510,6 @@ private class BarState(bar: ViewGroup) {
     var scrollListener: ViewTreeObserver.OnScrollChangedListener? = null
     var layoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
     var drawListener: ViewTreeObserver.OnPreDrawListener? = null
-    var preDrawPasses = 0
 }
 private val floatStates = WeakHashMap<ViewGroup, BarState>()
 private fun restoreBar(bar: ViewGroup) {
@@ -648,11 +643,9 @@ private fun float(bar: ViewGroup) {
                     }
                 }
                 settle(b)
-                if ((b.isLayoutRequested || strip?.isLayoutRequested == true) && state.preDrawPasses < 2) {
-                    state.preDrawPasses++
-                    return@OnPreDrawListener false
-                }
-                state.preDrawPasses = 0
+                // 原来这里「布局还在请求中就 return false 取消这一帧」，真机上每帧落一条
+                // VRI cancelAndRedraw（predraw_sumicya.qself…）：取消一帧等于让整棵树再走一遍
+                // measure/layout。settle 是幂等的，晚一帧生效看不出来，代价却整整少一次遍历。
                 knob(b)
             }
             state.glass.sync()
@@ -1559,7 +1552,8 @@ private class HeaderState(
         if (on("玻璃底栏")) {
             val o = outer
             val r = root
-            if (bar.background !== pills || o?.background != null || r?.background != null ||
+            val outerHasForeignBg = o?.background != null && o.background !== statusFades[o]
+            if (bar.background !== pills || outerHasForeignBg || r?.background != null ||
                 dividerLine?.visibility == View.VISIBLE || upMask?.visibility == View.VISIBLE ||
                 (o != null && ((lastAppliedOuterTop >= 0 && o.paddingTop != lastAppliedOuterTop) || (lastAppliedOuterTop < 0 && o.paddingTop > 0))) ||
                 (r != null && ((lastAppliedRootTop >= 0 && r.paddingTop != lastAppliedRootTop) || (lastAppliedRootTop < 0 && r.paddingTop > 0)))) {
@@ -1677,6 +1671,8 @@ private class HeaderState(
         (outer as? ViewGroup)?.let { it.clipChildren = false; it.clipToPadding = false }
         root?.background = null
         outer?.background = null
+        // 聊天页同一条规则：顶栏外层（sm1.u#k，从 y=0 铺到标题栏底）自己的背景换成安全区渐变。
+        outer?.let { statusFade(it) }
         (root?.parent as? View)?.background = null
         // 顶部背景板：不只顶栏自己，整条祖先链上任何一层的不透明底色都会把顶上那条盖住，
         // 让消息和壁纸透不上来。逐层清空并记住原值，关开关时按原样还回去。
@@ -1688,7 +1684,8 @@ private class HeaderState(
                 p = p.parent as? View
             }
         }
-        for (v in ancestorBgs.keys) if (v.background != null) v.background = null
+        // 自己挂上去的安全区渐变不算「祖先底色」，别在这一步把它抹掉。
+        for (v in ancestorBgs.keys) if (v.background != null && v.background !== statusFades[v]) v.background = null
         // 动态捕获 AIOTitleVB#Y1 / #A1 延后设置的 statusBarHeight（140px）并按 reducedSafeTop 压缩顶部内边距。
         outer?.let { o ->
             if (o.paddingTop != lastAppliedOuterTop && o.paddingTop > 0) {
@@ -1757,6 +1754,7 @@ private class HeaderState(
         if (bar.background === pills) bar.background = barBg
         bar.touchDelegate = origTouchDelegate
         root?.background = rootBg
+        outer?.let(::dropStatusFade)
         outer?.background = outerBg
         (root?.parent as? View)?.background = parentBg
         for ((v, bg) in ancestorBgs) v.background = bg
@@ -2724,6 +2722,168 @@ private fun homeSafeArea(bar: ViewGroup) {
     }
 }
 
+// ---- 状态栏安全区：顶栏底下那一段自己变成渐变。
+//
+// 不是「在列表上再叠一层」：载体是顶栏容器自己的背景（原本透明、在列表之后绘制），所以从消息区滚上来的
+// 内容在顶栏底下淡出，标题按钮仍在它之上。曲线取 1 - smoothstep，两端斜率为 0：顶端不硬，底端也不在
+// 容器下沿留折线。整块只有一层 LinearGradient，没有第二层，也没有描边。
+
+private const val STATUS_FADE_STOPS = 13
+
+/** 0..1 上的不透明度：顶端 1、底端 0，两端斜率为 0。 */
+internal fun statusFadeAlpha(t: Float): Float {
+    val x = t.coerceIn(0f, 1f)
+    val y = 1f - x
+    return y * y * (1f + 2f * x)
+}
+
+/** 停靠点颜色：同一个颜色只改 alpha，首尾精确为 255 与 0。 */
+internal fun statusFadeColors(argb: Int, stops: Int = STATUS_FADE_STOPS): IntArray {
+    val n = stops.coerceAtLeast(2)
+    return IntArray(n) { i ->
+        val a = if (i == 0) 255 else if (i == n - 1) 0 else (255 * statusFadeAlpha(i / (n - 1f))).roundToInt()
+        (argb and 0x00FFFFFF) or (a shl 24)
+    }
+}
+
+/**
+ * 第 [y] 行的不透明度（0..255）。LinearGradient 在相邻停靠点之间线性插值，这里照同一条规则还原，
+ * 单测因此能按真实行距量出台阶；绘制本身仍交给 Skia。
+ */
+internal fun statusFadeAlphaAt(y: Int, height: Int, stops: Int = STATUS_FADE_STOPS): Int {
+    if (height <= 1) return 255
+    val n = stops.coerceAtLeast(2)
+    val colors = statusFadeColors(0xFFFFFF, n)
+    val pos = (y.toFloat() / (height - 1)) * (n - 1)
+    val i = pos.toInt().coerceIn(0, n - 2)
+    val frac = pos - i
+    val a0 = (colors[i] ushr 24) and 0xFF
+    val a1 = (colors[i + 1] ushr 24) and 0xFF
+    return (a0 + (a1 - a0) * frac).roundToInt()
+}
+
+private class StatusFadeDrawable(val color: Int) : android.graphics.drawable.Drawable() {
+    private val paint = android.graphics.Paint()
+    private var shader: android.graphics.LinearGradient? = null
+    private var builtHeight = -1
+
+    override fun draw(canvas: Canvas) {
+        val h = bounds.height()
+        if (h <= 0 || bounds.width() <= 0) return
+        val live = shader?.takeIf { builtHeight == h } ?: build(h)
+        paint.shader = live
+        canvas.drawRect(bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(), bounds.bottom.toFloat(), paint)
+    }
+
+    private fun build(h: Int): android.graphics.LinearGradient {
+        builtHeight = h
+        val made = android.graphics.LinearGradient(
+            0f, 0f, 0f, h.toFloat(), statusFadeColors(color), null, android.graphics.Shader.TileMode.CLAMP,
+        )
+        shader = made
+        probe(h, made)
+        return made
+    }
+
+    /** 让 Skia 把这条渐变真正渲染成像素再读回来：量的是渲染结果，不是自己验算。 */
+    private fun probe(h: Int, live: android.graphics.Shader) {
+        val column = IntArray(h)
+        val rendered = runCatching {
+            val bitmap = android.graphics.Bitmap.createBitmap(1, h, android.graphics.Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            val brush = android.graphics.Paint()
+            brush.shader = live
+            canvas.drawRect(0f, 0f, 1f, h.toFloat(), brush)
+            bitmap.getPixels(column, 0, 1, 0, 0, 1, h)
+            bitmap.recycle()
+        }
+        if (rendered.isFailure) {
+            log("状态栏渐变自检没能渲染，跳过读数", rendered.exceptionOrNull())
+            return
+        }
+        var worst = 0
+        var prev = (column[0] ushr 24) and 0xFF
+        for (i in 1 until h) {
+            val a = (column[i] ushr 24) and 0xFF
+            worst = maxOf(worst, kotlin.math.abs(a - prev))
+            prev = a
+        }
+        recordQselfEvent(
+            "状态栏渐变 : 高=${h}px 底色=#${Integer.toHexString(color)} " +
+                "Skia 读数 相邻行不透明度最大差=${worst}/255 亮度上限=${worst}/255 阈值=6",
+        )
+    }
+
+    // 宿主偶尔会对背景做 setAlpha 渐变；这条带子不跟着变，否则安全区又露出来了。
+    override fun setAlpha(alpha: Int) = Unit
+    override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) = Unit
+    // 抽象方法必须覆写；API 35 起它已弃用，两条 suppress 与 EdgeFadeDrawable 当年同一处理。
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+}
+
+private val statusFades = WeakHashMap<View, StatusFadeDrawable>()
+private val statusFadeOrig = WeakHashMap<View, android.graphics.drawable.Drawable?>()
+private val fadedRoots = WeakHashMap<View, View>()
+
+/** 这块底下真实的底色：先看同父里排在它前面、铺满整块的实心底，再退到窗口根与 DecorView。 */
+private fun fadeColorBehind(container: View): Pair<Int, String> {
+    val parent = container.parent as? ViewGroup
+    if (parent != null) {
+        val index = parent.indexOfChild(container)
+        for (i in index - 1 downTo 0) {
+            val sibling = parent.getChildAt(i)
+            if (sibling.visibility != View.VISIBLE) continue
+            if (sibling.width < container.width || sibling.height < container.height) continue
+            val c = (sibling.background as? android.graphics.drawable.ColorDrawable)?.color ?: continue
+            if ((c ushr 24) and 0xFF != 0xFF) continue
+            return c to "同层 ${sibling.javaClass.simpleName} 底色"
+        }
+    }
+    val root = container.rootView
+    ((root.background as? android.graphics.drawable.ColorDrawable)?.color)
+        ?.takeIf { (it ushr 24) and 0xFF == 0xFF }?.let { return it to "窗口根底色" }
+    (((root.context as? Activity)?.window?.decorView?.background) as? android.graphics.drawable.ColorDrawable)
+        ?.color?.takeIf { (it ushr 24) and 0xFF == 0xFF }?.let { return it to "DecorView 底色" }
+    return (if (night()) 0xFF0F1113.toInt() else 0xFFF5F6FA.toInt()) to "夜间与日间常量"
+}
+
+/** 给这一层挂上安全区渐变；同一窗口只挂一层，重复调用没有副作用。 */
+private fun statusFade(container: View) {
+    if (!on("玻璃底栏") || container.width <= 0 || container.height <= 0) { dropStatusFade(container); return }
+    val root = container.rootView
+    val owner = fadedRoots[root]
+    if (owner != null && owner !== container) return
+    val (color, source) = fadeColorBehind(container)
+    val existing = statusFades[container]
+    val fade = if (existing != null && existing.color == color) existing else {
+        statusFadeOrig.putIfAbsent(container, container.background)
+        StatusFadeDrawable(color).also {
+            statusFades[container] = it
+            recordQselfEvent(
+                "状态栏渐变 : 挂到 ${container.javaClass.simpleName}@0x${Integer.toHexString(container.id)} " +
+                    "高=${container.height}px 底色=#${Integer.toHexString(color)} 来源=$source",
+            )
+        }
+    }
+    fadedRoots[root] = container
+    if (container.background !== fade) container.background = fade
+}
+
+/** 撤掉这一层的渐变，原背景原样还回去（原来没有背景就还成没有）。 */
+private fun dropStatusFade(container: View) {
+    val fade = statusFades.remove(container) ?: return
+    val original = statusFadeOrig.remove(container)
+    if (container.background === fade) container.background = original
+    val root = container.rootView
+    if (fadedRoots[root] === container) fadedRoots.remove(root)
+}
+
+private fun resetStatusFades() {
+    statusFades.keys.toList().forEach(::dropStatusFade)
+    statusFades.clear(); statusFadeOrig.clear(); fadedRoots.clear()
+}
+
 private fun homeTopBar(bar: ViewGroup) {
     homeSafeArea(bar)
     if (homeTopRecorded[bar] != true) {
@@ -2733,6 +2893,7 @@ private fun homeTopBar(bar: ViewGroup) {
     }
     val scope = (bar.parent as? ViewGroup) ?: bar
     if (!on("玻璃底栏")) {
+        dropStatusFade(bar)
         if (bar.id != 0x7f0a3245 && bar.background == null && homeTopBgs[bar] != null) bar.background = homeTopBgs[bar]
         homeTopClips[bar]?.let { bar.clipChildren = it.first; bar.clipToPadding = it.second }
         bar.findViewById<View>(0x7f0a0951)?.let { blur ->
@@ -2755,7 +2916,9 @@ private fun homeTopBar(bar: ViewGroup) {
         for ((iv, _) in homeTopIconRecorded) iv.imageTintList = homeTopIconTints[iv]
         return
     }
-    if (bar.id != 0x7f0a3245 && bar.background != null) bar.background = null
+    // 0x7f0a6cfa 是整条 0..194 的顶栏容器（原本透明、在列表之后绘制）：安全区渐变就挂在它自己的背景上。
+    if (bar.id == 0x7f0a6cfa) statusFade(bar)
+    else if (bar.id != 0x7f0a3245 && bar.background != null) bar.background = null
     bar.clipChildren = false; bar.clipToPadding = false
     bar.findViewById<View>(0x7f0a0951)?.let { blur ->
         homeTopBlurVis.putIfAbsent(blur, blur.visibility)

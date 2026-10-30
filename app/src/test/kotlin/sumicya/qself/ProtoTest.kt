@@ -844,6 +844,48 @@ class ProtoTest {
         assertEquals(696, listBottomInsetPx(1881, 100, 12, 696))
     }
 
+    @Test fun statusFadeIsOpaqueAtTheTopClearAtTheBottomWithNoKinkAtEitherEnd() {
+        assertEquals(1.0, statusFadeAlpha(0f).toDouble(), 1e-6)
+        assertEquals(0.0, statusFadeAlpha(1f).toDouble(), 1e-6)
+        // 系统给的进度会越界，必须夹住，不能算出负的不透明度
+        assertEquals(1.0, statusFadeAlpha(-1f).toDouble(), 1e-6)
+        assertEquals(0.0, statusFadeAlpha(2f).toDouble(), 1e-6)
+        var previous = 1.0
+        for (i in 0..1000) {
+            val a = statusFadeAlpha(i / 1000f).toDouble()
+            assertTrue("第 $i 档比上一档还亮：$a > $previous", a <= previous + 1e-9)
+            previous = a
+        }
+        // 中段最陡、两端斜率为 0：换成折线也不会在首尾留下能被看出来的硬边
+        val middle = (statusFadeAlpha(0.49f) - statusFadeAlpha(0.51f)).toDouble()
+        val top = (statusFadeAlpha(0f) - statusFadeAlpha(0.02f)).toDouble()
+        val bottom = (statusFadeAlpha(0.98f) - statusFadeAlpha(1f)).toDouble()
+        assertTrue("顶端有折线：中段 $middle / 顶端 $top", middle > top * 4)
+        assertTrue("底端有折线：中段 $middle / 底端 $bottom", middle > bottom * 4)
+    }
+
+    @Test fun statusFadePixelsNeverJumpSixLevelsBetweenAdjacentRows() {
+        // 真机高度 194px。亮度是各通道的凸组合，所以相邻行亮度差的上限就是相邻行不透明度差。
+        val height = 194
+        var previous = statusFadeAlphaAt(0, height)
+        assertEquals(255, previous)
+        var worst = 0
+        for (y in 1 until height) {
+            val a = statusFadeAlphaAt(y, height)
+            worst = maxOf(worst, kotlin.math.abs(a - previous))
+            previous = a
+        }
+        assertEquals(0, previous)
+        assertTrue("相邻行 $worst/255 超过 6", worst < 6)
+        // 停靠点自己也要守住首尾，否则 Skia 那头给不出 255 与 0
+        for (stops in intArrayOf(2, 9, 13, 33)) {
+            val colors = statusFadeColors(0xFF0F1113.toInt(), stops)
+            assertEquals(stops, colors.size)
+            assertEquals(255, (colors.first() ushr 24) and 0xFF)
+            assertEquals(0, (colors.last() ushr 24) and 0xFF)
+        }
+    }
+
     @Test fun pageExpandsFromWhereTheFingerWasAndFallsBackToTheCenter() {
         // 点在哪一行就从哪一行长出来；夹在 15% 至 85% 之间，避免整页从屏幕边缘甩出来
         assertEquals(600f, expandPivot(600f, 1000))
