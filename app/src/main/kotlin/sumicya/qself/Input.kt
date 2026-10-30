@@ -267,7 +267,7 @@ private class MsgListUnderScroll(
         } else origRecyclerBottom
         if (targetTop != lastAppliedTop || targetBottom != lastAppliedBottom) {
             recordQselfEvent(
-                "消息区几何 列表=${groupTop}..$groupBottom 浮层顶=$aioInputTopY " +
+                "消息区几何 列表=${groupTop}至${groupBottom} 浮层顶=${aioInputTopY} " +
                     "内边距=上${targetTop}/下${targetBottom}" +
                     if (targetBottom == 0 && aioInputTopY in 1 until groupBottom) " ← 异常：有重叠却没让位" else "",
             )
