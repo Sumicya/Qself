@@ -2787,6 +2787,7 @@ private class StatusFadeDrawable(val color: Int) : android.graphics.drawable.Dra
 
     /** 让 Skia 把这条渐变真正渲染成像素再读回来：量的是渲染结果，不是自己验算。 */
     private fun probe(h: Int, live: android.graphics.Shader) {
+        if (h !in 1..1024) return   // 只给顶栏那一条带子读，别为异常高度分配位图
         val column = IntArray(h)
         val rendered = runCatching {
             val bitmap = android.graphics.Bitmap.createBitmap(1, h, android.graphics.Bitmap.Config.ARGB_8888)
@@ -2850,7 +2851,9 @@ private fun fadeColorBehind(container: View): Pair<Int, String> {
 
 /** 给这一层挂上安全区渐变；同一窗口只挂一层，重复调用没有副作用。 */
 private fun statusFade(container: View) {
-    if (!on("玻璃底栏") || container.width <= 0 || container.height <= 0) { dropStatusFade(container); return }
+    if (!on("玻璃底栏")) { dropStatusFade(container); return }
+    // 还没量出尺寸就等下一次（walk 200ms 一次），别在首帧把已经挂好的渐变撤掉。
+    if (container.width <= 0 || container.height <= 0) return
     val root = container.rootView
     val owner = fadedRoots[root]
     if (owner != null && owner !== container) return
