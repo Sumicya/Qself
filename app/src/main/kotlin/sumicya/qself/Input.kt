@@ -15,18 +15,6 @@ private val inputs = WeakHashMap<EditText, WeakReference<NativeInput>>()
 private val inputDecorations = WeakHashMap<View, InputDecoration>()
 private val msgListUnderScrolls = WeakHashMap<ViewGroup, MsgListUnderScroll>()
 
-/** 顶部渐变带的上下限（dp）：下限保证硬切那刀被盖住，上限不吞掉第一条消息。 */
-private const val EDGE_FADE_MIN_DP = 40f
-private const val EDGE_FADE_MAX_DP = 140f
-
-/**
- * 输入浮层（输入药丸 + 发送按钮 + 快捷栏）最上沿的窗口 y。
- *
- * 这里只回答一个问题：浮层从哪一行开始盖住消息区。剩下的事交给 [listBottomInsetPx]。
- * 原来存的是「浮层顶到窗口底的高度」，而消息区那边用的是另一套坐标（窗口根视图高度），
- * 两个坐标系混算的结果是一条恒为 0 的下内边距 —— 真机导出里 `输入浮层高度 216px` 一直在记，
- * 消息列表的 `paddingBottom` 却始终是 0，最后一条消息整个压在输入栏底下。
- */
 @Volatile
 private var aioInputTopY = 0
 
@@ -42,18 +30,6 @@ internal fun listBottomInsetPx(listBottomY: Int, overlayTopY: Int, gapPx: Int, m
     val overlap = listBottomY - overlayTopY
     if (overlap <= 0) return 0
     return (overlap + gapPx.coerceAtLeast(0)).coerceIn(0, maxPx)
-}
-
-/**
- * 顶部渐变带的高度：从消息区上沿（状态栏下沿）一直淡到标题栏下沿再往下一点。
- *
- * 消息区被裁在自己的上沿，滚上去的半截气泡会在那条线上被硬切一刀；一条从底到此的渐变把
- * 这一刀抹平。带子短了硬线还在，长了会把第一条消息吃掉，所以夹在 [minPx] 与 [maxPx] 之间。
- */
-internal fun edgeFadeHeightPx(listTopY: Int, headerBottomY: Int, extraPx: Int, minPx: Int, maxPx: Int): Int {
-    if (headerBottomY <= 0 || maxPx <= 0) return 0
-    val band = (headerBottomY - listTopY).coerceAtLeast(0) + extraPx.coerceAtLeast(0)
-    return band.coerceIn(minPx.coerceAtMost(maxPx), maxPx)
 }
 
 /** 浮层最上沿的窗口 y：从锚点（输入框）往上找真正那一层容器，取最小 y。 */
@@ -74,36 +50,6 @@ private fun overlayTopInWindowPx(root: View, anchor: View): Int {
         cur = cur.parent as? View
     }
     return top.coerceAtLeast(0)
-}
-
-/**
- * 消息区顶部的渐变带：只在最上面 [band] 像素里画一层「[color] → 透明」的竖直渐变。
- * 用 CLAMP 让带子往下自然透明，不碰列表其余像素；不分配位图，也不开图层。
- */
-private class EdgeFadeDrawable(var band: Int, var color: Int) : android.graphics.drawable.Drawable() {
-    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-    private var bakedBand = -1
-    private var bakedColor = 0
-
-    override fun draw(canvas: android.graphics.Canvas) {
-        val b = bounds
-        if (band <= 0 || b.width() <= 0 || b.height() <= 0) return
-        val h = minOf(band, b.height())
-        if (h != bakedBand || color != bakedColor) {
-            paint.shader = android.graphics.LinearGradient(
-                0f, b.top.toFloat(), 0f, (b.top + h).toFloat(),
-                color, color and 0x00FFFFFF, android.graphics.Shader.TileMode.CLAMP,
-            )
-            bakedBand = h
-            bakedColor = color
-        }
-        canvas.drawRect(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), (b.top + h).toFloat(), paint)
-    }
-
-    override fun setAlpha(alpha: Int) { paint.alpha = alpha }
-    override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) { paint.colorFilter = colorFilter }
-    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
-    override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
 }
 
 private val panelGlasses = WeakHashMap<View, PanelGlassState>()
@@ -164,7 +110,6 @@ private class MsgListUnderScroll(
     private val origRecyclerClipChildren = recycler.clipChildren
     private val origRecyclerTop = recycler.paddingTop
     private val origRecyclerBottom = recycler.paddingBottom
-    private val origForeground = recycler.foreground
     private var watching = false
     /** 是否已经接管过这块消息区：没接管过就不要在 restore 里改回别的几何。 */
     private var active = false
@@ -277,51 +222,6 @@ private class MsgListUnderScroll(
         if (recycler.paddingTop != targetTop || recycler.paddingBottom != targetBottom) {
             recycler.setPadding(recycler.paddingLeft, targetTop, recycler.paddingRight, targetBottom)
         }
-        syncEdgeFade(groupTop, headerBottom)
-    }
-
-    /**
-     * 顶部渐变：消息区被裁在自己的上沿，滚上去的半截气泡会在那条线被硬切一刀，
-     * 露出一条十几像素的色块。这里在列表前景铺一层「底色 → 透明」的竖直渐变，把这一刀抹平。
-     *
-     * 不用 QQ 自带的 `EdgeTransparentView`：它靠 `saveLayer` + `PorterDuff.Mode.CLEAR` 擦，
-     * 每帧一张全屏图层，正是上一轮帧率问题的同一类开销。前景渐变只填渐变带那一块矩形。
-     */
-    private fun syncEdgeFade(groupTop: Int, headerBottom: Int) {
-        val want = if (on("玻璃底栏")) {
-            edgeFadeHeightPx(
-                groupTop, headerBottom, (12 * group.dp).toInt(),
-                (EDGE_FADE_MIN_DP * group.dp).toInt(), (EDGE_FADE_MAX_DP * group.dp).toInt(),
-            )
-        } else 0
-        if (want <= 0) {
-            if (recycler.foreground !== origForeground) recycler.foreground = origForeground
-            return
-        }
-        val color = edgeFadeColor()
-        val cur = recycler.foreground as? EdgeFadeDrawable
-        if (cur != null && cur.band == want && cur.color == color) return
-        if (cur != null) {
-            cur.band = want
-            cur.color = color
-            recycler.invalidate()
-        } else {
-            recycler.foreground = EdgeFadeDrawable(want, color)
-        }
-    }
-
-    /** 渐变底色：优先消息区上层里找得到的纯色背景；找不到就按昼夜给一层雾。 */
-    private fun edgeFadeColor(): Int {
-        var v: View? = group.parent as? View
-        var guard = 0
-        while (v != null && guard++ < 6) {
-            val bg = v.background
-            if (bg is android.graphics.drawable.ColorDrawable &&
-                android.graphics.Color.alpha(bg.color) == 255
-            ) return bg.color
-            v = v.parent as? View
-        }
-        return if (night()) 0xFF0F1113.toInt() else 0xFFF2F3F5.toInt()
     }
 
     private fun watch(start: Boolean) {
@@ -360,7 +260,6 @@ private class MsgListUnderScroll(
         recycler.clipToPadding = origRecyclerClipToPad
         recycler.clipChildren = origRecyclerClipChildren
         recycler.setPadding(recycler.paddingLeft, origRecyclerTop, recycler.paddingRight, origRecyclerBottom)
-        if (recycler.foreground !== origForeground) recycler.foreground = origForeground
     }
 }
 

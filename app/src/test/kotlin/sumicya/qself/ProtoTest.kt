@@ -844,14 +844,6 @@ class ProtoTest {
         assertEquals(696, listBottomInsetPx(1881, 100, 12, 696))
     }
 
-    /** 顶部渐变带：从状态栏下沿淡到标题栏下沿再往下一点，太短盖不住硬切的那一刀，太长会吃掉第一条消息。 */
-    @Test fun edgeFadeCoversTheTitleBarWithoutEatingTheFirstMessage() {
-        assertEquals(123, edgeFadeHeightPx(141, 240, 24, 79, 277))
-        assertEquals(79, edgeFadeHeightPx(141, 141, 0, 79, 277))
-        assertEquals(277, edgeFadeHeightPx(0, 400, 24, 79, 277))
-        assertTrue("没量到标题栏底边时不画", edgeFadeHeightPx(141, 0, 24, 79, 277) == 0)
-    }
-
     @Test fun mainThreadMeterNamesTheWorstMessageAndKeepsPerFrameTotals() {
         MainThreadMeter.reset()
         MainThreadMeter.record(3.0, "")
