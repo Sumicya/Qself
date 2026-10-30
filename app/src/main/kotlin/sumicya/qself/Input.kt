@@ -102,7 +102,7 @@ private class EdgeFadeDrawable(var band: Int, var color: Int) : android.graphics
 
     override fun setAlpha(alpha: Int) { paint.alpha = alpha }
     override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) { paint.colorFilter = colorFilter }
-    @Suppress("DEPRECATION")
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
 }
 
