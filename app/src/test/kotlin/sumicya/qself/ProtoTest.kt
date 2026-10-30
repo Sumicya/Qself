@@ -830,6 +830,28 @@ class ProtoTest {
         assertTrue("窗口帧数不对：\n$win", win.contains("帧=${FRAME_WINDOW_MIN + 2} "))
     }
 
+    /**
+     * 底部让位：真机导出实测列表 141..1881、输入浮层顶 1778。
+     * 旧算法拿「窗口根视图高 2800」减列表底边得到 919，再用 216-919 算出一个负数 → 恒为 0，
+     * 于是最后一条消息整条压在输入栏底下。这里钉住三件事：有重叠就必须让位、浮层在下方就不让、
+     * 键盘把浮层抬上去时让位跟着变大。
+     */
+    @Test fun listBottomInsetFollowsTheRealOverlayInsteadOfTheWindowHeight() {
+        assertEquals(115, listBottomInsetPx(1881, 1778, 12, 696))
+        assertTrue("浮层完全在列表下方时不该让位", listBottomInsetPx(1881, 1979, 12, 696) == 0)
+        assertEquals(735, listBottomInsetPx(1881, 1158, 12, 1000))
+        assertTrue("还没布局时不能瞎让位", listBottomInsetPx(0, 1778, 12, 696) == 0)
+        assertEquals(696, listBottomInsetPx(1881, 100, 12, 696))
+    }
+
+    /** 顶部渐变带：从状态栏下沿淡到标题栏下沿再往下一点，太短盖不住硬切的那一刀，太长会吃掉第一条消息。 */
+    @Test fun edgeFadeCoversTheTitleBarWithoutEatingTheFirstMessage() {
+        assertEquals(123, edgeFadeHeightPx(141, 240, 24, 79, 277))
+        assertEquals(79, edgeFadeHeightPx(141, 141, 0, 79, 277))
+        assertEquals(277, edgeFadeHeightPx(0, 400, 24, 79, 277))
+        assertTrue("没量到标题栏底边时不画", edgeFadeHeightPx(141, 0, 24, 79, 277) == 0)
+    }
+
     @Test fun mainThreadMeterNamesTheWorstMessageAndKeepsPerFrameTotals() {
         MainThreadMeter.reset()
         MainThreadMeter.record(3.0, "")

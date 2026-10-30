@@ -15,19 +15,50 @@ private val inputs = WeakHashMap<EditText, WeakReference<NativeInput>>()
 private val inputDecorations = WeakHashMap<View, InputDecoration>()
 private val msgListUnderScrolls = WeakHashMap<ViewGroup, MsgListUnderScroll>()
 
+/** 顶部渐变带的上下限（dp）：下限保证硬切那刀被盖住，上限不吞掉第一条消息。 */
+private const val EDGE_FADE_MIN_DP = 40f
+private const val EDGE_FADE_MAX_DP = 140f
+
 /**
- * 底部浮层（输入药丸 + 发送按钮 + 快捷栏）在窗口里占掉的高度（px，从浮层最上沿算到窗口底）。
+ * 输入浮层（输入药丸 + 发送按钮 + 快捷栏）最上沿的窗口 y。
  *
- * 真包把输入区画在消息列表之上：安全区实色背景一去，消息列表底部就再没有任何让位，最后一条消息
- * 的卡片按钮和它下面的时间会直接压到输入栏、快捷栏底下，屏幕最下面那一行还被窗口边界切掉。
- * 这里量的是浮层自身高度，消息列表的下内边距取它和原生值的较大者。
+ * 这里只回答一个问题：浮层从哪一行开始盖住消息区。剩下的事交给 [listBottomInsetPx]。
+ * 原来存的是「浮层顶到窗口底的高度」，而消息区那边用的是另一套坐标（窗口根视图高度），
+ * 两个坐标系混算的结果是一条恒为 0 的下内边距 —— 真机导出里 `输入浮层高度 216px` 一直在记，
+ * 消息列表的 `paddingBottom` 却始终是 0，最后一条消息整个压在输入栏底下。
  */
 @Volatile
-private var aioBottomOverlayPx = 0
+private var aioInputTopY = 0
 
-/** 浮层最上沿到窗口底的距离；[root] 为窗口根视图（消息列表与输入区共用的那棵视图树）。 */
-private fun bottomOverlayPx(root: View, anchor: View, dp: Float): Int {
-    if (root.height <= 0 || dp <= 0f) return 0
+/**
+ * 消息列表底部要留多少：列表底边被浮层盖住的部分，再加一段呼吸间距。
+ *
+ * 两个数都是窗口坐标，所以键盘弹出、面板展开、浮层整体上移时，量出来的重叠自己就跟着变，
+ * 不需要「键盘开着就按 0 算」这类分支 —— 那个分支在真机上正好把最后一条消息摁进输入栏。
+ * 浮层完全在列表下方（没重叠）时返回 0；量到 0 或负数（还没布局完）也返回 0，宁可不动。
+ */
+internal fun listBottomInsetPx(listBottomY: Int, overlayTopY: Int, gapPx: Int, maxPx: Int): Int {
+    if (listBottomY <= 0 || overlayTopY <= 0 || maxPx <= 0) return 0
+    val overlap = listBottomY - overlayTopY
+    if (overlap <= 0) return 0
+    return (overlap + gapPx.coerceAtLeast(0)).coerceIn(0, maxPx)
+}
+
+/**
+ * 顶部渐变带的高度：从消息区上沿（状态栏下沿）一直淡到标题栏下沿再往下一点。
+ *
+ * 消息区被裁在自己的上沿，滚上去的半截气泡会在那条线上被硬切一刀；一条从底到此的渐变把
+ * 这一刀抹平。带子短了硬线还在，长了会把第一条消息吃掉，所以夹在 [minPx] 与 [maxPx] 之间。
+ */
+internal fun edgeFadeHeightPx(listTopY: Int, headerBottomY: Int, extraPx: Int, minPx: Int, maxPx: Int): Int {
+    if (headerBottomY <= 0 || maxPx <= 0) return 0
+    val band = (headerBottomY - listTopY).coerceAtLeast(0) + extraPx.coerceAtLeast(0)
+    return band.coerceIn(minPx.coerceAtMost(maxPx), maxPx)
+}
+
+/** 浮层最上沿的窗口 y：从锚点（输入框）往上找真正那一层容器，取最小 y。 */
+private fun overlayTopInWindowPx(root: View, anchor: View): Int {
+    if (root.height <= 0) return 0
     fun topOf(v: View): Int {
         val a = IntArray(2); val b = IntArray(2)
         v.getLocationInWindow(a); root.getLocationInWindow(b)
@@ -42,8 +73,39 @@ private fun bottomOverlayPx(root: View, anchor: View, dp: Float): Int {
         if (h in 1..limit) top = minOf(top, topOf(cur))
         cur = cur.parent as? View
     }
-    return (root.height - top + (6 * dp).toInt()).coerceIn(0, limit)
+    return top.coerceAtLeast(0)
 }
+
+/**
+ * 消息区顶部的渐变带：只在最上面 [band] 像素里画一层「[color] → 透明」的竖直渐变。
+ * 用 CLAMP 让带子往下自然透明，不碰列表其余像素；不分配位图，也不开图层。
+ */
+private class EdgeFadeDrawable(var band: Int, var color: Int) : android.graphics.drawable.Drawable() {
+    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private var bakedBand = -1
+    private var bakedColor = 0
+
+    override fun draw(canvas: android.graphics.Canvas) {
+        val b = bounds
+        if (band <= 0 || b.width() <= 0 || b.height() <= 0) return
+        val h = minOf(band, b.height())
+        if (h != bakedBand || color != bakedColor) {
+            paint.shader = android.graphics.LinearGradient(
+                0f, b.top.toFloat(), 0f, (b.top + h).toFloat(),
+                color, color and 0x00FFFFFF, android.graphics.Shader.TileMode.CLAMP,
+            )
+            bakedBand = h
+            bakedColor = color
+        }
+        canvas.drawRect(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), (b.top + h).toFloat(), paint)
+    }
+
+    override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+    override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) { paint.colorFilter = colorFilter }
+    @Suppress("DEPRECATION")
+    override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+}
+
 private val panelGlasses = WeakHashMap<View, PanelGlassState>()
 
 private class PanelGlassState(val root: View) : ViewTreeObserver.OnPreDrawListener, View.OnAttachStateChangeListener {
@@ -102,6 +164,7 @@ private class MsgListUnderScroll(
     private val origRecyclerClipChildren = recycler.clipChildren
     private val origRecyclerTop = recycler.paddingTop
     private val origRecyclerBottom = recycler.paddingBottom
+    private val origForeground = recycler.foreground
     private var watching = false
     /** 是否已经接管过这块消息区：没接管过就不要在 restore 里改回别的几何。 */
     private var active = false
@@ -170,11 +233,11 @@ private class MsgListUnderScroll(
      *   真机 141）。全屏页把它让成 0 时按 0 算，此时列表从窗口最上沿铺下来。
      * - 顶部内边距直接取标题栏真实底边（日志实测 141+99 → 240），减去消息区自己的上沿。
      *   于是消息从胶囊底下滚过，又不和状态栏叠在一起。
-     * - 底部内边距按消息区实际底边到输入浮层顶端的距离算，最后一行按钮和时间不会被输入栏吞掉。
+     * - 底部内边距 = 列表底边与浮层上沿的重叠量 + 呼吸间距，两边都用窗口坐标，键盘开合不必分支。
+     *   真机导出实测：列表 141..1881、浮层顶 1778，重叠 103，加 12 的间距 = 115。
      */
     private fun syncGeometry() {
         if (recycler.height <= 0) return
-        val rootView = group.rootView ?: return
         val at = IntArray(2)
         if (on("玻璃底栏") && aioHeaderBottom() > 0) {
             group.getLocationInWindow(at)
@@ -197,15 +260,68 @@ private class MsgListUnderScroll(
             (headerBottom - groupTop).coerceAtLeast(0)
         } else origRecyclerTop
         val targetBottom = if (on("输入栏药丸") || on("玻璃底栏")) {
-            // 输入浮层占掉的那段里，减去消息区自身已经盖住的部分，剩下的才是要留的内边距。
-            val covered = (rootView.height - groupBottom).coerceAtLeast(0)
-            maxOf(origRecyclerBottom, aioBottomOverlayPx - covered).coerceAtLeast(0)
+            // 浮层上沿与列表底边都取窗口坐标：键盘弹起、面板展开时两边一起动，重叠量自己就对。
+            val gap = (6 * group.dp).toInt()
+            val cap = group.height * 2 / 5
+            maxOf(origRecyclerBottom, listBottomInsetPx(groupBottom, aioInputTopY, gap, cap))
         } else origRecyclerBottom
+        if (targetTop != lastAppliedTop || targetBottom != lastAppliedBottom) {
+            recordQselfEvent(
+                "消息区几何 列表=${groupTop}..$groupBottom 浮层顶=$aioInputTopY " +
+                    "内边距=上${targetTop}/下${targetBottom}" +
+                    if (targetBottom == 0 && aioInputTopY in 1 until groupBottom) " ← 异常：有重叠却没让位" else "",
+            )
+        }
         lastAppliedTop = targetTop
         lastAppliedBottom = targetBottom
         if (recycler.paddingTop != targetTop || recycler.paddingBottom != targetBottom) {
             recycler.setPadding(recycler.paddingLeft, targetTop, recycler.paddingRight, targetBottom)
         }
+        syncEdgeFade(groupTop, headerBottom)
+    }
+
+    /**
+     * 顶部渐变：消息区被裁在自己的上沿，滚上去的半截气泡会在那条线被硬切一刀，
+     * 露出一条十几像素的色块。这里在列表前景铺一层「底色 → 透明」的竖直渐变，把这一刀抹平。
+     *
+     * 不用 QQ 自带的 `EdgeTransparentView`：它靠 `saveLayer` + `PorterDuff.Mode.CLEAR` 擦，
+     * 每帧一张全屏图层，正是上一轮帧率问题的同一类开销。前景渐变只填渐变带那一块矩形。
+     */
+    private fun syncEdgeFade(groupTop: Int, headerBottom: Int) {
+        val want = if (on("玻璃底栏")) {
+            edgeFadeHeightPx(
+                groupTop, headerBottom, (12 * group.dp).toInt(),
+                (EDGE_FADE_MIN_DP * group.dp).toInt(), (EDGE_FADE_MAX_DP * group.dp).toInt(),
+            )
+        } else 0
+        if (want <= 0) {
+            if (recycler.foreground !== origForeground) recycler.foreground = origForeground
+            return
+        }
+        val color = edgeFadeColor()
+        val cur = recycler.foreground as? EdgeFadeDrawable
+        if (cur != null && cur.band == want && cur.color == color) return
+        if (cur != null) {
+            cur.band = want
+            cur.color = color
+            recycler.invalidate()
+        } else {
+            recycler.foreground = EdgeFadeDrawable(want, color)
+        }
+    }
+
+    /** 渐变底色：优先消息区上层里找得到的纯色背景；找不到就按昼夜给一层雾。 */
+    private fun edgeFadeColor(): Int {
+        var v: View? = group.parent as? View
+        var guard = 0
+        while (v != null && guard++ < 6) {
+            val bg = v.background
+            if (bg is android.graphics.drawable.ColorDrawable &&
+                android.graphics.Color.alpha(bg.color) == 255
+            ) return bg.color
+            v = v.parent as? View
+        }
+        return if (night()) 0xFF0F1113.toInt() else 0xFFF2F3F5.toInt()
     }
 
     private fun watch(start: Boolean) {
@@ -244,6 +360,7 @@ private class MsgListUnderScroll(
         recycler.clipToPadding = origRecyclerClipToPad
         recycler.clipChildren = origRecyclerClipChildren
         recycler.setPadding(recycler.paddingLeft, origRecyclerTop, recycler.paddingRight, origRecyclerBottom)
+        if (recycler.foreground !== origForeground) recycler.foreground = origForeground
     }
 }
 
@@ -910,17 +1027,14 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
         }
         if (!applied) { applied = true; onGlobalLayout() }
     }
-    /** 量一次底部浮层高度并让消息列表让位；高度没变就不碰列表，避免每帧触发重排。 */
+    /** 量一次浮层上沿并让消息列表重新让位；位置没变就不碰列表，避免每帧触发重排。 */
     private fun syncBottomOverlay(edit: EditText) {
         val rootView = edit.rootView ?: return
-        val ime = runCatching {
-            edit.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.ime())?.bottom ?: 0
-        }.getOrDefault(0)
-        // 键盘弹出时列表跟着窗口一起缩，再补内边距会多留一大段空白。
-        val need = if (ime > 0) 0 else bottomOverlayPx(rootView, edit, edit.dp)
-        if (need == aioBottomOverlayPx) return
-        aioBottomOverlayPx = need
-        recordQselfEvent("输入浮层高度 ${need}px，消息列表底部让位")
+        // 只记「浮层从哪一行开始」，不再把键盘开合折成一个 0：键盘弹出时浮层自己上移，
+        // 消息区那边按同一套窗口坐标重新量重叠，该让多少就是多少。
+        val top = overlayTopInWindowPx(rootView, edit)
+        if (top <= 0 || top == aioInputTopY) return
+        aioInputTopY = top
         msgListUnderScrolls.values.toList().forEach { it.sync() }
     }
     override fun onGlobalLayout() {
@@ -947,8 +1061,8 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
     private fun restore() {
         if (!applied) return
         focusAnimator?.cancel(); focusAnimator = null
-        if (aioBottomOverlayPx != 0) {
-            aioBottomOverlayPx = 0
+        if (aioInputTopY != 0) {
+            aioInputTopY = 0
             msgListUnderScrolls.values.toList().forEach { it.sync() }
         }
         edit.get()?.let {
