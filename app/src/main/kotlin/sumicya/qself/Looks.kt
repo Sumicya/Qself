@@ -13,6 +13,10 @@ import android.content.SharedPreferences
 import android.view.ViewTreeObserver
 import android.view.Window
 import android.view.WindowInsets
+import android.window.BackEvent
+import android.window.OnBackAnimationCallback
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import java.lang.ref.WeakReference
 import android.view.View
 import android.view.ViewGroup
@@ -50,6 +54,8 @@ fun looks() {
             watch(decor)
             noteTopInsets(decor)
             restoreStatusBar(activity)
+            // 每个 Activity 只在第一次恢复前台时展开一次：从对话框、选图页退回来不算「进入」。
+            if (enteredActivities.put(activity, true) == null) pageEnter(pageContent(activity), "页面")
         }
     }
     hook(ViewGroup::class.java.getDeclaredMethod("dispatchDraw", Canvas::class.java)) { chain ->
@@ -64,8 +70,13 @@ fun looks() {
     hook(ViewGroup::class.java.getDeclaredMethod("dispatchTouchEvent", MotionEvent::class.java)) { chain ->
         // 手势窗口：按下开一段、抬起收一段。最外层先收到事件，所以同一次触摸只会开一段，
         // 子 View 的重复事件在 noteTouch 里按 gOpen 忽略。
-        FrameMeter.noteTouch((chain.getArg(0) as? MotionEvent)?.actionMasked ?: -1)
+        val event = chain.getArg(0) as? MotionEvent
+        FrameMeter.noteTouch(event?.actionMasked ?: -1)
         val source = chain.thisObject as? ViewGroup
+        // 展开原点：只记最外层窗口收到的按下，屏幕坐标留到页面进入时再换算。
+        if (source != null && event != null && event.actionMasked == MotionEvent.ACTION_DOWN &&
+            source.rootView === source
+        ) notePageTap(event.rawX, event.rawY)
         if (source != null && on("玻璃底栏")) {
             aioHeaders[source]?.let { header ->
                 if (header.multiSelectRoot()?.visibility != View.VISIBLE) {
@@ -222,6 +233,7 @@ fun looks() {
     }
     runCatching { aioHeader() }
     runCatching { nativeMessageMenu() }
+    runCatching { pageAnimations() }
 }
 
 /** 三个输入均处于 badge.parent 的局部坐标；不把窗口像素直接写入 translationX。 */
@@ -2906,45 +2918,290 @@ private fun resetSearchBars() {
     searchBars.clear()
 }
 
-// ---- 页面与底栏页签切换过渡：共享 X 轴微缩淡入（RenderThread 属性动画，无 Y 轴下展开，零布局抖动）。
+// ---- 页面进入：从你点的那一行展开。只改 transform（动画在 RenderThread 跑），不动布局、不加逐帧监听。
+//
+// 旧版「页面动画」在 onPreDraw 里逐帧给列表子视图做下展开，滚动时每帧都要算一遍，已经因为掉帧整段删掉；
+// 而且 `pageAnimations()` 一直没在 `looks()` 里装上，等于那版过渡从未生效。这一版每个页面只播一次：
+// 起点取最后一次点按的位置（预测你从哪一行进来），没有点按就落回中心；返回手势有进度就把同一套变换反着收。
 
-private fun runSwitchTransition(view: View?, dirX: Float = 1f, distanceDp: Float = 16f, durationMs: Long = 210L) {
-    val v = view ?: return
-    v.animate().cancel()
-    if (!on("页面过渡动效") || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
-        v.translationX = 0f
-        v.scaleX = 1f
-        v.scaleY = 1f
-        v.alpha = 1f
-        return
+/** 最近一次按下：页面进入时用它预测展开原点。记屏幕坐标，用前换成目标视图的局部坐标。 */
+private var pageTapAtMs = 0L
+private var pageTapX = Float.NaN
+private var pageTapY = Float.NaN
+
+internal fun notePageTap(x: Float, y: Float, at: Long = android.os.SystemClock.uptimeMillis()) {
+    pageTapX = x
+    pageTapY = y
+    pageTapAtMs = at
+}
+
+/** 展开原点：点按坐标夹进 [15%, 85%]；没有点按（通知冷启动、程序内跳转）就取中心。 */
+internal fun expandPivot(anchor: Float, size: Int): Float {
+    if (size <= 0) return 0f
+    if (!anchor.isFinite()) return size / 2f
+    return anchor.coerceIn(size * 0.15f, size * 0.85f)
+}
+
+/** 返回手势进度 → 页面收缩比例：0 不动，1 收到 0.94。 */
+internal fun backScale(progress: Float): Float = 1f - 0.06f * progress.coerceIn(0f, 1f)
+
+/** 返回手势进度 → 横向让位（px）：左边缘滑出时向右让 10% 宽，右边缘反过来。 */
+internal fun backShift(progress: Float, width: Int, edgeLeft: Boolean): Float =
+    (if (edgeLeft) 1f else -1f) * width.coerceAtLeast(0) * 0.10f * progress.coerceIn(0f, 1f)
+
+private const val ENTER_MS = 260L
+private const val ENTER_SCALE_X = 0.86f
+private const val ENTER_SCALE_Y = 0.90f
+private const val TAP_FRESH_MS = 1500L
+
+/** 同一个根 700ms 内只展开一次：Activity 恢复与 AIO 建页会同时来报同一个页面。 */
+private val enteredPages = WeakHashMap<View, Long>()
+
+/** 已经展开过的 Activity：退对话框、选图页回来再恢复前台时不再播一遍。 */
+private val enteredActivities = WeakHashMap<Activity, Boolean>()
+
+/** 这个页面能不能整体缩放：悬浮窗（对话框式 Activity）与带 SurfaceView 的页面（相机、视频）保持原样。 */
+private fun pageAnimatable(activity: Activity): Boolean {
+    val window = activity.window ?: return false
+    if (window.isFloating) return false
+    return !hasSurface(window.decorView, intArrayOf(600))
+}
+
+private fun pageAnimatable(view: View): Boolean {
+    val activity = generateSequence(view.context) { (it as? android.content.ContextWrapper)?.baseContext }
+        .filterIsInstance<Activity>().firstOrNull() ?: return true
+    return pageAnimatable(activity)
+}
+
+private fun hasSurface(v: View, budget: IntArray): Boolean {
+    if (budget[0]-- <= 0) return false
+    if (v is android.view.SurfaceView) return true
+    if (v is ViewGroup) for (i in 0 until v.childCount) if (hasSurface(v.getChildAt(i), budget)) return true
+    return false
+}
+
+/** Activity 的整页根：android.R.id.content 的第一个孩子；没有孩子就用 content 自己。 */
+private fun pageContent(activity: Activity): View? {
+    val content = activity.window?.decorView?.findViewById<ViewGroup>(android.R.id.content) ?: return null
+    if (content.childCount == 0) return content
+    // content 里正常情况下只有一个孩子；QQ 偶尔会再塞一层浮层，取面积最大的那个当页面根。
+    return (0 until content.childCount).map(content::getChildAt)
+        .maxByOrNull { it.width.toLong() * it.height } ?: content
+}
+
+/** 会话页的整页根：从消息列表往上走到 android.R.id.content 下面那一层。 */
+private fun pageRootOf(v: View): View {
+    var cur = v
+    while (true) {
+        val parent = cur.parent as? ViewGroup ?: return cur
+        if (parent.id == android.R.id.content) return cur
+        cur = parent
     }
-    val dx = dirX * distanceDp * v.dp
-    v.translationX = dx
-    v.scaleX = 0.985f
-    v.scaleY = 0.985f
-    v.alpha = 0.74f
-    v.animate()
-        .translationX(0f)
-        .scaleX(1f)
-        .scaleY(1f)
-        .alpha(1f)
-        .setDuration(durationMs)
-        .setInterpolator(android.view.animation.PathInterpolator(0.22f, 1f, 0.36f, 1f))
+}
+
+private fun pageEnter(view: View?, source: String, wholePage: Boolean = false) {
+    val v = view ?: return
+    if (!on("页面过渡动效")) return
+    if (!android.animation.ValueAnimator.areAnimatorsEnabled()) return
+    if (!pageAnimatable(v)) return
+    // 等它真正接进窗口、量出尺寸之后再向上找整页根：AIO 建页那一刻视图还没挂到页面上。
+    OnceLaidOut(WeakReference(v)) { playEnter(if (wholePage) pageRootOf(it) else it, source) }.start()
+}
+
+/** 第一帧画之前把起始 scale 摆好，动画交给 RenderThread；不动 alpha，免得整页多开一层离屏缓冲。 */
+private fun playEnter(v: View, source: String) {
+    if (!on("页面过渡动效")) return
+    if (!android.animation.ValueAnimator.areAnimatorsEnabled()) return
+    if (v.width <= 0 || v.height <= 0) return
+    // 同一个根 700ms 内只展开一次：Activity 恢复与 AIO 建页会同时来报同一个页面。
+    val now = android.os.SystemClock.uptimeMillis()
+    if (now - (enteredPages[v] ?: 0L) < 700L) return
+    enteredPages[v] = now
+    val loc = IntArray(2)
+    v.getLocationOnScreen(loc)
+    val fresh = android.os.SystemClock.uptimeMillis() - pageTapAtMs <= TAP_FRESH_MS
+    val pivotX = expandPivot(if (fresh) pageTapX - loc[0] else Float.NaN, v.width)
+    val pivotY = expandPivot(if (fresh) pageTapY - loc[1] else Float.NaN, v.height)
+    v.animate().cancel()
+    v.pivotX = pivotX
+    v.pivotY = pivotY
+    v.scaleX = ENTER_SCALE_X
+    v.scaleY = ENTER_SCALE_Y
+    v.animate().scaleX(1f).scaleY(1f)
+        .setDuration(ENTER_MS)
+        .setInterpolator(android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f))
         .withEndAction {
-            v.translationX = 0f
             v.scaleX = 1f
             v.scaleY = 1f
-            v.alpha = 1f
+            v.pivotX = v.width / 2f
+            v.pivotY = v.height / 2f
+        }
+        .start()
+    recordQselfEvent(
+        "页面展开 : 来源=$source 尺寸=${v.width}x${v.height} " +
+            "原点=${pivotX.roundToInt()},${pivotY.roundToInt()} 从${ENTER_SCALE_X}缩到1 ${ENTER_MS}ms",
+    )
+}
+
+/** 等这个视图真正量出尺寸的第一帧（最多四帧），在绘制前把起始状态摆好；超时就当这页不该动，安静退出。 */
+private class OnceLaidOut(private val view: WeakReference<View>, private val action: (View) -> Unit) :
+    View.OnAttachStateChangeListener, ViewTreeObserver.OnPreDrawListener {
+    private var waited = 0
+
+    fun start() {
+        val v = view.get() ?: return
+        if (v.isAttachedToWindow) watch(v) else v.addOnAttachStateChangeListener(this)
+    }
+
+    private fun watch(v: View) {
+        val observer = v.viewTreeObserver
+        if (v.isAttachedToWindow && observer.isAlive) observer.addOnPreDrawListener(this) else stop(v)
+    }
+
+    override fun onViewAttachedToWindow(v: View) {
+        v.removeOnAttachStateChangeListener(this)
+        watch(v)
+    }
+
+    override fun onViewDetachedFromWindow(v: View) = stop(v)
+
+    override fun onPreDraw(): Boolean {
+        val v = view.get() ?: return true
+        if (v.width > 0 && v.height > 0) {
+            stop(v)
+            action(v)
+        } else if (++waited >= 4) {
+            stop(v)
+        }
+        return true
+    }
+
+    private fun stop(v: View) {
+        v.removeOnAttachStateChangeListener(this)
+        if (v.viewTreeObserver.isAlive) v.viewTreeObserver.removeOnPreDrawListener(this)
+    }
+}
+
+/** 返回手势进度直接映射到页面的 transform；只有 QQ 已启用预测性返回时才会收到进度事件。 */
+private fun backApply(root: View, progress: Float, edgeLeft: Boolean) {
+    if (!android.animation.ValueAnimator.areAnimatorsEnabled()) return
+    root.animate().cancel()
+    root.pivotX = if (edgeLeft) 0f else root.width.toFloat()
+    root.pivotY = root.height / 2f
+    root.scaleX = backScale(progress)
+    root.scaleY = backScale(progress)
+    root.translationX = backShift(progress, root.width, edgeLeft)
+}
+
+private fun backSettle(root: View) {
+    root.animate().scaleX(1f).scaleY(1f).translationX(0f)
+        .setDuration(160L)
+        .setInterpolator(android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f))
+        .withEndAction {
+            root.scaleX = 1f
+            root.scaleY = 1f
+            root.translationX = 0f
+            root.pivotX = root.width / 2f
+            root.pivotY = root.height / 2f
         }
         .start()
 }
 
+/**
+ * 返回手势的观察者：所有事件原样转发，进度只用来给页面做 transform。
+ * QQ 注册的 OnBackAnimationCallback 在这里换一个包装件；注销时按原引用换回去，行为与不装模块时一致。
+ */
+private class BackDispatcher(private val activity: Activity, private val base: OnBackInvokedDispatcher) : OnBackInvokedDispatcher {
+    private val forwards = ArrayList<Pair<OnBackInvokedCallback, OnBackInvokedCallback>>()
+
+    override fun registerOnBackInvokedCallback(priority: Int, callback: OnBackInvokedCallback) {
+        val target: OnBackInvokedCallback =
+            if (callback is OnBackAnimationCallback) BackGesture(activity, callback) else Plain(callback)
+        synchronized(forwards) { forwards += callback to target }
+        base.registerOnBackInvokedCallback(priority, target)
+    }
+
+    override fun unregisterOnBackInvokedCallback(callback: OnBackInvokedCallback) {
+        val target = synchronized(forwards) {
+            val index = forwards.indexOfFirst { it.first === callback }
+            if (index >= 0) forwards.removeAt(index).second else null
+        } ?: callback
+        base.unregisterOnBackInvokedCallback(target)
+    }
+
+    private class Plain(private val delegate: OnBackInvokedCallback) : OnBackInvokedCallback {
+        override fun onBackInvoked() = delegate.onBackInvoked()
+    }
+}
+
+private class BackGesture(private val activity: Activity, private val delegate: OnBackAnimationCallback) :
+    OnBackAnimationCallback {
+    private var root: WeakReference<View>? = null
+    private var edgeLeft = true
+    private var maxProgress = 0f
+    private var frames = 0
+    private var startedAt = 0L
+
+    override fun onBackStarted(backEvent: BackEvent) {
+        startedAt = android.os.SystemClock.uptimeMillis()
+        frames = 0
+        maxProgress = 0f
+        edgeLeft = backEvent.swipeEdge != BackEvent.EDGE_RIGHT
+        root = WeakReference(pageContent(activity)?.takeIf { pageAnimatable(activity) })
+        delegate.onBackStarted(backEvent)
+    }
+
+    override fun onBackProgressed(backEvent: BackEvent) {
+        val progress = backEvent.progress.coerceIn(0f, 1f)
+        frames++
+        if (progress > maxProgress) maxProgress = progress
+        root?.get()?.let { backApply(it, progress, edgeLeft) }
+        delegate.onBackProgressed(backEvent)
+    }
+
+    override fun onBackCancelled() {
+        root?.get()?.let(::backSettle)
+        report("取消")
+        delegate.onBackCancelled()
+    }
+
+    override fun onBackInvoked() {
+        root?.get()?.let(::backSettle)
+        report("提交")
+        delegate.onBackInvoked()
+    }
+
+    /** 没有进度事件就不写这行：那说明 QQ 没启用预测性返回，写了只会变成噪声。 */
+    private fun report(result: String) {
+        if (frames == 0) return
+        recordQselfEvent(
+            "返回预测 : $result 边=${if (edgeLeft) "左" else "右"} 进度=最大${(maxProgress * 100).roundToInt()}% " +
+                "帧=$frames 用时=${android.os.SystemClock.uptimeMillis() - startedAt}ms",
+        )
+    }
+}
+
+private val backDispatchers = WeakHashMap<Activity, BackDispatcher>()
+
+private fun predictiveBack() {
+    hook(Activity::class.java.getMethod("getOnBackInvokedDispatcher"), gated = false) { chain ->
+        val real = chain.proceed() as? OnBackInvokedDispatcher ?: return@hook chain.proceed()
+        val activity = chain.thisObject as? Activity ?: return@hook real
+        if (!on("页面过渡动效")) return@hook real
+        if (activity.window?.isFloating == true) return@hook real
+        backDispatchers.getOrPut(activity) { BackDispatcher(activity, real) }
+    }
+}
+
+/**
+ * 装入全部页面进入动效。页签、会话、群聊、普通页面各走一条钩子，最终都落到 `pageEnter`：
+ * 同一个页面根只展开一次，所以 Activity 恢复与 AIO 建页同时到达也不会播两遍。
+ */
 fun pageAnimations() {
     runCatching {
         val controller = cls("com.tencent.mobileqq.activity.home.impl.TabFrameControllerImpl")
         val frameFrag = cls("com.tencent.mobileqq.app.FrameFragment")
         val bfCls = cls("com.tencent.mobileqq.app.bf")
-        val getTabIdx = controller.getDeclaredMethod("getTabIndexFromName", String::class.java).apply { isAccessible = true }
         val getContentView = bfCls.getDeclaredMethod("getContentView").apply { isAccessible = true }
         val updateAfter = controller.getDeclaredMethod(
             "updateUIAfterTabChange",
@@ -2961,13 +3218,11 @@ fun pageAnimations() {
                 if (newTag == oldTag || oldTag.isEmpty()) return@also
                 val frame = chain.args.getOrNull(3) ?: return@also
                 val content = runCatching { getContentView.invoke(frame) as? View }.getOrNull() ?: return@also
-                val newIdx = runCatching { getTabIdx.invoke(chain.thisObject, newTag) as? Int }.getOrNull() ?: 0
-                val oldIdx = runCatching { getTabIdx.invoke(chain.thisObject, oldTag) as? Int }.getOrNull() ?: 0
-                val dir = if (newIdx >= oldIdx) 1f else -1f
-                runSwitchTransition(content, dirX = dir, distanceDp = 18f, durationMs = 220L)
+                pageEnter(content, "页签")
             }
         }
     }
+    // 会话与群聊共用 AIO：消息列表一建出来，就从它所在的整页根展开，标题栏与消息区一起进来。
     runCatching {
         val msgListVB = cls("com.tencent.mobileqq.aio.msglist.AIOMsgListVB")
         val helpParam = cls("com.tencent.mvi.api.help.a")
@@ -2978,12 +3233,11 @@ fun pageAnimations() {
             hook(onCreate.apply { isAccessible = true }, gated = false) { chain ->
                 chain.proceed().also { res ->
                     if (msgListVB.isInstance(chain.thisObject) && on("页面过渡动效")) {
-                        runSwitchTransition(res as? View, dirX = 1f, distanceDp = 14f, durationMs = 200L)
+                        (res as? View)?.let { pageEnter(it, "会话或群聊", wholePage = true) }
                     }
                 }
             }
         }
     }
+    runCatching { predictiveBack() }
 }
-
-

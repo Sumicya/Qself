@@ -844,6 +844,31 @@ class ProtoTest {
         assertEquals(696, listBottomInsetPx(1881, 100, 12, 696))
     }
 
+    @Test fun pageExpandsFromWhereTheFingerWasAndFallsBackToTheCenter() {
+        // 点在哪一行就从哪一行长出来；夹在 15% 至 85% 之间，避免整页从屏幕边缘甩出来
+        assertEquals(600f, expandPivot(600f, 1000))
+        assertEquals(150f, expandPivot(0f, 1000))
+        assertEquals(850f, expandPivot(1000f, 1000))
+        assertEquals(150f, expandPivot(-40f, 1000))
+        // 没有点按（通知冷启动、程序内跳转）就落回中心
+        assertEquals(500f, expandPivot(Float.NaN, 1000))
+        // 还没量出尺寸时不能拿 NaN 去当 pivot
+        assertEquals(0f, expandPivot(320f, 0))
+    }
+
+    @Test fun backGestureShrinksThePageAndFollowsTheEdgeItCameFrom() {
+        assertEquals(1.0, backScale(0f).toDouble(), 1e-6)
+        assertEquals(0.94, backScale(1f).toDouble(), 1e-6)
+        // 系统在取消时会给出越界进度，必须夹住，不能把页面缩成负的
+        assertEquals(1.0, backScale(-2f).toDouble(), 1e-6)
+        assertEquals(0.94, backScale(3f).toDouble(), 1e-6)
+        assertEquals(0.0, backShift(0f, 1000, true).toDouble(), 1e-6)
+        assertEquals(100.0, backShift(1f, 1000, true).toDouble(), 1e-6)
+        assertEquals(-100.0, backShift(1f, 1000, false).toDouble(), 1e-6)
+        assertEquals(50.0, backShift(0.5f, 1000, true).toDouble(), 1e-6)
+        assertEquals(0.0, backShift(1f, 0, true).toDouble(), 1e-6)
+    }
+
     @Test fun mainThreadMeterNamesTheWorstMessageAndKeepsPerFrameTotals() {
         MainThreadMeter.reset()
         MainThreadMeter.record(3.0, "")
