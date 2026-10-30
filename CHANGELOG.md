@@ -22,6 +22,10 @@
   `返回预测 : …`。系统不给进度事件时（QQ 没启用预测性返回）这段代码什么都不做，也不写噪声行。
 - 自证：`expandPivot`、`backScale`、`backShift` 抽成纯函数并加 2 条单测（75 → 77 条全过），钉住
   夹取边界、越界进度与左右方向；`tools/check.sh` 编译 135 个类、77 条测试全过，`dexcheck lint bad = 0`。
+- 规范收口（同一提交）：按 `GLOBAL.md`（`adbcf50a`）「CHANGELOG 只留最新 5 条」把 2026-10-24（九）（八）
+  两条原样移入 `bad/CHANGELOG-history.md` 开头；核对 `LICENSE` 为 GPL-3.0 全文 `35149` 字节、README 六个
+  二级章节顺序与固定末行、全仓无 `AGENTS.md` 变体。`LICENSE §5(d)` 要求的「关于/许可证」可点入口本仓
+  尚无，记为待办，不在本轮擅自加 UI。
 
 ## 2026-10-30（十三）— 消息区几何改成单一窗口坐标，底部安全区真的让位
 
@@ -134,17 +138,3 @@
 - 帧耗时归因（`Perf.kt`）：新增 `CostMeter`，只记「玻璃合成 / 头像浮绘 / 消息几何 / 顶栏」四个环节的纳秒数与次数，不分配对象；每 60 帧往事件流写一行「帧耗时 最近 60 帧 x.xms（yy fps）；「某环」z.zms/次」，导出时另有一行汇总。帧率只有总数时只能猜是谁拖慢的，有这一行才能指着某一环说话。
 - 按新版 `GLOBAL.md`（`f8f51cf5`）清工具：删掉被点名的 Agent 汇报辅助脚本 `tools/report_links.py` 与其测试、七份读源码做字符串匹配的伪测试、两份 `make_*_preview.py` 生图脚本、`.github/scripts/test_cleanup.py`、`TODO.md`、`docs/design-principles.md`；`ci/` 目录并入 `tools/`（`check.sh`、`check-shaders.sh`）。工作流按 C1–C6 重排：`build.yml` 三作业（`build` / `cleanup-artifacts` / `cleanup-releases`）、`pr-check.yml` 两作业（`check` / `cleanup-artifacts`），顶部注释不超过 5 行，去掉私加的 `::error::` 注解步骤，清理作业统一传 `RUN_ID`。
 - 版本口径换成 CI 运行数（同一份规范）：总序号取 `github.run_number`，当日序号按「当日现存 `build.yml` 运行最小 `run_number`」与「当日合规产物名反推 `r0-d0+1`」取小值锚定，同一 run 重试不换号；不再用 `git rev-list --count`，也不再需要完整历史。
-
-## 2026-10-24（九）— 面板「消息外观」按四组重排并钉死滑条与标题的配对，群聊顶栏去掉安全区后改为组件重定位而非相撞
-
-- 面板「消息外观」重排（`Knob.kt`）：气泡边距的滑条原先被 `grid.addView` 加在整节最后，和它自己的标题隔着一整片顶栏滑条；现在按「消息（头像 / 气泡）→ 玻璃 → 顶栏 → 时间格式」四组排，小组内标题紧跟对应滑条。新增契约（`tools/test_switch_groups.py`）：六条滑条必须紧跟自己的标题、四个小组顺序固定，再挪错位就红。
-- 群聊顶栏安全区改为组件重定位（`Looks.kt`）：真机快照（群聊，`26.10.24.10.3172`，`SAFE_TOP=100`）实测状态栏 `141px`、顶栏容器 `0x7f0a6bc6 pad=[0,141,0,0]`、标题栏 `0x7f0a6c15 b=[0,141,1272,240]`、返回键 `y=167`、消息区 `y=239` —— 一旦把安全区去掉，标题栏被推到 `y=0`、返回键落到 `y=26`，正好压在状态栏底下，与主人说的「这个安全区去掉就和状态栏撞了」一致。新增 `compensateTitleSafeTop()`：把去掉的那段补成标题栏自己的内容内边距，玻璃板从 `y=0` 铺满整个顶部（`0~240px`），按钮仍留在 `141px` 以下；标题栏最小高度改为 `50dp + 补进去的那段`，否则补的内边距会把按钮挤出可视区。滑条在 `100%` 或开关关闭时还原为 `0`。
-- 继承上一会话分支并收口文档口径：上一会话分支 `arena/c9924db7-qself` 的 3174 个提交按原样快进继承（不压缩成一个），核对 `HEAD` 已覆盖其全部提交后删除该远端分支；按 selfs 新规范重读全文（只留四个要领与底线，`REPOS.md` 降为参考），README「核落点」的符号数由旧值 `451` 改为与 `tools/symbols.txt` 实测一致的 `702`，「源码结构」由九个文件改为实际十三个并补齐 `MessageStyle.kt` / `DiagLog.kt` / `LogMerge.kt` / `Perf.kt`；全仓无 `AGENTS.md`，README 章节顺序与末行规范指针不变。
-
-## 2026-10-24（八）— 拆掉「不点导出也自己冒日志、还带 (1)」与帧率判据被抖动带塌两处真机缺陷
-
-- 日志不再自己往外吐（`DiagLog.kt`）：抓界面树的 `captureActivitySnapshot` / `captureViewRootSnapshot` 收尾都会调 `maybeAutoFlush`，而它每 2.5 秒就把整份日志写进 Download —— 主人不点导出也会自己冒出一个文件。现在自动落盘只写本应用私有目录（充当下次导出的累计底稿），间隔放宽到 60 秒；Download 那份只有点「导出全量日志」才写，同名直接覆盖。
-- 编号副本的源头拆掉（`DiagLog.kt`）：每次写文件都往 MediaStore 插一条同名 `qself-full-log.txt` 记录，Download 里已有同名文件时 MediaStore 每次另存一份 `qself-full-log (1).txt`、`(2).txt`…… 主人那儿堆到 `(9)` 就是这么来的，而 `cleanupPriorExports` 删不动 MediaStore 管的文件，于是「清理历史副本 4 个」每次导出都报。整块删除 MediaStore 写入，只保留直接文件覆盖。
-- 帧率周期不再被抖动带塌（`Perf.kt`）：真机日志（`26.10.24.10.3172`）报出「掉帧 35650（48%），错过同步 100840 次」——刷新周期取的是观测最小值，Choreographer 偶尔给出 1~5ms 的抖动，周期被带到 5ms 上下，8.2ms 的正常帧整片被判成掉帧。改成取环缓冲里落在 4~25ms 区间的帧间隔的 10 分位，每 120 帧重估一次；错过同步次数改成「帧长 ÷ 周期 − 1」。按真机分布复现：74530 帧，掉帧 230（0%）、错过同步 839 次、卡顿 30、最长 996ms、帧周期 8.2ms（约 122Hz）。
-- 测试：`ci/check.sh` 125 个类、66 个用例通过（新增 `frameMeterPeriodIgnoresSpuriousShortFrames`：偶发 1.2ms 抖动不得把周期带偏、正常帧不得被判成掉帧）。
-
