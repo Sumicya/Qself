@@ -3195,9 +3195,14 @@ private fun playEnter(v: View, source: String) {
     val fresh = android.os.SystemClock.uptimeMillis() - pageTapAtMs <= TAP_FRESH_MS
     val pivotX = expandPivot(if (fresh) pageTapX - loc[0] else Float.NaN, v.width)
     val pivotY = expandPivot(if (fresh) pageTapY - loc[1] else Float.NaN, v.height)
+    // 上一次返回手势的半路位移必须在这里清掉：cancel() 会丢掉被取消动画的 withEndAction
+    //（AOSP ViewPropertyAnimator 的 onAnimationCancel 把它从 mAnimatorOnEndMap 里删掉），
+    // 而 backSettle 的归零正写在那个 endAction 里；不清的话新页面会带着最多 10% 屏宽的横向偏移展开。
+    val leftoverShift = v.translationX
     v.animate().cancel()
     v.pivotX = pivotX
     v.pivotY = pivotY
+    v.translationX = 0f
     v.scaleX = ENTER_SCALE_X
     v.scaleY = ENTER_SCALE_Y
     v.animate().scaleX(1f).scaleY(1f)
@@ -3206,13 +3211,15 @@ private fun playEnter(v: View, source: String) {
         .withEndAction {
             v.scaleX = 1f
             v.scaleY = 1f
+            v.translationX = 0f
             v.pivotX = v.width / 2f
             v.pivotY = v.height / 2f
         }
         .start()
     recordQselfEvent(
         "页面展开 : 来源=$source 尺寸=${v.width}x${v.height} " +
-            "原点=${pivotX.roundToInt()},${pivotY.roundToInt()} 从${ENTER_SCALE_X}缩到1 ${ENTER_MS}ms",
+            "原点=${pivotX.roundToInt()},${pivotY.roundToInt()} 从${ENTER_SCALE_X}缩到1 ${ENTER_MS}ms " +
+            "清位移=${leftoverShift.roundToInt()}px",
     )
 }
 

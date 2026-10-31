@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-10-31（二十七）— 打开动效：清掉上一次返回手势留下的横向位移
+
+- 症结在 `Looks.kt` 的 `playEnter`：它只把 `scale` 和 `pivot` 摆回起点，没管 `translationX`。而返回手势
+  `backApply` 会把页面横推最多 10% 屏宽（`backShift`），归零写在 `backSettle` 的 `withEndAction` 里；
+  下一次开页时 `v.animate().cancel()` 把那个动画取消，**AOSP 的 `ViewPropertyAnimator.onAnimationCancel`
+  会把 endAction 从 `mAnimatorOnEndMap` 里删掉**（`core/java/android/view/ViewPropertyAnimator.java:1091-1096`，
+  文档在 `:818-820` 也写明「取消则 endAction 不跑」），于是位移停在半路，新页面带着偏移展开，收尾也不再回正。
+- 改法两行：进动画前 `v.translationX = 0f`，endAction 里同样归零；并在「页面展开」事件里加 `清位移=Npx`，
+  下次导出日志能直接看到残留了多少。
+- 读数（同一命令）：`grep -c "translationX" app/src/main/kotlin/sumicya/qself/Looks.kt` → 改前 `2`（只在返回手势里），
+  改后 `4`（进动画前与 endAction 各一次）。
+- 没动的两处：`ENTER_SCALE_X = 0.86` / `ENTER_SCALE_Y = 0.90` 是（十四）里写明的设计（横比纵多缩 4.4%），
+  属于观感取舍，不在这次 bug 范围内；`backApply` / `backSettle` 保持原样。
+
 ## 2026-10-31（二十六）— CHANGELOG 不再分卷：`bad/` 里的 71 条历史并回正文
 
 - 规范 282 行版（selfs `main` @ `96fdd26` 第 250 行）把「只留最新 5 条、更早的移进 `bad/CHANGELOG-history.md`」改成
