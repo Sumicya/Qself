@@ -58,14 +58,15 @@ fun looks() {
             if (enteredActivities.put(activity, true) == null) pageEnter(pageContent(activity), "页面")
         }
     }
-    hook(ViewGroup::class.java.getDeclaredMethod("dispatchDraw", Canvas::class.java)) { chain ->
-        // 这个钩子每个 ViewGroup 每帧都过一遍（真机日志 23.7 万次/5 小时），先用字段读判掉绝大多数。
-        // 帧率采样靠这一次调用判断「界面真的画了」，空闲时就不再去抢垂直同步。
-        FrameMeter.noteDraw()
-        val source = chain.thisObject as? ViewGroup
-        val background = source?.background
-        val glass = if (background is Glass) background else floatStates[source]?.glass
-        if (glass?.drawKernelContent(chain.getArg(0) as Canvas) == true) null else chain.proceed()
+    // 这个钩子每个 ViewGroup 每帧都要过一遍（真机日志 23.7 万次/5 小时），所以只留一次字段读：
+    // 「这一层的背景是不是玻璃」。帧率采样不再搭它的车 —— 那个信号由根视图的 OnDrawListener 给，
+    // 一次绘制只来一次；这条钩子也不进钩子计数（counted = false），省掉每次的查表与自增。
+    hook(ViewGroup::class.java.getDeclaredMethod("dispatchDraw", Canvas::class.java), counted = false) { chain ->
+        val source = chain.thisObject as? ViewGroup ?: return@hook chain.proceed()
+        val background = source.background
+        val glass = if (background is Glass) background
+        else if (floatStates.isEmpty()) null else floatStates[source]?.glass
+        if (glass != null && glass.drawKernelContent(chain.getArg(0) as Canvas)) null else chain.proceed()
     }
     hook(ViewGroup::class.java.getDeclaredMethod("dispatchTouchEvent", MotionEvent::class.java)) { chain ->
         // 手势窗口：按下开一段、抬起收一段。最外层先收到事件，所以同一次触摸只会开一段，
@@ -307,16 +308,21 @@ private fun watch(decor: View) {
 private const val WALK_MIN_GAP_MS = 200L
 
 private class AppearanceObserver(decor: View) : ViewTreeObserver.OnGlobalLayoutListener,
-    ViewTreeObserver.OnPreDrawListener, View.OnAttachStateChangeListener {
+    ViewTreeObserver.OnPreDrawListener, ViewTreeObserver.OnDrawListener, View.OnAttachStateChangeListener {
     private val root = WeakReference(decor)
     private var dirty = true
     private var lastWalkAt = 0L
     init {
         decor.viewTreeObserver.addOnGlobalLayoutListener(this)
         decor.viewTreeObserver.addOnPreDrawListener(this)
+        // 帧率采样：整棵树真画了一帧才叫一帧。挂在根视图的绘制回调上，一次绘制只来一次；
+        // 原来靠 ViewGroup#dispatchDraw 的全局钩子，每个 ViewGroup 每帧都要过一遍才算得出同一件事。
+        decor.viewTreeObserver.addOnDrawListener(this)
         decor.addOnAttachStateChangeListener(this)
         decor.invalidate()
     }
+
+    override fun onDraw() = FrameMeter.noteDraw()
     fun refresh() { dirty = true; root.get()?.invalidate() }
     override fun onGlobalLayout() { dirty = true }
     override fun onPreDraw(): Boolean {
@@ -340,6 +346,7 @@ private class AppearanceObserver(decor: View) : ViewTreeObserver.OnGlobalLayoutL
             if (decor.viewTreeObserver.isAlive) {
                 decor.viewTreeObserver.removeOnGlobalLayoutListener(this)
                 decor.viewTreeObserver.removeOnPreDrawListener(this)
+                runCatching { decor.viewTreeObserver.removeOnDrawListener(this) }
             }
             decor.removeOnAttachStateChangeListener(this)
             watched.remove(decor)

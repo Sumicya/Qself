@@ -62,6 +62,38 @@ internal const val MSG_SAMPLE_GAP_MS = 80.0  // 同一条卡消息两次抓栈�
 internal const val MSG_STACK_FRAMES = 4      // 一条栈只留前 4 个业务帧，长栈读不动
 
 /**
+ * 把「一条消息跨了几帧」按真实时间切开：每纳秒只记一次，且每帧拿到的部分不超过它真正占用的时间。
+ * 单独成类是为了能脱离 Android 与时钟做单测 —— 灌进时刻表就能验算。
+ */
+internal class ThreadAccounting {
+    private var active = false       // 不能拿 startNanos == 0 当空闲：单测与 uptime 基准里 0 是合法时刻
+    private var startNanos = 0L
+    private var attributed = 0L      // 这条在跑的消息已经交给帧窗口的纳秒数
+
+    fun reset() { active = false; startNanos = 0L; attributed = 0L }
+
+    fun start(now: Long) { active = true; startNanos = now; attributed = 0L }
+
+    /** 取走「已经过去但还没记过」的一段；没有在跑的消息就返回 0。 */
+    fun drain(now: Long): Long {
+        if (!active) return 0L
+        val elapsed = (now - startNanos).coerceAtLeast(0L)
+        val fresh = (elapsed - attributed).coerceAtLeast(0L)
+        attributed = elapsed
+        return fresh
+    }
+
+    /** 消息结束：返回还没记过的那一段，并把状态清空。 */
+    fun finish(now: Long): Long {
+        val fresh = drain(now)
+        active = false
+        startNanos = 0L
+        attributed = 0L
+        return fresh
+    }
+}
+
+/**
  * 主线程消息计时 + 卡顿当场抓栈。
  *
  * 帧间隔只说明「这一帧没出来」，说不清「谁不让它出来」：主线程真的在跑代码，和主线程闲着但渲染管线堵住，
@@ -77,6 +109,7 @@ internal object MainThreadMeter {
     @Volatile private var currentCallback: Class<*>? = null
 
     private var depth = 0                          // 只在主线程读写：嵌套 Looper.loop 只算最外层
+    private val split = ThreadAccounting()         // 跨帧消息按真实时间切开，每纳秒只记一次
     private var totalNanos = 0L
     private var totalCount = 0
     private var slowCount = 0
@@ -91,7 +124,7 @@ internal object MainThreadMeter {
     private var watchdog: Thread? = null
 
     fun reset() {
-        startNanos = 0L; currentWhat = 0; currentCallback = null
+        startNanos = 0L; currentWhat = 0; currentCallback = null; split.reset()
         depth = 0; totalNanos = 0; totalCount = 0; slowCount = 0; worstMs = 0.0; worstWhere = ""
         frameNanos = 0; frameCount = 0; lastSampleMs = 0.0; samples.clear()
     }
@@ -101,7 +134,9 @@ internal object MainThreadMeter {
         if (depth == 0) {
             currentWhat = what
             currentCallback = callback
-            startNanos = System.nanoTime()
+            val now = System.nanoTime()
+            startNanos = now
+            split.start(now)
         }
         depth++
     }
@@ -113,26 +148,41 @@ internal object MainThreadMeter {
         val t0 = startNanos
         startNanos = 0L
         if (t0 == 0L) return
-        val ms = (System.nanoTime() - t0) / 1e6
-        val where = if (ms >= MSG_SLOW_MS) messageLabel(currentWhat, currentCallback) else ""
+        val now = System.nanoTime()
+        val totalMs = (now - t0) / 1e6
+        // 已经被前面几帧取走的那部分不再重复计，只补剩下的。
+        val freshNanos = split.finish(now)
+        val where = if (totalMs >= MSG_SLOW_MS) messageLabel(currentWhat, currentCallback) else ""
         currentCallback = null
-        record(ms, where)
+        if (freshNanos <= 0L) { totalCount++; if (totalMs > worstMs) { worstMs = totalMs; worstWhere = where }; if (totalMs >= MSG_SLOW_MS) slowCount++ }
+        else record(freshNanos / 1e6, where, totalMs)
     }
 
     /** 纯函数入口：单测直接灌数，不碰计时与 Android 类。 */
-    fun record(ms: Double, where: String) {
-        val nanos = (ms * 1_000_000).toLong()
+    fun record(ms: Double, where: String) = record(ms, where, ms)
+
+    /** [freshMs] 记进当前帧，[totalMs] 只用于「最慢一条」的判定（跨帧消息两帧都不能算满）。 */
+    private fun record(freshMs: Double, where: String, totalMs: Double) {
+        val nanos = (freshMs * 1_000_000).toLong()
         totalNanos += nanos
         totalCount++
         frameNanos += nanos
         frameCount++
-        if (ms > worstMs) { worstMs = ms; worstWhere = where }
-        if (ms >= MSG_SLOW_MS) slowCount++
+        if (totalMs > worstMs) { worstMs = totalMs; worstWhere = where }
+        if (totalMs >= MSG_SLOW_MS) slowCount++
     }
 
-    /** 取走上一帧以来的一段（[0]=毫秒，[1]=条数）并清零。不分配对象。 */
+    /**
+     * 取走上一帧以来的一段（[0]=毫秒，[1]=条数）并清零。不分配对象。
+     *
+     * 正在跑的那条消息也要切一刀：它在两帧之间持续占着主线程，原来只在 exit 时一次性记进
+     * 「结束的那一帧」，一条 200ms 的消息会让那一帧的主线程合计远超帧间隔（真机日志里出现过
+     * 「均 75.6ms/帧」配 8.5ms 的帧间隔，就是这条）。现在把已经过掉的部分先记给当前这一帧，
+     * exit 时只补剩下的部分，每纳秒只进一次合计。
+     */
     fun take(into: DoubleArray) {
-        into[0] = frameNanos / 1e6
+        val fresh = split.drain(System.nanoTime())
+        into[0] = (frameNanos + fresh) / 1e6
         into[1] = frameCount.toDouble()
         frameNanos = 0L
         frameCount = 0

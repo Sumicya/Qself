@@ -886,6 +886,27 @@ class ProtoTest {
         }
     }
 
+    @Test fun longMessageIsSplitAcrossFramesInsteadOfChargedToTheFrameItEndsIn() {
+        // 一条 200ms 的消息跨了 24 帧：每一帧只拿到它在这一帧里真正占用的那一段，
+        // 加起来必须正好是 200ms，不能被「结束的那一帧」一次性吃掉。
+        val acc = ThreadAccounting()
+        val frame = 8_300_000L
+        acc.start(0L)
+        var sum = 0L
+        for (i in 1..24) {
+            val got = acc.drain(i * frame)
+            assertTrue("单帧取走 $got ns，超过一个帧间隔", got <= frame)
+            sum += got
+        }
+        // 消息在第 200ms 结束，最后这 0.8ms 由 finish 补上；合计必须正好等于消息时长
+        sum += acc.finish(200_000_000L)
+        assertEquals(200_000_000L, sum)
+        // 取完必须归零，同一段不能给下一帧再算一次
+        assertEquals(0L, acc.drain(900_000_000L))
+        // 没有消息在跑时不能凭空产时间
+        assertEquals(0L, acc.drain(1_000_000_000L))
+    }
+
     @Test fun pageExpandsFromWhereTheFingerWasAndFallsBackToTheCenter() {
         // 点在哪一行就从哪一行长出来；夹在 15% 至 85% 之间，避免整页从屏幕边缘甩出来
         assertEquals(600f, expandPivot(600f, 1000))

@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## 2026-10-31（十七）— 每帧少走一遍 ViewGroup 钩子，跨帧消息不再重复计时
+
+- 帧率采样不再搭 `ViewGroup#dispatchDraw` 的全局钩子（`Looks.kt`）：这条钩子每个 ViewGroup 每帧都要过一遍
+  （真机日志 `26.10.30.4.362` 里记到 `67735` 次），原来每次都要做一次 `FrameMeter.noteDraw()`
+  （两次 volatile 写 + 一次 lambda 调用）和一次钩子计数（`ConcurrentHashMap` 查表 + `AtomicLong` 自增）。
+  现在「这一帧真的画了」由根视图的 `OnDrawListener` 给，一次绘制只来一次；钩子本身 `counted = false`，
+  钩子体只剩一次字段读（`background is Glass`）与「没有玻璃就立刻走」的空表判断。玻璃合成路径不变。
+- 跨帧消息重复计时（`Perf.kt`）：`MainThreadMeter` 原来把一条消息的**全部**耗时记在它 `exit` 的那一帧，
+  一条 200ms 的消息会让那一帧的「主线程合计」远超帧间隔 —— 真机日志里那条
+  `帧率窗口 … 主线程=均75.6ms/帧（4096 条消息）` 配 8.5ms 的帧间隔，就是这个口径错。
+  新增 `ThreadAccounting`：消息跨帧时在每次取帧前先切走「已经过去的那一段」，`exit` 只补剩下的，
+  每纳秒只记一次、每帧拿到的部分不会超过它真正占用的时间。单测用 200ms / 8.3ms 的时间表验算：
+  单帧不超过一个帧间隔，24 次取帧加最后一次补足正好 200ms，取完归零不会二次计。
+- 每帧分配（`Input.kt`）：`MsgListUnderScroll.syncGeometry()` 原来每帧 `IntArray(2)` 新建一个数组取窗口
+  坐标，改成复用同一个字段；内边距只在真的变了时才 `setPadding`，这点没变。
+- 连发合并头像的可判定化（`Chat.kt`）：规则是「合并组默认居底」，但以前只有主观判断。现在整组首尾都在屏里
+  （`hasStart && hasEnd`）时，若头像底边与组内容底边相差超过 1px，就写一行
+  `头像未居底 : 组底=…px 头像底=…px 差=…px`（两秒最多一行）。组被裁掉一半时本来就要贴视口边，不判。
+  这一行只报告不修正 —— 没有真机证据前不去猜公式。
+- 自证：`tools/check.sh` 编译 137 个类、80 条测试全过（新增跨帧切分 1 条），`dexcheck lint bad = 0`，
+  四个改动文件无新增编译告警。
+
 ## 2026-10-31（十六）— 补上 GPL-3 §5(d) 的「关于」入口，补状态栏渐变的模型渲染图
 
 - 许可证用尽义务（`Knob.kt`、`app/src/main/assets/GPL-3.0.txt`、`README.md`）：GPL-3 §5(d) 要求交互程序
@@ -82,58 +104,3 @@
   用真机实测数字（1881 / 1778 / 12 → 115）钉住；几何每次变化写一行
   `消息区几何 列表=… 浮层顶=… 内边距=上…/下…`，若出现「有重叠却没让位」当场追加 `← 异常`，
   下次导出就能从日志里核对，而不是靠主观觉得好看。
-
-## 2026-10-28（十二）— 合规收口（测试归位、docs/ 清空、工作流对齐）+ 帧率录制改成「一次滑动一行」
-
-- 测试归位：`tools/test_dexq.py`、`tools/test_ui_paths.py` 是本仓反汇编与字段解码的真纯函数回归（真二进制夹具，
-  不读业务源码做字符串匹配），按「单元测试只放项目标准测试目录」迁到 `app/src/test/python/`，导入路径指向 `tools/`；
-  `build.yml` 与 `pr-check.yml` 的单测步骤同步改路径（`tools/` 下已无测试文件，Python 3.12 的 `unittest`
-  在「一条都没跑到」时退出码为 5，`build` 为此红过一轮，本轮已修）；`tools/check.sh` 也接上这两条回归，
-  本地自检与 CI 同口径。8 条断言在新位置全过。
-- 文档收敛：删除 `docs/` 下四个文件。`design-principles.md` 按规范仅 `Selffont` 维护；`apk-analysis.md`、
-  `kernel-port.md`、`message-ui.md` 属未经主人要求的过程文档。README 里指向它们的两处引用同提交清掉，
-  「源码结构」补上 Python 测试与着色器检查两行，不留指向已删文件的链接。
-- 号源口径复核：`build.yml` 取号用 `github.run_number` 原值 + 当日序号差值锚定，打印 `HEAD SHA`/`run_id`/
-  `run_number`/`R_first`/当日序号/最终版本，取不到即退出；现存五个产物末段 `348–352` 与其来源运行号逐个对齐。
-- 工作流结构复核：`Build` 仅 `push` 与 `workflow_dispatch` 触发，三个 job（`build` / `cleanup-artifacts` /
-  `cleanup-releases`），两个清理 job 都带 `if: always()`，`cleanup-releases` 另与默认分支条件相与；
-  `PR check` 仅 `pull_request` 触发、不取号不出包、含独立 `cleanup-artifacts`；两个工作流顶层都有
-  `SEGMENTS: '5'` 与 `CLEANUP_APPLY: 'true'`，artifact 四字段齐全。
-- 工作流补过滤（`build.yml`）：按新规范 C2 给 `push` 加 `paths-ignore`（`**.md`、`docs/**`、`bad/**`、`LICENSE`、
-  `.gitignore`），纯文档推送不建 run、不占 `run_number`；`.github/**` 与代码不进名单，改工作流自身照常触发。
-- 帧率录制（`Perf.kt`、`Looks.kt`）：真机日志显示头部「帧率（真机）」只反映最后一次进程（本次导出 `累计 997 帧`，
-  等于装包重启后 8 秒），事件流里却有 3203 条 60 帧记录、跨 73 个分钟位 —— 数据在，结论读不出来。三处改：
-  ① `dispatchTouchEvent` 切手势窗口，按下到抬起单独统计，抬手**无条件**写一行
-  `帧率手势 <起>-<止> 帧=N 平均=Xms（Yfps） 掉帧=J(P%) 卡顿=S 最长=Wms` 进事件流，
-  合并导出后跨进程保留；② 卡顿段一结束立即收口窗口：原来必须凑满「连续 30 帧不卡」才收口，滑动中 stall 会把
-  `gap` 反复清零，密度高的卡顿只能等手停下来才落盘 —— 导出头部那 10 个窗口全是 8 秒静止画面里的
-  `帧=30 掉帧=1(3%) 最长=16ms`，就是这个原因；改成卡顿段一结束就收口（窗口至少 20 帧），卡顿与前后文一起落盘；
-  ③ 导出头部新增「最近手势」一行，本进程还没滑动就直说。`ProtoTest` 新增 2 条（手势成行且短触摸不记、
-  卡顿段结束即收口），72 条全过。
-- 主线程归因（`Perf.kt`、`Hook.kt`、`Qself.kt`）：帧间隔只说「这一帧没出来」，说不清「谁不让它出来」。
-  新增 `MainThreadMeter`：装 `Handler#dispatchMessage` 计时（`counted=false`，不进钩子事件流；只认主线程），
-  每帧取走主线程耗时写进窗口行 `主线程=均 X.Xms/帧（N 条消息）`；单条消息超过 `32ms` 由看门狗线程每 `20ms`
-  一巡、当场抓主线程栈，跳掉 `android.`/`java.`/`kotlin.` 这些壳取前 4 个业务帧。导出头部新增 `主线程`
-  与 `卡顿栈` 两行 —— 主线程忙满一帧和主线程闲着但渲染管线堵住，从此分得开。
-  热路径只多两次 `nanoTime` 和两个字段写入，字符串只在慢消息上才拼。`ProtoTest` 新增 2 条
-  （按帧聚合与点名最慢消息、跳系统帧取业务帧），74 条全过。
-- dex 核对（不靠真机日志）：真包 `389.6 MB` / `37` 个 dex，`tools/dexcheck.py --apk /tmp/qq.apk --lint`
-  跑出 **702 条符号 0 条对不上**，现有钩子落点在当前 QQ 版本上仍然成立。查 `FPSCalculator` 一系：
-  `com.tencent.mobileqq.fpsreport.FPSXListView`／`FPSSwipListView`／`FPSSlideDetectListView` 分别继承
-  `com.tencent.widget.XListView`／`SwipListView`／`SlideDetectListView`（全是旧 `ListView` 系），而 AIO 的列表是
-  `androidx.recyclerview.widget.AIORecycleView`（`RecyclerView` 派生），`AIOMsgListVB` 也不是它们。
-  dex 里没找到给 AIO 记 FPS 的实现，所以这项数字只能自采，没有现成结论可抄。
-  另外 `AIORecycleView#dispatchDraw` 自己就在 `save()`/`restore()` 里按 `getChildCount()` 逐个子 View 走一遍
-  （由 `com.tencent.aio.pref.a#j` 开关控制），这是「帧时间随可见消息条数涨」的候选，已列入下一步量测。
-- 清理脚本（`cleanup.py`）：项目名前缀不再写死，改由 `REPO` 推导（`REPO.split("/")[-1] + "-"`）；artifact 名
-  不合前缀的理由串改用前缀变量；两处 docstring 与一处过期注释（号源仍写「git 提交数」）同步改掉。行为等价：
-  本仓 `REPO=Sumicya/Qself` 推导值仍是 `Qself-`，现存产物名与 `run_number` 的 join 结论一个不变。
-- CI 单测修复（`ProtoTest.kt`、`tools/check.sh`）：`Build` 与 `PR check` 在 `ee83218b` 上双双红在
-  `mainThreadMeterNamesTheWorstMessageAndKeepsPerFrameTotals`，报 `java.lang.AssertionError at ProtoTest.kt:840`，
-  而 `take()` 的算术是整数纳秒除以 `1e6`，本地两套编译器（2.2.20 / 2.4.20）都算得出 `56.0`。取 JUnit 4.13.2 的
-  `Assert.java` 原文核对：两参 `assertEquals(double, double)` 先转成 `assertEquals(null, expected, actual)`，
-  落到 `assertEquals(String, double, double)`，而那一支的实现只有一句
-  `fail("Use assertEquals(expected, actual, delta) to compare floating-point numbers")` —— **与数值无关，
-  写了就必红**；本地替身把这四个数当对象比，所以一路全绿。四处改成带容差的三参
-  `assertEquals(56.0, into[0], 1e-9)`；`tools/check.sh` 的 JUnit 替身按真包语义补齐「两参浮点断言 = 编译错误 +
-  delta 三参重载」，本地再写两参直接红在编译期（已实测：改回两参后 `check.sh` 退出码 1）。74 条全过。

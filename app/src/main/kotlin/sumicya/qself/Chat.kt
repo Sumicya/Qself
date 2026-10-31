@@ -1809,13 +1809,33 @@ private class RunAvatars(private val host: ViewGroup) : Drawable(), ViewTreeObse
                 }
             }
             // 单条消息恢复原生顶对齐头像；连发组若暂时没有浮绘源，只保留组首原生头像，绝不把续条重复头像亮出来。
-            if (face != null) { avatars.forEach { it.hide() }; next.add(face) }
+            if (face != null) {
+                avatars.forEach { it.hide() }
+                next.add(face)
+                // 「合并组头像默认居底」是规则，不是感觉：整组首尾都在屏里时，头像底边必须贴住组内容底边。
+                // 偏差超过 1px 就当一次缺陷写进事件流（两秒最多一行），下次导出直接能看见差了多少。
+                if (merged && hasStart && hasEnd) reportAvatarDrift(face.rect.bottom, groupBottom)
+            }
             else if (merged) group.forEach { if (it.run.continued) it.layout.avatars.forEach { a -> a.hide() } else it.layout.avatars.forEach { a -> a.restore() } }
             else avatars.forEach { it.restore() }
         }
         commitFrame(next, clip)
         return true
     }
+    /** 头像底边与组内容底边的偏差；只在「整组可见」时判，组被裁掉一半时本来就是要贴在视口边上的。 */
+    private var lastDriftAt = 0L
+    private fun reportAvatarDrift(avatarBottom: Float, groupBottom: Float) {
+        val drift = kotlin.math.abs(avatarBottom - groupBottom)
+        if (drift <= 1f) return
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastDriftAt < 2000L) return
+        lastDriftAt = now
+        recordQselfEvent(
+            "头像未居底 : 组底=" + groupBottom.toInt() + "px 头像底=" + avatarBottom.toInt() +
+                "px 差=" + drift.toInt() + "px（整组可见时应当为 0，这是缺陷）",
+        )
+    }
+
     // RecyclerView 可在两次 pre-draw 之间重绑；绘制与每个触摸事件都核对绑定身份。
     private fun isCurrent(face: Face): Boolean = face.binding.valid && face.binding.group == face.group &&
         face.view.isAttachedToWindow && face.target.isAttachedToWindow && rows.values.any { state ->

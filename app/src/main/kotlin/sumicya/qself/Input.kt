@@ -111,6 +111,8 @@ private class MsgListUnderScroll(
     private val origRecyclerTop = recycler.paddingTop
     private val origRecyclerBottom = recycler.paddingBottom
     private var watching = false
+    /** 主线程每帧都要取一次窗口坐标，复用同一个数组，不每帧新建。 */
+    private val at = IntArray(2)
     /** 是否已经接管过这块消息区：没接管过就不要在 restore 里改回别的几何。 */
     private var active = false
     /** 为「从 y=0 铺下来」自己加过的位移，关开关时按这个数还回去。 */
@@ -183,7 +185,6 @@ private class MsgListUnderScroll(
      */
     private fun syncGeometry() {
         if (recycler.height <= 0) return
-        val at = IntArray(2)
         if (on("玻璃底栏") && aioHeaderBottom() > 0) {
             group.getLocationInWindow(at)
             val inset = topInsetPx()
