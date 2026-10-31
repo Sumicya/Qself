@@ -167,6 +167,9 @@ for a in sorted(arts, key=lambda x: (x["created_at"], x["id"]), reverse=True):
         drop_a.append((a, ws, f"口径：名不是 {PREFIX} 前缀"))
     elif len(seg) != SEGMENTS or not all(part.isdigit() for part in seg):
         drop_a.append((a, ws, f"口径：段数={len(seg)} 要求={SEGMENTS}，各段须为数字"))
+    elif any(len(part) > 1 and part[0] == "0" for part in seg):
+        # 月/日/当日序号/总序号都不许补零：26.11.01.x.y 这类产物按不合规删除（规范 278bf9b1 清理判据一）。
+        drop_a.append((a, ws, "口径：段里有前导零"))
     elif r and r["event"] == "pull_request":
         drop_a.append((a, ws, "来源：workflow_run 事件是 pull_request"))
     else:

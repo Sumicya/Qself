@@ -67,7 +67,9 @@ jobs:
           arts = json.load(open("arts.json"))["artifacts"]
 
           def local_day(stamp: str) -> str:
-              return datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone(TZ).strftime("%y.%-m.%-d")
+              # 月与日不补零，也不依赖 %-m / %-d（非 glibc 平台不生效）：直接整数拼接。
+              d = datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone(TZ)
+              return f"{d.year % 100}.{d.month}.{d.day}"
 
           today = local_day(datetime.now(TZ).isoformat())
           todays = [r["run_number"] for r in runs if local_day(r["run_started_at"]) == today]
@@ -87,8 +89,9 @@ jobs:
           if daily < 1:
               sys.exit(f"当日序号小于 1：run_number={run_number} R_first={first}")
           version = f"{today}.{daily}.{run_number}"
-          if not re.fullmatch(r"\d{2}\.\d{1,2}\.\d{1,2}\.\d+\.\d+", version):
-              sys.exit(f"版本不是五段：{version}")
+          # 五段，且月/日/当日序号/总序号都不带前导零；不匹配即退出，不降级。
+          if not re.fullmatch(r"\d{2}\.(1[0-2]|[1-9])\.(3[01]|[12][0-9]|[1-9])\.([1-9]\d*)\.([1-9]\d*)", version):
+              sys.exit(f"版本不合口径：{version}")
           print(f"取号：HEAD SHA={os.environ.get('GITHUB_SHA', '')} run_id={os.environ['RUN_ID']} "
                 f"run_number={run_number} R_first={first} 当日序号={daily} 版本={version}")
           with open(os.environ["GITHUB_ENV"], "a") as env:
