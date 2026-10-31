@@ -31,7 +31,7 @@ val features = listOf(
     Feature("消息时间", true, "消息容器外下方绘制自定义格式时间，适配全部消息类型", ::messageTimestamps),
     Feature("头像圆角", true, "聊天头像圆角比例可调，关闭恢复原样", ::customAvatarCorners),
     Feature("At可点", true, "点按群消息中的 @名字 打开对应资料卡", ::clickableMentions),
-    Feature("连发合并", true, "他人左对齐、自己右对齐、灰字居中；单条顶对齐，连发头像随组浮动并支持长按@微震，全圆角气泡", ::groupRuns),
+    Feature("连发合并", true, "他人左对齐、自己右对齐、灰字居中；连发组只有最后一条显示头像（同 NagramXF 的底边规则），单条顶对齐，全圆角气泡", ::groupRuns),
     Feature("双击回应", true, "双击消息直接贴上快捷回应表情，不弹全屏文字预览", ::doubleTapReaction),
     Feature("语音倍速", true, "记住语音播放倍速且不被单条播完重置，波形条支持直接拖动", ::pttSpeedMemory),
     Feature("回复不@", true, "回复不往输入框插 @昵称", ::replyNoAt),

@@ -23,12 +23,11 @@ internal const val TOUCH_CANCEL = 3          // MotionEvent.ACTION_CANCEL
  * 帧率只有总数时只能猜是谁拖慢的；有这一行才能指着某一环说「就是它」。
  */
 internal const val COST_GLASS = 0
-internal const val COST_AVATAR = 1
-internal const val COST_LIST = 2
-internal const val COST_HEADER = 3
+internal const val COST_LIST = 1
+internal const val COST_HEADER = 2
 
 internal object CostMeter {
-    private val names = arrayOf("玻璃合成", "头像浮绘", "消息几何", "顶栏")
+    private val names = arrayOf("玻璃合成", "消息几何", "顶栏")
     private val nanos = LongArray(names.size)
     private val counts = LongArray(names.size)
 

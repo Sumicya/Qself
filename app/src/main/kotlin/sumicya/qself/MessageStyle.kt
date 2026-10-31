@@ -387,10 +387,7 @@ private class AvatarCorners(
             if (v.outlineProvider !== origOutline) v.outlineProvider = origOutline
             if (v.clipToOutline != origClip) v.clipToOutline = origClip
         }
-        if (!fromDraw) {
-            v.invalidate()
-            notifyChatAvatarsUpdated()
-        }
+        if (!fromDraw) v.invalidate()
     }
     override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
         if (r - l == or - ol && b - t == ob - ot && appliedEnabled != null) return
@@ -495,9 +492,7 @@ fun customAvatarCorners() {
                     val prev = inAioAvatarLoad.get()
                     inAioAvatarLoad.set(true)
                     try {
-                        chain.proceed().also {
-                            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) notifyChatAvatarsUpdated()
-                        }
+                        chain.proceed()
                     } finally { if (prev == null) inAioAvatarLoad.remove() else inAioAvatarLoad.set(prev) }
                 }
             }

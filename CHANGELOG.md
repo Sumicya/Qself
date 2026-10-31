@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## 2026-10-31（二十三）— 连发头像改成 NagramXF 的「底边那条画」：删掉整套浮绘，少 404 行
+
+- 规范（`63ff7f9a`）：新增「零、五级提问」——每轮回复开头先写处境/目标/验收/卡点/取舍五句；新增
+  「主人点名『按某个实现做』时必须给该仓 commit、文件路径与行号，并写成可执行规则」；第 9 条补
+  `gh run download` 没有 `--clobber`，同一产物重复下到同一目录会 `file exists`，命令要先 `rm -rf` 再 `mkdir -p`。
+- 依据（实取，非转述）：`Keeperorowner/NagramXF@d170a0e30e52d0d6486ccc6adc23143ed4c12fec`（`dev`，2026-10-27 13:15 UTC+8），
+  `TMessagesProj/src/main/java/org/telegram/ui/Cells/ChatMessageCell.java:7081`：
+  `isAvatarVisible = needDrawAvatar() && (currentPosition == null || currentPosition.edge);`
+  其中 `edge` 定义在同仓 `.../messenger/MessageObject.java:1254`（`public boolean edge;`），只在 1436／1722／1729
+  三处置 `true`，即「这一格位于组的底边」。翻译成一条可执行规则：**多格块里只有底边那一格画头像**；
+  对应到 QQ 的连发组就是「只有组内最后一条保留原生头像，其余行藏掉」。
+- 代码（`Chat.kt`）：`RunLayout.apply` 的头像分支从「续条一律隐藏」（等于头像钉在组首）改成
+  `avatarVisibleInRun(continues, enabled)` —— `enabled && !continues` 才显示。关掉「连发合并」时全量还原。
+- 删除（同文件，−404 行）：整套跨行浮绘 `Face`／`sample()`／`draw()`／`touch()`／`commitFrame()`、
+  预绘制监听与 `overlay.add`、`dispatchTouchEvent` 转发钩子，以及只为浮绘服务的三个纯函数
+  （`floatingAvatarTop`、`runAvatarBounds`、`floatingRunAvatarTop`）；`RunAvatars` 变成一个只登记
+  「哪一行还留着原生头像」的 WeakHashMap。`MessageStyle.kt` 两处 `notifyChatAvatarsUpdated()` 随之删除，
+  `Perf.kt` 的 `CostMeter` 去掉「头像浮绘」槽（4 槽 → 3 槽），滚动帧不再有任何头像采样。
+- 测试：删掉 8 条绑在浮绘几何上的用例，新增 2 条钉住新规则 —— 5 行组只有最后一行可见、关开关全可见
+  （`onlyTheLastRowOfARunKeepsTheAvatar`、`turningOffMergeRestoresEveryNativeAvatar`）。80 → 74 条。
+- 可复查读数：`tools/check.sh` → `compiled: 136 classes`、`74 tests passed`、`Ran 8 tests in 0.001s`、`OK`；
+  `grep -c addOnPreDrawListener Chat.kt` → `0`；`grep -c overlay.add Chat.kt` → `0`；
+  `grep -rn notifyChatAvatarsUpdated app/src/main` → 0 条；`git diff --stat` → `5 files changed, 51 insertions(+), 466 deletions(-)`。
+- README 三条命令的第 1 条补 `rm -rf "$D"`（先删后建），与第 9 条新句一致。
+- 真机未验证（命令与时耗见汇报）：头像落点改用原生视图后，观感要用设备看一次 —— 打开任意群，滑到一组 3 条以上的
+  同人连发，`logcat -s Qself | grep TG连发定位` 应出现「头像只留组内最后一条」，约 5 分钟。
+
 ## 2026-10-31（二十二）— 装机命令改成手机端三条：下载到固定路径、`su -c pm install`、`rm -rf`
 
 - 起因：上一版 README 第 1 条给的是 `adb install -r apk/*.apk`。主人手上只有手机，`adb` 是电脑上的工具，
@@ -61,18 +88,4 @@
 - 自证：`tools/check.sh` 编译 137 个类、80 条测试全过、`Ran 8 tests OK`。开关观感（关掉是否直出、
   打开是否只播一次）需真机，本轮**未验证**。
 - 收尾：CHANGELOG 只留 5 条，`2026-10-30（十四）` 原样移入 `bad/CHANGELOG-history.md` 开头。
-
-## 2026-10-31（十八）— 版本号按新规范收口：月日不补零、断言收紧、不合规产物判删
-
-- 规范生效点随之更新：selfs open PR #13 head `278bf9b1`（2026-10-31 09:40:03 UTC+8）取代
-  `main` @ `adbcf50a`。新版第「六、仓库与工程 / 版本口径」要求 `yy.m.d` 的月与日一律不补零，
-  取号脚本必须断言 `^\d{2}\.(1[0-2]|[1-9])\.(3[01]|[12][0-9]|[1-9])\.([1-9]\d*)\.([1-9]\d*)$`，
-  且实现不得依赖 `%-m` / `%-d`（非 glibc 平台不生效）。
-- `build.yml`：`local_day()` 从 `strftime("%y.%-m.%-d")` 改成整数拼接 `f"{d.year % 100}.{d.month}.{d.day}"`；
-  版本断言从宽松的 `\d{1,2}` 换成规范给的那条，`26.11.01.x.y`、`26.10.31.0.368`、`26.10.31.4.0368`
-  这类都直接退出。自测：`26.10.31.4.368` 与 `26.11.1.3.400` 通过，`26.11.01.3.400`、`26.10.31.0.368`、
-  `26.10.31.4.0368` 被拒。
-- `cleanup.py`：清理判据一补「段里有前导零」分支，补零产物按不合规产物删除并打印原因。
-- 自证：`python3 -m py_compile` 通过；从 `build.yml` 里抽出内嵌 Python 单独 `compile()` 通过（39 行）；
-  上述 6 个版本串逐条跑断言，结果与规范一致。
 

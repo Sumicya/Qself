@@ -106,62 +106,6 @@ class ProtoTest {
         assertFalse(continuesMessageRun("a", "a", 57601, 57599, 2, 2))
     }
 
-    @Test fun floatingAvatarUsesContentCentersNotRowBottom() {
-        // 一行短文本即使比头像矮，也严格同中心；高图片同理。
-        assertEquals(10f, floatingAvatarTop(30f, 30f, 0f, 500f, 40f, 4f))
-        assertEquals(180f, floatingAvatarTop(200f, 200f, 0f, 500f, 40f, 4f))
-        // 连发最后一条中心对齐，长组受可见窗口底部约束。
-        assertEquals(100f, floatingAvatarTop(30f, 120f, 0f, 500f, 40f, 4f))
-        assertEquals(56f, floatingAvatarTop(30f, 120f, 0f, 100f, 40f, 4f))
-        assertEquals(446f, floatingAvatarTop(-300f, 900f, 0f, 500f, 50f, 4f))
-        assertTrue(floatingAvatarTop(-100f, -30f, 0f, 500f, 50f, 4f) == null)
-        assertTrue(floatingAvatarTop(530f, 600f, 0f, 500f, 50f, 4f) == null)
-        assertTrue(floatingAvatarTop(Float.POSITIVE_INFINITY, 20f, 0f, 500f, 40f, 4f) == null)
-    }
-
-    @Test fun avatarTracksFractionalScrollWithoutRounding() {
-        for (step in 0..800) {
-            val offset = step * 0.125f
-            val y = floatingAvatarTop(180f - offset, 300f - offset, 0f, 500f, 40f, 4f)!!
-            assertTrue(kotlin.math.abs(y - (280f - offset)) < 0.0001f)
-        }
-    }
-
-    @Test fun avatarClampCrossesViewportBoundaryContinuously() {
-        var previous: Float? = null
-        for (step in 0..400) {
-            val last = 440f + step * 0.25f
-            val y = floatingAvatarTop(100f, last, 0f, 500f, 40f, 4f)!!
-            assertEquals(minOf(last, 476f) - 20f, y)
-            previous?.let { assertTrue(y >= it && y - it <= 0.25f) }
-            previous = y
-        }
-    }
-
-    @Test fun avatarReverseScrollDoesNotDependOnPreviousFrame() {
-        val forward = (0..400).map { step ->
-            floatingAvatarTop(100f - step * 0.25f, 600f - step * 0.25f, 0f, 500f, 40f, 4f)
-        }
-        val reverse = (400 downTo 0).map { step ->
-            floatingAvatarTop(100f - step * 0.25f, 600f - step * 0.25f, 0f, 500f, 40f, 4f)
-        }
-        assertEquals(forward, reverse.reversed())
-    }
-
-    @Test fun avatarUsesCurrentViewportImmediatelyAfterKeyboardResize() {
-        assertEquals(456f, floatingAvatarTop(-300f, 900f, 0f, 500f, 40f, 4f))
-        assertEquals(256f, floatingAvatarTop(-300f, 900f, 0f, 300f, 40f, 4f))
-        assertEquals(456f, floatingAvatarTop(-300f, 900f, 0f, 500f, 40f, 4f))
-    }
-
-    @Test fun avatarRejectsInvalidViewportAndNonFiniteGeometry() {
-        assertTrue(floatingAvatarTop(10f, 20f, 0f, 0f, 40f, 4f) == null)
-        assertTrue(floatingAvatarTop(10f, 20f, 50f, 0f, 40f, 4f) == null)
-        assertTrue(floatingAvatarTop(10f, 20f, 0f, Float.NaN, 40f, 4f) == null)
-        assertTrue(floatingAvatarTop(10f, 20f, 0f, 500f, Float.POSITIVE_INFINITY, 4f) == null)
-        assertTrue(floatingAvatarTop(10f, 20f, 0f, 500f, 40f, -1f) == null)
-    }
-
     @Test fun ownMessagesKeepOneSenderWhenUidIsEmpty() {
         val pair = runSenderPair("u_old", 1, true, "", null, true)
         assertEquals(pair.first, pair.second)
@@ -309,6 +253,20 @@ class ProtoTest {
         assertEquals(1f, -30f + barTouchOffset(-30f, 800))
     }
 
+    @Test fun onlyTheLastRowOfARunKeepsTheAvatar() {
+        // NagramXF `ChatMessageCell.java:7081`：多格块只有底边那一格画头像。
+        // 映射到连发组：只有 `continues == false` 的那一行保留原生头像。
+        val run = List(5) { avatarVisibleInRun(continues = it < 4, enabled = true) }
+        assertEquals(listOf(false, false, false, false, true), run)
+        assertTrue(avatarVisibleInRun(continues = false, enabled = true))
+        assertFalse(avatarVisibleInRun(continues = true, enabled = true))
+    }
+
+    @Test fun turningOffMergeRestoresEveryNativeAvatar() {
+        assertTrue(avatarVisibleInRun(continues = true, enabled = false))
+        assertTrue(avatarVisibleInRun(continues = false, enabled = false))
+    }
+
     @Test fun continuationHeightUsesContentNotTheInvisibleAvatarSlot() {
         assertEquals(22, compactRunHeight(44, 22, 0, 0))
         assertEquals(26, compactRunHeight(44, 22, 4, 0))
@@ -323,19 +281,6 @@ class ProtoTest {
         assertEquals(8, runVisibility(8, 4))
         assertEquals(0, runVisibility(0, null))
         assertEquals(8, runVisibility(8, null))
-    }
-
-    @Test fun onlyAttachedMiddleRowIsNotASingleMessageGroup() {
-        assertEquals(456f, floatingRunAvatarTop(200f, 200f, 0f, 500f, 40f, 4f, false, false))
-        assertEquals(180f, floatingRunAvatarTop(200f, 200f, 0f, 500f, 40f, 4f, true, true))
-        assertEquals(180f, floatingRunAvatarTop(200f, 200f, 0f, 500f, 40f, 4f, false, true))
-        assertEquals(456f, floatingRunAvatarTop(200f, 200f, 0f, 500f, 40f, 4f, true, false))
-    }
-
-    @Test fun detachingIntermediateRowsDoesNotMoveTheFloatingAvatar() {
-        for (i in 0..300) {
-            assertEquals(456f, floatingRunAvatarTop(i.toFloat(), 400f + i, 0f, 500f, 40f, 4f, false, false))
-        }
     }
 
     @Test fun prependingHistoryAndReplacementUpdateBoundMessageIndex() {
@@ -575,16 +520,7 @@ class ProtoTest {
         assertEquals(6, outgoing.contentMarginEnd)
     }
 
-    @Test fun runAvatarScrollingMergeTakesPrecedenceOverCenteringAndTimeFormatGuideIsComplete() {
-        val tallSingle = runAvatarBounds(groupTop = 10f, groupBottom = 110f, firstCenter = 60f, lastCenter = 60f, height = 36f, merged = false)
-        assertEquals(null, tallSingle)
-
-        val mergedRun = runAvatarBounds(groupTop = 10f, groupBottom = 90f, firstCenter = 25f, lastCenter = 75f, height = 36f, merged = true)
-        assertEquals(28f to 72f, mergedRun)
-
-        val shortSingle = runAvatarBounds(groupTop = 10f, groupBottom = 40f, firstCenter = 25f, lastCenter = 25f, height = 36f, merged = false)
-        assertEquals(null, shortSingle)
-
+    @Test fun timeFormatGuideCoversEveryTokenAndMidnightUsesHour24() {
         for (token in listOf("yyyy/yy", "MM/M", "dd/d", "E", "HH/H", "kk/k 1-24时", "hh/h", "KK/K 0-11时", "a", "mm/m", "ss/s", "SSS/S", "左对齐")) {
             assertTrue(TIME_FORMAT_GUIDE.contains(token))
         }

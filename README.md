@@ -57,8 +57,9 @@
 
 1. 手机上拿包、装机、清干净，三条命令（全程用手机，不需要电脑；`gh` 先登录一次 `gh auth login`）：
    ```sh
-   # 1. 下载到固定路径
+   # 1. 下载到固定路径（同一产物重复下到同一目录会报 file exists，所以先删后建）
    D=/storage/emulated/0/Download/selfs
+   rm -rf "$D"
    mkdir -p "$D"
    gh run download -R Sumicya/Qself -n "$(gh api repos/Sumicya/Qself/actions/artifacts --jq '.artifacts[0].name')" -D "$D"
 
