@@ -325,7 +325,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     fun draw(canvas: Canvas, bounds: Rect, alpha: Int, filter: ColorFilter?) {
         if (bounds.isEmpty) return
         if (!canvas.isHardwareAccelerated) {
-            paint.color = if (night()) 0xFF242424.toInt() else Color.WHITE
+            paint.color = if (night()) 0xFF242424.toInt() else 0xFFF5F6FA.toInt()
             val r = kernelRadius(bounds.width().toFloat(), bounds.height().toFloat(), cornerRadius)
             canvas.drawRoundRect(RectF(bounds),r,r,paint)
             return // 软件 Canvas 不能执行 RenderNode，不作为玻璃验收。
@@ -413,7 +413,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
             // 覆盖 TabLayout.onDraw 的旧装饰，避免旧选中背景混进玻璃。
             body(canvas,w,h,p)
             // 普通行统一中性色，不能透出 QQ 的另一套选中蓝；只改变录制层，不写 QQ 控件属性。
-            neutralTint.colorFilter = PorterDuffColorFilter(if (night()) Color.WHITE else 0xFF1C1C1E.toInt(),PorterDuff.Mode.SRC_IN)
+            neutralTint.colorFilter = PorterDuffColorFilter(if (night()) 0xFFF5F6FA.toInt() else 0xFF1C1C1E.toInt(),PorterDuff.Mode.SRC_IN)
             val normalLayer = canvas.saveLayer(null,neutralTint)
             try { canvas.drawRenderNode(tabContent) } finally { canvas.restoreToCount(normalLayer) }
             val tw = (w-8*dp)/tabs().size
