@@ -544,6 +544,53 @@ fun nativeMessageMenu() {
     }
 }
 
+/**
+ * GPL-3 §5(d)：交互程序要有可点的「关于」入口，里面给出版权、无担保声明与许可全文入口。
+ * 许可全文随包放在 assets（与仓根 LICENSE 逐字节相同的副本），不另外写一份摘要。
+ */
+private fun aboutQself(ctx: android.content.Context) {
+    val dp = ctx.resources.displayMetrics.density
+    val body = TextView(ctx).apply {
+        text = buildString {
+            append("Qself ").append(BuildConfig.VERSION_NAME).append("\n\n")
+            append("Copyright (C) 2026 Sumicya\n")
+            append("许可：GNU General Public License 第 3 版或更高版本（GPL-3.0-or-later）\n\n")
+            append("本程序按现状提供，不附带任何担保，包括但不限于适销性与特定用途适用性的担保。")
+            append("完整条款以 GPL-3.0 全文为准；点「许可全文」查看。\n\n")
+            append("源码：https://github.com/Sumicya/Qself")
+        }
+        textSize = 13f
+        setTextColor(if (night()) 0xFFE8EEF7.toInt() else 0xFF1C1C1E.toInt())
+        setPadding((18 * dp).toInt(), (10 * dp).toInt(), (18 * dp).toInt(), (6 * dp).toInt())
+        setTextIsSelectable(true)
+    }
+    AlertDialog.Builder(ctx)
+        .setTitle("关于 Qself")
+        .setView(body)
+        .setPositiveButton("许可全文") { _, _ -> showLicense(ctx) }
+        .setNegativeButton("好", null)
+        .show()
+}
+
+/** 许可全文：直接读随包的 GPL-3.0.txt，读不到就照实说读不到，不伪造正文。 */
+private fun showLicense(ctx: android.content.Context) {
+    val text = runCatching {
+        ctx.assets.open("GPL-3.0.txt").bufferedReader().use { it.readText() }
+    }.getOrElse { "许可全文读取失败：" + (it.message ?: "包内缺少 assets 里的 GPL 全文") }
+    val page = TextView(ctx).apply {
+        this.text = text
+        textSize = 11f
+        typeface = android.graphics.Typeface.MONOSPACE
+        setPadding(24, 16, 24, 16)
+        setTextIsSelectable(true)
+    }
+    AlertDialog.Builder(ctx)
+        .setTitle("GPL-3.0 全文")
+        .setView(ScrollView(ctx).apply { addView(page) })
+        .setPositiveButton("好", null)
+        .show()
+}
+
 private fun sheet(anchor: View) {
     val decor = anchor.rootView as? ViewGroup ?: return
     val existing = decor.findViewWithTag<View>(SHEET)
@@ -853,6 +900,7 @@ private fun sheet(anchor: View) {
             safeShiftLabel.text = safeTopText(0)
             paints.forEach { it() }; refreshLooks(); card.invalidate()
         })
+        addView(button("关于 Qself") { aboutQself(ctx) })
         addView(button("结束进程") {
             android.os.Process.killProcess(android.os.Process.myPid())
         })

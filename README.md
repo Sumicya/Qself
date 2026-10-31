@@ -20,6 +20,7 @@
 - **Monet 取色**：玻璃的罩色、选中项、设置短胶囊图标的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色
 - TG 输入栏：接入 NT 的 `InputEditTextVBDelegate.U`（`adorn.e#a` 编辑器与 `adorn.e#d` 发送按钮）、`AIOInputExpandableVB`（容器 `e` 与顶部分割线 `f`）、`compat.b`（`handleUIState` / `e` / `g` / `i` / `n` 全路径防回退）、`compat.e$b#f`（发送按钮原生半高圆角）、`BottomBlurVB`（底部通栏模糊隐藏）、`AIOShortcutBarVB`（`onCreateView` / `handleUIState` / `x1` / `y1` / `s1` 拦截异步背景回写）与 `PanelIconLinearLayout#f`（图标带重建同步），将真实 `AIOEditText` 与右侧 `AIOInputSendBtn`（含 `com.tencent.qui.smoothcorner.b#j` 圆角背景）分别独立按 `height / 2` 完全药丸化（`capsule()`），去除安全区实色背景后重定位输入区与聊天列表（`RecyclerView` `clipToPadding = false`），并在夜间模式主动提亮玻璃材质、输入框文字与全部快捷操作图标，保留原输入框、发送、语音、表情和附件按钮。保留用户原有开关选择，切换后立即还原/应用；图标只调整剩余间隙，不改按钮宽度与权重。输入与键盘效果待真机验收。
+- **状态栏渐变（模型渲染，非真机截图）**：`0..194` 那条安全区带子本身的 `alpha` 曲线与相邻行台阶；左半是改动前的实心底色与 y=194 的硬边，右半是单层 `LinearGradient`。设备侧读数由运行期日志 `状态栏渐变 : … Skia 读数 …` 给出，见 [docs/status-fade-194px.png](docs/status-fade-194px.png)。
 - 藏掉「频道」「动态」「小世界」页签
 - 聊天标题栏去掉一起听 / 一起看 / 群游戏那排；侧栏去掉打卡、天气、等级、会员、装扮、钱包一类的入口（数据源和视图两头都拦）
 - 隐藏好友聊天标题栏那行在线状态（在线 / 手机在线 / WiFi在线 / 忙碌 / 隐身…）
@@ -182,5 +183,7 @@ QQ 原生消息菜单与设置面板已接入单有效项随指高亮、跨项�
 ## 许可证
 
 GPL-3.0-or-later。源自 [QAuxiliary](https://github.com/cinit/QAuxiliary)，只留了思路，聊天等原有实现重写；底栏包含注明来源的上游算法和着色器，见 [第三方许可](third_party/NOTICE.md)。
+
+GPL-3 §5(d)：设置面板里有可点的「关于 Qself」，显示版本、版权（`Copyright (C) 2026 Sumicya`）、无担保声明与「许可全文」入口；全文随包放在 `assets/GPL-3.0.txt`，与仓根 [`LICENSE`](LICENSE) 逐字节相同。
 
 遵循 [Sumicya/selfs](https://github.com/Sumicya/selfs) 最新 GLOBAL.md。
