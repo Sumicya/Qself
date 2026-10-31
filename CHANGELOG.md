@@ -17,9 +17,14 @@
   `outlineProvider` 同步 `capsule(0f)`。契约只留「全圆」与「零」；这张卡在小屏上占大半屏、内容是滚动列表，
   全圆会把它变成胶囊，所以取零（要改回全圆，把两个 `0f` 换成 `Float.MAX_VALUE` 即可）。读数：
   `grep -rn "val radius = " app/src/main/kotlin | wc -l` → 改前 `2`（面板卡片 22dp、头像圆角函数），改后 `1`
-  （只剩 `avatarCorner(size, percent)`；头像圆角是用户可调功能，不动）。其余半径要么是 0，要么是 4 的倍数
-  （`cornerRadius = 12 * dp`、`Glass(scroll, 12 * dp)`、`itemRadii { 8 * dp }`），气泡圆角 17dp 与头像圆角同属
-  用户可调项（滑条 0–32），不在这一类。
+  （只剩 `avatarCorner(size, percent)`；头像圆角是用户可调功能，不动）。
+  半径全量清单（`grep -rnoE "Glass\([a-zA-Z]+, *[^,)]+|cornerRadius = [^,)]+" app/src/main/kotlin`
+  → 11 行）：0（`Knob.kt:614`，本轮）、`Float.MAX_VALUE` 全圆 2 处（`Input.kt:766` 等）、12dp 两处
+  （`Knob.kt:295/471`）、8dp（`Knob.kt:526` 菜单项四角）、`cornerRadius` 动态赋值的两处（`Input.kt:694/707`，
+  值来自 `capsule()` 即全圆）。另有 4 处中间值**不在任务点名的两处之内，本轮按「不许顺手改别的」未动**：
+  顶栏三枚胶囊 `Looks.kt:1399–1401` 的 `23 * host.dp`、搜索根视图 `Input.kt:59` 的 `20 * root.dp`
+  （注意 23dp 也不满足间距那条，因为它写的是 `host.dp` 不是 `dp`，验收正则抓不到）。下一轮要不要收，主人定。
+  气泡圆角 17dp 与头像圆角同属用户可调项（滑条 0–32），不属这一类。
 - 更正一处点数：任务里点名的 `Looks.kt:2128` 的 `22 * dp` 不是圆角，是标题 `TextView` 的最小高度
   （`th = tv.measuredHeight.coerceAtLeast((24 * dp).roundToInt())`，已由间距那条收到 24dp），本轮不改它的语义。
 
