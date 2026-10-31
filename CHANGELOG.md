@@ -9,8 +9,9 @@
   文档在 `:818-820` 也写明「取消则 endAction 不跑」），于是位移停在半路，新页面带着偏移展开，收尾也不再回正。
 - 改法两行：进动画前 `v.translationX = 0f`，endAction 里同样归零；并在「页面展开」事件里加 `清位移=Npx`，
   下次导出日志能直接看到残留了多少。
-- 读数（同一命令）：`grep -c "translationX" app/src/main/kotlin/sumicya/qself/Looks.kt` → 改前 `2`（只在返回手势里），
-  改后 `4`（进动画前与 endAction 各一次）。
+- 读数（同一命令，两次都以 `git show <rev>:…` 取同一文件）：
+  `grep -c "translationX" …/Looks.kt` → 改前（`7f6117d3`）`11`、改后 `14`；
+  `grep -c "v\.translationX" …/Looks.kt` → 改前 `1`、改后 `4`（进动画前、endAction、取残留值各一次）。
 - 没动的两处：`ENTER_SCALE_X = 0.86` / `ENTER_SCALE_Y = 0.90` 是（十四）里写明的设计（横比纵多缩 4.4%），
   属于观感取舍，不在这次 bug 范围内；`backApply` / `backSettle` 保持原样。
 
