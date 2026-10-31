@@ -237,6 +237,12 @@ private fun appendViewTree(
         sb.append(" trans=[").append(v.translationX).append(',').append(v.translationY).append(',').append(v.translationZ).append(']')
     }
     if (v.alpha != 1f) sb.append(" alpha=").append(v.alpha)
+    // 缩放是「页面缩着、四周留边」这类毛病的唯一读数：这个树上原本只打 trans/alpha，
+    // 所以导出几十 MB 的报告里也看不出某一层是不是停在 0.86/0.90。只在不等于 1 时打，健康态不多一个字节。
+    if (v.scaleX != 1f || v.scaleY != 1f) {
+        sb.append(" sc=[").append(v.scaleX).append(',').append(v.scaleY)
+            .append("] piv=[").append(v.pivotX).append(',').append(v.pivotY).append(']')
+    }
     if (v is ViewGroup) {
         sb.append(" clip=[ch=").append(v.clipChildren).append(",pad=").append(v.clipToPadding).append(",out=").append(v.clipToOutline).append(']')
     } else if (v.clipToOutline) {

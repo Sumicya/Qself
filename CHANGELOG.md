@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## 2026-10-31（二十九）— 给「页面缩着、四周留边」装上读数：视图树与收尾日志都打比例
+
+- 为什么加：验收的最后一条是「连续开关同一会话 5 次，第 5 次不得缩小留边」，可这一条此前**没有任何读数**。
+  `DiagLog.kt` 导出视图树时只打 `trans=`（位移 ≠ 0 时）和 `alpha=`（≠ 1 时），`scale` 从来没进过报告，
+  于是「有没有缩」只能靠眼睛，真缩了也拿不出一对数。补的是**表**，不是新功能：动画行为一字未改。
+- 三处改动：
+  1. `DiagLog.kt` `appendViewTree`：`scaleX/scaleY` 任一 ≠ 1 时追加 `sc=[sx,sy] piv=[px,py]`。
+     等于 1 不打印，健康态的导出体积和改前一样，只有真被缩放的层才多这几个字节。
+  2. `Looks.kt` `playEnter` 的收尾：复位**之前**先把 `scaleX/scaleY` 抓下来，复位后记一行
+     `展开收尾 : 自然结束|取消 收尾前比例=a,b`。自然结束应当读到 `1.0,1.0`；读到半路值就是被取消的现场。
+  3. `backSettle` 同型，记 `返回收尾 : …`；两处都用 `onAnimationCancel` 置一个 `cancelled` 标志来区分。
+- 读数：`git show <rev>:app/src/main/kotlin/sumicya/qself/DiagLog.kt | grep -cE "scaleX|scaleY"`
+  → 改前 `eac62b80` **0**、改后 **2**（判定与取值各一处）。`tools/check.sh` → `compiled: 138 classes`
+  （与改前同级：只是给已有的匿名监听器加方法，没有新增类）/ `74 tests passed` / `OK`。
+- **未做**：真机读数。这三行的作用要装了新包才会出现；装之前 `12.376` 的行为与读数跟改前完全一致。
+
 ## 2026-10-31（二十八）— 打开动效的收尾改用 setListener：cancel 不再把页面留在半截
 
 - 病灶比上一笔更靠里。`playEnter` 与 `backSettle` 都把复位写在 `withEndAction` 里，而

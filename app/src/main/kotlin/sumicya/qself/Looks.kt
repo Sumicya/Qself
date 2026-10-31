@@ -3213,13 +3213,27 @@ private fun playEnter(v: View, source: String) {
         // 于是下一次进这个页面看到的是「缩着、四周留边」。setListener 的 onAnimationEnd 在 cancel
         // 之后仍会回调（ValueAnimator.cancel → endAnimation → notifyEndListeners），用它收尾才收得干净。
         .setListener(object : android.animation.AnimatorListenerAdapter() {
+            private var cancelled = false
+
+            override fun onAnimationCancel(animation: android.animation.Animator) {
+                cancelled = true
+            }
+
             override fun onAnimationEnd(animation: android.animation.Animator) {
+                // 先把「动画停在视图上的比例」抓下来，复位之后这数就没了：自然结束应当读到 1.000，
+                // 读到别的值就说明这一帧是被中途取消的，也正好是「页面缩着」的现场。
+                val restX = v.scaleX
+                val restY = v.scaleY
                 v.animate().setListener(null)
                 v.scaleX = 1f
                 v.scaleY = 1f
                 v.translationX = 0f
                 v.pivotX = v.width / 2f
                 v.pivotY = v.height / 2f
+                recordQselfEvent(
+                    "展开收尾 : ${if (cancelled) "取消" else "自然结束"} " +
+                        "收尾前比例=${(restX * 1000).roundToInt() / 1000f},${(restY * 1000).roundToInt() / 1000f}",
+                )
             }
         })
         .start()
@@ -3286,13 +3300,25 @@ private fun backSettle(root: View) {
         .setInterpolator(android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f))
         // 同上：withEndAction 会在 cancel 时被丢弃，改用 setListener 才保证复位跑到。
         .setListener(object : android.animation.AnimatorListenerAdapter() {
+            private var cancelled = false
+
+            override fun onAnimationCancel(animation: android.animation.Animator) {
+                cancelled = true
+            }
+
             override fun onAnimationEnd(animation: android.animation.Animator) {
+                val restX = root.scaleX
+                val restY = root.scaleY
                 root.animate().setListener(null)
                 root.scaleX = 1f
                 root.scaleY = 1f
                 root.translationX = 0f
                 root.pivotX = root.width / 2f
                 root.pivotY = root.height / 2f
+                recordQselfEvent(
+                    "返回收尾 : ${if (cancelled) "取消" else "自然结束"} " +
+                        "收尾前比例=${(restX * 1000).roundToInt() / 1000f},${(restY * 1000).roundToInt() / 1000f}",
+                )
             }
         })
         .start()
