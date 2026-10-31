@@ -877,7 +877,7 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
                     edit.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.ime())?.bottom ?: 0
                 }.getOrDefault(0)
                 val safeBottom = if (imeBottom > 0) (4 * dp).toInt()
-                else if (shortcutHidden) maxOf(navBottom, (6 * dp).toInt())
+                else if (shortcutHidden) maxOf(navBottom, (8 * dp).toInt())
                 else (origGrandPadding?.get(3) ?: 0)
                 val gpl = origGrandPadding?.get(0) ?: inputRoot.paddingLeft
                 val gpt = origGrandPadding?.get(1) ?: inputRoot.paddingTop

@@ -601,7 +601,7 @@ private fun float(bar: ViewGroup) {
     (bar.parent as? ViewGroup)?.clipChildren = false
     val dp = bar.dp
     (bar.parent as? ViewGroup)?.let { barTouchHosts[it] = WeakReference(bar) }
-    bar.elevation = 10 * dp
+    bar.elevation = 12 * dp
     bar.outlineAmbientShadowColor = if (night()) 0x33000000 else 0x1A000000
     bar.outlineSpotShadowColor = bar.outlineAmbientShadowColor
     // 胶囊只包住页签、居中：iOS 那样不是通栏。
@@ -900,7 +900,7 @@ private fun fit(tab: View) {
                 copyLayoutParams(ilp) to intArrayOf(iv.paddingLeft, iv.paddingTop, iv.paddingRight, iv.paddingBottom)
             }
             val hasLabel = text != null && text.visibility != View.GONE
-            val padTop = if (hasLabel) (6 * dp).roundToInt() else 0
+            val padTop = if (hasLabel) (8 * dp).roundToInt() else 0
             val targetGravity = if (hasLabel) 1 else 0
             runCatching { tabDragSetGravityMethod?.invoke(iv, targetGravity) }
             if (ilp.width != ViewGroup.LayoutParams.MATCH_PARENT || ilp.height != ViewGroup.LayoutParams.MATCH_PARENT ||
@@ -916,7 +916,7 @@ private fun fit(tab: View) {
         val tlp = tv.layoutParams as? ViewGroup.MarginLayoutParams
         if (tlp != null) {
             state?.tabTexts?.getOrPut(tv) { copyLayoutParams(tlp) }
-            val btm = (6 * dp).roundToInt()
+            val btm = (8 * dp).roundToInt()
             if (tlp is RelativeLayout.LayoutParams) {
                 tlp.addRule(RelativeLayout.CENTER_HORIZONTAL, RelativeLayout.TRUE)
                 tlp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM, RelativeLayout.TRUE)
@@ -2111,7 +2111,7 @@ private fun aioHeader() {
             }
             if (unread != null) {
                 val uw = unread.measuredWidth; val uh = unread.measuredHeight
-                val ux = (geom.leftPill.right - (10 * dp).roundToInt() - uw).coerceAtLeast(geom.leftPill.left + (28 * dp).roundToInt())
+                val ux = (geom.leftPill.right - (12 * dp).roundToInt() - uw).coerceAtLeast(geom.leftPill.left + (28 * dp).roundToInt())
                 val uy = geom.leftPill.centerY() - uh / 2
                 unread.layout(ux, uy, ux + uw, uy + uh)
             }
@@ -2125,7 +2125,7 @@ private fun aioHeader() {
             state.titleTv?.let { tv ->
                 val rawTitleW = (titleTextW - tailW - earW + (2 * dp).roundToInt()).coerceAtLeast(0)
                 val tw = minOf(maxOf(tv.measuredWidth, rawTitleW), maxTitleW)
-                val th = tv.measuredHeight.coerceAtLeast((22 * dp).roundToInt())
+                val th = tv.measuredHeight.coerceAtLeast((24 * dp).roundToInt())
                 tv.gravity = Gravity.START or Gravity.CENTER_VERTICAL
                 tv.measure(
                     View.MeasureSpec.makeMeasureSpec(tw, View.MeasureSpec.EXACTLY),
@@ -2135,7 +2135,7 @@ private fun aioHeader() {
                 tv.layout(geom.textLeft, ty, geom.textLeft + tw, ty + th)
                 var curRight = geom.textLeft + tw
                 tail?.let { tl ->
-                    val tlh = tl.measuredHeight.coerceAtLeast((18 * dp).roundToInt())
+                    val tlh = tl.measuredHeight.coerceAtLeast((20 * dp).roundToInt())
                     tl.measure(
                         View.MeasureSpec.makeMeasureSpec(tailW, View.MeasureSpec.EXACTLY),
                         View.MeasureSpec.makeMeasureSpec(tlh, View.MeasureSpec.EXACTLY),
@@ -2155,7 +2155,7 @@ private fun aioHeader() {
             if (hasSub) {
                 var sx = geom.textLeft
                 val sy = geom.centerPill.top + (24 * dp).roundToInt()
-                val sh = (18 * dp).roundToInt()
+                val sh = (20 * dp).roundToInt()
                 subIcon?.let { ic ->
                     val iw = ic.measuredWidth; val ih = ic.measuredHeight
                     val iy = sy + (sh - ih) / 2
@@ -2186,8 +2186,8 @@ private fun aioHeader() {
                 val rx = geom.rightPill.centerX() - rw / 2; val ry = geom.rightPill.centerY() - rh / 2
                 rv.layout(rx, ry, rx + rw, ry + rh)
             } else if (rightViews.size > 1) {
-                val slotW = (38 * dp).roundToInt()
-                var slotLeft = geom.rightPill.left + (6 * dp).roundToInt()
+                val slotW = (40 * dp).roundToInt()
+                var slotLeft = geom.rightPill.left + (8 * dp).roundToInt()
                 for (rv in rightViews) {
                     val rw = rv.measuredWidth; val rh = rv.measuredHeight
                     val rx = slotLeft + (slotW - rw) / 2; val ry = geom.rightPill.centerY() - rh / 2

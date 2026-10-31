@@ -140,7 +140,7 @@ fun knob(bar: View) {
                 outline.setRoundRect(inset,inset,view.width-inset,view.height-inset,32*dp)
             }
         }
-        clipToOutline = false; elevation = 10 * dp
+        clipToOutline = false; elevation = 12 * dp
         outlineAmbientShadowColor = if (night()) 0x33000000 else 0x1A000000
         outlineSpotShadowColor = outlineAmbientShadowColor
         val glass = Glass(this, kernelButton = true)
@@ -459,7 +459,7 @@ fun nativeMessageMenu() {
                         list.setPadding(pad, pad, pad, pad)
                         list.minimumWidth = (196 * dp).roundToInt()
                         val rowH = (48 * dp).roundToInt()
-                        val padX = (18 * dp).roundToInt()
+                        val padX = (20 * dp).roundToInt()
                         for (cell in items) {
                             (cell.parent as? ViewGroup)?.removeView(cell)
                             // 原生 q()->r()/s()/t() 会在 p() 返回后覆盖 setPadding(0, D=16dp, 0, D=16dp)，在此归零纵向内边距防止文字下部被截断。
@@ -497,7 +497,7 @@ fun nativeMessageMenu() {
             cell.gravity = Gravity.CENTER_VERTICAL
             cell.minimumHeight = (48 * dp).roundToInt()
             cell.minimumWidth = (188 * dp).roundToInt()
-            val padX = (18 * dp).roundToInt()
+            val padX = (20 * dp).roundToInt()
             cell.setPadding(padX, 0, padX, 0)
             for (i in 0 until cell.childCount) {
                 when (val child = cell.getChildAt(i)) {
@@ -523,7 +523,7 @@ fun nativeMessageMenu() {
                 }
             }
         }
-        val itemRadii = FloatArray(8) { 6 * dp }
+        val itemRadii = FloatArray(8) { 8 * dp }
         cell.background = menuPress(dp, danger = danger, radii = itemRadii)
         trackerFor(menu).track(cell)
         out
@@ -561,7 +561,7 @@ private fun aboutQself(ctx: android.content.Context) {
         }
         textSize = 13f
         setTextColor(if (night()) 0xFFE8EEF7.toInt() else 0xFF1C1C1E.toInt())
-        setPadding((18 * dp).toInt(), (10 * dp).toInt(), (18 * dp).toInt(), (6 * dp).toInt())
+        setPadding((20 * dp).toInt(), (12 * dp).toInt(), (20 * dp).toInt(), (8 * dp).toInt())
         setTextIsSelectable(true)
     }
     AlertDialog.Builder(ctx)
@@ -609,10 +609,10 @@ private fun sheet(anchor: View) {
     // 面板只提供玻璃材质；按压反馈由各项自己的状态背景负责，不能驱动整卡高亮。
     val card = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL; isClickable = true
-        val radius = 22 * dp
+        val radius = 24 * dp
         background = Glass(this, radius, kernelSurface = true); outlineProvider = capsule(radius); clipToOutline = true
         elevation = 8 * dp
-        setPadding((10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt(), (6 * dp).toInt())
+        setPadding((12 * dp).toInt(), (12 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt())
         scaleX = 0.94f; scaleY = 0.94f
     }
     var closing = false
@@ -637,10 +637,10 @@ private fun sheet(anchor: View) {
         val cell = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             minimumHeight = (64 * dp).toInt()
-            setPadding((6 * dp).toInt(), (7 * dp).toInt(), (6 * dp).toInt(), (7 * dp).toInt())
+            setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
             contentDescription = feature.name + "，" + feature.desc
-            addView(View(ctx).apply { background = mark }, LinearLayout.LayoutParams((18 * dp).toInt(), (18 * dp).toInt()).apply {
-                marginEnd = (6 * dp).toInt()
+            addView(View(ctx).apply { background = mark }, LinearLayout.LayoutParams((20 * dp).toInt(), (20 * dp).toInt()).apply {
+                marginEnd = (8 * dp).toInt()
             })
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL; addView(title); addView(desc)
@@ -677,7 +677,7 @@ private fun sheet(anchor: View) {
     fun groupHeading(text: String) = TextView(ctx).apply {
         this.text = text; textSize = 15f; setTextColor(ink); gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (16 * dp).toInt(), 0, (6 * dp).toInt())
+        setPadding((8 * dp).toInt(), (16 * dp).toInt(), 0, (8 * dp).toInt())
     }
     for ((group, list) in featuresByGroup()) {
         grid.addView(groupHeading(group))
@@ -695,7 +695,7 @@ private fun sheet(anchor: View) {
     grid.addView(TextView(ctx).apply {
         text = "勾选仅表示配置开启，不代表效果已验证。部分功能需重进页面或重启 QQ（结束进程只结束当前进程）；恢复默认也遵循此规则。"
         textSize = 12f; setTextColor(sub)
-        setPadding((6 * dp).toInt(), 0, (6 * dp).toInt(), (8 * dp).toInt())
+        setPadding((8 * dp).toInt(), 0, (8 * dp).toInt(), (8 * dp).toInt())
     }, 0)
     card.addView(ScrollView(ctx).apply { isFillViewport = false; addView(grid) },
         LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -704,7 +704,7 @@ private fun sheet(anchor: View) {
         val dangerInk = if (night()) 0xFFFF453A.toInt() else 0xFFD70015.toInt()
         text = label; textSize = 13f; gravity = Gravity.CENTER; setTextColor(if (danger) dangerInk else ink)
         minimumHeight = (48 * dp).toInt()
-        setPadding((10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt())
+        setPadding((12 * dp).toInt(), (12 * dp).toInt(), (12 * dp).toInt(), (12 * dp).toInt())
         background = if (danger) menuPress(dp, danger = true) else menuPress(dp)
         setOnClickListener { body() }
         sheetTracker.track(this)
@@ -713,19 +713,19 @@ private fun sheet(anchor: View) {
         text = "消息外观"; textSize = 15f; setTextColor(ink)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (16 * dp).toInt(), 0, (6 * dp).toInt())
+        setPadding((8 * dp).toInt(), (16 * dp).toInt(), 0, (8 * dp).toInt())
     })
     val cornerLabel = TextView(ctx).apply {
         textSize = 13f; setTextColor(ink)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+        setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (2 * dp).toInt())
     }
     grid.addView(TextView(ctx).apply {
         text = "消息（头像 / 气泡）"; textSize = 13.5f; setTextColor(sub)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (14 * dp).toInt(), 0, (2 * dp).toInt())
+        setPadding((8 * dp).toInt(), (16 * dp).toInt(), 0, (2 * dp).toInt())
     })
     grid.addView(cornerLabel)
     val radiusSeek = android.widget.SeekBar(ctx).apply {
@@ -747,13 +747,13 @@ private fun sheet(anchor: View) {
         textSize = 13f; setTextColor(ink)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+        setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (2 * dp).toInt())
     }
     grid.addView(TextView(ctx).apply {
         text = "玻璃"; textSize = 13.5f; setTextColor(sub)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (14 * dp).toInt(), 0, (2 * dp).toInt())
+        setPadding((8 * dp).toInt(), (16 * dp).toInt(), 0, (2 * dp).toInt())
     })
     grid.addView(blurLabel)
     val blurSeek = android.widget.SeekBar(ctx).apply {
@@ -776,7 +776,7 @@ private fun sheet(anchor: View) {
         textSize = 13f; setTextColor(ink)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+        setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (2 * dp).toInt())
     }
     grid.addView(bubbleCornerLabel)
     val bubbleCornerSeek = android.widget.SeekBar(ctx).apply {
@@ -799,7 +799,7 @@ private fun sheet(anchor: View) {
         textSize = 13f; setTextColor(ink)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+        setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (2 * dp).toInt())
     }
     grid.addView(bubblePadLabel)
     val bubblePadSeek = android.widget.SeekBar(ctx).apply {
@@ -822,13 +822,13 @@ private fun sheet(anchor: View) {
         text = "顶栏"; textSize = 13.5f; setTextColor(sub)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (14 * dp).toInt(), 0, (2 * dp).toInt())
+        setPadding((8 * dp).toInt(), (16 * dp).toInt(), 0, (2 * dp).toInt())
     })
     val safeShiftLabel = TextView(ctx).apply {
         textSize = 13f; setTextColor(ink)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+        setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (2 * dp).toInt())
     }
     grid.addView(safeShiftLabel)
     val safeShiftSeek = android.widget.SeekBar(ctx).apply {
@@ -851,14 +851,14 @@ private fun sheet(anchor: View) {
         text = "时间格式"; textSize = 13.5f; setTextColor(sub)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (14 * dp).toInt(), 0, (2 * dp).toInt())
+        setPadding((8 * dp).toInt(), (16 * dp).toInt(), 0, (2 * dp).toInt())
     })
     val format = android.widget.EditText(ctx).apply {
         setText(prefs.getString(TIME_PATTERN, "HH:mm")); textSize = 14f; setTextColor(ink)
         hint = "时间格式，例如 MM-dd HH:mm:ss"; setHintTextColor(sub); isSingleLine = true
         gravity = Gravity.START or Gravity.CENTER_VERTICAL
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
+        setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
         contentDescription = "消息时间格式"
     }
     grid.addView(format)
@@ -867,7 +867,7 @@ private fun sheet(anchor: View) {
         textSize = 11.5f; setTextColor(sub)
         gravity = Gravity.START
         textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-        setPadding((6 * dp).toInt(), (2 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
+        setPadding((8 * dp).toInt(), (2 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
     })
     grid.addView(button("保存时间格式") {
         val value = format.text.toString()
@@ -883,7 +883,7 @@ private fun sheet(anchor: View) {
             textSize = 11.5f; setTextColor(sub)
             gravity = Gravity.END
             textAlignment = View.TEXT_ALIGNMENT_VIEW_END
-            setPadding((6 * dp).toInt(), (2 * dp).toInt(), (6 * dp).toInt(), (6 * dp).toInt())
+            setPadding((8 * dp).toInt(), (2 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
         })
         addView(button("导出全量日志（合并去重）") {
             exportFullQqLog(ctx, activity)

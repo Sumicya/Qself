@@ -394,7 +394,7 @@ private class BubbleSurface(
         } else {
             if (night) 0xFF222D3D.toInt() else 0xFFFFFFFF.toInt()
         }
-        val pad5 = (5 * dp).roundToInt()
+        val pad5 = (4 * dp).roundToInt()
         val pad = if (store() != null) (bubblePaddingDp() * dp).roundToInt() else pad5
         val curDrawable = drawable
         if (curDrawable == null) {
