@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2026-10-31（二十五）— 图标换成自适应：加 monochrome，ColorOS 圆环里不再有方形硬边
+
+- 原来只有一枚 `res/drawable/icon.xml`（108dp 矢量，深底 + 描边放大镜），manifest 直接拿它当 `android:icon`。
+  这种写法在桌面会被塞进一个方形／圆角方形里，各家启动器的形状和缩放都不归我们管。
+- 现在拆成三层：`ic_launcher_background.xml`（108dp 满屏 `#0F1115`）、`ic_launcher_foreground.xml`
+  （放大镜绕 (54,54) 缩 0.62，描边改纯白）、`mipmap-anydpi-v26/ic_launcher.xml` 与 `ic_launcher_round.xml`
+  （background / foreground / monochrome 三层都指向前两个 vector，monochrome 用前景）。
+  manifest 改 `@mipmap/ic_launcher` 并补 `android:roundIcon="@mipmap/ic_launcher_round"`，旧 `drawable/icon.xml` 删除。
+- 前景安全区是算过的，不是手感：镜圈外缘 16.74dp + 半描边 2.79 = 19.53dp，手柄末端 (71.36,71.36) 离中心
+  24.55 + 2.79 = 27.34dp，都在自适应图标 66dp 安全圆（半径 33dp）以内，圆形／水滴／圆角方形怎么裁都切不到镜身。
+- 只有 `anydpi-v26` 一份：`minSdk = 36`，没有 API 26 以下的设备要兜底。主题图标（ColorOS 的图标换肤）平台接口
+  不开放，不做，也不写进 README 当卖点。
+
 ## 2026-10-31（二十四）— 风格契约收敛：间距收到 4dp 栅格、颜色只留中性两档、圆角去掉中间值
 
 - 间距：`N * dp` 里不是 4 的倍数、且大于 3dp 的字面量，全部就近收到 4 的倍数（正中时向上：5→4、6→8、7→8、
@@ -88,16 +101,3 @@
 - 未验证（带命令）：本沙箱取不到产物，`curl https://productionresultssa13.blob.core.windows.net/` 返回 `000`，
   `gh run download` 两次都是 EOF——这台机器访问不了 Azure Blob，跟仓库无关。在你机器上跑 README 第 1 条那条命令即可验证，约 1 分钟。
 
-## 2026-10-31（二十）— 第二个未登记开关：`快捷栏隐藏` 把输入区钉在「快捷栏已收起」分支
-
-- 事实（`Input.kt` 872）：`shortcutHidden = on("快捷栏隐藏") || strip 为 null || 不可见 || 高度 ≤0`。这个键从
-  2026-10-22 `4bf38dad` 起就在读，但 `features` 表里从来没有它；`on()` 对未登记键取默认 true，于是
-  `shortcutHidden` 恒为 true —— 快捷栏可见时也不会走「按 QQ 原始内边距」那一支。
-- 处置（不猜真机）：键名改成说清行为的「输入区按导航栏留白」并登记进 `features`（默认开），
-  `featureGroups` 的「输入与面板」补位；默认值等于改前行为，**真机上的底部留白一个像素都没动**。
-- 防护（`Hook.kt`）：`on()` 读到未登记的名字时，每个进程只写一行 `开关未登记 : 名字（清单里没有，按默认开启）`。
-  这类错以前只能靠肉眼看代码，现在会在 logcat 里自己露头；本轮扫完全仓 `on("…")` 的 17 个键，未登记 0。
-- 自证：`tools/check.sh` 编译 137 个类、80 条测试全过、`Ran 8 tests OK`；脚本解析 `Qself.kt` 得
-  features 33 条、分组 33 条、未分组 0、组里多余 0、重复 0。
-- 未做的判断（带命令）：快捷栏可见时该用哪种留白要真机对比 —— 装这一版，聊天页让快捷栏可见，
-  关掉该开关后看输入区底边与快捷栏的间距，10 分钟内可判；我没动那一支，避免无图改外观。
