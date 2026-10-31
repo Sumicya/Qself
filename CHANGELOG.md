@@ -11,8 +11,11 @@
   `ValueAnimator.cancel()` → `endAnimation()` → `notifyEndListenersFromEndAnimation(...)`
   （`core/java/android/animation/ValueAnimator.java:1177-1199`、`:1292-1317`），所以复位一定跑到；
   回调里先 `setListener(null)` 再复位，不做无谓的二次动画。
-- 读数（同一命令）：`grep -c "withEndAction" app/src/main/kotlin/sumicya/qself/Looks.kt` → 改前 `2`、改后 `0`
-  （剩下的一处在 `Knob.kt:626`，设置面板关闭时移除视图，与页面动画无关，未动）。
+- 读数（两条命令分别跑，别混）：`git show <rev>:…/Looks.kt | grep -c "withEndAction"`
+  → 改前 `93702fef` **3**（2 处代码 + 1 处注释）、改后 `e6bff7c6` **3**（全是注释），**总数没变**；
+  `… | grep -E "withEndAction" | grep -vcE "^\s*//"` → 改前 **2**、改后 **0**，这才是「调用点清零」。
+  更正：这一条原先写「`grep -c` → 2 → 0」，把调用点数当成了含注释的总数，数与命令对不上，现改正。
+  另 `Knob.kt:627` 有一处代码调用（`dim.animate()…withEndAction`），关设置面板时移除视图，与页面动画无关，未动。
   `tools/check.sh` → `compiled: 138 classes`（两个匿名监听器各多一个类，改前 136）/ `74 tests passed` / `OK`。
 - 真机读数（主人手机 `dumpsys gfxinfo 15783 framestats`，78 帧 / 642ms / 帧间隔中位 8.23ms 即 121.6Hz）：
   总帧时中位 9.46ms、P90 12.13ms；拆开看「遍历→开始画」中位 0.76ms（只有 1 帧超 4ms，最差 13.12ms）、
