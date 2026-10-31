@@ -609,8 +609,9 @@ private fun sheet(anchor: View) {
     // 面板只提供玻璃材质；按压反馈由各项自己的状态背景负责，不能驱动整卡高亮。
     val card = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL; isClickable = true
-        val radius = 24 * dp
-        background = Glass(this, radius, kernelSurface = true); outlineProvider = capsule(radius); clipToOutline = true
+        // 风格契约：圆角只留「全圆」与「零」两种。这张面板是小屏上占大半屏的滚动卡，全圆会变成胶囊，
+        // 所以收成零（直角）；要改回全圆，把下面两个 0f 换成 Float.MAX_VALUE 即可。
+        background = Glass(this, 0f, kernelSurface = true); outlineProvider = capsule(0f); clipToOutline = true
         elevation = 8 * dp
         setPadding((12 * dp).toInt(), (12 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt())
         scaleX = 0.94f; scaleY = 0.94f

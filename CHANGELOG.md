@@ -13,6 +13,15 @@
   `grep -rn "Color.WHITE" app/src/main/kotlin | wc -l` → 改前 `2`、改后 `0`；全仓颜色字面量集合
   （排除 `0x7f…` 资源 id）改前改后都是 `58` 个、逐个相同。另三处 `#RRGGBB` 落在注释里，是记录 QQ 原生
   顶栏与父容器底色的事实（`#25272d`、`#000000`、`#1b1c1e`，都带资源 id），不是我们的硬编码，未动。
+- 圆角：`Knob.kt` 设置面板卡片的 `val radius = 24 * dp`（原 22dp，被间距那条先收到 24）改成 `0f` 直角，
+  `outlineProvider` 同步 `capsule(0f)`。契约只留「全圆」与「零」；这张卡在小屏上占大半屏、内容是滚动列表，
+  全圆会把它变成胶囊，所以取零（要改回全圆，把两个 `0f` 换成 `Float.MAX_VALUE` 即可）。读数：
+  `grep -rn "val radius = " app/src/main/kotlin | wc -l` → 改前 `2`（面板卡片 22dp、头像圆角函数），改后 `1`
+  （只剩 `avatarCorner(size, percent)`；头像圆角是用户可调功能，不动）。其余半径要么是 0，要么是 4 的倍数
+  （`cornerRadius = 12 * dp`、`Glass(scroll, 12 * dp)`、`itemRadii { 8 * dp }`），气泡圆角 17dp 与头像圆角同属
+  用户可调项（滑条 0–32），不在这一类。
+- 更正一处点数：任务里点名的 `Looks.kt:2128` 的 `22 * dp` 不是圆角，是标题 `TextView` 的最小高度
+  （`th = tv.measuredHeight.coerceAtLeast((24 * dp).roundToInt())`，已由间距那条收到 24dp），本轮不改它的语义。
 
 ## 2026-10-31（二十三）— 连发头像改成 NagramXF 的「底边那条画」：删掉整套浮绘，少 404 行
 
