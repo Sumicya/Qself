@@ -3208,13 +3208,20 @@ private fun playEnter(v: View, source: String) {
     v.animate().scaleX(1f).scaleY(1f)
         .setDuration(ENTER_MS)
         .setInterpolator(android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f))
-        .withEndAction {
-            v.scaleX = 1f
-            v.scaleY = 1f
-            v.translationX = 0f
-            v.pivotX = v.width / 2f
-            v.pivotY = v.height / 2f
-        }
+        // 收尾不能写在 withEndAction 里：ViewPropertyAnimator 被 cancel 时会把 endAction 从表里删掉
+        //（AOSP ViewPropertyAnimator.java:1091-1096），页面就永久停在 0.86/0.90 的半截，
+        // 于是下一次进这个页面看到的是「缩着、四周留边」。setListener 的 onAnimationEnd 在 cancel
+        // 之后仍会回调（ValueAnimator.cancel → endAnimation → notifyEndListeners），用它收尾才收得干净。
+        .setListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: android.animation.Animator) {
+                v.animate().setListener(null)
+                v.scaleX = 1f
+                v.scaleY = 1f
+                v.translationX = 0f
+                v.pivotX = v.width / 2f
+                v.pivotY = v.height / 2f
+            }
+        })
         .start()
     recordQselfEvent(
         "页面展开 : 来源=$source 尺寸=${v.width}x${v.height} " +
@@ -3277,13 +3284,17 @@ private fun backSettle(root: View) {
     root.animate().scaleX(1f).scaleY(1f).translationX(0f)
         .setDuration(160L)
         .setInterpolator(android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f))
-        .withEndAction {
-            root.scaleX = 1f
-            root.scaleY = 1f
-            root.translationX = 0f
-            root.pivotX = root.width / 2f
-            root.pivotY = root.height / 2f
-        }
+        // 同上：withEndAction 会在 cancel 时被丢弃，改用 setListener 才保证复位跑到。
+        .setListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: android.animation.Animator) {
+                root.animate().setListener(null)
+                root.scaleX = 1f
+                root.scaleY = 1f
+                root.translationX = 0f
+                root.pivotX = root.width / 2f
+                root.pivotY = root.height / 2f
+            }
+        })
         .start()
 }
 

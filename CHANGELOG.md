@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2026-10-31（二十八）— 打开动效的收尾改用 setListener：cancel 不再把页面留在半截
+
+- 病灶比上一笔更靠里。`playEnter` 与 `backSettle` 都把复位写在 `withEndAction` 里，而
+  **`ViewPropertyAnimator.cancel()` 会把 endAction 从 `mAnimatorOnEndMap` 里删掉**
+  （AOSP `core/java/android/view/ViewPropertyAnimator.java:1091-1096`；文档 `:818-820` 也写明「取消则 endAction 不跑」）。
+  上一笔加的「进动画前 `translationX = 0f`」只补了位移，`scale` 与 `pivot` 仍只在 endAction 里复位，
+  于是**任何一次取消都把页面永久留在 0.86/0.90 的半截**——下一次进这一页看到的就是缩小、四周留边。
+- 改法：两处都换成 `setListener(AnimatorListenerAdapter)` 的 `onAnimationEnd`。取消路径**不会**丢它：
+  `ValueAnimator.cancel()` → `endAnimation()` → `notifyEndListenersFromEndAnimation(...)`
+  （`core/java/android/animation/ValueAnimator.java:1177-1199`、`:1292-1317`），所以复位一定跑到；
+  回调里先 `setListener(null)` 再复位，不做无谓的二次动画。
+- 读数（同一命令）：`grep -c "withEndAction" app/src/main/kotlin/sumicya/qself/Looks.kt` → 改前 `2`、改后 `0`
+  （剩下的一处在 `Knob.kt:626`，设置面板关闭时移除视图，与页面动画无关，未动）。
+  `tools/check.sh` → `compiled: 138 classes`（两个匿名监听器各多一个类，改前 136）/ `74 tests passed` / `OK`。
+- 真机读数（主人手机 `dumpsys gfxinfo 15783 framestats`，78 帧 / 642ms / 帧间隔中位 8.23ms 即 121.6Hz）：
+  总帧时中位 9.46ms、P90 12.13ms；拆开看「遍历→开始画」中位 0.76ms（只有 1 帧超 4ms，最差 13.12ms）、
+  「发命令→交换」中位 3.38ms、「交换→完成」中位 2.39ms。**最慢的一帧 23.74ms 里 13.12ms 花在遍历上**，
+  即掉这一帧主要不是 GLASS 合成，是页面那一帧的布局/绘制；这条只作记录，尚未定位到具体视图。
+
 ## 2026-10-31（二十七）— 打开动效：清掉上一次返回手势留下的横向位移
 
 - 症结在 `Looks.kt` 的 `playEnter`：它只把 `scale` 和 `pivot` 摆回起点，没管 `translationX`。而返回手势
