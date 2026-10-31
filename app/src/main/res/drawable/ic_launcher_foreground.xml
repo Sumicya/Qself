@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- 前景层：放大镜缩到 0.62，绕中心（54,54）缩。最远点是手柄末端 (71.4,71.4) 再加半个描边 2.8，
+         离中心 27.3dp，落在 66dp 安全圆（半径 33dp）里，任何裁切形状都不会切到镜身。 -->
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.62" android:scaleY="0.62">
+        <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="9"
+            android:pathData="M54,27a27,27 0 1,0 0.01,0z M68,68l14,14" />
+    </group>
+</vector>

@@ -1,82 +1,210 @@
 # Qself
 
-给 NT QQ 的一个 LSPosed 模块：**自由、简单、现代、原生**。装上即全部生效，不联网、没有第三方库、没有一个 `.so`。
-开关不在模块里，在 QQ 主页底栏胶囊旁边那颗玻璃圆钮里：点开是一整块玻璃大卡片，一行两张卡、
-画出来的 ✓/–/✗ 加一句描述（✗ = 这版 QQ 没装上），存进 QQ 自己的 SharedPreferences。
+给 NT QQ 的一个 LSPosed 模块：**自由、简单、现代、原生**。功能默认开启，实际生效受 QQ 版本与对象生命周期限制；不联网、没有第三方库、没有一个 `.so`。
+开关位于 QQ 主页底栏旁独立的 76×64dp 玻璃三线设置短胶囊中。菜单在入口附近展开，宽不超过 360dp、高不超过 520dp；自动避让系统栏和键盘，空间不足时缩小并在安全区内定位。单列列表、状态说明与操作按钮都可在面板内部滚动。
+菜单、输入区与底栏共享模糊、折射和罩色路径，按用途保留不同圆角，不把阅读面板做成大胶囊。勾选只表示配置已开启，✗ 表示当前进程记录了安装失败，不表示效果已经验证。部分功能需要重进页面或重启 QQ；恢复默认同样受此限制。“结束进程”直接结束当前进程，不保证 QQ 其他进程退出。偏好存进 QQ 自己的 SharedPreferences。
+
+## 要求
 
 只对着一台机器写：QQ 9.2.10 · Android 16 · LSPosed 2.x（libxposed API 102）。类名、方法名全部写死，
-但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，176 条）——换版本先看那张表红哪条，别猜。
+但每一个都在 CI 里拿真 dex 逐条核过（[`tools/symbols.txt`](tools/symbols.txt)，702 条）——换版本先看那张表红哪条，别猜。
 
-## 做了什么
+## 功能
 
 外观（照着 [NagramXF](https://github.com/Keeperorowner/NagramXF) 那套长相来）
-- 首页底栏浮成一颗居中的液态玻璃胶囊（每个页签 76dp，只包住页签）：不模糊，系统 `RenderEffect` + AGSL 做边缘折射、
-  贴边高光、提饱和、淡色罩，没有描边；选中项是一块弹着滑过去的亮胶囊
-- **Monet 取色**：玻璃的罩色、选中圆、圆钮的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
+- 首页底栏按 [KernelSU 固定源码](https://github.com/tiann/KernelSU/tree/3186a2fe2107f7170e06dab7aa157eb10ae7759f/manager/app/src/main/java/me/weishu/kernelsu/ui/component) 与 [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass/tree/65ab177e90e5c1d8c62e70cf7755841982da65f6) `InteractiveHighlight` 移植到原生 View：64dp 栏 / 最小 76dp 页签 / 56dp 指示器、默认 `1dp` 模糊（可在面板通过「玻璃模糊」`0~15dp` 滑条实时调节）、按压色散、**全仓零描边（`Paint.Style.STROKE` 全部撤除）**、长按/触摸驱动 `INTERACTIVE_HIGHLIGHT_SHADER` + `BlendMode.PLUS` 径向柔光高光（`0.08f * hp` 底光 + `0.15f * hp` `smoothstep(r, r*0.5, d)` 径向高光，`r = min(w, h) * 1.5f`）和解析弹簧。`BarState` 持久持有 `Glass` 并在 `settle(bar)`、`layoutListener` 与 `OnPreDraw` 中强制守护 `64dp` 高度与 `strip` 四周 `4dp` 对称内边距（防 `TabFrameControllerImpl#checkEnableTabAnim` 将底栏重置回 `54dp` 导致 `56dp` 选中胶囊向下溢出），`fit(tab)` 清零 `TabView` 四向内边距并将 `customView` 设为 `MATCH_PARENT × MATCH_PARENT`（`56dp`）、`TabDragAnimationView` `paddingTop = 8dp`、`mTabTextView` `bottomMargin = 4dp`，使未读数、图标与文字三层垂直分离且水平居中于页签中心，同时通过 `centeredBarTranslationX` 与 `drawListener` 同步 `knob(bar)` 使 `[底栏 + 12dp 间距 + Qself 按钮]` 整体在屏幕水平正中；右侧设置短胶囊 `MenuGlyph` 重写 `setTintList` 并按深浅色自动取色（浅色 `#1C1C1E` / 深色 `#FFFFFF` / Monet 强调色），且与底栏统一采用 `10dp` 柔和阴影（浅色 `0x1A000000` / 深色 `0x33000000`）。**未获本轮设备复验，不宣称一比一验收完成**。
+- **聊天顶栏、主页顶栏与二级页三胶囊布局（按 NagramXF `ActionBar.java` + `ChatActivity.java` 彻底剥离顶栏安全区背景、胶囊外间隙触摸直通与消息全屏穿底）**：照 NagramXF `ActionBar.setupGlass` + `ChatAvatarContainer`（`p = 6dp`、`s = 46dp`、`r = 23dp`、通过 `reducedSafeTop` 动态缩减 `sm1.u#k` / `sm1.u#a` / `QUISecNavBar#x()` / `MainResourceConfig#n` 顶部安全区高度）接入 `AIOUtil#b`/`A`/`C`/`D`（强制全屏透明叠层模式）、`AIOTitleVB`（`sm1.u` / `sm1.v` / `sm1.w` / `CenterVB`，覆盖 `H1`/`I1`/`w1`/`P1`/`X1`/`Y1`/`Z1`/`z1`/`A1`/`D1`/`C1`/`R1`/`S1`/`W1`/`h1`/`l1` 拦截 UI Handler 异步重设 `#25272d` 实色背景并隐藏 `sm1.u#d` `dividerLine` 与 `sm1.u#q` `upMask`）、`TopBlurVB`（`com.tencent.mobileqq.aio.reserve1.blur.f` `d: sm1.t -> a: QQBlurViewWrapper`）、`MaskVB`（`com.tencent.mobileqq.aio.reserve1.mask.b` `d: sm1.y -> a: View`）、`AIOMsgListGroup` + `EdgeTransparentView`（`h`）+ `AIORefreshLayout`（`AbsMsgListVB#m1`）+ `AIORecycleView`（`AIOMsgListVB#S2`）（全链路解裁切并清零 `EdgeTransparentView` 的 `i`/`m`/`D` 渐隐擦除，使消息全屏 `y = 0..2800` 顺滑滚过悬浮胶囊与状态栏下方）、`ViewGroup.dispatchTouchEvent`（胶囊外间隙直接返回 `false` 透传给底层消息列表滑动）、主页 `MainResourceConfig#n`/`p` + `TitleAreaHeadLayout#k` + `SimpleModeHelper#u`/`A`（隐藏 `0x7f0a6596` `mStatusTitleDivider`）+ `SkinnableRecycleView#dispatchDraw`（`f = false`）与二级页导航栏 `QUISecNavBar`（`SecNavBarState`，覆盖 `S`/`T`/`U`/`W`/`X`/`C`/`Q`/`R`/`Z`/`updateView`/`setBlur`/`setTitleBlurAlpha` 并清除 `Z` 按钮圆底），关闭或重置完整还原（待真机验收）。**状态栏安全区渐变**：主页顶栏容器 `0x7f0a6cfa` 与聊天页标题栏外层 `sm1.u#k` 自己的背景换成单层 `LinearGradient`（`1 - smoothstep`，顶端 `255` 不透明、底端 `0`，两端斜率为 0，13 个停靠点），内容从消息区滚上来时在这里淡出，不加第二层、不加描边；底色按同层实心底 → 窗口根 → `DecorView` 逐级取，挂载与 Skia 逐行读数各写一行日志。**顶栏安全区滑条**：`reducedSafeTop` 旧实现带 `origTop * 0.72f` 下限，真机 `statusBars=[0,141,0,0]` 时只能把 141px 压到 109px（等于没去掉），现已改为纯比例策略（见下条）。
+- **顶栏再下移（面板滑条 `0~48dp`，默认 `0dp` 即 QQ 原始位置；读取时上限 `96dp`）**：`reducedSafeTop(origTop, dp, offsetDp, edgePx)` 以状态栏／摄像头下沿为上限：`origTop` 比下沿小就按 QQ 原值走，量不到下沿（全屏页把状态栏让成 `0`）时同样退回原值，绝不把顶栏压到 `y = 0`；微调只在本值基础上往下加 `dp`。`ProtoTest` 断言 `reducedSafeTop(141, 1.9761429f, edgePx = 141) == 141`、`(+15.75dp) == 172`、`(+30dp) == 200`、`(origTop = 100, edgePx = 141) == 100`、`(edgePx = 0) == 141`、`(0) == 0`，`+400dp` 夹紧到 `141 + 96dp = 331px`。状态栏照常显示，不靠隐藏状态栏或把顶栏顶到 `y = 0` 换空间；上一版「顶栏安全区百分比」滑条已删除，`safeTopPercent()` 不再存在。主页 `Conversation` 的 `0x7f0a3245` 头像 `topMargin`、`0x7f0a6cfa` 顶栏容器 `translationY` 与 `0x7f0a0e96` 会话列表 `paddingTop` 由 `homeSafeArea` 同步同一个 `delta`，AIO 消息列表顶部内边距经 `aioSafeTopRemoved()` 同步减去同一段（真包 `238 = 141 + 97`）；每次安全区换算写一行全量日志（`MainResourceConfig#n orig=…px -> …px`、`AIO 顶栏 outer 顶部 …px -> …px`）便于真机核对。`26.10.24.3.3165` 那批真机日志对应的是「一路压到 0」的旧策略，已被本条取代。
+- **原生表情 / 相册 / 「+」附件面板玻璃化（`PanelGlassState`）与共享轴切换过渡（`页面过渡动效`）**：接入 `com.tencent.mobileqq.aio.panel.emoticon.c#onCreateView`、`com.tencent.mobileqq.aio.panel.photo.PhotoPanelVB#onCreateView` 与 `com.tencent.mobileqq.aio.panel.b#onCreateView`，将底部弹出的表情、相册与「+」附件面板容器替换为 `20dp` 圆角无描边液态玻璃材质；在 `TabFrameControllerImpl#updateUIAfterTabChange`、`AIOMsgListVB#onCreateView` 与 `Instrumentation#callActivityOnResume` 上实装「从点按处展开」的页面进入动效（`pageAnimations`：`scale 0.86 / 0.90 → 1`、`260ms`、`PathInterpolator(0.2f, 0f, 0f, 1f)`，原点取最后一次按下的位置并夹在 `15%` 至 `85%`，没有点按就落在中心；动画只在 RenderThread 跑，不动 alpha、不碰布局，每个页面根只播一次，页签、会话与群聊走同一条路径），返回手势经 `Activity#getOnBackInvokedDispatcher` 的包装件按系统进度把页面收拢（`scale 1 → 0.94`、横向最多 `10%` 宽、取消或提交都以 `160ms` 回位）。
+- 底栏角标按真实计数入口展开「99+」；底栏 QUIBadge 在 widget.d.a 转文字之前保留第 3 个参数的真实数量，数字宽度与左右内边距一同调整；底栏纯数字不画红底或边框，用完整矩阵在共同父坐标中校正，并显式居中绘字；上移半个数字字形高度，减少与图标重叠，不再混用窗口坐标与局部宽度（仍待设备验收）
+- **Monet 取色**：玻璃的罩色、选中项、设置短胶囊图标的颜色跟壁纸走（系统动态色 `system_accent1_*`，NagramX 的招牌）。
   关掉就退回原来那套写死的中性色
-- 聊天输入栏 Telegram 化：一颗悬浮玻璃胶囊 [表情 · 输入框 · +] 加右侧玻璃圆钮 麦克风⇄发送，
-  输入栏底色去掉、框里的 AI 星星藏掉，原来那条图标带收起
+- TG 输入栏：接入 NT 的 `InputEditTextVBDelegate.U`（`adorn.e#a` 编辑器与 `adorn.e#d` 发送按钮）、`AIOInputExpandableVB`（容器 `e` 与顶部分割线 `f`）、`compat.b`（`handleUIState` / `e` / `g` / `i` / `n` 全路径防回退）、`compat.e$b#f`（发送按钮原生半高圆角）、`BottomBlurVB`（底部通栏模糊隐藏）、`AIOShortcutBarVB`（`onCreateView` / `handleUIState` / `x1` / `y1` / `s1` 拦截异步背景回写）与 `PanelIconLinearLayout#f`（图标带重建同步），将真实 `AIOEditText` 与右侧 `AIOInputSendBtn`（含 `com.tencent.qui.smoothcorner.b#j` 圆角背景）分别独立按 `height / 2` 完全药丸化（`capsule()`），去除安全区实色背景后重定位输入区与聊天列表（`RecyclerView` `clipToPadding = false`），并在夜间模式主动提亮玻璃材质、输入框文字与全部快捷操作图标，保留原输入框、发送、语音、表情和附件按钮。保留用户原有开关选择，切换后立即还原/应用；图标只调整剩余间隙，不改按钮宽度与权重。输入与键盘效果待真机验收。
+- **状态栏渐变（模型渲染，非真机截图）**：`0..194` 那条安全区带子本身的 `alpha` 曲线与相邻行台阶；左半是改动前的实心底色与 y=194 的硬边，右半是单层 `LinearGradient`。设备侧读数由运行期日志 `状态栏渐变 : … Skia 读数 …` 给出，见 [docs/status-fade-194px.png](docs/status-fade-194px.png)。
 - 藏掉「频道」「动态」「小世界」页签
 - 聊天标题栏去掉一起听 / 一起看 / 群游戏那排；侧栏去掉打卡、天气、等级、会员、装扮、钱包一类的入口（数据源和视图两头都拦）
 - 隐藏好友聊天标题栏那行在线状态（在线 / 手机在线 / WiFi在线 / 忙碌 / 隐身…）
-- 统一气泡、统一字体、去头像挂件；昵称行只留名字（不显示群等级、头衔、成员等级、会员图标）
-- **屏蔽红点引导**：群红点、王者小队、群头衔、游戏中心红点、乐吧引导气泡、资料卡引导、虚拟形象角标一律不亮
-- **去会员等级**：资料卡上 SVIP / VIP / 大会员 / 大会员年费那排图标不画
+- 气泡统一、字体统一、隐藏头像挂件；开启气泡统一时，全部消息气泡保持四角全圆角（`17dp`，不切直角，与头像圆角滑块解耦），气泡四边内边距严格统一为 `5dp`（归零 `skin.padding.j` `a,b,c,d=0` 与 `skin.padding.h` `j,k,l,n,o=0, m=4dp`，递归清零内层包装视图冗余内边距、四向 `margin` 与 `57dp × 65dp` 最小宽高锁，并关闭 `TextView` 与 `FasterTextView#mIncludePad` 的 `includeFontPadding`）；被回复消息彻底清除 `0x7f0a5c31` 外框与左部竖条，与回复正文融为单一外层玻璃气泡，覆盖 `BaseMixContentComponent#C2`/`s2`、`AIOReplyComponent#C2`/`s2`/`K3`/`L3`、`AIOTextContentComponent#Z1`/`n2`、`TextMsgContent#H` 与 `AIOUnsuportContentComponent#Y1`；已移除“昵称只留名字”，保留 QQ 原昵称装饰。
+- **隐藏红点引导**：群红点、王者小队、群头衔、游戏中心红点、乐吧引导气泡、资料卡引导、虚拟形象角标一律不亮
+- **隐藏会员等级**：资料卡上 SVIP / VIP / 大会员 / 大会员年费那排图标不画
 
 聊天
-- 防撤回：私聊、群聊、重连补发的撤回都吞掉，被撤回的那条压成半透明，会话里插一条「xx 尝试撤回一条消息」灰字
-- 连发合并：同一人 5 分钟内连着发的消息，后面的不再画头像（占位留着）和昵称行，像 Telegram 那样成组
+- 防撤回：私聊、群聊、重连补发的撤回都吞掉，被撤回的那条压成半透明，会话里插一条「xx 尝试撤回一条消息」灰字；本机主动点击「撤回」时直接放行原生撤回流程，不拦截自身撤回。
+- **消息时间（置于消息容器外部下方以适配全部消息）**：通过 `AIOBubbleMsgItemVB#k1` 与全部内容组件 `d1` 将自定义格式时间（`ExternalStamp`）直接挂载于消息槽容器 `msgContent`（`0x7f0a11b9` `BubbleLayoutCompatPress` 垂直 `LinearLayout`）底部外侧（他人消息左对齐 `START`、自己消息右对齐 `END`），并将同容器兄弟内容根的 `MATCH_PARENT` 宽度转为 `WRAP_CONTENT`（避免 `LinearLayout.measureVertical` 的 `forceUniformWidth` 将图片、表情、转发卡片或短文本水平压窄为时间戳宽度），统一适配文字、图片、文件、引用、混排、语音、表情、卡片、视频、合并转发与不支持消息等全部类型，同时折叠会话顶部 `AIOTimestampComponent` 时间分隔槽。默认 `HH:mm`，在菜单「消息外观」输入自定义格式（内附左对齐格式码说明：`yyyy/yy` 年、`MM` 月、`dd` 日、`E` 星期、`HH` 24时、`hh` 12时、`a` 上下午、`mm` 分、`ss` 秒、`SSS` 毫秒，单引号包裹文字）。时间不会混入正文、复制内容或输入框，也不破坏气泡与卡片内部子 View 树；关闭、复用与热重载均完整还原。各类型实际视觉效果仍待真机验收。
+- **原生消息菜单纵向列表与设置面板随指高亮**：按 NagramXF `ActionBarPopupWindow` + `ActionBarMenuSubItem` 将 QQ 原生消息长按菜单 `QQCustomMenuExpandableLayout`（`p` / `l` / `H` / `G`）重排为 12dp 圆角玻璃纵向列表（行高 48dp、左右内边距 18dp、上下内边距清零、20dp 图标 + 12dp 间距 + 16sp 完整不截断文案、6dp 圆角按压高亮，隐藏原生暗色 `S: QQBlurViewWrapper` 与直接子级分割线 `View`，保持聊天列表 `T: mSourceView` 可见且 `C = 220dp` 不裁高），并与模块设置面板共用单有效项随指高亮、跨项移动、项外取消且松手不触发动作、展开态纵滑交还 `ScrollView`；「删除」「撤回」「结束进程」统一标记为警示红图文与按压态（待真机手势复验）。
+- **消息显示 At 对象**：点按群消息中的 `@名字` 打开对应资料卡；按元素顺序定位重复名字，保留原链接及正常长按/滑动。UID 无缓存映射时明确提示，`@全体成员` 不当作个人资料卡。
+- **头像圆角（普通聊天与聊天记录同步生效）**：菜单「消息外观」调整 0～50%；0% 为直角，50% 为圆形，默认 20%（仅控制头像，不联动气泡圆角）。同时拦截普通聊天 `RoundRectImageView#draw` 下的 `QQProAvatarDrawable#z`（跳过 `proavatar.j#b` / `proavatar.mask.a#a` 的 360° 圆形 `Path.addArc` 遮罩）、`com.tencent.mobileqq.proavatar.e$a#a`、`com.tencent.qqnt.avatar.meta.b$a#b`、`com.tencent.qqnt.avatar.b$a#i` 与 `BaseImageUtil#getCircleFaceBitmap`，交由 `RoundRectImageView#setCornerRadiusAndMode` 按圆角半径裁剪；切换或拖动滑块时清空 `m` 缓存重刷，关闭还原原半径与模式。
+- 连发合并（他人居左、自己居右含组首 ID、灰字居中、单条顶对齐、连发粘性浮动、长按头像 `@` 微震反馈、气泡圆角与边距滑条）：仅对气泡收发模板（`template.g` / `template.l`）套用行几何，居中灰字提示（`template.m` / `sm1.z`）保持原生居中且撤回变灰字时自动解绑；他人消息居左（头像左距 8dp、气泡左距 6dp、清零 `holder.c` / `nickSlot` / `MainNickNameBlock` / `contentSlot` 水平内边距使全类型组件共线于 `51dp`）、自己消息保持原生居右与右侧头像并在每组连发首条右对齐显示头衔+昵称 ID（续条折叠，全类型共线于 `right - 54dp`）；`RunLayout.apply` 在续条绑定时即刻隐藏重复原生头像，同发送人同日连续消息不再受 5 分钟断组限制，长按连发浮绘头像或原生头像触发 `@` 时附带 `HapticFeedbackConstants.LONG_PRESS` 轻触感反馈（`AIOAvatarContentComponent#w1`），且面板支持「气泡圆角」`0~32dp`（默认 `17dp`）与「气泡边距」`0~16dp`（默认 `5dp`）滑条实时调节。**尚无本轮设备复验，本次实现与离线检查不等于效果验收。**
+- **双击消息快速回应（`双击回应`）**：拦截 `TextPreviewApiImpl#openTextPreview` 与 `TextPreviewApiNtImpl#openTextPreview`，双击消息时通过 `AIOEmoReplyApiImpl#setEmojiLikes` 直接给该条消息贴上快捷回应表情（👍 `76`），不再弹出全屏文字预览页。
+- **语音倍速播放记忆与进度条直拖（`语音倍速`）**：挂钩 `AIOPttAudioPlayerManager`（`h:F`、`w`、`E`、`C8`）跨条记忆用户上次选择的语音播放倍速（不被单条播放完成后的 `C8` 重置回 `1.0x`），并在 `PttAudioWaveView` 构造时开启 `setCanSupportSlide(true)` 支持直接横向拖动语音波形进度条。
 - **回复不@**：回复消息时不再往输入框插「@昵称 」
-- **转发不限人数**：转发选人到 9 个就不再卡住，顶部「已选 N 人」跟着走
-- **左滑回复不设限**：卡片 (Ark) 消息也能左滑回复
+- **转发不限人数**：修正私有方法反射访问，转发选人不再卡 9 个；调用 QQ 原生搜索勾选同步及顶部计数刷新。仍需设备验证实际发送端限制。
+- **左滑回复**：卡片 (Ark) 消息也能左滑回复
 - 转发页一直显示好友 / 群 / 多选入口
 
 以上三条加防撤回那批都是从上游 [QAuxiliary](https://github.com/cinit/QAuxiliary) 同步过来的思路，落点重新按 9.2.10 的真 dex 核过。
 - 「+」面板只留正经附件，一起派对、礼物、直播间之类剔掉
-- 屏蔽轻互动特效与表情雨
+- 停止轻互动特效与表情雨
 
 自由化
+- **通知现代化（`通知现代化` / `Notify.kt`，默认开）**：在 `NotificationManager#notify` 落盘前，把 QQ 的消息通知换成 `BigTextStyle`——标题保留、正文展开成完整内容、时间显示打开；带自定义 `RemoteViews`（`contentView != null`）的通知一律放行不动，改动经 `chain.proceed(新参数)` 回填、不重调 `notify`，无递归；判断逻辑是纯函数 `notificationText()`，由 `ProtoTest` 覆盖展开、跳过已展开、超长截断三种情况，改样式失败时按原样发出。
 - 网页一律走系统 WebView，不加载 X5
 - 灯塔 (beacon) 与 StatisticCollector 的统计上报空转
 - 不初始化崩溃上报
+- **全量日志录制与一键导出（`全量日志` / `DiagLog.kt` / `LogMerge.kt`）**：挂钩 `com.tencent.qphone.base.util.QLog#isColorLevel`（开启 QQ 内部 UI/AIO/顶栏/底栏调试日志）与 `QLog#addLogItem(byte, String, int, String, Throwable)`，双环缓冲记录全量 QQ `QLog`、UI/AIO/顶栏专项 `QLog`、全部 Qself 钩子调用频次与前 10 次入参/返回值样本、未捕获崩溃栈、当前进程 `logcat -d`，并在主页/AIO/二级页自动抓取完整 `DecorView` 视图树快照（含每个 View 的类名、资源 ID、屏幕坐标、`padding`/`margin`、`clip`、背景 Drawable 颜色与 `EdgeTransparentView`/`SkinnableRecycleView` 内部状态）；设置面板底部提供「导出全量日志（合并去重）」按钮，一键复制到剪贴板、写入 `/sdcard/Download/qself-full-log.txt` 与 `/sdcard/Android/data/com.tencent.mobileqq/files/qself-full-log.txt` 并拉起系统分享面板。**反复导出只产生一个文件**：每次导出先把上一次的 `qself-full-log.txt` 读回，按小节合并去重（`[3]` 视图树快照按标题取并集、`[4][5][6]` 流式记录整条去重后按时间戳排序、上限 12000 条），环缓冲被挤掉的老记录会被捞回来；随后按 `DISPLAY_NAME LIKE 'qself-full-log%'` 清掉 MediaStore Downloads 里包括 `(1)(2)…` 在内的全部历史副本（别的应用写入的副本会弹一次系统授权框），最后只写回一个 `qself-full-log.txt`，报告头会写明「上次 N 字节 / 清理 M 个」；`LSPosed` 日志与 `logcat -s QselfDiag` 只吐本次新增记录数，重复导出不再刷屏（回放验证：真机 10 份日志逐份合并后单文件 4.36MB，`[6] 全量 QQ QLog` 由单份 3000 条累计到 9367 条）。
 
-## 用
+## 安装与使用
 
-1. Actions 里下载最新一次构建的 APK（或 `gh run download -R Sumicya/Qself`），安装
+1. 手机上拿包、装机、清干净，三条命令（全程用手机，不需要电脑；`gh` 先登录一次 `gh auth login`）：
+   ```sh
+   # 1. 下载到固定路径（同一产物重复下到同一目录会报 file exists，所以先删后建）
+   D=/storage/emulated/0/Download/selfs
+   rm -rf "$D"
+   mkdir -p "$D"
+   gh run download -R Sumicya/Qself -n "$(gh api repos/Sumicya/Qself/actions/artifacts --jq '.artifacts[0].name')" -D "$D"
+
+   # 2. 装：root 用下面这条，没 root 就在文件管理里点开那个 .apk
+   su -c "pm install -r $(find "$D" -name '*.apk' | head -1)"
+
+   # 3. 用完删干净
+   rm -rf "$D"
+   ```
+   包落在 `"$D"/<产物名>/<产物名>.apk`，想先看一眼就 `ls -l "$D"/*/*.apk`；当前最新那包是
+   `452944` 字节（2026-10-31 11:00 UTC+8 取自 artifact `Qself-26.10.31.7.371`）。`artifacts[0]` 就是最新一条（5 条产物的
+   `created_at` 从新到旧正好是接口返回顺序，jq 判 `. == (. | sort | reverse)` 为 `true`）；
+   不想用命令就点 Actions 里最新一次 `Build` 的 Artifacts。产物只留最近 5 个，更早的会被
+   `.github/scripts/cleanup.py` 删掉。下载下来的 apk 权限是 `600`（你自己的 `ls -l` 就是这样），
+   `su -c` 的 root 与文件管理都能读，不用改权限。
 2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开
 3. 主页底栏胶囊旁边那颗圆钮（右边放不下就在胶囊右上方）：点开勾选即时生效（钩子每次被调用都查开关）；
-   已经浮起来的底栏、排好的输入行要点「重启 QQ」才复原
+   输入栏开关可恢复原外观；从旧的搬移布局版本升级时必须强行停止 QQ 再打开。底栏关闭会还原布局、背景与内边距；菜单不拖动、宽度不变、只有限增高；底栏背景纵向拖动超过触摸阈值后转交 QQ 自己登记的内容页，由原生内容树分发；通过 TabFrameLayout.e 身份核对与 a() 获取，不按尺寸/滚动能力找列表，保留页签点击与徽标拖动；菜单支持恢复默认，✗ 项可查看安装失败原因
 4. 每个 QQ 进程启动时打一行日志，`logcat -s Qself` 或 LSPosed 管理器的日志页可见，形如
    `Qself <版本> @ com.tencent.mobileqq ✓系统WebView ✓防撤回 … ✗某功能(NoSuchMethodException: …)`
    —— ✗ 就是那个功能在这版 QQ 里找不到落点，其余不受影响。**把这一行贴回来就能修。**
 5. 之后换 APK 直接覆盖安装；当前仓库不保存正式签名私钥，正式签名 APK 不能从本仓库自动推导。
 
-## 结构
+## 构建
+
+本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）出 APK。
+从零复现一次构建：`gh workflow run build.yml -R Sumicya/Qself --ref arena/b08370a2-qself`，
+跑完用「安装与使用」第 1 条那三条命令取包装机。
+当前仓库不保存签名私钥；debug APK 使用 Android 默认 debug 签名，正式签名需由仓库外的安全签名环境提供。
+失败日志以 GitHub Actions 原始日志为准。
+本地没有 Android SDK 时用 `tools/check.sh` 做类型检查 + 跑 ProtoTest（第一次会拉工具链到 `~/.cache/qself-tc`）。
+版本号 `yy.m.d.当日序号.总序号`，按 git 提交数取，由 `build.yml` 在 CI 里算。
+
+### 核落点
+
+**改任何落点之前先跑 `tools/dexcheck.py`。**
+
+```sh
+git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
+python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 702 条全绿才算数
+python3 tools/ui_paths.py qq.apk                                   # 完整签名、字段读写和调用关系；不是设备验收
+python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
+```
+
+### 源码结构
+
+纯 Kotlin，十四个源码文件，没有第三方依赖、没有 `.so`、不联网。开关状态存 QQ 的 SharedPreferences「qself」，键就是功能名。
 
 ```
 app/src/main/kotlin/sumicya/qself/
   Qself.kt   入口：功能清单（也是开关列表）、按进程装、日志
   Hook.kt    libxposed 封装（hook / constant / afterNew / 反射读写字段方法）与开关读取
-  Knob.kt    主页那颗圆钮与开关面板（玻璃大卡片）
+  Knob.kt    主页那颗圆钮与开关面板（紧凑玻璃面板）
   Quiet.kt   自由化
   Chat.kt    聊天，含防撤回用的几十行 protobuf 读取、撤回灰字、连发合并、回复不@
   Looks.kt   外观：盯住每个 Activity 的视图树套规则
   Input.kt   TG 式输入栏
-  Glass.kt   液态玻璃 Drawable（RenderNode + AGSL + Monet 取色，底栏用时自带滑动亮胶囊）
-app/src/test/kotlin/sumicya/qself/ProtoTest.kt   防撤回判断的唯一一份可跑检查
+  Glass.kt   液态玻璃 Drawable；底栏、设置入口、菜单与输入区委托 KernelBar
+  KernelBar.kt   KernelSU 算法的无依赖 View 移植（着色器 / 弹簧 / 手势 / 生命周期）
+  MessageStyle.kt  消息行几何：头像圆角、气泡边距、外部时间、连发合并的绘制与触摸
+  DiagLog.kt    全量日志与界面树快照录制、一键导出
+  LogMerge.kt   导出日志的合并去重（纯 JVM，可离线回放真机日志）
+  Notify.kt     通知现代化：QQ 消息通知换成本代大文本样式
+  Perf.kt       Choreographer 帧率采样与每帧耗时归因（跨帧消息按真实时间切给每帧），导出日志里的卡顿数字
+app/src/test/kotlin/sumicya/qself/ProtoTest.kt   协议、分组、间距、菜单尺寸等纯逻辑回归
+app/src/test/python/                         反汇编与字段解码工具的纯函数回归（unittest）
 app/src/main/resources/META-INF/xposed/          libxposed 入口、module.prop、作用域
 tools/symbols.txt    落点表：代码依赖的每一个名字
 tools/dexcheck.py    拿真 dex 逐条核落点，顺带 lint 源码里没登记的名字
+tools/ui_paths.py    真包字段读写与调用边；只做静态核对
 tools/dexq.py        最小反汇编器：按签名找落点（上游用 DexKit 在运行时搜，这里离线搜）
-ci/check.sh          无 SDK 时的类型检查 + 跑 ProtoTest
+tools/check.sh       无 SDK 时的类型检查 + 跑 ProtoTest
+tools/check-shaders.sh + check_kernel_shaders.py   用 Skia 138 CPU 编译五份移植着色器（不是设备验收）
 ```
 
-## 核落点
+## 项目限制
 
-```sh
-git clone --depth 1 https://github.com/Sumicya/qqapk q && cat q/qq.a* > qq.apk && rm -rf q
-python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin     # 176 条全绿才算数
-python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个类里每个方法用到什么
-```
+QQ 原生消息菜单与设置面板已接入单有效项随指高亮、跨项移动、项外取消与危险操作警示色，全类型消息时间与顶部时间条折叠已接线，但手势、浮动头像及各类消息视觉效果仍待真机验收。
 
-GPL-3.0-or-later。源自 [QAuxiliary](https://github.com/cinit/QAuxiliary)，只留了思路，代码全部重写。
+顶栏落点、聊天帧率、通知样式的最终观感只有真机能判。Ark 模板卡片（右侧成排蓝框按钮那种）按自己排版后的宽度整块绘制，
+截图逐像素量到卡片蓝框比底板右边缘多出 `19px`（左边对齐）。现在的做法是量出卡片画到的最右像素、给气泡补上等宽右侧内边距，
+底板长到和卡片一样宽；补完再量一次，若加宽无效（卡片按固定宽度画）就退回原值，两种情况都写一行日志。**效果待真机验收。**
+通知现代化只作用于没有自定义 `RemoteViews` 的通知，是否命中看日志里的「通知现代化：共 N 条……」计数。
+
+### 写法
+
+按 [ponytail](https://github.com/DietrichGebert/ponytail) 来：
+
+- 先问「不做行不行」；再看仓库里有没有现成的；再看 Kotlin 标准库；再看 Android 原生 API；最后才写代码
+- 不加抽象、不加依赖、不加样板；能删就删；一个功能 = 一个顶层函数 + `Qself.kt` 清单里一行（清单顺序就是开关顺序）
+- 钩子体不要 try/catch 兜底整个功能：libxposed 默认异常模式下，钩子抛异常等于这一次没装。
+  但**从 `chain` 取参数、反射取视图这类可能落在兄弟子类上的动作要包 `runCatching`** —— 挂点在基类时，钩子会盖住所有子类
+- 每项安装经 `installFeature()`：异常撤掉本项已经安装的钩子；钩子经 `hook()` 自动受开关管，视图规则自己 `on("功能名")`
+- 连发昵称/间距在绑定及开关变化时应用；头像 pre-draw 只采样位置并提交重绘，不请求布局或取消帧，禁止恢复延迟注册。用列表本地浮点矩阵统一绘制/触摸坐标，浮动位置不加追赶补间；续条仅收紧正文容器的正 topMargin，不改正文内边距；昵称操作 i1 容器并读取主表与活跃附加表 G，组首固定。原生测量阶段可排除头像槽撑高，须按原生求解器保留其余子控件、最小高度及 EXACTLY 约束；复用和关闭还原并重测。数据提交时统一重算组键及完整组边界，不能按挂载行数判断单条。
+- 输入保留 QQ 原 EditText 和父层级；不得带回旧输入栏搬移/隐藏/压缩方案，不得重新加入“昵称只留名字”。
+- minSdk 36：只有 Android 16，别写 `SDK_INT` 判断和降级分支
+- 故意省掉的地方写 `ponytail:` 注释，说清上限和往上走的路
+- 非平凡逻辑留一份能跑的检查（目前只有 `ProtoTest.kt`）
+- 外观文件（`Glass.kt` / `KernelBar.kt` / `Input.kt` / `Looks.kt` / `Knob.kt`）的实际视觉与生命周期不能由 dex 核验代替，必须真机检查；
+  改完说清楚改了哪块长相，别让人猜
+- 代码先行，解释不超过三行；中文
+
+### 怎么找落点
+
+类名、方法名全部从 9.2.10 的 dex 里查出来，写进 `tools/symbols.txt`，不是猜的。
+
+混淆过的短名字（`a`、`k`、`d1`）按签名找，别按名字猜：`tools/dexq.py` 是个最小反汇编器，
+打印一个类里每个方法用到的字符串、读写的字段、调用的方法 —— 上游 QAuxiliary 用 DexKit 在运行时搜的就是这些判据，
+这里离线搜同一件事，搜到就把名字写进表和代码。两条规矩：
+
+- `Class<*>.method(name)` 和 `constant()` 都往父类找（QQ 的挂点大半声明在 MVVM 基类 / Api 基类上），
+  `declaredMethods` 只翻本类会静悄悄空转；反射**调用**用 `getMethod`（public + 父类），装钩子用 `method()`
+- `dexq.py` 按 DEX 格式分别重置 direct/virtual 方法差分索引；声明关系可用 class_data 核对，
+  运行时解析仍沿父类查找。`constant()` 的 pick 必须带名字过滤，避免改到父类的无关方法。
+- 解析方法要在**装的时候**做完（`val m = c.getMethod("x")`），别写在钩子体里 —— 找不到就当场 ✗ 报出来，
+  而不是每次绑定时被 `runCatching` 吞掉，看起来装着其实什么都没干
+
+换版本时：
+1. 拿到 QQ 的 APK（`Sumicya/qqapk` 里是 9.2.10 的分卷，`cat qq.a* > qq.apk`）
+2. `python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin`，看哪条红
+3. 红的那条用 `tools/dexq.py` 按签名找新名字（参数类型、用到的字符串、读的字段），先改表再改代码
+4. 装上后看 `logcat -s Qself` 那一行，✗ 的再修
+
+### 做不到的（别再去挖一遍）
+
+- **全量 Monet 化**：QQ 没有集中的取色入口。`com.tencent.mobileqq.theme` 包里只有 DarkModeManager /
+  ThemeConstants，一个返回颜色的方法都没有；界面颜色散在 QUI 设计系统的几百个 drawable 里
+  （`qui_button_bg_primary_default`、`qui_aio_word_primary`…）。Telegram/NagramX 能全量 Monet
+  是因为有 `Theme.getColor(key)` 一个口子。hook `Resources.getColor` 只能碰纯色资源、碰不到 drawable，
+  还会把整个 UI 弄花 —— 所以 Monet 只作用在 Qself 自己画的那几块玻璃上（`Glass.kt` / `Knob.kt`）。
+- **屏蔽更新**：`UpgradeController` 在 9.2.10 里没有了，`ConfigHandler` 也没有上游要找的
+  `void(UpgradeDetailWrapper)`；`UpgradeBannerProcessor` 里对不上 `void(Message,long,boolean)`。要做得重新找落点。
+- **屏蔽抖动窗口**：`AIOShakeHelper` 类不存在（上游自己写着「作用暂时不明」）。
+- **移除消息列表顶栏横幅广告**：上游靠的 `QbossADImmersionBannerManager` 不存在；剩下的
+  Renewals/Push/DressUp/VasAD 四个 BannerProcessor 的 `handleMessage(Message)→boolean` 返回值语义
+  没机器验不了，不敢直接吞。要做就走 Looks.kt 的视图规则，别猜返回值。
+- **语音转发及保存**：上游 411 行，要自己建确认对话框和长按菜单，不是一个钩子的事。
+- **气泡尾巴**：尾巴画在 9-patch 里（`skin_aio_*_bubble_nor/pressed`，朝头像那侧凸 17 行像素），QQ 也确实自带
+  同尺寸(110x106)无尾巴的 `_simple` 版 —— 但两套九宫格内边距不一样，直接换 id 会让消息文字不居中；
+  而且真机上聊天里本来就没有尾巴（NT 聊天大概率不走这套图，只有充值气泡/皮肤走）。0.8.1 试过，已撤，别再碰。
+
+## 许可证
+
+GPL-3.0-or-later。源自 [QAuxiliary](https://github.com/cinit/QAuxiliary)，只留了思路，聊天等原有实现重写；底栏包含注明来源的上游算法和着色器，见 [第三方许可](third_party/NOTICE.md)。
+
+GPL-3 §5(d)：设置面板里有可点的「关于 Qself」，显示版本、版权（`Copyright (C) 2026 Sumicya`）、无担保声明与「许可全文」入口；全文随包放在 `assets/GPL-3.0.txt`，与仓根 [`LICENSE`](LICENSE) 逐字节相同。
+
+遵循 [Sumicya/selfs](https://github.com/Sumicya/selfs) 最新 GLOBAL.md。

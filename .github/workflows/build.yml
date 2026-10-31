@@ -1,37 +1,28 @@
-# Qself CI。
-#
-# 每次 push / PR / 手动运行：dex 作业拿真 QQ 包核每一个落点；apk 作业跑 ProtoTest 再出 debug APK 放进 Artifacts。
-# CI 不创建 Release、正式发行 tag 或 Release asset；正式发版必须按仓库规范由主人明确授权并人工完成。
+# Qself 出包：push 与手动触发都出 debug APK，产物名 Qself-五段版本。
 name: Build
 
 on:
   push:
-  pull_request:
+    paths-ignore:
+      - '**.md'        # 含 README、CHANGELOG 等全部 Markdown 文档
+      - 'docs/**'
+      - 'bad/**'
+      - 'LICENSE'
+      - '.gitignore'
   workflow_dispatch:
 
 permissions:
   contents: read
   actions: read
 
-jobs:
-  # 落点核对：真包在 Sumicya/qqapk（qq.aa..qq.ae 拼起来）。表红了就是这版 QQ 里名字对不上，
-  # 出包也是白出 —— 所以这个作业和出包平行跑，谁红都拦得住。
-  dex:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - name: 拼出真 QQ 包
-        run: |
-          git clone -q --depth 1 https://github.com/Sumicya/qqapk qq
-          cat qq/qq.a* > qq.apk && rm -rf qq
-          ls -l qq.apk
-      - name: 逐个核落点
-        run: python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin --quiet
+env:
+  SEGMENTS: '5'
+  CLEANUP_APPLY: 'true'
 
-  apk:
+jobs:
+  build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -43,33 +34,72 @@ jobs:
           packages: 'platform-tools'
       - run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
       - uses: gradle/actions/setup-gradle@v6
-      - name: Calculate release version
+      - name: 拼出真 QQ 包
+        run: |
+          git clone -q --depth 1 https://github.com/Sumicya/qqapk qq
+          cat qq/qq.a* > qq.apk && rm -rf qq
+          ls -l qq.apk
+      - name: 逐个核落点
+        run: |
+          python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin --quiet
+          python3 tools/ui_paths.py qq.apk
+          python3 -m unittest discover -s app/src/test/python -p 'test_*.py'
+      - name: Skia CPU 编译五份移植着色器（不是设备验收）
+        run: bash tools/check-shaders.sh
+      - name: 算版本 yy.m.d.当日序号.总序号
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
-          stamp="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq '.created_at')"
-          day="$(TZ=Asia/Shanghai date -d "$stamp" +%y.%-m.%-d)"
-          local_day="$(TZ=Asia/Shanghai date -d "$stamp" +%Y-%m-%d)"
-          since="$(TZ=Asia/Shanghai date -u -d "$local_day 00:00:00" +%Y-%m-%dT%H:%M:%SZ)"
-          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            push_runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=push&created=>=$since&per_page=1" --jq '.total_count')"
-            dispatch_runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=workflow_dispatch&created=>=$since&per_page=1" --jq '.total_count')"
-            total_push="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=push&per_page=1" --jq '.total_count')"
-            total_dispatch="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/runs?event=workflow_dispatch&per_page=1" --jq '.total_count')"
-            daily="$((push_runs + dispatch_runs))"
-            total="$((total_push + total_dispatch))"
-          else
-            daily=0
-            total=0
-          fi
-          echo "QSELF_DAILY_SEQUENCE=$daily" >> "$GITHUB_ENV"
-          echo "QSELF_VERSION=$day.$daily.$total" >> "$GITHUB_ENV"
+          set -euo pipefail
+          gh api "repos/$REPO/actions/workflows/build.yml/runs?per_page=100" > runs.json
+          gh api "repos/$REPO/actions/artifacts?per_page=100" > arts.json
+          python3 - <<'PY'
+          import json, os, re, sys
+          from datetime import datetime, timedelta, timezone
 
-      - name: Test and build
-        run: |
-          set -o pipefail
-          ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug 2>&1 | tee build.log
-      - name: Check libxposed packaging
+          TZ = timezone(timedelta(hours=8))
+          repo = os.environ["REPO"]
+          run_number = int(os.environ["RUN_NUMBER"])
+          runs = json.load(open("runs.json"))["workflow_runs"]
+          arts = json.load(open("arts.json"))["artifacts"]
+
+          def local_day(stamp: str) -> str:
+              # 月与日不补零，也不依赖 %-m / %-d（非 glibc 平台不生效）：直接整数拼接。
+              d = datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone(TZ)
+              return f"{d.year % 100}.{d.month}.{d.day}"
+
+          today = local_day(datetime.now(TZ).isoformat())
+          todays = [r["run_number"] for r in runs if local_day(r["run_started_at"]) == today]
+          first = min(todays) if todays else run_number
+
+          # 当日现存合规产物 Qself-yy.m.d.d0.r0 反推当日首条运行号 r0 - d0 + 1
+          pat = re.compile(r"^" + re.escape(repo.split("/")[-1]) + r"-(\d{2}\.\d{1,2}\.\d{1,2})\.(\d+)\.(\d+)$")
+          for a in arts:
+              m = pat.match(a["name"])
+              if not m or a.get("expired"):
+                  continue
+              if m.group(1) != today:
+                  continue
+              first = min(first, int(m.group(3)) - int(m.group(2)) + 1)
+
+          daily = run_number - first + 1
+          if daily < 1:
+              sys.exit(f"当日序号小于 1：run_number={run_number} R_first={first}")
+          version = f"{today}.{daily}.{run_number}"
+          # 五段，且月/日/当日序号/总序号都不带前导零；不匹配即退出，不降级。
+          if not re.fullmatch(r"\d{2}\.(1[0-2]|[1-9])\.(3[01]|[12][0-9]|[1-9])\.([1-9]\d*)\.([1-9]\d*)", version):
+              sys.exit(f"版本不合口径：{version}")
+          print(f"取号：HEAD SHA={os.environ.get('GITHUB_SHA', '')} run_id={os.environ['RUN_ID']} "
+                f"run_number={run_number} R_first={first} 当日序号={daily} 版本={version}")
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+              env.write(f"QSELF_VERSION={version}\n")
+          PY
+      - name: 测试与出包
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
+      - name: 核对模块入口
         run: |
           APK=$(find app/build/outputs/apk/debug -maxdepth 1 -type f -name 'Qself-*.apk' -print -quit)
           for f in java_init.list module.prop scope.list; do unzip -l "$APK" | grep -F "META-INF/xposed/$f"; done
@@ -80,4 +110,49 @@ jobs:
           name: Qself-${{ env.QSELF_VERSION }}
           path: app/build/outputs/apk/debug/Qself-${{ env.QSELF_VERSION }}.apk
           if-no-files-found: error
+          overwrite: true
           retention-days: 5
+
+  cleanup-artifacts:
+    needs: build
+    # 构建红了也照常清理：失败运行同样占号、同样计入保留上限。
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: qself-cleanup
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: 按五条判据清理产物与运行记录
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          CLEANUP_SCOPE: actions
+        run: python3 .github/scripts/cleanup.py
+
+  cleanup-releases:
+    needs: build
+    if: always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: qself-cleanup
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Release 只留最近 1 个，孤立 tag 一并删
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          CLEANUP_SCOPE: releases
+        run: python3 .github/scripts/cleanup.py

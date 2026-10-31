@@ -25,22 +25,26 @@ fun noTelemetry() {
 
 /** RQD/Bugly 不初始化：崩溃就按系统的来，不往腾讯传栈。 */
 fun noCrashReport() =
-    cls("com.tencent.feedback.eup.CrashReport").constant(null) { it.name.startsWith("initCrashReport") }
+    cls("com.tencent.feedback.eup.CrashReport").constant(null) { it.name.startsWith("initCrashReport") && it.returnType == Void.TYPE }
 
 /**
  * 门方法一律答 false：类名 → 方法名们。沿父类找（见 Hook.kt 的 constant）。
  * ponytail: 单个没命中只写日志不抛 —— 每个门各管各的，少一个不影响其余；一个都没命中才算装失败。
  */
 private fun gates(vararg specs: Pair<String, List<String>>) {
-    val all = specs.flatMap { (c, ms) -> ms.map { c to it } }
-    val hit = all.count { (c, m) ->
-        val ok = runCatching {
-            cls(c).constant(false) { mt -> mt.name == m && mt.returnType == java.lang.Boolean.TYPE }
-        }.isSuccess
-        if (!ok) log("门方法没命中: $c#$m")
-        ok
-    }
-    require(hit > 0) { "门方法一个都没命中" }
+    val methods = specs.flatMap { (name, names) ->
+        val type = runCatching { cls(name) }.getOrNull()
+        names.flatMap { method ->
+            val found = type?.let { generateSequence<Class<*>>(it) { c -> c.superclass }
+                .map { c -> c.declaredMethods.filter { m -> m.name == method && m.returnType == java.lang.Boolean.TYPE } }
+                .firstOrNull { it.isNotEmpty() } }.orEmpty()
+            if (found.isEmpty()) log("门方法未命中：$name#$method")
+            found
+        }
+    }.distinct()
+    require(methods.isNotEmpty()) { "门方法一个都没命中" }
+    // 先解析完再安装；安装异常交 installFeature 统一回滚。
+    methods.forEach { method -> hook(method) { false } }
 }
 
 /** 群、资料卡、游戏中心、乐吧、虚拟形象的红点和引导气泡：门方法一律答「不显示」。 */

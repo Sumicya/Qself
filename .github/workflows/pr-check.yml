@@ -1,0 +1,62 @@
+# Qself PR 校验：只跑落点核对、着色器编译与单测，不取号、不出包、不上传。
+name: PR check
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  SEGMENTS: '5'
+  CLEANUP_APPLY: 'true'
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: 拼出真 QQ 包
+        run: |
+          git clone -q --depth 1 https://github.com/Sumicya/qqapk qq
+          cat qq/qq.a* > qq.apk && rm -rf qq
+          ls -l qq.apk
+      - name: 逐个核落点
+        run: |
+          python3 tools/dexcheck.py --apk qq.apk --lint app/src/main/kotlin --quiet
+          python3 tools/ui_paths.py qq.apk
+          python3 -m unittest discover -s app/src/test/python -p 'test_*.py'
+      - name: Skia CPU 编译五份移植着色器（不是设备验收）
+        run: bash tools/check-shaders.sh
+      - name: 单元测试（不取号）
+        env:
+          QSELF_VERSION: 00.0.0.0.1
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+
+  cleanup-artifacts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: qself-cleanup
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: 按五条判据清理产物与运行记录
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          CLEANUP_SCOPE: actions
+        run: python3 .github/scripts/cleanup.py
