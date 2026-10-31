@@ -869,7 +869,7 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
                 if (inputRoot.background != null) inputRoot.background = null
                 (inputRoot.parent as? ViewGroup)?.let { outer -> if (outer.background != null) outer.background = null }
                 val stripView = strip.get()
-                val shortcutHidden = on("快捷栏隐藏") || stripView == null || stripView.visibility != View.VISIBLE || stripView.height <= 0
+                val shortcutHidden = on("输入区按导航栏留白") || stripView == null || stripView.visibility != View.VISIBLE || stripView.height <= 0
                 val navBottom = runCatching {
                     edit.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.navigationBars())?.bottom ?: 0
                 }.getOrDefault(0)

@@ -1,3 +1,29 @@
+## 2026-10-31（十五）— 状态栏安全区自己变成渐变，页面不再每帧取消重绘
+
+- 状态栏渐变（`Looks.kt`）：以前 `0..顶栏底边` 那条带子显形的是窗口底色，顶上是一块实心的
+  `#FF0F1113`，和下面的内容之间是一条硬边。现在把渐变挂在**顶栏容器自己的背景**上——
+  主页是 `0x7f0a6cfa`（`b=[0,0,1272,194]`、原本透明、在列表之后绘制），聊天页是标题栏外层
+  `sm1.u#k`；内容从消息区滚上来时在顶栏底下淡出，标题按钮与胶囊仍在它之上。**没有第二层、没有描边**，
+  也没有在列表上再叠一层：整块就是那层容器背景。
+- 曲线取 `1 - smoothstep`：顶端不透明度 `255`、底端 `0`，且两端斜率都为 0 —— 只做线性渐变的话，
+  底端会在容器下沿留一条斜率突变（马赫带），眼睛能看出「到这儿为止」的界线。13 个停靠点喂给同一个
+  `LinearGradient`，仍然是单层。
+- 底色不是写死的：`fadeColorBehind()` 先看同父容器里排在它前面、铺满整块的实心 `ColorDrawable`，
+  再退到窗口根底色、`DecorView` 底色，最后才是夜间/日间常量；挂载时写一行
+  `状态栏渐变 : 挂到 <类名>@0x<id> 高=…px 底色=#… 来源=…`，来源对不上就能当场看出来。
+- 客观读数：`StatusFadeDrawable` 在尺寸或底色变化时，把这条渐变**交给 Skia 真正渲染**成 1×`h` 的
+  位图再逐行读回 alpha，写一行 `状态栏渐变 : 高=194px … Skia 读数 相邻行不透明度最大差=n/255
+  亮度上限=n/255 阈值=6`。亮度是各通道的凸组合，所以相邻行亮度差的上限就是相邻行不透明度差 ——
+  这条把「截图 x=1100、y=0..194 相邻行亮度差 < 6/255」从主观判断变成可读的数字。
+- 帧率（`Looks.kt`）：真机日志里每秒数十条 `VRI performTraversals: cancelAndRedraw,
+  mLastPerformTraversalsSkipDrawReason predraw_sumicya.qself.LooksKt$$ExternalSyntheticLambdaNN`，
+  两处 `onPreDraw` 在「规则刚改过布局」时 `return false` 取消当前帧。取消一帧等于让整棵树再走一遍
+  `measure/layout`，而两处规则本身都是幂等的、晚一帧生效看不出来。两处都改成不取消（`BarState`
+  的 `preDrawPasses` 与 `AppearanceObserver` 的 `cancelledOnce` 随之删除），把布局请求交给下一次遍历。
+- 自证：`statusFadeAlpha` / `statusFadeColors` / `statusFadeAlphaAt` 抽成纯函数并加 2 条单测（77 → 79 条），
+  钉住首尾精确值、单调性、两端斜率中段最陡、以及真机 194px 高时相邻行不透明度差 `worst < 6/255`；
+  `tools/check.sh` 编译 136 个类、79 条测试全过，`dexcheck lint bad = 0`，`Looks.kt` 无新增编译告警。
+
 ## 2026-10-30（十四）— 全部页面进入改成「从点按处展开」，返回手势跟手收拢
 
 - 先修一个没人发现的事实：`pageAnimations()` 从写出来那天起就没有在 `looks()` 里被调用过，等于上一版

@@ -22,6 +22,7 @@ val features = listOf(
     Feature("壁纸取色", true, "玻璃的颜色跟壁纸走", {}),
     Feature("隐藏频道动态", true, "底栏藏掉频道/动态/小世界", {}),
     Feature("输入栏药丸", true, "原生输入框与发送按钮独立药丸化，保留全部按钮", ::inputLayout),
+    Feature("输入区按导航栏留白", true, "快捷栏显示时输入区仍按导航栏留白；关掉则随 QQ 原始内边距（快捷栏没显示时两种一样）", {}),
     Feature("侧栏精简", true, "藏一起听/一起看和侧栏会员那排", ::drawerMenu),
     Feature("气泡统一", true, "充值气泡归零，按默认画", ::plainBubble),
     Feature("字体统一", true, "魔法字体归零", ::plainFont),
@@ -57,7 +58,7 @@ val featureDefaults = features.associate { it.name to it.default }
 /** 菜单与日志的分组：从外到内排（底栏 → 输入 → 消息 → 账号 → 杂项 → 系统），名字一律说清「开了会怎样」。 */
 val featureGroups = listOf(
     "底栏与导航" to listOf("玻璃底栏", "壁纸取色", "隐藏频道动态", "未读实数", "隐藏红点引导"),
-    "输入与面板" to listOf("输入栏药丸", "+面板精简", "侧栏精简"),
+    "输入与面板" to listOf("输入栏药丸", "输入区按导航栏留白", "+面板精简", "侧栏精简"),
     "消息" to listOf("连发合并", "消息时间", "气泡统一", "字体统一", "头像圆角", "隐藏头像挂件", "防撤回",
         "At可点", "双击回应", "语音倍速", "回复不@", "左滑回复"),
     "转发与账号" to listOf("转发多选", "转发不限人数", "隐藏在线状态", "隐藏会员等级"),

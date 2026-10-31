@@ -107,9 +107,17 @@ fun hook(target: Executable, gated: Boolean = true, counted: Boolean = true, bod
 
 private var prefs: SharedPreferences? = null
 
+/** 读到没登记的开关名时每个进程只报一次，免得「代码在读、清单里没有」永远静默（2026-10-31 两次踩到）。 */
+private val unknownSwitches = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
 /** 开关存在 QQ 自己的 SharedPreferences「qself」里，缺省全开；Application 还没建起来时也当开。 */
-fun on(name: String): Boolean = name !in failed &&
-    (store()?.getBoolean(name, featureDefaults[name] ?: true) ?: (featureDefaults[name] ?: true))
+fun on(name: String): Boolean {
+    val known = featureDefaults[name]
+    if (known == null && unknownSwitches.add(name)) {
+        runCatching { log("开关未登记 : $name（清单里没有，按默认开启）") }
+    }
+    return name !in failed && (store()?.getBoolean(name, known ?: true) ?: (known ?: true))
+}
 
 fun store(): SharedPreferences? = prefs ?: runCatching {
     (Class.forName("android.app.ActivityThread").getMethod("currentApplication").invoke(null) as? Context)
