@@ -44,6 +44,7 @@ val features = listOf(
     Feature("隐藏会员等级", true, "资料卡不画 SVIP/VIP 图标", ::plainCard),
     Feature("停止轻互动", true, "轻互动特效不播", ::noLightInteraction),
     Feature("停止表情雨", true, "表情雨不下", ::noEmojiRain),
+    Feature("页面过渡动效", true, "页签、会话、群聊切页时整页展开一次，关掉就直出", {}),
     Feature("通知现代化", true, "QQ 消息通知换成大文本样式，长消息在锁屏上不再只剩半句", ::modernNotifications),
     Feature("系统WebView", false, "网页走系统 WebView，不加载 X5", ::systemWebView),
     Feature("停止统计上报", false, "灯塔统计空转", ::noTelemetry),
@@ -60,7 +61,7 @@ val featureGroups = listOf(
     "消息" to listOf("连发合并", "消息时间", "气泡统一", "字体统一", "头像圆角", "隐藏头像挂件", "防撤回",
         "At可点", "双击回应", "语音倍速", "回复不@", "左滑回复"),
     "转发与账号" to listOf("转发多选", "转发不限人数", "隐藏在线状态", "隐藏会员等级"),
-    "特效与上报" to listOf("停止轻互动", "停止表情雨", "停止统计上报", "停止崩溃上报"),
+    "特效与上报" to listOf("停止轻互动", "停止表情雨", "页面过渡动效", "停止统计上报", "停止崩溃上报"),
     "系统与诊断" to listOf("通知现代化", "系统WebView", "全量日志"),
 )
 

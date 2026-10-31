@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-10-31（十九）— 「页面过渡动效」接回开关表：五个判定点以前读的是一个永远为真的键
+
+- 事实（`Looks.kt` 3177／3186／3363／3388／3408）：进入动效的五处判定都写 `if (!on("页面过渡动效")) return`，
+  但 `features` 表里从来没有登记这个名字；`on()` 对未登记的键按 `featureDefaults[name] ?: true` 取值，
+  恒为 true。`featureGroupGaps()` 只查「表里有、组里没有」，查不出「代码在读、表里没有」。结果：动效一直开着，
+  用户没有任何开关能关它，日志里也看不出来。
+- 改动（`Qself.kt`）：`features` 加 `Feature("页面过渡动效", true, "页签、会话、群聊切页时整页展开一次，关掉就直出", {})`，
+  默认开，装法 `{}`（与「玻璃底栏」等同属「按名字查开关」的视图规则）；`featureGroups` 的「特效与上报」
+  补同名条目，免得安装时被 `featureGroupGaps()` 记一条「开关没进任何分组」。
+- 默认值与改前一致，默认行为不变；关掉时 `pageEnter`／`playEnter` 直接返回，页签、会话、群聊三条钩子
+  都不播展开，预测性返回包装件也不安装。
+- 自证：`tools/check.sh` 编译 137 个类、80 条测试全过、`Ran 8 tests OK`。开关观感（关掉是否直出、
+  打开是否只播一次）需真机，本轮**未验证**。
+- 收尾：CHANGELOG 只留 5 条，`2026-10-30（十四）` 原样移入 `bad/CHANGELOG-history.md` 开头。
+
 ## 2026-10-31（十八）— 版本号按新规范收口：月日不补零、断言收紧、不合规产物判删
 
 - 规范生效点随之更新：selfs open PR #13 head `278bf9b1`（2026-10-31 09:40:03 UTC+8）取代
@@ -75,30 +90,3 @@
 - 自证：`statusFadeAlpha` / `statusFadeColors` / `statusFadeAlphaAt` 抽成纯函数并加 2 条单测（77 → 79 条），
   钉住首尾精确值、单调性、两端斜率中段最陡、以及真机 194px 高时相邻行不透明度差 `worst < 6/255`；
   `tools/check.sh` 编译 136 个类、79 条测试全过，`dexcheck lint bad = 0`，`Looks.kt` 无新增编译告警。
-
-## 2026-10-30（十四）— 全部页面进入改成「从点按处展开」，返回手势跟手收拢
-
-- 先修一个没人发现的事实：`pageAnimations()` 从写出来那天起就没有在 `looks()` 里被调用过，等于上一版
-  「共享 X 轴微缩淡入」从来没生效；QQ 现在跑的是它自己的页面切换。这次把它接上，并换成展开。
-- 展开（`Looks.kt`）：每个页面根只动一次 `scaleX 0.86` / `scaleY 0.90` → `1`，`260ms`，
-  `PathInterpolator(0.2, 0, 0, 1)`；**不动 alpha**（整页加 alpha 会多开一层 1272×2800 的离屏缓冲），
-  **不碰布局**，动画由 RenderThread 跑。展开原点取最后一次按下的屏幕坐标（`dispatchTouchEvent` 里只记
-  `ACTION_DOWN`，且只认最外层窗口），换算到目标视图局部坐标后夹进 `15%` 至 `85%`；没有点按（通知冷启动、
-  程序内跳转）就落在中心 —— 这就是「预测你从哪一行进来」。起始值在第一帧 `onPreDraw` 里摆好再返回 `true`，
-  不会先闪一帧全尺寸；这个监听器一次性，播完立刻移除，不留在垂直同步上。
-- 覆盖范围：①底部页签切换（`TabFrameControllerImpl#updateUIAfterTabChange` → 内容根）；②会话与群聊
-  （`AIOMsgListVB#onCreateView` → 由消息列表向上找到 `android.R.id.content` 下面那一层的整页根，
-  标题栏与消息区一起进来，C2C 与群聊走同一条 AIO 钩子）；③普通 Activity 第一次恢复前台
-  （`Instrumentation#callActivityOnResume` → `android.R.id.content` 里面积最大的孩子）。
-  同一个页面根 `700ms` 内只播一次，Activity 另有 `enteredActivities` 记录，退对话框/选图页回来不会重播。
-  悬浮窗（对话框式 Activity）与含 `SurfaceView` 的页面（相机、视频，SurfaceView 独立合成、缩放父容器只会错位）不展开。
-- 预测性动画：`Activity#getOnBackInvokedDispatcher` 返回一个包装件，`OnBackAnimationCallback` 的
-  `onBackStarted/Progressed/Cancelled/Invoked` 全部原样转发，进度同时驱动页面 `scale 1 → 0.94`、
-  沿滑出边横移最多 `10%` 宽；取消与提交都用 `160ms` 回位，并按「边/最大进度/帧数/用时」写一行
-  `返回预测 : …`。系统不给进度事件时（QQ 没启用预测性返回）这段代码什么都不做，也不写噪声行。
-- 自证：`expandPivot`、`backScale`、`backShift` 抽成纯函数并加 2 条单测（75 → 77 条全过），钉住
-  夹取边界、越界进度与左右方向；`tools/check.sh` 编译 135 个类、77 条测试全过，`dexcheck lint bad = 0`。
-- 规范收口（同一提交）：按 `GLOBAL.md`（`adbcf50a`）「CHANGELOG 只留最新 5 条」把 2026-10-24（九）（八）
-  两条原样移入 `bad/CHANGELOG-history.md` 开头；核对 `LICENSE` 为 GPL-3.0 全文 `35149` 字节、README 六个
-  二级章节顺序与固定末行、全仓无 `AGENTS.md` 变体。`LICENSE §5(d)` 要求的「关于/许可证」可点入口本仓
-  尚无，记为待办，不在本轮擅自加 UI。
