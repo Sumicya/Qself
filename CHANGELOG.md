@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## 2026-10-31（二十二）— 装机命令改成手机端三条：下载到固定路径、`su -c pm install`、`rm -rf`
+
+- 起因：上一版 README 第 1 条给的是 `adb install -r apk/*.apk`。主人手上只有手机，`adb` 是电脑上的工具，
+  这条命令在他的环境里跑不了 —— 规范 `128e16f9` 第 9 条因此改成「命令必须能在他手上的环境里跑」，并点名
+  只给 `adb install` 按未完成处理。
+- 新版第 1 条给出三条命令，全程在手机上：① `D=/storage/emulated/0/Download/selfs` ＋ `mkdir -p` ＋
+  `gh run download … -D "$D"` 落到固定路径；② `su -c "pm install -r $(find "$D" -name '*.apk' | head -1)"`，
+  没 root 就在文件管理里点开那个 `.apk`；③ `rm -rf "$D"`。README 里 `adb` 字样已清零
+  （`grep -cE '\badb\b' README.md` → `0`）。
+- 验证方式（可复算）：把 README 里那三条命令原样抽出来 `sh -n` → `OK`；用桩 `gh`／`su` 实跑，
+  `su` 收到 `-c pm install -r /tmp/selftest2/Qself-26.10.31.7.371/Qself-26.10.31.7.371.apk`，
+  跑完 `/tmp/selftest2` 已不存在 —— 说明嵌套引号在 `sh` 下解析成一个参数，`find` 取到的是第一条 apk。
+- 保留的两条事实：下载下来的 apk 权限是 `600`（`gh run download` 展开后的实际权限，主人的 `ls -l` 也是这个），
+  `su` 的 root 与文件管理都读得到，不用 `chmod`；最新产物 `Qself-26.10.31.7.371` 为 `452944` 字节，
+  已写进 README 当对照值。
+
 ## 2026-10-31（二十一）— 按规范 `0ab98575` 收口：装机改成一条命令，CI 读数写进仓里
 
 - 规范变动（三处，本轮已按新口径执行）：① 收尾的「四要领」改为两项必核——「外部指标」（数值＋取值命令）与
@@ -59,26 +75,4 @@
 - `cleanup.py`：清理判据一补「段里有前导零」分支，补零产物按不合规产物删除并打印原因。
 - 自证：`python3 -m py_compile` 通过；从 `build.yml` 里抽出内嵌 Python 单独 `compile()` 通过（39 行）；
   上述 6 个版本串逐条跑断言，结果与规范一致。
-
-## 2026-10-31（十七）— 每帧少走一遍 ViewGroup 钩子，跨帧消息不再重复计时
-
-- 帧率采样不再搭 `ViewGroup#dispatchDraw` 的全局钩子（`Looks.kt`）：这条钩子每个 ViewGroup 每帧都要过一遍
-  （真机日志 `26.10.30.4.362` 里记到 `67735` 次），原来每次都要做一次 `FrameMeter.noteDraw()`
-  （两次 volatile 写 + 一次 lambda 调用）和一次钩子计数（`ConcurrentHashMap` 查表 + `AtomicLong` 自增）。
-  现在「这一帧真的画了」由根视图的 `OnDrawListener` 给，一次绘制只来一次；钩子本身 `counted = false`，
-  钩子体只剩一次字段读（`background is Glass`）与「没有玻璃就立刻走」的空表判断。玻璃合成路径不变。
-- 跨帧消息重复计时（`Perf.kt`）：`MainThreadMeter` 原来把一条消息的**全部**耗时记在它 `exit` 的那一帧，
-  一条 200ms 的消息会让那一帧的「主线程合计」远超帧间隔 —— 真机日志里那条
-  `帧率窗口 … 主线程=均75.6ms/帧（4096 条消息）` 配 8.5ms 的帧间隔，就是这个口径错。
-  新增 `ThreadAccounting`：消息跨帧时在每次取帧前先切走「已经过去的那一段」，`exit` 只补剩下的，
-  每纳秒只记一次、每帧拿到的部分不会超过它真正占用的时间。单测用 200ms / 8.3ms 的时间表验算：
-  单帧不超过一个帧间隔，24 次取帧加最后一次补足正好 200ms，取完归零不会二次计。
-- 每帧分配（`Input.kt`）：`MsgListUnderScroll.syncGeometry()` 原来每帧 `IntArray(2)` 新建一个数组取窗口
-  坐标，改成复用同一个字段；内边距只在真的变了时才 `setPadding`，这点没变。
-- 连发合并头像的可判定化（`Chat.kt`）：规则是「合并组默认居底」，但以前只有主观判断。现在整组首尾都在屏里
-  （`hasStart && hasEnd`）时，若头像底边与组内容底边相差超过 1px，就写一行
-  `头像未居底 : 组底=…px 头像底=…px 差=…px`（两秒最多一行）。组被裁掉一半时本来就要贴视口边，不判。
-  这一行只报告不修正 —— 没有真机证据前不去猜公式。
-- 自证：`tools/check.sh` 编译 137 个类、80 条测试全过（新增跨帧切分 1 条），`dexcheck lint bad = 0`，
-  四个改动文件无新增编译告警。
 

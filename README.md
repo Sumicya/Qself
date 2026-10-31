@@ -55,14 +55,25 @@
 
 ## 安装与使用
 
-1. 一条命令取最新构建并装机（需要 `gh` 已登录、`adb` 连着手机）：
+1. 手机上拿包、装机、清干净，三条命令（全程用手机，不需要电脑；`gh` 先登录一次 `gh auth login`）：
    ```sh
-   gh run download -R Sumicya/Qself -n "$(gh api repos/Sumicya/Qself/actions/artifacts --jq '.artifacts[0].name')" -D apk \
-     && adb install -r apk/*.apk
+   # 1. 下载到固定路径
+   D=/storage/emulated/0/Download/selfs
+   mkdir -p "$D"
+   gh run download -R Sumicya/Qself -n "$(gh api repos/Sumicya/Qself/actions/artifacts --jq '.artifacts[0].name')" -D "$D"
+
+   # 2. 装：root 用下面这条，没 root 就在文件管理里点开那个 .apk
+   su -c "pm install -r $(find "$D" -name '*.apk' | head -1)"
+
+   # 3. 用完删干净
+   rm -rf "$D"
    ```
-   `artifacts[0]` 就是最新一条（2026-10-31 10:22 UTC+8 核对：5 条产物的 `created_at` 从新到旧正好是接口返回顺序，
-   jq 判 `. == (. | sort | reverse)` 为 `true`）。不想用命令就直接点 Actions 里最新一次 `Build` 的 Artifacts；
-   产物只留最近 5 个，更早的会被 `.github/scripts/cleanup.py` 删掉。
+   包落在 `"$D"/<产物名>/<产物名>.apk`，想先看一眼就 `ls -l "$D"/*/*.apk`；当前最新那包是
+   `452944` 字节（2026-10-31 11:00 UTC+8 取自 artifact `Qself-26.10.31.7.371`）。`artifacts[0]` 就是最新一条（5 条产物的
+   `created_at` 从新到旧正好是接口返回顺序，jq 判 `. == (. | sort | reverse)` 为 `true`）；
+   不想用命令就点 Actions 里最新一次 `Build` 的 Artifacts。产物只留最近 5 个，更早的会被
+   `.github/scripts/cleanup.py` 删掉。下载下来的 apk 权限是 `600`（你自己的 `ls -l` 就是这样），
+   `su -c` 的 root 与文件管理都能读，不用改权限。
 2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开
 3. 主页底栏胶囊旁边那颗圆钮（右边放不下就在胶囊右上方）：点开勾选即时生效（钩子每次被调用都查开关）；
    输入栏开关可恢复原外观；从旧的搬移布局版本升级时必须强行停止 QQ 再打开。底栏关闭会还原布局、背景与内边距；菜单不拖动、宽度不变、只有限增高；底栏背景纵向拖动超过触摸阈值后转交 QQ 自己登记的内容页，由原生内容树分发；通过 TabFrameLayout.e 身份核对与 a() 获取，不按尺寸/滚动能力找列表，保留页签点击与徽标拖动；菜单支持恢复默认，✗ 项可查看安装失败原因
@@ -75,7 +86,7 @@
 
 本地不需要 SDK：push 之后 GitHub Actions（`.github/workflows/build.yml`）出 APK。
 从零复现一次构建：`gh workflow run build.yml -R Sumicya/Qself --ref arena/b08370a2-qself`，
-跑完用「安装与使用」第 1 条那条命令取包。
+跑完用「安装与使用」第 1 条那三条命令取包装机。
 当前仓库不保存签名私钥；debug APK 使用 Android 默认 debug 签名，正式签名需由仓库外的安全签名环境提供。
 失败日志以 GitHub Actions 原始日志为准。
 本地没有 Android SDK 时用 `tools/check.sh` 做类型检查 + 跑 ProtoTest（第一次会拉工具链到 `~/.cache/qself-tc`）。
