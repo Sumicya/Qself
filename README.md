@@ -80,3 +80,5 @@ python3 tools/dexq.py qq.apk com.tencent.mobileqq.aio.input.reply.i   # 某个�
 ```
 
 GPL-3.0-or-later。源自 [QAuxiliary](https://github.com/cinit/QAuxiliary)，只留了思路，代码全部重写。
+
+遵循 [Sumicya/selfs](https://github.com/Sumicya/selfs) 最新 GLOBAL.md。
