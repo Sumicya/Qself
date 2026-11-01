@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 现行决定（2026-11-01）
+
+- **进页**：alpha 0→1、scale 0.9→1、200ms、`EASE_OUT_QUINT(.23,1,.32,1)`、pivot 居中（`Looks.kt:3108-3116`；锚 `NagramXF@1af8d9b4` 的 `ActionBarLayout.java:2339-2367`）。
+- **退页**：alpha 1→0、scale 1→0.9、200ms、`accelerateDecelerate`，动画收尾后才把返回交回 QQ（`Looks.kt:3111-3112`、`:3347`；锚同文件 `:2948-2972`）。
+- **返回手势**：页面收缩 `1−0.06p`、横向让位 `±0.10w·p`，`ProtoTest` 8 条断言锁住（`Looks.kt:3097-3101`）。
+- **早退留痕**：七道早退统一走 `recordEnterSkip`，格式 `页面进入 : 跳过 来源=… 原因=…`，同一根 700ms 去重（`Looks.kt:3125`、`:3191`）。
+- **版本**：五段 `yy.m.d.当日序号.总序号`，月日不补零，总序号取 `run_number` 原值（`build.yml:49-90`）。
+- **产物**：artifact 名 `Qself-版本`、`retention-days: 5`，仓库 artifact 总数 ≤5（`build.yml:114`；2026-11-01 21:42 实测 3 个）。
+- **许可**：GPL-3.0-or-later，根 `LICENSE` 35149 B 全文，APK 内 `assets/GPL-3.0.txt` 同文。
+- **图标**：`mipmap-anydpi-v26` 两份各含 background／foreground／monochrome，运行时不换图标。
+- **日志**：导出合并成单份 `qself-full-log.txt` 落 `Download`，同名覆盖不建副本（`LogMerge.kt:7`）。
+
+## 历史全文（倒序，原样保留）
+
+## 2026-11-01（三十六）— CHANGELOG 按新规范拆成「现行决定＋历史全文」
+
+- 规范 `f3307091` 的七·文档改成「现行决定（一条 ≤5 行）＋历史全文」，本文件照此拆开。
+- 现行决定只留仍成立、能指到行号的九条；原 84 条一律不动，整体落进历史全文。
+- 本轮 `tools/`、`app/` 未改一行，纯文档。
+
 ## 2026-11-01（三十五）— 退页照 NagramXF 收成 1→0.9 并淡出，不再弹回原尺寸
 
 - 关闭那一支（`Keeperorowner/NagramXF@1af8d9b4` 的 `ActionBarLayout.java:2948-2972`）：alpha 1→0、SCALE_X/Y 1→0.9、200ms、`AccelerateDecelerateInterpolator`；上游把摘页放在 `onCloseAnimationEndRunnable`，这里同样等收尾后才把返回交回 QQ。
