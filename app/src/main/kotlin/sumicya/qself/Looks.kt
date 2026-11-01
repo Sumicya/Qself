@@ -3114,6 +3114,14 @@ private const val EASE_OUT_QUINT_Y2 = 1f
 /** 同一个根 700ms 内只展开一次：Activity 恢复与 AIO 建页会同时来报同一个页面。 */
 private val enteredPages = WeakHashMap<View, Long>()
 
+/**
+ * 跳过一次进页也留一行：验收时要能分清「根本没触发」和「触发了但被挡住」。
+ * 少了这一行，五次连开只导出三条收尾时，就只能靠猜是闸挡的、还是页面不该动。
+ */
+private fun recordEnterSkip(reason: String, source: String, detail: String = "") {
+    recordQselfEvent("页面进入 : 跳过 来源=$source 原因=$reason${if (detail.isEmpty()) "" else " $detail"}")
+}
+
 /** 已经展开过的 Activity：退对话框、选图页回来再恢复前台时不再播一遍。 */
 private val enteredActivities = WeakHashMap<Activity, Boolean>()
 
@@ -3158,9 +3166,9 @@ private fun pageRootOf(v: View): View {
 
 private fun pageEnter(view: View?, source: String, wholePage: Boolean = false) {
     val v = view ?: return
-    if (!on("页面过渡动效")) return
-    if (!android.animation.ValueAnimator.areAnimatorsEnabled()) return
-    if (!pageAnimatable(v)) return
+    if (!on("页面过渡动效")) return recordEnterSkip("开关未开", source)
+    if (!android.animation.ValueAnimator.areAnimatorsEnabled()) return recordEnterSkip("系统动画已关", source)
+    if (!pageAnimatable(v)) return recordEnterSkip("页面不可动", source, "类=${v.javaClass.simpleName}")
     // 等它真正接进窗口、量出尺寸之后再向上找整页根：AIO 建页那一刻视图还没挂到页面上。
     OnceLaidOut(WeakReference(v)) { playEnter(if (wholePage) pageRootOf(it) else it, source) }.start()
 }
@@ -3170,12 +3178,13 @@ private fun pageEnter(view: View?, source: String, wholePage: Boolean = false) {
  * 不按点按位置取原点（那是我们自己加的，上游没有），也没有宽高不等的 0.86/0.90。
  */
 private fun playEnter(v: View, source: String) {
-    if (!on("页面过渡动效")) return
-    if (!android.animation.ValueAnimator.areAnimatorsEnabled()) return
-    if (v.width <= 0 || v.height <= 0) return
+    if (!on("页面过渡动效")) return recordEnterSkip("开关未开", source)
+    if (!android.animation.ValueAnimator.areAnimatorsEnabled()) return recordEnterSkip("系统动画已关", source)
+    if (v.width <= 0 || v.height <= 0) return recordEnterSkip("尺寸未定", source, "尺寸=${v.width}x${v.height}")
     // 同一个根 700ms 内只进一次：Activity 恢复与 AIO 建页会同时来报同一个页面。
     val now = android.os.SystemClock.uptimeMillis()
-    if (now - (enteredPages[v] ?: 0L) < 700L) return
+    val sinceLast = now - (enteredPages[v] ?: 0L)
+    if (sinceLast < 700L) return recordEnterSkip("700ms 去重", source, "距上次=${sinceLast}ms")
     enteredPages[v] = now
     // 上一次返回手势的半路位移必须在这里清掉：cancel() 会丢掉被取消动画的 withEndAction
     //（AOSP ViewPropertyAnimator 的 onAnimationCancel 把它从 mAnimatorOnEndMap 里删掉），
@@ -3261,6 +3270,8 @@ private class OnceLaidOut(private val view: WeakReference<View>, private val act
             action(v)
         } else if (++waited >= 4) {
             stop(v)
+            // 四帧还没量出尺寸就当这页不该动；留一行，免得把「没等到」记成「没触发」。
+            recordQselfEvent("页面进入 : 跳过 原因=四帧内未量出尺寸 尺寸=${v.width}x${v.height}")
         }
         return true
     }
