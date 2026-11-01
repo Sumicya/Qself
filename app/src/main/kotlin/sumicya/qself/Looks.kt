@@ -74,10 +74,6 @@ fun looks() {
         val event = chain.getArg(0) as? MotionEvent
         FrameMeter.noteTouch(event?.actionMasked ?: -1)
         val source = chain.thisObject as? ViewGroup
-        // 展开原点：只记最外层窗口收到的按下，屏幕坐标留到页面进入时再换算。
-        if (source != null && event != null && event.actionMasked == MotionEvent.ACTION_DOWN &&
-            source.rootView === source
-        ) notePageTap(event.rawX, event.rawY)
         if (source != null && on("玻璃底栏")) {
             aioHeaders[source]?.let { header ->
                 if (header.multiSelectRoot()?.visibility != View.VISIBLE) {
@@ -3097,24 +3093,6 @@ private fun resetSearchBars() {
 // 而且 `pageAnimations()` 一直没在 `looks()` 里装上，等于那版过渡从未生效。这一版每个页面只播一次：
 // 起点取最后一次点按的位置（预测你从哪一行进来），没有点按就落回中心；返回手势有进度就把同一套变换反着收。
 
-/** 最近一次按下：页面进入时用它预测展开原点。记屏幕坐标，用前换成目标视图的局部坐标。 */
-private var pageTapAtMs = 0L
-private var pageTapX = Float.NaN
-private var pageTapY = Float.NaN
-
-internal fun notePageTap(x: Float, y: Float, at: Long = android.os.SystemClock.uptimeMillis()) {
-    pageTapX = x
-    pageTapY = y
-    pageTapAtMs = at
-}
-
-/** 展开原点：点按坐标夹进 [15%, 85%]；没有点按（通知冷启动、程序内跳转）就取中心。 */
-internal fun expandPivot(anchor: Float, size: Int): Float {
-    if (size <= 0) return 0f
-    if (!anchor.isFinite()) return size / 2f
-    return anchor.coerceIn(size * 0.15f, size * 0.85f)
-}
-
 /** 返回手势进度 → 页面收缩比例：0 不动，1 收到 0.94。 */
 internal fun backScale(progress: Float): Float = 1f - 0.06f * progress.coerceIn(0f, 1f)
 
@@ -3122,10 +3100,16 @@ internal fun backScale(progress: Float): Float = 1f - 0.06f * progress.coerceIn(
 internal fun backShift(progress: Float, width: Int, edgeLeft: Boolean): Float =
     (if (edgeLeft) 1f else -1f) * width.coerceAtLeast(0) * 0.10f * progress.coerceIn(0f, 1f)
 
-private const val ENTER_MS = 260L
-private const val ENTER_SCALE_X = 0.86f
-private const val ENTER_SCALE_Y = 0.90f
-private const val TAP_FRESH_MS = 1500L
+// 进页参数照抄 NagramXF（Telegram 分支）`ActionBarLayout.presentFragment` 的 useAlphaAnimations 那一支：
+// alpha 0→1、SCALE_X/SCALE_Y 0.9→1（各向同性，没有 0.86/0.90 那种宽高不等）、200ms、
+// CubicBezierInterpolator.EASE_OUT_QUINT = (.23, 1, .32, 1)，pivot 用视图自身的中心。
+// 打开那一支：ActionBarLayout.java:2350-2372；关闭那一支（alpha 1→0、1→0.9、accelerateDecelerate）：:2958-2975。
+private const val ENTER_MS = 200L
+private const val ENTER_SCALE = 0.9f
+private const val EASE_OUT_QUINT_X1 = 0.23f
+private const val EASE_OUT_QUINT_Y1 = 1f
+private const val EASE_OUT_QUINT_X2 = 0.32f
+private const val EASE_OUT_QUINT_Y2 = 1f
 
 /** 同一个根 700ms 内只展开一次：Activity 恢复与 AIO 建页会同时来报同一个页面。 */
 private val enteredPages = WeakHashMap<View, Long>()
@@ -3181,37 +3165,40 @@ private fun pageEnter(view: View?, source: String, wholePage: Boolean = false) {
     OnceLaidOut(WeakReference(v)) { playEnter(if (wholePage) pageRootOf(it) else it, source) }.start()
 }
 
-/** 第一帧画之前把起始 scale 摆好，动画交给 RenderThread；不动 alpha，免得整页多开一层离屏缓冲。 */
+/**
+ * 进页：整段照 NagramXF 的进页动画做——alpha 0→1、scale 0.9→1、200ms、EASE_OUT_QUINT、pivot 居中。
+ * 不按点按位置取原点（那是我们自己加的，上游没有），也没有宽高不等的 0.86/0.90。
+ */
 private fun playEnter(v: View, source: String) {
     if (!on("页面过渡动效")) return
     if (!android.animation.ValueAnimator.areAnimatorsEnabled()) return
     if (v.width <= 0 || v.height <= 0) return
-    // 同一个根 700ms 内只展开一次：Activity 恢复与 AIO 建页会同时来报同一个页面。
+    // 同一个根 700ms 内只进一次：Activity 恢复与 AIO 建页会同时来报同一个页面。
     val now = android.os.SystemClock.uptimeMillis()
     if (now - (enteredPages[v] ?: 0L) < 700L) return
     enteredPages[v] = now
-    val loc = IntArray(2)
-    v.getLocationOnScreen(loc)
-    val fresh = android.os.SystemClock.uptimeMillis() - pageTapAtMs <= TAP_FRESH_MS
-    val pivotX = expandPivot(if (fresh) pageTapX - loc[0] else Float.NaN, v.width)
-    val pivotY = expandPivot(if (fresh) pageTapY - loc[1] else Float.NaN, v.height)
     // 上一次返回手势的半路位移必须在这里清掉：cancel() 会丢掉被取消动画的 withEndAction
     //（AOSP ViewPropertyAnimator 的 onAnimationCancel 把它从 mAnimatorOnEndMap 里删掉），
-    // 而 backSettle 的归零正写在那个 endAction 里；不清的话新页面会带着最多 10% 屏宽的横向偏移展开。
+    // 而 backSettle 的归零正写在那个 endAction 里；不清的话新页面会带着最多 10% 屏宽的横向偏移进来。
     val leftoverShift = v.translationX
     v.animate().cancel()
-    v.pivotX = pivotX
-    v.pivotY = pivotY
+    v.pivotX = v.width / 2f          // NagramXF 动的是铺满窗口的容器，pivot 即中心
+    v.pivotY = v.height / 2f
     v.translationX = 0f
-    v.scaleX = ENTER_SCALE_X
-    v.scaleY = ENTER_SCALE_Y
-    v.animate().scaleX(1f).scaleY(1f)
+    v.scaleX = ENTER_SCALE
+    v.scaleY = ENTER_SCALE
+    v.alpha = 0f
+    v.animate().alpha(1f).scaleX(1f).scaleY(1f)
         .setDuration(ENTER_MS)
-        .setInterpolator(android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f))
+        .setInterpolator(
+            android.view.animation.PathInterpolator(
+                EASE_OUT_QUINT_X1, EASE_OUT_QUINT_Y1, EASE_OUT_QUINT_X2, EASE_OUT_QUINT_Y2,
+            ),
+        )
         // 收尾不能写在 withEndAction 里：ViewPropertyAnimator 被 cancel 时会把 endAction 从表里删掉
-        //（AOSP ViewPropertyAnimator.java:1091-1096），页面就永久停在 0.86/0.90 的半截，
-        // 于是下一次进这个页面看到的是「缩着、四周留边」。setListener 的 onAnimationEnd 在 cancel
-        // 之后仍会回调（ValueAnimator.cancel → endAnimation → notifyEndListeners），用它收尾才收得干净。
+        //（AOSP ViewPropertyAnimator.java:1091-1096），页面就永久停在半截，下一次进来是「缩着、四周留边」。
+        // setListener 的 onAnimationEnd 在 cancel 之后仍会回调（ValueAnimator.cancel → endAnimation →
+        // notifyEndListeners），复位和 alpha 都得在这里兜住——alpha 留在 0 就是整页看不见。
         .setListener(object : android.animation.AnimatorListenerAdapter() {
             private var cancelled = false
 
@@ -3220,27 +3207,28 @@ private fun playEnter(v: View, source: String) {
             }
 
             override fun onAnimationEnd(animation: android.animation.Animator) {
-                // 先把「动画停在视图上的比例」抓下来，复位之后这数就没了：自然结束应当读到 1.000，
-                // 读到别的值就说明这一帧是被中途取消的，也正好是「页面缩着」的现场。
+                // 先抓「动画停在视图上的状态」，复位之后就没了：自然结束应读到 1.0/1.0/1.0。
                 val restX = v.scaleX
                 val restY = v.scaleY
+                val restA = v.alpha
                 v.animate().setListener(null)
                 v.scaleX = 1f
                 v.scaleY = 1f
+                v.alpha = 1f
                 v.translationX = 0f
                 v.pivotX = v.width / 2f
                 v.pivotY = v.height / 2f
                 recordQselfEvent(
-                    "展开收尾 : ${if (cancelled) "取消" else "自然结束"} " +
-                        "收尾前比例=${(restX * 1000).roundToInt() / 1000f},${(restY * 1000).roundToInt() / 1000f}",
+                    "进入收尾 : ${if (cancelled) "取消" else "自然结束"} " +
+                        "收尾前 比例=${(restX * 1000).roundToInt() / 1000f}," +
+                        "${(restY * 1000).roundToInt() / 1000f} 透明=${(restA * 1000).roundToInt() / 1000f}",
                 )
             }
         })
         .start()
     recordQselfEvent(
-        "页面展开 : 来源=$source 尺寸=${v.width}x${v.height} " +
-            "原点=${pivotX.roundToInt()},${pivotY.roundToInt()} 从${ENTER_SCALE_X}缩到1 ${ENTER_MS}ms " +
-            "清位移=${leftoverShift.roundToInt()}px",
+        "页面进入 : 来源=$source 尺寸=${v.width}x${v.height} " +
+            "${ENTER_SCALE}→1 透明0→1 ${ENTER_MS}ms 清位移=${leftoverShift.roundToInt()}px",
     )
 }
 
@@ -3295,9 +3283,13 @@ private fun backApply(root: View, progress: Float, edgeLeft: Boolean) {
 }
 
 private fun backSettle(root: View) {
-    root.animate().scaleX(1f).scaleY(1f).translationX(0f)
-        .setDuration(160L)
-        .setInterpolator(android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f))
+    root.animate().scaleX(1f).scaleY(1f).alpha(1f).translationX(0f)
+        .setDuration(ENTER_MS)
+        .setInterpolator(
+            android.view.animation.PathInterpolator(
+                EASE_OUT_QUINT_X1, EASE_OUT_QUINT_Y1, EASE_OUT_QUINT_X2, EASE_OUT_QUINT_Y2,
+            ),
+        )
         // 同上：withEndAction 会在 cancel 时被丢弃，改用 setListener 才保证复位跑到。
         .setListener(object : android.animation.AnimatorListenerAdapter() {
             private var cancelled = false
@@ -3312,6 +3304,7 @@ private fun backSettle(root: View) {
                 root.animate().setListener(null)
                 root.scaleX = 1f
                 root.scaleY = 1f
+                root.alpha = 1f
                 root.translationX = 0f
                 root.pivotX = root.width / 2f
                 root.pivotY = root.height / 2f

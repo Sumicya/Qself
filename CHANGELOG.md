@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## 2026-11-01（三十一）— 进页动画改成照 NagramXF 做：alpha 0→1、0.9→1、200ms、EaseOutQuint
+
+- 不再自造参数。进页整段对齐 NagramXF（Telegram 分支）`ActionBarLayout.presentFragment` 里
+  `useAlphaAnimations` 那一支（`Keeperorowner/NagramXF@dev`，`TMessagesProj/src/main/java/org/telegram/ui/ActionBar/ActionBarLayout.java:2350-2372`）：`ALPHA 0→1`、`SCALE_X/SCALE_Y 0.9→1`、`AnimatorSet` 200ms、
+  `CubicBezierInterpolator.EASE_OUT_QUINT`（同文件 `CubicBezierInterpolator.java:13` = `(.23, 1, .32, 1)`），
+  关闭那一支是 `alpha 1→0`、`1→0.9`、200ms、`accelerateDecelerate`（`:2958-2975`）。
+- 本仓改掉的三处自造参数：
+  - `0.86/0.90` 宽高不等 → **`0.9/0.9` 各向同性**（上游两个轴同值）；
+  - `260ms` → **`200ms`**；
+  - `PathInterpolator(0.2, 0, 0, 1)` → **`(.23, 1, .32, 1)`**（EaseOutQuint）；
+  - 另加**透明度 0→1**（上游有，我们之前为省一层离屏缓冲去掉了），并删掉「按点按位置取原点」
+    ——上游动的是铺满窗口的容器，pivot 就是中心，所以我们这边也固定取 `width/2, height/2`。
+- 复位照旧写在 `setListener` 的 `onAnimationEnd`（`cancel()` 会丢 `withEndAction`，见二十八），
+  这次连 **alpha 一起兜**：取消路径若把 alpha 停在 0，整页会看不见。
+- 读数：`tools/check.sh` → `compiled: 138 classes` / `73 tests passed` / `OK`
+  （少的那一条是删掉的 `expandPivot` 单测——函数本身已随「点按取原点」一起删除）。
+- **未做**：真机。参数是照上游抄的，观感要装了才看得见。
+
 ## 2026-11-01（三十）— 装机说明不再自称「最新」：取包改按 run 锚定，删掉会腐化的字节数
 
 - 两条都是文档口径，不是功能改动。
