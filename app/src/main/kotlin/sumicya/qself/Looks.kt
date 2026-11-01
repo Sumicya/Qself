@@ -3170,7 +3170,7 @@ private fun pageEnter(view: View?, source: String, wholePage: Boolean = false) {
     if (!android.animation.ValueAnimator.areAnimatorsEnabled()) return recordEnterSkip("系统动画已关", source)
     if (!pageAnimatable(v)) return recordEnterSkip("页面不可动", source, "类=${v.javaClass.simpleName}")
     // 等它真正接进窗口、量出尺寸之后再向上找整页根：AIO 建页那一刻视图还没挂到页面上。
-    OnceLaidOut(WeakReference(v)) { playEnter(if (wholePage) pageRootOf(it) else it, source) }.start()
+    OnceLaidOut(WeakReference(v), source) { playEnter(if (wholePage) pageRootOf(it) else it, source) }.start()
 }
 
 /**
@@ -3242,7 +3242,11 @@ private fun playEnter(v: View, source: String) {
 }
 
 /** 等这个视图真正量出尺寸的第一帧（最多四帧），在绘制前把起始状态摆好；超时就当这页不该动，安静退出。 */
-private class OnceLaidOut(private val view: WeakReference<View>, private val action: (View) -> Unit) :
+private class OnceLaidOut(
+    private val view: WeakReference<View>,
+    private val source: String,
+    private val action: (View) -> Unit,
+) :
     View.OnAttachStateChangeListener, ViewTreeObserver.OnPreDrawListener {
     private var waited = 0
 
@@ -3271,7 +3275,9 @@ private class OnceLaidOut(private val view: WeakReference<View>, private val act
         } else if (++waited >= 4) {
             stop(v)
             // 四帧还没量出尺寸就当这页不该动；留一行，免得把「没等到」记成「没触发」。
-            recordQselfEvent("页面进入 : 跳过 原因=四帧内未量出尺寸 尺寸=${v.width}x${v.height}")
+            // 带上来源，跟另外六道早退同一格式：判据里 `grep "页面进入 : 跳过" | grep 来源=`
+            // 才数得全，不会把这一支漏在分母外。
+            recordEnterSkip("四帧内未量出尺寸", source, "尺寸=${v.width}x${v.height}")
         }
         return true
     }
