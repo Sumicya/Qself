@@ -3103,9 +3103,13 @@ internal fun backShift(progress: Float, width: Int, edgeLeft: Boolean): Float =
 // 进页参数照抄 NagramXF（Telegram 分支）`ActionBarLayout.presentFragment` 的 useAlphaAnimations 那一支：
 // alpha 0→1、SCALE_X/SCALE_Y 0.9→1（各向同性，没有 0.86/0.90 那种宽高不等）、200ms、
 // CubicBezierInterpolator.EASE_OUT_QUINT = (.23, 1, .32, 1)，pivot 用视图自身的中心。
-// 打开那一支：ActionBarLayout.java:2350-2372；关闭那一支（alpha 1→0、1→0.9、accelerateDecelerate）：:2958-2975。
+// 源码锚 `Keeperorowner/NagramXF@1af8d9b4` 的 TMessagesProj/src/main/java/org/telegram/ui/ActionBar/ActionBarLayout.java：
+// 打开那一支 :2339-2367；关闭那一支（alpha 1→0、1→0.9、accelerateDecelerate、200ms）：:2948-2972。
 private const val ENTER_MS = 200L
 private const val ENTER_SCALE = 0.9f
+/** 关闭那一支的终点比例（与开启那支同为上游的 0.9）。 */
+private const val EXIT_SCALE = 0.9f
+private const val EXIT_MS = 200L
 private const val EASE_OUT_QUINT_X1 = 0.23f
 private const val EASE_OUT_QUINT_Y1 = 1f
 private const val EASE_OUT_QUINT_X2 = 0.32f
@@ -3335,6 +3339,60 @@ private fun backSettle(root: View) {
 }
 
 /**
+ * 退页：按关闭那一支收成 alpha 0、scale 0.9（200ms、`AccelerateDecelerateInterpolator`），
+ * 收尾之后才把返回交回 QQ——上游把 `removeFragmentFromStackInternal` 放进
+ * `onCloseAnimationEndRunnable`（ActionBarLayout.java:2955-2962），动画没跑完不摘页。
+ * 改前这里直接调 `backSettle`：把滑到一半的页面弹回 1.0 再让 QQ 摘掉，肉眼看是「先缩一下又弹回原大小」。
+ */
+private fun backClose(root: View, handoff: () -> Unit) {
+    var handed = false
+    fun once() {
+        if (handed) return
+        handed = true
+        handoff()
+        // 复位放在交回之后：页面可能被 QQ 复用，留在 alpha 0 就是整页看不见。
+        root.animate().setListener(null)
+        root.alpha = 1f
+        root.scaleX = 1f
+        root.scaleY = 1f
+        root.translationX = 0f
+        root.pivotX = root.width / 2f
+        root.pivotY = root.height / 2f
+    }
+    if (!android.animation.ValueAnimator.areAnimatorsEnabled()) {
+        recordQselfEvent("页面退出 : 跳过 原因=系统动画已关")
+        return once()
+    }
+    root.animate().cancel()
+    root.pivotX = root.width / 2f          // 关闭那一支不重取 pivot；容器铺满窗口，中心即 pivot
+    root.pivotY = root.height / 2f
+    root.animate().alpha(0f).scaleX(EXIT_SCALE).scaleY(EXIT_SCALE).translationX(0f)
+        .setDuration(EXIT_MS)
+        .setInterpolator(android.view.animation.AccelerateDecelerateInterpolator())
+        .setListener(object : android.animation.AnimatorListenerAdapter() {
+            private var cancelled = false
+
+            override fun onAnimationCancel(animation: android.animation.Animator) {
+                cancelled = true
+            }
+
+            override fun onAnimationEnd(animation: android.animation.Animator) {
+                val restA = root.alpha
+                val restX = root.scaleX
+                recordQselfEvent(
+                    "退出收尾 : ${if (cancelled) "取消" else "自然结束"} " +
+                        "比例=${(restX * 1000).roundToInt() / 1000f} " +
+                        "透明=${(restA * 1000).roundToInt() / 1000f}",
+                )
+                once()
+            }
+        })
+        .start()
+    // 兜底：动画被系统丢掉（视图提前 detach 之类）时也不把返回吞掉。
+    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ once() }, EXIT_MS + 80L)
+}
+
+/**
  * 返回手势的观察者：所有事件原样转发，进度只用来给页面做 transform。
  * QQ 注册的 OnBackAnimationCallback 在这里换一个包装件；注销时按原引用换回去，行为与不装模块时一致。
  */
@@ -3368,6 +3426,7 @@ private class BackGesture(private val activity: Activity, private val delegate: 
     private var maxProgress = 0f
     private var frames = 0
     private var startedAt = 0L
+    private var closing = false
 
     override fun onBackStarted(backEvent: BackEvent) {
         startedAt = android.os.SystemClock.uptimeMillis()
@@ -3393,9 +3452,13 @@ private class BackGesture(private val activity: Activity, private val delegate: 
     }
 
     override fun onBackInvoked() {
-        root?.get()?.let(::backSettle)
+        // 过渡期间吞掉重复的返回：上游拿 transitionAnimationInProgress 挡这一下。
+        if (closing) return
+        val v = root?.get()
         report("提交")
-        delegate.onBackInvoked()
+        if (v == null) return delegate.onBackInvoked()
+        closing = true
+        backClose(v) { delegate.onBackInvoked() }
     }
 
     /** 没有进度事件就不写这行：那说明 QQ 没启用预测性返回，写了只会变成噪声。 */

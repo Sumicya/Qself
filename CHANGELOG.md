@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 2026-11-01（三十五）— 退页照 NagramXF 收成 1→0.9 并淡出，不再弹回原尺寸
+
+- 关闭那一支（`Keeperorowner/NagramXF@1af8d9b4` 的 `ActionBarLayout.java:2948-2972`）：alpha 1→0、SCALE_X/Y 1→0.9、200ms、`AccelerateDecelerateInterpolator`；上游把摘页放在 `onCloseAnimationEndRunnable`，这里同样等收尾后才把返回交回 QQ。
+- 改前提交返回走 `backSettle`，把滑到一半的页面弹回 1.0 再让 QQ 摘掉，肉眼看是「先缩一下又弹回原大小」；改后收在 0.9 并淡到 0。
+- 手势段没动：`backScale` 1−0.06p、`backShift` ±0.10w·p 与 `ProtoTest` 的 8 条断言都保留；只有收尾那一支换成 `backClose`。
+
 ## 2026-11-01（三十四）— CHANGELOG 收成「一条五行」：84 条压到 82 条，加本条 83 条
 
 - 新规范（`1e1012d9`）要求本文件只记「改了什么＋为什么一句」，一条不超过五行。
