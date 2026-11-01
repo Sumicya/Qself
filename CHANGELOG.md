@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-10-31（三十）— 装机说明不再自称「最新」：取包改按 run 锚定，删掉会腐化的字节数
+
+- 两条都是文档口径，不是功能改动。
+- 取包：`gh api repos/…/actions/artifacts --jq '.artifacts[0].name'` 说的是「**全仓最新产物**」，
+  不是「最近一次成功 `Build` 的产物」——别的 workflow 写一次 artifact 就会把 `[0]` 顶掉，而命令一个字都不用改。
+  改成先取 run 再整包下载：`RID=$(gh api 'repos/Sumicya/Qself/actions/workflows/build.yml/runs?per_page=1&status=success' --jq '.workflow_runs[0].id')`
+  → `gh run download "$RID" -R Sumicya/Qself -D "$D"`。实测该查询返回 `41208187005`（head `9b4e2ca1`，
+  产物 `Qself-26.10.31.13.377` / `440446 B`），与 `run download` 的目标一致。
+- 字节数：原来写「当前最新那包是 `452944` 字节（`7.371`）」，六个构建之后实际是 `440446`，差 `12498` 字节，
+  且过期不产生任何错误信号。现在**不写**任何「最新包」读数，只留「按 run 取」的口径与「点 Actions 里最新一次 `Build`」的退路。
+- 同时**不写**「最近一次在真机上验过的包」：`连开同一会话 5 次不缩` 那条验收还没跑完，写上去就是把没验的说成验过。
+- 读数：`grep -c "当前最新那包" README.md` → 改前 `1`、改后 `0`；`grep -c "artifacts\[0\]" README.md` → 改前 `2`、改后 `0`
+  （改后第 76 行只留了一句「不要用 `actions/artifacts` 的 `[0]`」的反面说明，字面量已清零）。只改 `*.md`，按 `paths-ignore` 不触发 Build。
+
 ## 2026-10-31（二十九）— 给「页面缩着、四周留边」装上读数：视图树与收尾日志都打比例
 
 - 为什么加：验收的最后一条是「连续开关同一会话 5 次，第 5 次不得缩小留边」，可这一条此前**没有任何读数**。
