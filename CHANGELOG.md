@@ -8,7 +8,7 @@
   于是「跳过几次」永远少数一次，而没人看得出少了。
 - 改法：`OnceLaidOut` 多接一个 `source`（构造处就传，`pageEnter` 那里本来就有），超时改调 `recordEnterSkip`。
   现在七道早退同一格式：`页面进入 : 跳过 来源=… 原因=… [尺寸=…|距上次=Nms|类=…]`。
-- 读数（取样 2026-11-01 10:47 +0800，对象 `arena/b08370a2-qself` @ `1948f786` 与其父）：
+- 读数（取样 2026-11-01 10:45 +0800，对象 `arena/b08370a2-qself` @ `1948f786` 与其父）：
   `grep -c "recordEnterSkip(" …/Looks.kt` → `8` → **`9`**（1 定义 + 8 调用，此前 7 调用）；
   `grep -c "页面进入 : 跳过" …/Looks.kt` → `2` → **`1`**（只剩函数定义里那一处字面量）。
   `tools/check.sh` → `compiled: 138 classes` / `73 tests passed` / `OK`。
