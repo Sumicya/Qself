@@ -14,6 +14,13 @@
 
 ## 历史全文（倒序，原样保留）
 
+## 2026-11-05（三十八）— 三个仓的工作流对齐同一套写法
+
+- `name` 跟文件名走：`Build`→`build`、`PR check`→`pr-check`，Actions 列表里不再出现大小写两套。
+- 并发组按用途一个锁：`<仓>-build` / `<仓>-pr` / `<仓>-cleanup`；Gself 三处 `gself-build` 改回 `gself-cleanup`，Selffont 的 `build-${{ github.ref }}` 与 `selffont-artifacts` 收成 `selffont-build` / `selffont-cleanup`。
+- Selffont 补顶层 `env` 两键、artifact `overwrite: true`、五条英文步骤名改中文、顶部两行注释。
+- 未做：Selffont 的清理仍是内联 Python（仓里没有 `.github/scripts/cleanup.py`），且 `if: github.event_name != 'pull_request'` 保留（写权限 job 不跑未信任 PR）。
+
 ## 2026-11-05（三十七）— 时间标签可带 QQ 号与序号，设置面板换成厚磨砂
 
 - 消息时间格式按第一个 `{` 切成两段：前段照旧交给 `DateTimeFormatter`，后段替换 `{uin}` / `{seq}`，取不到就留空（`MessageStyle.kt:57-70`）。

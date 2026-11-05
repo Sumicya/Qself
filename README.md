@@ -61,7 +61,7 @@
    D=/storage/emulated/0/Download/selfs
    rm -rf "$D"
    mkdir -p "$D"
-   # 「最新」必须有归属：按最近一次成功的 Build 取，不要用全仓 artifact 列表的 [0]
+   # 「最新」必须有归属：按最近一次成功的 build 取，不要用全仓 artifact 列表的 [0]
    RID=$(gh api 'repos/Sumicya/Qself/actions/workflows/build.yml/runs?per_page=1&status=success' --jq '.workflow_runs[0].id')
    gh run download "$RID" -R Sumicya/Qself -D "$D"
 
@@ -72,12 +72,12 @@
    rm -rf "$D"
    ```
    包落在 `"$D"/<产物名>/<产物名>.apk`，想先看一眼就 `ls -l "$D"/*/*.apk`。`RID` 取的是
-   **最近一次成功的 `Build`**，所以「最新」有明确归属，出偏差能顺着 run 号回溯到提交；
+   **最近一次成功的 `build`**，所以「最新」有明确归属，出偏差能顺着 run 号回溯到提交；
    不要用 `actions/artifacts` 的 `[0]`——那是全仓最新产物，别的 workflow 写一次 artifact 就会把它顶掉。
    **这里不写「最新包是多少字节」**：最新每天都变，写死在文档里必然过期，而且过期不报错——
    旧版本写死过一次，六个构建之后就差了一万二千多字节，谁也没收到提示。也不写「最近验过的那一包」：
    「连开同一会话 5 次不缩」那条真机验收还没跑完，写了就是把没验的说成验过。
-   不想用命令就点 Actions 里最新一次 `Build` 的 Artifacts。产物只留最近 5 个，更早的会被
+   不想用命令就点 Actions 里最新一次 `build` 的 Artifacts。产物只留最近 5 个，更早的会被
    `.github/scripts/cleanup.py` 删掉。下载下来的 apk 权限是 `600`（你自己的 `ls -l` 就是这样），
    `su -c` 的 root 与文件管理都能读，不用改权限。
 2. LSPosed 里启用 Qself，作用域已写死为 QQ，强行停止 QQ 再打开
