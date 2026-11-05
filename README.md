@@ -96,7 +96,7 @@
 当前仓库不保存签名私钥；debug APK 使用 Android 默认 debug 签名，正式签名需由仓库外的安全签名环境提供。
 失败日志以 GitHub Actions 原始日志为准。
 本地没有 Android SDK 时用 `tools/check.sh` 做类型检查 + 跑 ProtoTest（第一次会拉工具链到 `~/.cache/qself-tc`）。
-版本号 `yy.m.d.当日序号.总序号`，按 git 提交数取，由 `build.yml` 在 CI 里算。
+版本号 `yy.m.d.当日序号.总序号`，总序号直接取本次运行的 `run_number` 原值（不是提交数，也不是 artifact 数），当日序号由同日运行的 `run_number` 差算出，整段由 `build.yml` 在 CI 里算。
 
 ### 核落点
 
