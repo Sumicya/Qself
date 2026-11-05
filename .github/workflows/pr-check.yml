@@ -1,5 +1,5 @@
 # Qself PR 校验：只跑落点核对、着色器编译与单测，不取号、不出包、不上传。
-name: PR check
+name: pr-check
 
 on:
   pull_request:
@@ -15,6 +15,9 @@ jobs:
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    concurrency:
+      group: qself-pr
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -43,6 +46,7 @@ jobs:
         run: ./gradlew --no-daemon :app:testDebugUnitTest
 
   cleanup-artifacts:
+    if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     concurrency:
