@@ -31,7 +31,7 @@ internal const val BUBBLE_PADDING = "bubble_padding_dp"
 internal fun bubbleCornerDp(): Float = (store()?.getInt(BUBBLE_CORNER, 17) ?: 17).coerceIn(0, 32).toFloat()
 internal fun bubblePaddingDp(): Float = (store()?.getInt(BUBBLE_PADDING, 5) ?: 5).coerceIn(0, 16).toFloat()
 internal const val TIME_FORMAT_GUIDE =
-    "格式码（左对齐显示）：yyyy/yy 年 · MM/M 月 · dd/d 日 · E 星期 · HH/H 0-23时 · kk/k 1-24时 · hh/h 1-12时 · KK/K 0-11时 · a 上下午 · mm/m 分 · ss/s 秒 · SSS/S 毫秒；文字用单引号包裹"
+    "格式码：yyyy/yy 年 · MM/M 月 · dd/d 日 · E 星期 · HH/H 0-23时 · kk/k 1-24时 · hh/h 1-12时 · KK/K 0-11时 · a 上下午 · mm/m 分 · ss/s 秒 · SSS/S 毫秒；文字用单引号包裹。时间部分写完后可接 {uin}（发送者 QQ 号）与 {seq}（本条在会话里的序号），例：HH:mm {uin} #{seq}"
 
 internal const val SAFE_TOP_GUIDE =
     "状态栏照常显示，顶栏内容固定停在状态栏／摄像头下沿（真机 141px），不会顶到 y=0 被摄像头压住；滑条只在这个位置上再往下让，0dp 就是 QQ 的原始位置。消息区从这条线铺下来，滚动时从玻璃胶囊底下穿过。"
@@ -54,7 +54,19 @@ private fun cachedTimeFormatter(pattern: String, locale: Locale = Locale.getDefa
     return fmt
 }
 
-internal fun validTimePattern(pattern: String): Boolean = cachedTimeFormatter(pattern) != null
+internal fun validTimePattern(pattern: String): Boolean = cachedTimeFormatter(stampTimePattern(pattern)) != null
+
+/** 时间格式按第一个 `{` 切成两段：前面给 DateTimeFormatter，后面按 `{uin}`／`{seq}` 换成 QQ 号与序号。 */
+internal fun stampTimePattern(pattern: String): String = pattern.substringBefore('{')
+
+/** 取不到 QQ 号或序号就换成空串，不把占位符留给用户看。 */
+internal fun messageStamp(pattern: String, seconds: Long, uin: Long, seq: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+    val time = messageTime(seconds, stampTimePattern(pattern), zone)
+    if (time.isEmpty()) return ""
+    return time + pattern.substring(stampTimePattern(pattern).length)
+        .replace("{uin}", if (uin > 0) uin.toString() else "")
+        .replace("{seq}", if (seq > 0) seq.toString() else "")
+}
 
 internal fun messageTime(seconds: Long, pattern: String, zone: ZoneId = ZoneId.systemDefault()): String =
     if (seconds <= 0) "" else runCatching {
@@ -139,6 +151,8 @@ private class ExternalStamp(host: android.view.ViewGroup) {
     }
     var seconds = 0L
     var self = false
+    var uin = 0L
+    var seq = 0L
     /** 卡片 (Ark) 内容根必须留在原生 MATCH_PARENT：改成 WRAP_CONTENT 后 QQ 用 AT_MOST 量它，
      *  卡片按自己的宽度排版、却按量到的宽度裁剪，真机上右侧一列按钮和链接图标会被卡片底切掉。 */
     var keepWidth = false
@@ -165,7 +179,7 @@ private class ExternalStamp(host: android.view.ViewGroup) {
             restore()
             return
         }
-        val text = messageTime(seconds, store()?.getString(TIME_PATTERN, "HH:mm") ?: "HH:mm")
+        val text = messageStamp(store()?.getString(TIME_PATTERN, "HH:mm") ?: "HH:mm", seconds, uin, seq)
         if (text.isEmpty()) {
             restore()
             return
@@ -241,11 +255,14 @@ fun messageTimestamps() {
     val tplReceiver = cls("com.tencent.mobileqq.aio.msglist.holder.template.g")
     val tplSender = cls("com.tencent.mobileqq.aio.msglist.holder.template.l")
     fun bindSlot(slotView: android.view.ViewGroup, item: Any?, arkCard: Boolean = false) {
-        val time = messageRecord(item)?.get("msgTime") as? Long ?: 0L
+        val rec = messageRecord(item)
+        val time = rec?.get("msgTime") as? Long ?: 0L
         val self = isSelfItem(item)
         externalStamps.getOrPut(slotView) { ExternalStamp(slotView) }.also {
             it.seconds = time
             it.self = self
+            it.uin = (rec?.get("senderUin") as? Number)?.toLong() ?: 0L
+            it.seq = (rec?.get("msgSeq") as? Number)?.toLong() ?: 0L
             it.keepWidth = arkCard
             it.apply()
         }

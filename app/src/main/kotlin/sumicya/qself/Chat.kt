@@ -1018,6 +1018,9 @@ private class RunSpacing(view: View) {
 internal fun runVisibility(native: Int, override: Int?): Int =
     if (override == View.INVISIBLE && native != View.VISIBLE) native else override ?: native
 
+/** 复用的行会把上一轮我们自己写的 INVISIBLE 当成原生状态带回来；松手时按可见处理，否则新消息永远没有头像。 */
+internal fun releasedRunVisibility(native: Int): Int = if (native == View.INVISIBLE) View.VISIBLE else native
+
 private val runMeasurements = WeakHashMap<View, WeakReference<RunBinding>>()
 private val runVisibilities = WeakHashMap<View, RunVisibility>()
 private class RunVisibility(view: View) {
@@ -1028,6 +1031,7 @@ private class RunVisibility(view: View) {
     init { runVisibilities[view] = this }
     fun receive(value: Int): Int { native = value; return runVisibility(native, override) }
     fun apply(value: Int?) {
+        if (value == null && override == View.INVISIBLE) native = releasedRunVisibility(native)
         override = value
         view.get()?.let {
             val target = runVisibility(native, override)

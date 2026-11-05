@@ -2,7 +2,7 @@
 
 给 NT QQ 的一个 LSPosed 模块：**自由、简单、现代、原生**。功能默认开启，实际生效受 QQ 版本与对象生命周期限制；不联网、没有第三方库、没有一个 `.so`。
 开关位于 QQ 主页底栏旁独立的 76×64dp 玻璃三线设置短胶囊中。菜单在入口附近展开，宽不超过 360dp、高不超过 520dp；自动避让系统栏和键盘，空间不足时缩小并在安全区内定位。单列列表、状态说明与操作按钮都可在面板内部滚动。
-菜单、输入区与底栏共享模糊、折射和罩色路径，按用途保留不同圆角，不把阅读面板做成大胶囊。勾选只表示配置已开启，✗ 表示当前进程记录了安装失败，不表示效果已经验证。部分功能需要重进页面或重启 QQ；恢复默认同样受此限制。“结束进程”直接结束当前进程，不保证 QQ 其他进程退出。偏好存进 QQ 自己的 SharedPreferences。
+菜单、输入区与底栏共享模糊、折射和罩色路径，按用途保留不同圆角，不把阅读面板做成大胶囊；设置面板自己走厚磨砂（`KernelBar.frost`：模糊不小于 14dp、罩色 85%），压在会话列表上也不把背后的字透出来。勾选只表示配置已开启，✗ 表示当前进程记录了安装失败，不表示效果已经验证。部分功能需要重进页面或重启 QQ；恢复默认同样受此限制。“结束进程”直接结束当前进程，不保证 QQ 其他进程退出。偏好存进 QQ 自己的 SharedPreferences。
 
 ## 要求
 
@@ -30,7 +30,7 @@
 
 聊天
 - 防撤回：私聊、群聊、重连补发的撤回都吞掉，被撤回的那条压成半透明，会话里插一条「xx 尝试撤回一条消息」灰字；本机主动点击「撤回」时直接放行原生撤回流程，不拦截自身撤回。
-- **消息时间（置于消息容器外部下方以适配全部消息）**：通过 `AIOBubbleMsgItemVB#k1` 与全部内容组件 `d1` 将自定义格式时间（`ExternalStamp`）直接挂载于消息槽容器 `msgContent`（`0x7f0a11b9` `BubbleLayoutCompatPress` 垂直 `LinearLayout`）底部外侧（他人消息左对齐 `START`、自己消息右对齐 `END`），并将同容器兄弟内容根的 `MATCH_PARENT` 宽度转为 `WRAP_CONTENT`（避免 `LinearLayout.measureVertical` 的 `forceUniformWidth` 将图片、表情、转发卡片或短文本水平压窄为时间戳宽度），统一适配文字、图片、文件、引用、混排、语音、表情、卡片、视频、合并转发与不支持消息等全部类型，同时折叠会话顶部 `AIOTimestampComponent` 时间分隔槽。默认 `HH:mm`，在菜单「消息外观」输入自定义格式（内附左对齐格式码说明：`yyyy/yy` 年、`MM` 月、`dd` 日、`E` 星期、`HH` 24时、`hh` 12时、`a` 上下午、`mm` 分、`ss` 秒、`SSS` 毫秒，单引号包裹文字）。时间不会混入正文、复制内容或输入框，也不破坏气泡与卡片内部子 View 树；关闭、复用与热重载均完整还原。各类型实际视觉效果仍待真机验收。
+- **消息时间（置于消息容器外部下方以适配全部消息）**：通过 `AIOBubbleMsgItemVB#k1` 与全部内容组件 `d1` 将自定义格式时间（`ExternalStamp`）直接挂载于消息槽容器 `msgContent`（`0x7f0a11b9` `BubbleLayoutCompatPress` 垂直 `LinearLayout`）底部外侧（他人消息左对齐 `START`、自己消息右对齐 `END`），并将同容器兄弟内容根的 `MATCH_PARENT` 宽度转为 `WRAP_CONTENT`（避免 `LinearLayout.measureVertical` 的 `forceUniformWidth` 将图片、表情、转发卡片或短文本水平压窄为时间戳宽度），统一适配文字、图片、文件、引用、混排、语音、表情、卡片、视频、合并转发与不支持消息等全部类型，同时折叠会话顶部 `AIOTimestampComponent` 时间分隔槽。默认 `HH:mm`，在菜单「消息外观」输入自定义格式（内附格式码说明：`yyyy/yy` 年、`MM` 月、`dd` 日、`E` 星期、`HH` 24时、`hh` 12时、`a` 上下午、`mm` 分、`ss` 秒、`SSS` 毫秒，单引号包裹文字）；时间部分之后还能接 `{uin}`（发送者 QQ 号）与 `{seq}`（本条在会话里的序号），分隔符自己写，如 `HH:mm {uin} #{seq}`。时间不会混入正文、复制内容或输入框，也不破坏气泡与卡片内部子 View 树；关闭、复用与热重载均完整还原。各类型实际视觉效果仍待真机验收。
 - **原生消息菜单纵向列表与设置面板随指高亮**：按 NagramXF `ActionBarPopupWindow` + `ActionBarMenuSubItem` 将 QQ 原生消息长按菜单 `QQCustomMenuExpandableLayout`（`p` / `l` / `H` / `G`）重排为 12dp 圆角玻璃纵向列表（行高 48dp、左右内边距 18dp、上下内边距清零、20dp 图标 + 12dp 间距 + 16sp 完整不截断文案、6dp 圆角按压高亮，隐藏原生暗色 `S: QQBlurViewWrapper` 与直接子级分割线 `View`，保持聊天列表 `T: mSourceView` 可见且 `C = 220dp` 不裁高），并与模块设置面板共用单有效项随指高亮、跨项移动、项外取消且松手不触发动作、展开态纵滑交还 `ScrollView`；「删除」「撤回」「结束进程」统一标记为警示红图文与按压态（待真机手势复验）。
 - **消息显示 At 对象**：点按群消息中的 `@名字` 打开对应资料卡；按元素顺序定位重复名字，保留原链接及正常长按/滑动。UID 无缓存映射时明确提示，`@全体成员` 不当作个人资料卡。
 - **头像圆角（普通聊天与聊天记录同步生效）**：菜单「消息外观」调整 0～50%；0% 为直角，50% 为圆形，默认 20%（仅控制头像，不联动气泡圆角）。同时拦截普通聊天 `RoundRectImageView#draw` 下的 `QQProAvatarDrawable#z`（跳过 `proavatar.j#b` / `proavatar.mask.a#a` 的 360° 圆形 `Path.addArc` 遮罩）、`com.tencent.mobileqq.proavatar.e$a#a`、`com.tencent.qqnt.avatar.meta.b$a#b`、`com.tencent.qqnt.avatar.b$a#i` 与 `BaseImageUtil#getCircleFaceBitmap`，交由 `RoundRectImageView#setCornerRadiusAndMode` 按圆角半径裁剪；切换或拖动滑块时清空 `m` 缓存重刷，关闭还原原半径与模式。

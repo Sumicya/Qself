@@ -54,7 +54,8 @@ internal fun kernelRadius(width: Float, height: Float, limit: Float): Float =
 
 /** QQ 仍持有真实页签、点击及无障碍；这里只接管底栏背景、按压和横向选择。 */
 internal class KernelBar(private val host: View, private val behind: (Canvas) -> Unit,
-    private val invalidate: () -> Unit, val standalone: Boolean = false, private val cornerRadius: Float = Float.MAX_VALUE, private val deformBody: Boolean = true) {
+    private val invalidate: () -> Unit, val standalone: Boolean = false, private val cornerRadius: Float = Float.MAX_VALUE,
+    private val deformBody: Boolean = true, private val frost: Boolean = false) {
     private val dp = host.dp
     private val scene = RenderNode("ksu-scene")
     private val base = RenderNode("ksu-base")
@@ -260,7 +261,7 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
     private fun material(canvas: Canvas, node: RenderNode, rect: RectF, shift: Float) {
         rounded(canvas,rect) {
             drawAt(canvas,node,0f,rect.top)
-            paint.color = if (night()) 0x66121212 else 0x66FAFAFA
+            paint.color = if (frost) { if (night()) 0xD8121212.toInt() else 0xE6FAFAFA.toInt() } else if (night()) 0x66121212 else 0x66FAFAFA
             canvas.drawRect(rect,paint)
             val hp = highlight.value.coerceIn(0f,1f)
             if (hp > 0) {
@@ -302,7 +303,8 @@ internal class KernelBar(private val host: View, private val behind: (Canvas) ->
             try { sc.translate(pad-bounds.left.toFloat()-panel(),pad-bounds.top.toFloat()); behind(sc) } finally { scene.endRecording() }
             lastSceneFrame = frames
         }
-        val blurRadius = (glassBlurDp()*dp).coerceAtLeast(.1f)
+        // 面板整块压在会话列表上：1dp 模糊加四成罩色等于没有底，字和背后的行叠在一起，按 14dp 起跳。
+        val blurRadius = ((if (frost) maxOf(glassBlurDp(), 14f) else glassBlurDp()) * dp).coerceAtLeast(.1f)
         val key = (w.toLong() shl 32) or (h.toLong() and 0xFFFFL) or ((blurRadius * 100f).toLong() shl 16)
         if (baseKey != key) {
             colorControls.setFloatUniform("in_brightness", 0f)

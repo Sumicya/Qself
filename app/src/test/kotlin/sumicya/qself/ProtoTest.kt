@@ -378,6 +378,22 @@ class ProtoTest {
         assertEquals(0f, kernelRadius(0f, 0f, 22f))
     }
 
+    @Test fun messageStampAppendsQqIdAndSequenceAfterTheTimePart() {
+        val utc = java.time.ZoneOffset.UTC
+        assertEquals("22:13", messageStamp("HH:mm", 1700000000L, 10001, 42, utc))
+        assertEquals("22:13 10001 #42", messageStamp("HH:mm {uin} #{seq}", 1700000000L, 10001, 42, utc))
+        assertEquals("22:13  #42", messageStamp("HH:mm {uin} #{seq}", 1700000000L, 0, 42, utc))
+        assertEquals("", messageStamp("HH:mm {uin}", 0, 10001, 0, utc))
+        assertTrue(validTimePattern("HH:mm {uin} #{seq}"))
+        assertFalse(validTimePattern("HH:mm:ss["))
+    }
+
+    @Test fun releasedRunVisibilityNeverLeavesOurOwnInvisibleBehind() {
+        assertEquals(0, releasedRunVisibility(4))
+        assertEquals(0, releasedRunVisibility(0))
+        assertEquals(8, releasedRunVisibility(8))
+    }
+
     @Test fun messageTimestampFormatsSecondsAndRejectsInvalidPatterns() {
         val utc = java.time.ZoneOffset.UTC
         assertEquals("2023-11-14 22:13:20", messageTime(1700000000L, "yyyy-MM-dd HH:mm:ss", utc))

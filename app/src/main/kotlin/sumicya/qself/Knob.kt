@@ -693,11 +693,11 @@ private fun sheet(anchor: View) {
         setPadding(0, 0, 0, (8 * dp).toInt())
     }
     card.addView(heading)
-    grid.addView(TextView(ctx).apply {
+    card.addView(TextView(ctx).apply {
         text = "勾选仅表示配置开启，不代表效果已验证。部分功能需重进页面或重启 QQ（结束进程只结束当前进程）；恢复默认也遵循此规则。"
         textSize = 12f; setTextColor(sub)
         setPadding((8 * dp).toInt(), 0, (8 * dp).toInt(), (8 * dp).toInt())
-    }, 0)
+    })
     card.addView(ScrollView(ctx).apply { isFillViewport = false; addView(grid) },
         LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     fun button(label: String, body: () -> Unit) = TextView(ctx).apply {
