@@ -385,7 +385,7 @@ class ProtoTest {
         assertEquals("22:13  #42", messageStamp("HH:mm {uin} #{seq}", 1700000000L, 0, 42, utc))
         assertEquals("", messageStamp("HH:mm {uin}", 0, 10001, 0, utc))
         assertTrue(validTimePattern("HH:mm {uin} #{seq}"))
-        assertFalse(validTimePattern("HH:mm:ss["))
+        assertFalse(validTimePattern("HH:mm#"))
     }
 
     @Test fun releasedRunVisibilityNeverLeavesOurOwnInvisibleBehind() {
@@ -537,7 +537,7 @@ class ProtoTest {
     }
 
     @Test fun timeFormatGuideCoversEveryTokenAndMidnightUsesHour24() {
-        for (token in listOf("yyyy/yy", "MM/M", "dd/d", "E", "HH/H", "kk/k 1-24时", "hh/h", "KK/K 0-11时", "a", "mm/m", "ss/s", "SSS/S", "左对齐")) {
+        for (token in listOf("yyyy/yy", "MM/M", "dd/d", "E", "HH/H", "kk/k 1-24时", "hh/h", "KK/K 0-11时", "a", "mm/m", "ss/s", "SSS/S", "{uin}", "{seq}")) {
             assertTrue(TIME_FORMAT_GUIDE.contains(token))
         }
         val utc = java.time.ZoneOffset.UTC
