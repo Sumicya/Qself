@@ -394,6 +394,22 @@ class ProtoTest {
         assertEquals(8, releasedRunVisibility(8))
     }
 
+    @Test fun mergedRunAvatarIsBottomAnchoredAndFloatsInsideTheViewport() {
+        // 整组可见：头像底边贴住组内容底边（居底），组首在 100、组底在 400、头像高 40。
+        val bounds = runAvatarBounds(100f, 400f, 120f, 380f, 40f, merged = true)!!
+        assertEquals(380f, floatingRunAvatarTop(bounds.first, bounds.second, 0f, 900f, 40f, 4f, true, true)!! + 20f)
+        // 组比屏幕高：头像贴可视区底部浮动，且不低于组首。
+        val tall = runAvatarBounds(0f, 2000f, 20f, 1980f, 40f, merged = true)!!
+        assertEquals(900f - 20f - 4f, floatingRunAvatarTop(tall.first, tall.second, 0f, 900f, 40f, 4f, true, true)!! + 20f)
+        // 单条消息不浮绘：保持原生顶对齐。
+        assertEquals(null, runAvatarBounds(100f, 140f, 120f, 120f, 40f, merged = false))
+        // 整组滚出可视区之后不再画。
+        assertEquals(null, floatingAvatarTop(20f, 40f, 900f, 1200f, 40f, 4f))
+        // 组首不在屏里时不能把头像顶到视口上方。
+        val clipped = floatingRunAvatarTop(10f, 600f, 300f, 900f, 40f, 4f, hasStart = false, hasEnd = true)!!
+        assertTrue(clipped >= 300f - 40f)
+    }
+
     @Test fun messageTimestampFormatsSecondsAndRejectsInvalidPatterns() {
         val utc = java.time.ZoneOffset.UTC
         assertEquals("2023-11-14 22:13:20", messageTime(1700000000L, "yyyy-MM-dd HH:mm:ss", utc))

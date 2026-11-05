@@ -25,9 +25,10 @@ internal const val TOUCH_CANCEL = 3          // MotionEvent.ACTION_CANCEL
 internal const val COST_GLASS = 0
 internal const val COST_LIST = 1
 internal const val COST_HEADER = 2
+internal const val COST_AVATAR = 3
 
 internal object CostMeter {
-    private val names = arrayOf("玻璃合成", "消息几何", "顶栏")
+    private val names = arrayOf("玻璃合成", "消息几何", "顶栏", "浮绘头像")
     private val nanos = LongArray(names.size)
     private val counts = LongArray(names.size)
 

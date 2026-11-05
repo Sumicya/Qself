@@ -52,7 +52,7 @@ class Glass(
     private val backdropOverride: ((Canvas) -> Boolean)? = null,
     private val selected: (() -> View?)? = null,
 ) : Drawable() {
-    private val kernel = if (kernelBar || kernelButton || kernelSurface) KernelBar(host, { behind(it) }, { invalidateSelf() }, standalone = !kernelBar, cornerRadius = if (kernelSurface) radius else Float.MAX_VALUE, deformBody = !kernelSurface, frost = kernelSurface) else null
+    private val kernel = if (kernelBar || kernelButton || kernelSurface) KernelBar(host, { behind(it) }, { invalidateSelf() }, standalone = !kernelBar, cornerRadius = if (kernelSurface) radius else Float.MAX_VALUE, deformBody = !kernelSurface) else null
     private val dp = host.dp
     private val node = RenderNode("qself-glass")
     private val pad = (12 * dp).toInt() // 边缘折射往里采样，留一点余量就够
