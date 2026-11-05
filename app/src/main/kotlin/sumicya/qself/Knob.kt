@@ -607,11 +607,12 @@ private fun sheet(anchor: View) {
     val sub = if (night()) 0xFFB8BEC8.toInt() else 0xFF6E6E73.toInt()
     val dim = FrameLayout(ctx).apply { tag = SHEET; alpha = 0f }
     // 面板只提供玻璃材质；按压反馈由各项自己的状态背景负责，不能驱动整卡高亮。
+    val sheetRadius = 22 * dp
     val card = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL; isClickable = true
-        // 风格契约：圆角只留「全圆」与「零」两种。这张面板是小屏上占大半屏的滚动卡，全圆会变成胶囊，
-        // 所以收成零（直角）；要改回全圆，把下面两个 0f 换成 Float.MAX_VALUE 即可。
-        background = Glass(this, 0f, kernelSurface = true); outlineProvider = capsule(0f); clipToOutline = true
+        // 小屏上占大半屏的滚动卡：全圆会变成胶囊，直角又不像玻璃，取中档 22dp，玻璃与阴影都跟着它走。
+        background = Glass(this, sheetRadius, kernelSurface = true)
+        outlineProvider = capsule(sheetRadius); clipToOutline = true
         elevation = 8 * dp
         setPadding((12 * dp).toInt(), (12 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt())
         scaleX = 0.94f; scaleY = 0.94f
