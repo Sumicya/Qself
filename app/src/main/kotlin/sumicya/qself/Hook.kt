@@ -13,8 +13,9 @@ import java.lang.reflect.Method
 lateinit var xposed: XposedInterface
 lateinit var loader: ClassLoader
 
-/** 同时写 logcat（`logcat -s Qself`）和 LSPosed 管理器的日志页。 */
+/** 同时写 logcat（`logcat -s Qself`）、LSPosed 管理器的日志页与内存诊断环。 */
 fun log(msg: String, t: Throwable? = null) {
+    runCatching { recordQselfEvent(msg, t) }
     Log.i("Qself", msg, t)
     xposed.log(Log.INFO, "Qself", msg, t)
 }
@@ -23,20 +24,100 @@ fun cls(name: String): Class<*> = Class.forName(name, false, loader)
 
 /** 正在装的功能名。hook() 把它记进钩子，运行时按开关决定走不走；null = 不受开关管。 */
 var feature: String? = null
+private var installing: MutableList<XposedInterface.HookHandle>? = null
+
+/** 每项功能安装原子化：失败撤掉本项已装钩子，不能留下“显示 ✗ 但半项仍生效”。 */
+fun installFeature(name: String?, body: () -> Any?) {
+    check(installing == null) { "不支持嵌套安装" }
+    val handles = ArrayList<XposedInterface.HookHandle>()
+    installing = handles
+    val previous = feature
+    feature = name
+    try { body() } catch (failure: Throwable) {
+        handles.asReversed().forEach { handle ->
+            runCatching { handle.unhook() }.exceptionOrNull()?.let(failure::addSuppressed)
+        }
+        throw failure
+    } finally { installing = null; feature = previous }
+}
+
+private class SafeChain(private val delegate: Chain) : Chain by delegate {
+    var proceeded = false
+    var outcome: Any? = null
+    var targetFailure: Throwable? = null
+    override fun proceed(): Any? {
+        proceeded = true
+        return try {
+            delegate.proceed().also { outcome = it }
+        } catch (t: Throwable) {
+            targetFailure = t
+            throw t
+        }
+    }
+    override fun proceed(args: Array<out Any?>): Any? {
+        proceeded = true
+        return try {
+            delegate.proceed(args).also { outcome = it }
+        } catch (t: Throwable) {
+            targetFailure = t
+            throw t
+        }
+    }
+    override fun proceedWith(thisObject: Any, args: Array<out Any?>): Any? {
+        proceeded = true
+        return try {
+            delegate.proceedWith(thisObject, args).also { outcome = it }
+        } catch (t: Throwable) {
+            targetFailure = t
+            throw t
+        }
+    }
+}
 
 /**
- * 装钩子。libxposed 默认（PROTECTIVE）异常模式：钩子在 proceed 前抛异常 = 这一次当没装，
- * QQ 原方法照常跑，所以钩子体不必 try/catch。不调用 proceed 就是替换原方法。
+ * 装钩子。libxposed 默认（PROTECTIVE）只兜住 proceed 前抛出的异常；
+ * SafeChain 同时兜住 proceed 后（如 .also 块内）抛出的钩子异常并退回原返回值，防止把异常抛回宿主导致崩溃。
  */
-fun hook(target: Executable, body: (Chain) -> Any?): XposedInterface.HookHandle {
-    val name = feature
-    return xposed.hook(target).intercept { chain -> if (name == null || on(name)) body(chain) else chain.proceed() }
+fun hook(target: Executable, gated: Boolean = true, counted: Boolean = true, body: (Chain) -> Any?): XposedInterface.HookHandle {
+    val name = if (gated) feature else null
+    val sig = "${target.declaringClass.name}#${target.name}"
+    val isQLogSelf = target.declaringClass.name == "com.tencent.qphone.base.util.QLog"
+    return xposed.hook(target).intercept { chain ->
+        if (name != null && !on(name)) return@intercept chain.proceed()
+        val safe = SafeChain(chain)
+        try {
+            val res = body(safe)
+            // counted=false 给「每条消息都会走」的钩子用：省掉一次查表与一次参数摘要分配，也不占事件流。
+            if (counted && !isQLogSelf) {
+                runCatching { recordHookInvocation(sig, safe.thisObject, safe.args, res) }
+            }
+            res
+        } catch (t: Throwable) {
+            if (t === safe.targetFailure) throw t
+            if (!safe.proceeded) {
+                log("钩子前置异常: ${target.declaringClass.simpleName}#${target.name}", t)
+                chain.proceed()
+            } else {
+                log("钩子后置异常: ${target.declaringClass.simpleName}#${target.name}", t)
+                safe.outcome
+            }
+        }
+    }.also { installing?.add(it) }
 }
 
 private var prefs: SharedPreferences? = null
 
+/** 读到没登记的开关名时每个进程只报一次，免得「代码在读、清单里没有」永远静默（2026-10-31 两次踩到）。 */
+private val unknownSwitches = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
 /** 开关存在 QQ 自己的 SharedPreferences「qself」里，缺省全开；Application 还没建起来时也当开。 */
-fun on(name: String): Boolean = store()?.getBoolean(name, true) ?: true
+fun on(name: String): Boolean {
+    val known = featureDefaults[name]
+    if (known == null && unknownSwitches.add(name)) {
+        runCatching { log("开关未登记 : $name（清单里没有，按默认开启）") }
+    }
+    return name !in failed && (store()?.getBoolean(name, known ?: true) ?: (known ?: true))
+}
 
 fun store(): SharedPreferences? = prefs ?: runCatching {
     (Class.forName("android.app.ActivityThread").getMethod("currentApplication").invoke(null) as? Context)
@@ -74,9 +155,20 @@ fun Class<*>.afterNew(body: (Any) -> Unit) = declaredConstructors.forEach { c ->
     hook(c) { chain -> chain.proceed().also { body(chain.thisObject) } }
 }
 
-/** 反射读写字段，父类里的也认。 */
-private fun Any.field(name: String) = generateSequence<Class<*>>(javaClass) { it.superclass }
-    .firstNotNullOfOrNull { c -> c.declaredFields.firstOrNull { it.name == name } }?.apply { isAccessible = true }
+private val NO_FIELD = Any()
+private val fieldCache = java.util.concurrent.ConcurrentHashMap<Pair<Class<*>, String>, Any>()
+
+/** 反射读写字段，父类里的也认；缓存 Field 避免高频调用（如 MsgRecord 读取）反复分配 declaredFields 数组。 */
+private fun Any.field(name: String): java.lang.reflect.Field? {
+    val key = javaClass to name
+    val cached = fieldCache[key]
+    if (cached != null) return cached as? java.lang.reflect.Field
+    val found = generateSequence<Class<*>>(javaClass) { it.superclass }
+        .firstNotNullOfOrNull { c -> c.declaredFields.firstOrNull { it.name == name } }
+        ?.apply { isAccessible = true }
+    fieldCache[key] = found ?: NO_FIELD
+    return found
+}
 
 fun Any.set(name: String, value: Any?) =
     (field(name) ?: throw NoSuchFieldException("${javaClass.name}#$name")).set(this, value)

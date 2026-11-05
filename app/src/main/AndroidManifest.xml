@@ -3,6 +3,7 @@
     <application
         android:allowBackup="false"
         android:description="@string/description"
-        android:icon="@drawable/icon"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="Qself" />
 </manifest>

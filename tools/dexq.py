@@ -26,17 +26,35 @@ for lo, hi, w in (
     (0x1a, 0x1a, 2), (0x1b, 0x1b, 3), (0x1c, 0x1c, 2), (0x1f, 0x20, 2),
     (0x22, 0x23, 2), (0x24, 0x26, 3), (0x29, 0x29, 2), (0x2a, 0x2c, 3),
     (0x2d, 0x3d, 2), (0x44, 0x6d, 2), (0x6e, 0x72, 3), (0x74, 0x78, 3),
-    (0xd0, 0xe2, 2),
+    (0x90, 0xaf, 2), (0xd0, 0xe2, 2),
+    (0xfa, 0xfb, 4), (0xfc, 0xfd, 3), (0xfe, 0xff, 2),
 ):
     for op in range(lo, hi + 1):
         W[op] = w
+
+
+def payload_end(data, p, end):
+    """载荷允许位于指令流中间；跳过数据后继续解码，截断或未知载荷则停止。"""
+    if p + 4 > end:
+        return None
+    kind, size = struct.unpack_from('<HH', data, p)
+    if kind == 0x0100:
+        length = 8 + 4 * size
+    elif kind == 0x0200:
+        length = 4 + 8 * size
+    elif kind == 0x0300 and p + 8 <= end:
+        count = struct.unpack_from('<I', data, p + 4)[0]
+        length = 8 + ((size * count + 1) // 2) * 2
+    else:
+        return None
+    return p + length if p + length <= end else None
 
 
 def disasm(d, code_off):
     """线性扫一遍 code_item -> (用到的字符串, 读写的字段, 调用的方法)。
 
     只看 const-string / 字段读写 / invoke 三类，其余按宽度跳过。
-    撞上 switch / fill-array-data 载荷就停（那东西只出现在指令流末尾）。
+    跳过 switch / fill-array-data 数据载荷；载荷后仍可能存在可执行指令。
     """
     insns_size = struct.unpack_from("<I", d.b, code_off + 12)[0]
     p, end = code_off + 16, code_off + 16 + 2 * insns_size
@@ -46,7 +64,11 @@ def disasm(d, code_off):
         u = struct.unpack_from("<H", d.b, p)[0]
         op = u & 0xFF
         if op == 0x00 and (u >> 8) & 0xFF != 0:
-            break
+            after = payload_end(d.b, p, end)
+            if after is None:
+                break
+            p = after
+            continue
         if op == 0x1A:
             strs.add(s[struct.unpack_from("<H", d.b, p + 2)[0]])
         elif op == 0x1B:
@@ -61,7 +83,7 @@ def disasm(d, code_off):
     return strs, flds, calls
 
 
-def methods_of(d, cls_name):
+def methods_of(d, cls_name, with_access=False):
     """-> [(方法名, 签名, code_off)]；code_off 为 0 表示 abstract / native。"""
     t, s = d.types(), d.strings()
     for i in range(d.ncls):
@@ -76,19 +98,22 @@ def methods_of(d, cls_name):
         for _ in range(nsf + nif):
             _, p = uleb(d.b, p)
             _, p = uleb(d.b, p)
-        idx, out = 0, []
-        for _ in range(ndm + nvm):
-            di, p = uleb(d.b, p)
-            idx += di
-            _, p = uleb(d.b, p)
-            co, p = uleb(d.b, p)
-            # QQ 的 dex 有畸形 class_data（越界的 method_idx），撞上就把手上这些交出去，别崩
-            if idx >= d.nmth:
-                break
-            c, pr, n = struct.unpack_from("<HHI", d.b, d.omth + 8 * idx)
-            if n >= len(s) or pr >= d.npro:
-                continue
-            out.append((s[n], d.proto(pr), co))
+        out = []
+        # DEX 的 direct_methods 与 virtual_methods 是独立的差分索引流，必须分别从 0 开始。
+        for count in (ndm, nvm):
+            idx = 0
+            for _ in range(count):
+                di, p = uleb(d.b, p)
+                idx += di
+                access, p = uleb(d.b, p)
+                co, p = uleb(d.b, p)
+                if idx >= d.nmth:
+                    raise ValueError(f"method_idx {idx} >= {d.nmth}")
+                c, pr, n = struct.unpack_from("<HHI", d.b, d.omth + 8 * idx)
+                if c != cidx:
+                    raise ValueError("class_data 方法所属类不匹配")
+                method = (s[n], d.proto(pr), co)
+                out.append(method + (access,) if with_access else method)
         return out
     return None
 

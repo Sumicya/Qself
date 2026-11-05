@@ -7,44 +7,84 @@ import io.github.libxposed.api.XposedModuleInterface.HotReloadingParam
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
 
-/** 这版 QQ 里没装上的功能。开关对话框给它们画 ✗，点了也不让点。 */
+/** 这版 QQ 里没装上的功能。开关面板给它们画 ✗，点击显示失败原因，不伪装成可启用。 */
 val failed = mutableSetOf<String>()
+val failures = mutableMapOf<String, String>()
 
 /**
  * 功能清单：名字（也是开关的键）、是否只在主进程、一句描述、装法。开关面板按这个顺序排。
  * 装法找不到类就抛，install 接住写进日志，不连累别的；装法是 {} 的是 Looks.kt 里按名字查开关的视图规则。
  */
-class Feature(val name: String, val main: Boolean, val desc: String, val install: () -> Any?)
+class Feature(val name: String, val main: Boolean, val desc: String, val install: () -> Any?, val default: Boolean = true)
 
 val features = listOf(
     Feature("玻璃底栏", true, "底栏浮成一颗玻璃胶囊", {}),
-    Feature("Monet取色", true, "玻璃的颜色跟壁纸走", {}),
-    Feature("藏频道动态", true, "底栏藏掉频道/动态/小世界", {}),
-    Feature("TG输入栏", true, "输入栏改 Telegram 式玻璃胶囊", {}),
-    Feature("标题栏侧栏精简", true, "藏一起听/一起看和侧栏会员那排", ::drawerMenu),
-    Feature("统一气泡", true, "充值气泡归零，按默认画", ::plainBubble),
-    Feature("统一字体", true, "魔法字体归零", ::plainFont),
-    Feature("去头像挂件", true, "消息头像不画挂件", ::noPendant),
-    Feature("昵称只留名字", true, "昵称行去掉等级/头衔/会员", ::plainNick),
+    Feature("壁纸取色", true, "玻璃的颜色跟壁纸走", {}),
+    Feature("隐藏频道动态", true, "底栏藏掉频道/动态/小世界", {}),
+    Feature("输入栏药丸", true, "原生输入框与发送按钮独立药丸化，保留全部按钮", ::inputLayout),
+    Feature("输入区按导航栏留白", true, "快捷栏显示时输入区仍按导航栏留白；关掉则随 QQ 原始内边距（快捷栏没显示时两种一样）", {}),
+    Feature("侧栏精简", true, "藏一起听/一起看和侧栏会员那排", ::drawerMenu),
+    Feature("气泡统一", true, "充值气泡归零，按默认画", ::plainBubble),
+    Feature("字体统一", true, "魔法字体归零", ::plainFont),
+    Feature("隐藏头像挂件", true, "消息头像不画挂件", ::noPendant),
     Feature("防撤回", true, "撤回的消息留下，插灰字", ::antiRecall),
-    Feature("连发合并", true, "同一人连发成组，只留一个头像", ::groupRuns),
+    Feature("消息时间", true, "消息容器外下方绘制自定义格式时间，适配全部消息类型", ::messageTimestamps),
+    Feature("头像圆角", true, "聊天头像圆角比例可调，关闭恢复原样", ::customAvatarCorners),
+    Feature("At可点", true, "点按群消息中的 @名字 打开对应资料卡", ::clickableMentions),
+    Feature("连发合并", true, "他人左对齐、自己右对齐、灰字居中；连发组只有最后一条显示头像（同 NagramXF 的底边规则），单条顶对齐，全圆角气泡", ::groupRuns),
+    Feature("双击回应", true, "双击消息直接贴上快捷回应表情，不弹全屏文字预览", ::doubleTapReaction),
+    Feature("语音倍速", true, "记住语音播放倍速且不被单条播完重置，波形条支持直接拖动", ::pttSpeedMemory),
     Feature("回复不@", true, "回复不往输入框插 @昵称", ::replyNoAt),
     Feature("转发多选", true, "转发页常显多选入口", ::multiForward),
     Feature("转发不限人数", true, "转发选人不再卡 9 个", ::noForwardLimit),
-    Feature("左滑回复不设限", true, "卡片消息也能左滑回复", ::replyAnyMsg),
+    Feature("左滑回复", true, "卡片消息也能左滑回复", ::replyAnyMsg),
     Feature("隐藏在线状态", true, "昵称下那行在线状态藏掉", {}),
-    Feature("显示具体未读条数", true, "角标不再停在 99+", ::exactCount),
+    Feature("未读实数", true, "角标不再停在 99+", ::exactCount),
     Feature("+面板精简", true, "+ 面板只留正经附件", ::plusPanel),
-    Feature("屏蔽红点引导", true, "红点和引导气泡不亮", ::noRedDot),
-    Feature("去会员等级", true, "资料卡不画 SVIP/VIP 图标", ::plainCard),
-    Feature("屏蔽轻互动", true, "轻互动特效不播", ::noLightInteraction),
-    Feature("屏蔽表情雨", true, "表情雨不下", ::noEmojiRain),
+    Feature("隐藏红点引导", true, "红点和引导气泡不亮", ::noRedDot),
+    Feature("隐藏会员等级", true, "资料卡不画 SVIP/VIP 图标", ::plainCard),
+    Feature("停止轻互动", true, "轻互动特效不播", ::noLightInteraction),
+    Feature("停止表情雨", true, "表情雨不下", ::noEmojiRain),
+    Feature("页面过渡动效", true, "页签、会话、群聊切页时整页展开一次，关掉就直出", {}),
+    Feature("通知现代化", true, "QQ 消息通知换成大文本样式，长消息在锁屏上不再只剩半句", ::modernNotifications),
     Feature("系统WebView", false, "网页走系统 WebView，不加载 X5", ::systemWebView),
-    Feature("屏蔽统计上报", false, "灯塔统计空转", ::noTelemetry),
-    Feature("屏蔽崩溃上报", false, "不初始化 Bugly", ::noCrashReport),
+    Feature("停止统计上报", false, "灯塔统计空转", ::noTelemetry),
+    Feature("停止崩溃上报", false, "不初始化 Bugly", ::noCrashReport),
+    Feature("全量日志", false, "录制 QQ 全量 QLog、钩子轨迹与界面树快照，支持一键导出/复制", ::fullQqLogger),
 )
 
-/** libxposed 入口。装上即全部生效；开关在 QQ 主页右下角那颗圆钮里。 */
+val featureDefaults = features.associate { it.name to it.default }
+
+/** 菜单与日志的分组：从外到内排（底栏 → 输入 → 消息 → 账号 → 杂项 → 系统），名字一律说清「开了会怎样」。 */
+val featureGroups = listOf(
+    "底栏与导航" to listOf("玻璃底栏", "壁纸取色", "隐藏频道动态", "未读实数", "隐藏红点引导"),
+    "输入与面板" to listOf("输入栏药丸", "输入区按导航栏留白", "+面板精简", "侧栏精简"),
+    "消息" to listOf("连发合并", "消息时间", "气泡统一", "字体统一", "头像圆角", "隐藏头像挂件", "防撤回",
+        "At可点", "双击回应", "语音倍速", "回复不@", "左滑回复"),
+    "转发与账号" to listOf("转发多选", "转发不限人数", "隐藏在线状态", "隐藏会员等级"),
+    "特效与上报" to listOf("停止轻互动", "停止表情雨", "页面过渡动效", "停止统计上报", "停止崩溃上报"),
+    "系统与诊断" to listOf("通知现代化", "系统WebView", "全量日志"),
+)
+
+/** 按分组顺序摊平；漏进分组表的开关归到「其他」，绝不在菜单里凭空消失。 */
+fun featuresByGroup(): List<Pair<String, List<Feature>>> {
+    val byName = features.associateBy { it.name }
+    val grouped = featureGroups.map { (g, names) -> g to names.mapNotNull { byName[it] } }
+    val used = featureGroups.flatMap { it.second }.toSet()
+    val rest = features.filter { it.name !in used }
+    return if (rest.isEmpty()) grouped else grouped + ("其他" to rest)
+}
+
+/** 分组表与功能表对不上的地方，安装时直接报出来，不靠肉眼核对。 */
+fun featureGroupGaps(): List<String> {
+    val all = features.map { it.name }
+    val grouped = featureGroups.flatMap { it.second }
+    return (all - grouped.toSet()).map { "开关没进任何分组：$it" } +
+        (grouped.toSet() - all.toSet()).map { "分组里有不存在的开关：$it" } +
+        grouped.groupBy { it }.filter { it.value.size > 1 }.keys.map { "开关被分进多个组：$it" }
+}
+
+/** libxposed 入口。功能默认开启；配置入口在 QQ 主页独立设置短胶囊中，实际生效受对象生命周期限制。 */
 class Qself : XposedModule() {
     private var process = ""
     private var installed: ClassLoader? = null
@@ -59,12 +99,18 @@ class Qself : XposedModule() {
 
     /** 换 APK 时 LSPosed 热重载：旧的一代把 ClassLoader 传给新的一代，新的一代重装。 */
     override fun onHotReloading(param: HotReloadingParam): Boolean {
+        if (!restoreUi()) return false
         param.setSavedInstanceState(installed)
         return true
     }
 
     override fun onHotReloaded(param: HotReloadedParam) {
-        param.oldHookHandles.forEach { runCatching { it.unhook() } }
+        var uninstallFailed = false
+        param.oldHookHandles.forEach { handle -> runCatching { handle.unhook() }.onFailure {
+            uninstallFailed = true
+            android.util.Log.e("Qself", "旧钩子卸载失败；停止新代安装，请强行停止 QQ 后再打开", it)
+        } }
+        if (uninstallFailed) return
         process = param.processName
         (param.savedInstanceState as? ClassLoader)?.let(::install)
     }
@@ -76,16 +122,51 @@ class Qself : XposedModule() {
         val main = process == "com.tencent.mobileqq"
         val report = StringBuilder("Qself ${BuildConfig.VERSION_NAME} @ $process")
         failed.clear()
-        fun run(name: String, fn: () -> Any?) = runCatching(fn)
-            .onSuccess { report.append(" ✓").append(name) }
-            .onFailure { failed += name; report.append(" ✗").append(name).append('(').append(it.toString().take(120)).append(')') }
+        failures.clear()
+        fun run(name: String, fn: () -> Any?, gated: Boolean = true) = runCatching {
+            installFeature(if (gated) name else null, fn)
+        }.onSuccess { report.append(" ✓").append(name) }
+            .onFailure {
+                failed += name
+                failures[name] = it.stackTraceToString()
+                report.append(" ✗").append(name).append('(').append(it.toString().take(120)).append(')')
+                log("安装失败：$name；本项钩子已尝试回滚", it)
+            }
         for (f in features) {
             if (f.main && !main) continue
-            feature = f.name
             run(f.name, f.install)
         }
         feature = null // 视图扫描器不归任何开关管，它自己按名字查
-        if (main) run("视图扫描", ::looks)
+        if (main) run("视图扫描", ::looks, false)
+        // 帧率采样：每帧只记一个时间戳，导出日志里才有「卡不卡」的真机数字，而不是自评。
+        frameEventSink = ::recordQselfEvent
+        runCatching { FrameMeter.install() }.onFailure { log("帧率采样安装失败", it) }
+        // 主线程消息计时：帧率只说「没出帧」，这一项说「谁不让出帧」——慢消息当场抓栈。
+        runCatching { stallWatch() }.onFailure { log("主线程计时安装失败", it) }
         log(report.toString())
+        featureGroupGaps().forEach { log(it) }
     }
+}
+
+/** 热重载先还原旧代视图与监听器，防止两代布局、动画同时操纵同一窗口。 */
+private fun restoreUi(): Boolean {
+    val finished = java.util.concurrent.CountDownLatch(1)
+    var failure: Throwable? = null
+    val restore = Runnable {
+        try {
+            resetMessageStyle(); resetChatLayout(); resetInputLayout(); resetLooks(); resetMenus()
+        } catch (t: Throwable) { failure = t } finally { finished.countDown() }
+    }
+    if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) restore.run()
+    else {
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        handler.post(restore)
+        if (!finished.await(2, java.util.concurrent.TimeUnit.SECONDS)) {
+            handler.removeCallbacks(restore)
+            log("热重载停止：主线程未在两秒内完成旧布局还原")
+            return false
+        }
+    }
+    failure?.let { log("热重载停止：旧布局还原失败", it) }
+    return failure == null
 }
