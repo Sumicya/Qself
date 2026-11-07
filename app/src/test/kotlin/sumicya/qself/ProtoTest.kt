@@ -394,20 +394,18 @@ class ProtoTest {
         assertEquals(8, releasedRunVisibility(8))
     }
 
-    @Test fun mergedRunAvatarIsBottomAnchoredAndFloatsInsideTheViewport() {
-        // 整组可见：头像底边贴住组内容底边（居底），组首在 100、组底在 400、头像高 40。
-        val bounds = runAvatarBounds(100f, 400f, 120f, 380f, 40f, merged = true)!!
-        assertEquals(380f, floatingRunAvatarTop(bounds.first, bounds.second, 0f, 900f, 40f, 4f, true, true)!! + 20f)
-        // 组比屏幕高：头像贴可视区底部浮动，且不低于组首。
-        val tall = runAvatarBounds(0f, 2000f, 20f, 1980f, 40f, merged = true)!!
-        assertEquals(900f - 20f - 4f, floatingRunAvatarTop(tall.first, tall.second, 0f, 900f, 40f, 4f, true, true)!! + 20f)
-        // 单条消息不浮绘：保持原生顶对齐。
-        assertEquals(null, runAvatarBounds(100f, 140f, 120f, 120f, 40f, merged = false))
-        // 整组滚出可视区之后不再画。
-        assertEquals(null, floatingAvatarTop(20f, 40f, 900f, 1200f, 40f, 4f))
-        // 组首不在屏里时不能把头像顶到视口上方。
-        val clipped = floatingRunAvatarTop(10f, 600f, 300f, 900f, 40f, 4f, hasStart = false, hasEnd = true)!!
-        assertTrue(clipped >= 300f - 40f)
+    @Test fun mergedRunAvatarHugsTheGroupBottomAndFloatsAtTheViewportBottom() {
+        // 整组可见：头像底边贴住组内容底边（居底），组首 100、组底 400、头像高 40 → 顶点 360。
+        assertEquals(360f, floatingRunAvatarTop(100f, 400f, 0f, 900f, 40f, 4f)!!)
+        // 组比屏幕高：贴可视区底部浮动（留 4px），与内容中心无关——函数根本没有中心这个入参。
+        assertEquals(900f - 40f - 4f, floatingRunAvatarTop(0f, 2000f, 0f, 900f, 40f, 4f)!!)
+        // 组底刚进可视区：仍旧贴组底，不提前吸到底部，也不按最后一格的高度重新居中。
+        assertEquals(600f, floatingRunAvatarTop(100f, 640f, 0f, 900f, 40f, 4f)!!)
+        // 整组在可视区下方或上方：不画。
+        assertEquals(null, floatingRunAvatarTop(900f, 1200f, 0f, 900f, 40f, 4f))
+        assertEquals(null, floatingRunAvatarTop(-200f, 0f, 0f, 900f, 40f, 4f))
+        // 组首掉到视口上方：仍只按组底算，不被拉到视口上方。
+        assertTrue(floatingRunAvatarTop(-300f, 500f, 0f, 900f, 40f, 4f)!! >= 0f)
     }
 
     @Test fun messageTimestampFormatsSecondsAndRejectsInvalidPatterns() {

@@ -1073,7 +1073,7 @@ private class RunLayout(val avatars: List<RunAvatar>, nicks: List<View>, content
         val bubbleOn = on("气泡统一")
         bubbles.forEach { it.apply(self, continued, continues, bubbleOn) }
         // NagramXF 规则：多格块里只有底边那一格画头像（ChatMessageCell.java:7081）。
-        // 对应到 QQ 连发组：只有组内最后一条保留原生头像，前面各行藏掉；不做跨行浮绘。
+        // 对应到 QQ 连发组：只有组内最后一条保留原生头像，前面各行藏掉；浮绘由 RunFloat 按组底统一画一颗。
         val avatarOn = avatarVisibleInRun(continues, enabled)
         avatars.forEach { if (avatarOn) it.restore() else it.hide() }
     }
@@ -1636,7 +1636,7 @@ private class RunAvatars(private val host: ViewGroup) {
 private class RunFloat(private val host: ViewGroup, private val source: () -> Map<View, RunRow>) :
     Drawable(), ViewTreeObserver.OnPreDrawListener, View.OnAttachStateChangeListener {
     private class Face(val group: RunKey, val binding: RunBinding, val view: View, val target: View,
-        val matrix: Matrix, val toTarget: Matrix, val rect: RectF)
+        val matrix: Matrix, val toTarget: Matrix, val rect: RectF, val dy: Float)
 
     private val rows get() = source()
     private var faces = emptyList<Face>()
@@ -1745,10 +1745,9 @@ private class RunFloat(private val host: ViewGroup, private val source: () -> Ma
         for ((key, group) in groups) {
             var groupTop = Float.POSITIVE_INFINITY
             var groupBottom = Float.NEGATIVE_INFINITY
-            var firstCenter = Float.POSITIVE_INFINITY
-            var lastCenter = Float.NEGATIVE_INFINITY
             var hasStart = false
             var hasEnd = false
+            val bottoms = HashMap<RunRow, Float>(group.size)
             for (state in group) {
                 var top = Float.POSITIVE_INFINITY
                 var bottom = Float.NEGATIVE_INFINITY
@@ -1764,11 +1763,10 @@ private class RunFloat(private val host: ViewGroup, private val source: () -> Ma
                     top = minOf(top, tmpContentRect.top); bottom = maxOf(bottom, tmpContentRect.bottom)
                 }
                 if (top.isFinite() && bottom.isFinite()) {
-                    val center = (top + bottom) / 2
                     groupTop = minOf(groupTop, top); groupBottom = maxOf(groupBottom, bottom)
-                    firstCenter = minOf(firstCenter, center); lastCenter = maxOf(lastCenter, center)
                     hasStart = hasStart || !state.run.continued
                     hasEnd = hasEnd || !state.run.continues
+                    bottoms[state] = bottom
                 }
             }
             val avatars = ArrayList<RunAvatar>(group.size)
@@ -1778,30 +1776,21 @@ private class RunFloat(private val host: ViewGroup, private val source: () -> Ma
                 avatars.addAll(state.layout.avatars)
             }
             val merged = group.size > 1 || !hasStart || !hasEnd || anyCont
-            // 尽量保留上帧同一个原图源，不能每滚入一行就切到新的头像组件。
-            val preferred = pressed?.takeIf { it.group == key }?.target
-                ?: faces.firstOrNull { it.group == key }?.target
-            if (preferred != null && avatars.size > 1) {
-                val prefIdx = avatars.indexOfFirst { it.container.get() === preferred }
-                if (prefIdx > 0) {
-                    val fav = avatars.removeAt(prefIdx)
-                    avatars.add(0, fav)
-                }
-            }
+            // 画哪一颗只由这一帧决定：组尾那一行（NagramXF 的底边那一格）；组尾没绑定时取最靠下的一行。
+            // 不按「上帧画的是哪颗」挑，否则滚入滚出一行就换源，看着就是头像在行与行之间跳。
+            val tail = group.firstOrNull { !it.run.continues }
+                ?: group.maxByOrNull { bottoms[it] ?: Float.NEGATIVE_INFINITY }
             var face: Face? = null
-            for (avatar in avatars) {
+            var anchorBottom = Float.NaN
+            for (avatar in tail?.layout?.avatars.orEmpty()) {
                 if (avatar.visibility.native != View.VISIBLE) continue
                 val image = avatar.image.get() ?: continue
                 if (image.visibility != View.VISIBLE) continue
                 val container = avatar.container.get() ?: continue
                 val matrix = inHost(image)
                 val rect = rectangle(image, matrix) ?: continue
-                val bounds = runAvatarBounds(groupTop, groupBottom, firstCenter, lastCenter, rect.height(), merged) ?: continue
-                val y = floatingRunAvatarTop(bounds.first, bounds.second, safeTop, safeBottom,
-                    rect.height(), 2 * host.dp, hasStart, hasEnd)
-                    ?: floatingRunAvatarTop(bounds.first, bounds.second, clip.top.toFloat(), clip.bottom.toFloat(),
-                        rect.height(), 2 * host.dp, hasStart, hasEnd)
-                    ?: continue
+                val y = floatingRunAvatarTop(groupTop, groupBottom, safeTop, safeBottom,
+                    rect.height(), 2 * host.dp) ?: continue
                 val delta = y - rect.top
                 matrix.postTranslate(0f, delta)
                 val targetMatrix = inHost(container).apply { postTranslate(0f, delta) }
@@ -1809,27 +1798,23 @@ private class RunFloat(private val host: ViewGroup, private val source: () -> Ma
                 if (!targetMatrix.invert(inverse)) continue
                 rect.offset(0f, delta)
                 val binding = group.first { state -> avatar in state.layout.avatars }.run
-                face = Face(key, binding, image, container, matrix, inverse, rect)
+                face = Face(key, binding, image, container, matrix, inverse, rect, delta)
+                anchorBottom = minOf(groupBottom, safeBottom - 2 * host.dp)
                 break
             }
-            if (face == null) {
-                // 正文异步切换的一帧沿用本组上次有效位置，不能恢复到 QQ 的行顶位置。
-                val old = faces.firstOrNull { previous -> previous.group == key && isCurrent(previous) && avatars.any {
-                    it.image.get() === previous.view && it.visibility.native == View.VISIBLE
-                } }
+            if (face == null && merged) {
+                // 正文异步切换的一帧：沿用本组上次「相对这一行的偏移」，跟着行走；不回行顶，也不夹进视口。
+                val old = faces.firstOrNull { it.group == key && isCurrent(it) }
                 if (old != null && old.view.isAttachedToWindow) {
                     val matrix = inHost(old.view)
-                    val source = rectangle(old.view, matrix)
-                    if (source != null) {
-                        val top = old.rect.top.coerceIn(clip.top.toFloat() - source.height(),
-                            maxOf(clip.top.toFloat() - source.height(), clip.bottom - source.height() - 2 * host.dp))
-                        val delta = top - source.top
-                        matrix.postTranslate(0f, delta)
-                        val targetMatrix = inHost(old.target).apply { postTranslate(0f, delta) }
+                    val rect = rectangle(old.view, matrix)
+                    if (rect != null) {
+                        matrix.postTranslate(0f, old.dy)
+                        val targetMatrix = inHost(old.target).apply { postTranslate(0f, old.dy) }
                         val inverse = Matrix()
                         if (targetMatrix.invert(inverse)) {
-                            source.offset(0f, delta)
-                            face = Face(key, old.binding, old.view, old.target, matrix, inverse, source)
+                            rect.offset(0f, old.dy)
+                            face = Face(key, old.binding, old.view, old.target, matrix, inverse, rect, old.dy)
                         }
                     }
                 }
@@ -1840,7 +1825,7 @@ private class RunFloat(private val host: ViewGroup, private val source: () -> Ma
                 next.add(face)
                 // 「合并组头像默认居底」是规则，不是感觉：整组首尾都在屏里时，头像底边必须贴住组内容底边。
                 // 偏差超过 1px 就当一次缺陷写进事件流（两秒最多一行），下次导出直接能看见差了多少。
-                if (merged && hasStart && hasEnd) reportAvatarDrift(face.rect.bottom, groupBottom)
+                if (merged && hasStart && hasEnd && !anchorBottom.isNaN()) reportAvatarDrift(face.rect.bottom, anchorBottom)
             }
             else if (merged) group.forEach { st ->
                 if (st.run.continued) st.layout.avatars.forEach { a -> a.hide() }
@@ -1964,33 +1949,17 @@ private class RunFloat(private val host: ViewGroup, private val source: () -> Ma
     @Deprecated("Drawable opacity") override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
 
-/** 单条严格按内容中心；长组跟随最后一条内容中心，并约束在组首与可见底部之间。 */
-internal fun floatingAvatarTop(firstCenter: Float, lastCenter: Float, viewportTop: Float, viewportBottom: Float,
-    height: Float, gap: Float): Float? {
-    if (!firstCenter.isFinite() || !lastCenter.isFinite() || !height.isFinite() || height <= 0 ||
+/**
+ * 居底：头像底边贴住组内容底边；组比可视区高时贴住可视区底部（留 gap），整组在可视区外不画。
+ * 位置只由这一帧的组边界与可视区决定——不跟内容中心，不看上一帧，所以滚动时不会在两个锚点之间跳。
+ */
+internal fun floatingRunAvatarTop(groupTop: Float, groupBottom: Float, viewportTop: Float,
+    viewportBottom: Float, height: Float, gap: Float): Float? {
+    if (!groupTop.isFinite() || !groupBottom.isFinite() || !height.isFinite() || height <= 0f ||
         !viewportTop.isFinite() || !viewportBottom.isFinite() || viewportBottom <= viewportTop ||
-        !gap.isFinite() || gap < 0 || firstCenter > lastCenter ||
-        lastCenter + height / 2 <= viewportTop || firstCenter - height / 2 >= viewportBottom) return null
-    return maxOf(firstCenter, minOf(lastCenter, viewportBottom - height / 2 - gap)) - height / 2
-}
-
-/** 单条消息保持原生顶对齐（不浮绘居中，避免高度变化跳动与向下侵入）；仅连发多条消息按整组上下边界滚动合并。 */
-internal fun runAvatarBounds(groupTop: Float, groupBottom: Float, firstCenter: Float, lastCenter: Float,
-    height: Float, merged: Boolean): Pair<Float, Float>? {
-    if (!merged || !groupTop.isFinite() || !groupBottom.isFinite() || !firstCenter.isFinite() ||
-        !lastCenter.isFinite() || !height.isFinite() || height <= 0f || groupTop > groupBottom ||
-        firstCenter > lastCenter) return null
-    val start = groupTop + height / 2f
-    val end = maxOf(start, groupBottom - height / 2f)
-    return start to end
-}
-
-/** 可见的只有组中间一条时，不能误当成整个组只有一条；起止约束来自消息数据。 */
-internal fun floatingRunAvatarTop(first: Float, last: Float, top: Float, bottom: Float, height: Float, gap: Float,
-    hasStart: Boolean, hasEnd: Boolean): Float? {
-    if (!first.isFinite() || !last.isFinite() || first > last) return null
-    return floatingAvatarTop(if (hasStart) first else minOf(first, top - height),
-        if (hasEnd) last else maxOf(last, bottom + height), top, bottom, height, gap)
+        !gap.isFinite() || gap < 0f || groupTop > groupBottom) return null
+    if (groupBottom <= viewportTop || groupTop >= viewportBottom) return null
+    return minOf(groupBottom - height, viewportBottom - gap - height)
 }
 
 fun refreshChatLayout() {

@@ -14,6 +14,14 @@
 
 ## 历史全文（倒序，原样保留）
 
+## 2026-11-07（四十一）— 连发头像只留居底：删掉按内容中心取位与跨帧沿用旧位置
+
+- 删掉「居中」整条链：`firstCenter`/`lastCenter` 每帧逐行计算、`floatingAvatarTop` 的 `min(最后一条中心, 视口底)` 取位、`runAvatarBounds` 的中心区间、以及 `hasStart`/`hasEnd` 拼出来的伪中心。位置改由一条函数算：`floatingRunAvatarTop(组上, 组下, 可视区上, 可视区下, 头像高, gap)`，底边贴组内容底边，组高于可视区时贴可视区底部（留 2dp），整组在可视区外返回 `null`。
+- 删掉两处「弹跳」来源：①回落分支原来把上一帧的 rect 夹进 `clip` 再画，组解散或正文异步切换时会从居底跳回行内位置——现在只在 `merged` 时沿用本组「相对这一行的偏移」（`Face.dy`），跟着行走，且不再对 `merged == false` 的单条生效；②原来靠「上帧画的是哪颗」挑原图源，`rows` 是 `WeakHashMap`、末行进出复用池时源会换——现在固定取组尾那一行（NagramXF 的底边那一格），组尾未绑定时取最靠下的一行。
+- 去掉第二个 `?: floatingRunAvatarTop(..., clip.top, clip.bottom, ...)` 兜底：同一帧只按 `safeTop/safeBottom` 判一次，不再出现两种结果。
+- `ProtoTest` 用例改名 `mergedRunAvatarHugsTheGroupBottomAndFloatsAtTheViewportBottom`，断言改为：组底 400 → 顶点 360；组底 2000 → 顶点 856；组底 640 → 顶点 600（不提前吸底）；整组在视口上方/下方都 `null`；组首滚出视口时仍只按组底算。
+- `Chat.kt` 净减 33 行（-78/+45 的净差）——居中和弹跳的代码是删掉的，不是绕开的。
+
 ## 2026-11-05（四十）— 面板并回同一块玻璃，连发头像恢复浮绘与居底
 
 - 撤掉 `KernelBar.frost`：设置面板罩色回到 `0x66`、模糊回到滑条值（默认 1dp），全仓只剩一种玻璃材质（`KernelBar.kt:265`、`:307`、`Glass.kt:55`）。
