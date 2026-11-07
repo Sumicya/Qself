@@ -156,11 +156,6 @@ fun knob(bar: View) {
     button.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(motionDuration(180)).setInterpolator(easing()).start()
 }
 
-fun borderlessRipple(view: View): Drawable? = TypedValue().let {
-    if (view.context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, it, true))
-        view.context.getDrawable(it.resourceId) else null
-}
-
 /** 紧凑面板上限 360×520dp；屏幕/键盘边缘仍留出 16dp。 */
 internal fun menuSize(width: Int, height: Int, density: Float): Pair<Int, Int> {
     val old = min((height * 0.62f).toInt().coerceAtLeast(0), (440 * density).toInt())

@@ -4,7 +4,6 @@ package sumicya.qself
 // 导出日志里直接给出真机帧数、平均帧长、掉帧率和最长帧。测出来才算数，测不出来就别改。
 
 internal const val FRAME_BUDGET_MS = 16.7f   // 没测出刷新率时的兜底（60Hz 一帧）
-internal const val FRAME_MIN_MS = 1f         // 比这还短的间隔不是帧，是噪声
 internal const val FRAME_PERIOD_MIN = 4f     // 刷新周期只可能在 250Hz ~ 40Hz 之间，出了这个区间就是抖动
 internal const val FRAME_PERIOD_MAX = 25f
 internal const val FRAME_PERIOD_EVERY = 120L // 每采 120 帧重估一次刷新周期

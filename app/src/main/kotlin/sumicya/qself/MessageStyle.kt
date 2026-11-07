@@ -4,13 +4,9 @@ package sumicya.qself
 import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Canvas
-import android.graphics.ColorFilter
-import android.graphics.PixelFormat
-import android.graphics.drawable.Drawable
 import android.os.Parcelable
 import android.text.Spannable
 import android.text.SpannableString
-import android.text.TextPaint
 import android.text.TextUtils
 import android.text.style.ClickableSpan
 import android.view.MotionEvent
@@ -32,9 +28,6 @@ internal fun bubbleCornerDp(): Float = (store()?.getInt(BUBBLE_CORNER, 17) ?: 17
 internal fun bubblePaddingDp(): Float = (store()?.getInt(BUBBLE_PADDING, 5) ?: 5).coerceIn(0, 16).toFloat()
 internal const val TIME_FORMAT_GUIDE =
     "格式码：yyyy/yy 年 · MM/M 月 · dd/d 日 · E 星期 · HH/H 0-23时 · kk/k 1-24时 · hh/h 1-12时 · KK/K 0-11时 · a 上下午 · mm/m 分 · ss/s 秒 · SSS/S 毫秒；文字用单引号包裹。时间部分写完后可接 {uin}（发送者 QQ 号）与 {seq}（本条在会话里的序号），例：HH:mm {uin} #{seq}"
-
-internal const val SAFE_TOP_GUIDE =
-    "状态栏照常显示，顶栏内容固定停在状态栏／摄像头下沿（真机 141px），不会顶到 y=0 被摄像头压住；滑条只在这个位置上再往下让，0dp 就是 QQ 的原始位置。消息区从这条线铺下来，滚动时从玻璃胶囊底下穿过。"
 
 private val INVALID_FORMATTER = Any()
 private val timeFormatterCache = java.util.concurrent.ConcurrentHashMap<Pair<String, Locale>, Any>()

@@ -2603,8 +2603,6 @@ private val homeTopAppliedRootBgs = WeakHashMap<ViewGroup, android.graphics.draw
 @Volatile
 private var aioSafeTopRemovedPx = 0
 
-internal fun aioSafeTopRemoved(): Int = aioSafeTopRemovedPx
-
 /**
  * 顶栏内容要往下让的像素数：状态栏还在时等于「QQ 预留的状态栏高度减去我们压掉的量」，
  * 按钮因此停在状态栏以下；状态栏被本模块藏掉后这段让位本身就是空白，一律让 0，

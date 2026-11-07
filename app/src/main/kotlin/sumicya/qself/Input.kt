@@ -284,7 +284,6 @@ fun inputLayout() {
     } }
     val styleDelegate = cls("com.tencent.mobileqq.aio.input.inputbar.compat.b")
     val styleBinding = styleDelegate.getDeclaredField("e").apply { isAccessible = true }
-    val mviState = cls("com.tencent.mvi.base.mvi.MviUIState")
     fun syncCompatDelegate(delegateObj: Any?) {
         refreshInputLayout()
         runCatching { delegateObj?.let { styleBinding.get(it) } }.getOrNull()?.let { adorn ->
