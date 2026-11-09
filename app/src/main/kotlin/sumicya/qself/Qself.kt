@@ -108,7 +108,7 @@ class Qself : XposedModule() {
         var uninstallFailed = false
         param.oldHookHandles.forEach { handle -> runCatching { handle.unhook() }.onFailure {
             uninstallFailed = true
-            android.util.Log.e("Qself", "旧钩子卸载失败；停止新代安装，请强行停止 QQ 后再打开", it)
+            xposed.log(android.util.Log.ERROR, "Diag", "旧钩子卸载失败；停止新代安装，请强行停止 QQ 后再打开", it)
         } }
         if (uninstallFailed) return
         process = param.processName
@@ -120,7 +120,7 @@ class Qself : XposedModule() {
         loader = classLoader
         installed = classLoader
         val main = process == "com.tencent.mobileqq"
-        val report = StringBuilder("Qself ${BuildConfig.VERSION_NAME} @ $process")
+        val report = StringBuilder("init ${BuildConfig.VERSION_NAME} @ $process")
         failed.clear()
         failures.clear()
         fun run(name: String, fn: () -> Any?, gated: Boolean = true) = runCatching {

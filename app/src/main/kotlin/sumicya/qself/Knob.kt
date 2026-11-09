@@ -39,8 +39,8 @@ import java.util.WeakHashMap
 import kotlin.math.roundToInt
 import kotlin.math.min
 
-private const val KNOB = "qself-knob"
-private const val SHEET = "qself-sheet"
+private val KNOB = Any()
+private val SHEET = Any()
 private const val TAG_SHEET_CLOSE = 0x5153434C
 private val knobs: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
 private val sheets: MutableSet<View> = Collections.newSetFromMap(WeakHashMap())
@@ -126,7 +126,7 @@ fun knob(bar: View) {
     }
     val button = ImageView(bar.context).apply {
         tag = KNOB
-        contentDescription = "Qself 设置"
+        contentDescription = "设置"
         isFocusable = true
         setImageDrawable(MenuGlyph(dp))
         imageTintList = ColorStateList.valueOf(monet(night(), 0xFF)
@@ -547,12 +547,11 @@ private fun aboutQself(ctx: android.content.Context) {
     val dp = ctx.resources.displayMetrics.density
     val body = TextView(ctx).apply {
         text = buildString {
-            append("Qself ").append(BuildConfig.VERSION_NAME).append("\n\n")
+            append(ctx.packageName).append(" ").append(BuildConfig.VERSION_NAME).append("\n\n")
             append("Copyright (C) 2026 Sumicya\n")
             append("许可：GNU General Public License 第 3 版或更高版本（GPL-3.0-or-later）\n\n")
             append("本程序按现状提供，不附带任何担保，包括但不限于适销性与特定用途适用性的担保。")
-            append("完整条款以 GPL-3.0 全文为准；点「许可全文」查看。\n\n")
-            append("源码：https://github.com/Sumicya/Qself")
+            append("完整条款以 GPL-3.0 全文为准；点「许可全文」查看。")
         }
         textSize = 13f
         setTextColor(if (night()) 0xFFE8EEF7.toInt() else 0xFF1C1C1E.toInt())
@@ -560,7 +559,7 @@ private fun aboutQself(ctx: android.content.Context) {
         setTextIsSelectable(true)
     }
     AlertDialog.Builder(ctx)
-        .setTitle("关于 Qself")
+        .setTitle("关于")
         .setView(body)
         .setPositiveButton("许可全文") { _, _ -> showLicense(ctx) }
         .setNegativeButton("好", null)
@@ -659,7 +658,7 @@ private fun sheet(anchor: View) {
         cell.setOnClickListener {
             if (feature.name in failed) {
                 AlertDialog.Builder(ctx).setTitle(feature.name + "：安装失败")
-                    .setMessage(failures[feature.name] ?: "请查看 Qself 日志")
+                    .setMessage(failures[feature.name] ?: "请查看诊断日志")
                     .setPositiveButton("好", null).show()
             } else {
                 prefs.edit().putBoolean(feature.name, !prefs.getBoolean(feature.name, feature.default)).apply()
@@ -684,7 +683,7 @@ private fun sheet(anchor: View) {
         }
     }
     val heading = TextView(ctx).apply {
-        text = "Qself ${BuildConfig.VERSION_NAME}"; textSize = 15f; gravity = Gravity.CENTER; setTextColor(ink)
+        text = "v${BuildConfig.VERSION_NAME}"; textSize = 15f; gravity = Gravity.CENTER; setTextColor(ink)
         minimumHeight = (40 * dp).toInt()
         setPadding(0, 0, 0, (8 * dp).toInt())
     }
@@ -876,7 +875,7 @@ private fun sheet(anchor: View) {
     grid.addView(LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.END
         addView(TextView(ctx).apply {
-            text = "每点一次就与上次的 qself-full-log.txt 合并去重，并先清掉 Download 里的历史编号副本，所以永远只留一个文件。"
+            text = "每点一次就与上次的 qq-diag.txt 合并去重，并先清掉 Download 里的历史编号副本，所以永远只留一个文件。"
             textSize = 11.5f; setTextColor(sub)
             gravity = Gravity.END
             textAlignment = View.TEXT_ALIGNMENT_VIEW_END
@@ -897,7 +896,7 @@ private fun sheet(anchor: View) {
             safeShiftLabel.text = safeTopText(0)
             paints.forEach { it() }; refreshLooks(); card.invalidate()
         })
-        addView(button("关于 Qself") { aboutQself(ctx) })
+        addView(button("关于") { aboutQself(ctx) })
         addView(button("结束进程") {
             android.os.Process.killProcess(android.os.Process.myPid())
         })

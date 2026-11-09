@@ -152,7 +152,7 @@ private fun proxy(iface: String, body: (Array<*>?) -> Any?): Any {
     val c = cls(iface)
     return Proxy.newProxyInstance(loader, arrayOf(c)) { self, m, args ->
         when (m.name) {
-            "toString" -> "Qself$" + c.simpleName
+            "toString" -> c.simpleName
             "hashCode" -> System.identityHashCode(self)
             "equals" -> self === args?.getOrNull(0)
             else -> runCatching { body(args) }.onFailure { log("内核回调异常: $iface#${m.name}", it) }.getOrNull()
@@ -791,7 +791,6 @@ private class RowGeometry(
             (cv as? ViewGroup)?.let { cg ->
                 for (i in 0 until cg.childCount) {
                     val compRoot = cg.getChildAt(i) ?: continue
-                    if (compRoot.tag == "qself-external-time") continue
                     zeroHorizontalInsets(compRoot)
                     if (compRoot is ViewGroup && compRoot.childCount > 0) {
                         zeroHorizontalInsets(compRoot.getChildAt(0))

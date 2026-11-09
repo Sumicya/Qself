@@ -830,19 +830,7 @@ class ProtoTest {
         assertTrue("底端有折线：中段 $middle / 底端 $bottom", middle > bottom * 4)
     }
 
-    @Test fun statusFadePixelsNeverJumpSixLevelsBetweenAdjacentRows() {
-        // 真机高度 194px。亮度是各通道的凸组合，所以相邻行亮度差的上限就是相邻行不透明度差。
-        val height = 194
-        var previous = statusFadeAlphaAt(0, height)
-        assertEquals(255, previous)
-        var worst = 0
-        for (y in 1 until height) {
-            val a = statusFadeAlphaAt(y, height)
-            worst = maxOf(worst, kotlin.math.abs(a - previous))
-            previous = a
-        }
-        assertEquals(0, previous)
-        assertTrue("相邻行 $worst/255 超过 6", worst < 6)
+    @Test fun statusFadeColorStopsHoldBothEnds() {
         // 停靠点自己也要守住首尾，否则 Skia 那头给不出 255 与 0
         for (stops in intArrayOf(2, 9, 13, 33)) {
             val colors = statusFadeColors(0xFF0F1113.toInt(), stops)

@@ -1,11 +1,18 @@
 package sumicya.qself
 
 // 全量日志的「合并/去重」逻辑：与 Android 完全解耦，方便 JVM 单测直接跑真机日志。
-// 目标：反复导出只产生一个 qself-full-log.txt，新导出与上一次的导出按小节合并去重，
-// 环缓冲被挤掉的老行也能从上一次导出里捞回来，不必再发多个 qself-full-log (1).txt 之类的编号副本。
+// 目标：反复导出只产生一个 qq-diag.txt，新导出与上一次的导出按小节合并去重，
+// 环缓冲被挤掉的老行也能从上一次导出里捞回来，不必再发多个 qq-diag (1).txt 之类的编号副本。
 
-internal const val LOG_FILE_NAME = "qself-full-log.txt"
-internal const val LOG_FILE_PREFIX = "qself-full-log"
+internal const val LOG_FILE_NAME = "qq-diag.txt"
+internal const val LOG_FILE_PREFIX = "qq-diag"
+/** 上一版文件名里的尾巴；只用来删主人 Download 里的历史副本，删完即失效。 */
+internal const val LOG_FILE_LEGACY = "full-log"
+
+/** 上一版留下的 `*-full-log.txt` 与 `*-full-log (N).txt`：判据写死，免得删掉别人的 `something.txt`。 */
+internal fun isLegacyExport(name: String): Boolean =
+    name.endsWith("$LOG_FILE_LEGACY.txt") || (name.contains("$LOG_FILE_LEGACY (") && name.endsWith(").txt"))
+
 internal const val MAX_MERGED_RECORDS = 12000
 internal const val MAX_MERGED_SNAPSHOTS = 16
 // 只按条数封顶不够：真机实测 [5] 一节 12000 条就有 13.8MB（整份日志 19MB），
@@ -116,7 +123,7 @@ internal fun mergeSnapshotBlocks(chunks: List<String>): LinkedHashMap<String, St
 
 /**
  * 与上一次导出的内容合并：报告头用新的，快照按标题取并集（新覆盖旧），
- * 流式小节（[4] Qself 事件 / [5] UI 专项 QLog / [6] 全量 QLog）按记录去重后按时间戳排序取并集，
+ * 流式小节（[4] 事件 / [5] UI 专项 QLog / [6] 全量 QLog）按记录去重后按时间戳排序取并集，
  * 其余小节（失败清单、钩子调用次数、logcat）一律用新的。
  * 这样环缓冲里被挤掉的老行也能从上一次导出里捞回来 —— 一次导出就是到此刻为止的完整累计，不必再发多个编号文件。
  */

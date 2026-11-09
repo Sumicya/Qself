@@ -53,7 +53,7 @@ class Glass(
 ) : Drawable() {
     private val kernel = if (kernelBar || kernelButton || kernelSurface) KernelBar(host, { behind(it) }, { invalidateSelf() }, standalone = !kernelBar, cornerRadius = if (kernelSurface) radius else Float.MAX_VALUE, deformBody = !kernelSurface) else null
     private val dp = host.dp
-    private val node = RenderNode("qself-glass")
+    private val node = RenderNode(null)
     private val pad = (12 * dp).toInt() // 边缘折射往里采样，留一点余量就够
     private val lens = RuntimeShader(LENS)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -331,7 +331,6 @@ class Glass(
         setPress(host.isPressed || hasPressedDescendant(host))
     }
 
-    internal val isKernelBar: Boolean get() = kernel?.standalone == false
     fun kernelTouchDown(x: Float, y: Float = host.height / 2f) { kernel?.touchDown(x, y) }
     fun kernelTouchEnd(commit: Boolean = false) { kernel?.touchEnd(commit) }
 

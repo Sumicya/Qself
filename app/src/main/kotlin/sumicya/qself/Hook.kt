@@ -13,11 +13,10 @@ import java.lang.reflect.Method
 lateinit var xposed: XposedInterface
 lateinit var loader: ClassLoader
 
-/** 同时写 logcat（`logcat -s Qself`）、LSPosed 管理器的日志页与内存诊断环。 */
+/** 只写 LSPosed 管理器的日志页与内存诊断环：宿主进程自己的 logcat 里不留本模块的名字。 */
 fun log(msg: String, t: Throwable? = null) {
     runCatching { recordQselfEvent(msg, t) }
-    Log.i("Qself", msg, t)
-    xposed.log(Log.INFO, "Qself", msg, t)
+    xposed.log(Log.INFO, "Diag", msg, t)
 }
 
 fun cls(name: String): Class<*> = Class.forName(name, false, loader)
@@ -110,7 +109,7 @@ private var prefs: SharedPreferences? = null
 /** 读到没登记的开关名时每个进程只报一次，免得「代码在读、清单里没有」永远静默（2026-10-31 两次踩到）。 */
 private val unknownSwitches = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
-/** 开关存在 QQ 自己的 SharedPreferences「qself」里，缺省全开；Application 还没建起来时也当开。 */
+/** 开关存在应用私有 SharedPreferences「app_cfg」里，缺省全开；Application 还没建起来时也当开。 */
 fun on(name: String): Boolean {
     val known = featureDefaults[name]
     if (known == null && unknownSwitches.add(name)) {
@@ -119,9 +118,29 @@ fun on(name: String): Boolean {
     return name !in failed && (store()?.getBoolean(name, known ?: true) ?: (known ?: true))
 }
 
+private const val PREFS = "app_cfg"
+
+/** 全仓唯一保留的旧名字面量：上一版把开关存在同目录的 qself.xml 里，搬一次就删掉，之后不再出现。 */
+private const val LEGACY_PREFS = "qself"
+
+/** 旧开关搬家：只在新文件还没搬过、且旧文件真在磁盘上时才动，搬完立刻删旧 xml，免得 QQ 的数据目录里一直躺着这个名字。 */
+private fun migrate(ctx: Context): SharedPreferences {
+    val fresh = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    if (fresh.contains("_migrated")) return fresh
+    val legacyFile = java.io.File(ctx.dataDir, "shared_prefs/$LEGACY_PREFS.xml")
+    if (runCatching { legacyFile.isFile }.getOrDefault(false)) runCatching {
+        val legacy = ctx.getSharedPreferences(LEGACY_PREFS, Context.MODE_PRIVATE)
+        val edit = fresh.edit()
+        legacy.all.forEach { (k, v) -> when (v) { is Boolean -> edit.putBoolean(k, v); is Int -> edit.putInt(k, v); is Float -> edit.putFloat(k, v); is String -> edit.putString(k, v) } }
+        edit.putBoolean("_migrated", true).apply()
+        ctx.deleteSharedPreferences(LEGACY_PREFS)
+    }
+    return fresh
+}
+
 fun store(): SharedPreferences? = prefs ?: runCatching {
     (Class.forName("android.app.ActivityThread").getMethod("currentApplication").invoke(null) as? Context)
-        ?.getSharedPreferences("qself", Context.MODE_PRIVATE)
+        ?.let { migrate(it) }
 }.getOrNull()?.also { prefs = it }
 
 /**

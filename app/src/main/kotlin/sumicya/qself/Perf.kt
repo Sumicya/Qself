@@ -229,7 +229,7 @@ internal object MainThreadMeter {
                 if (where !in samples) samples.addLast(where)
                 frameEventSink?.invoke("主线程卡 ${fmt("%.0f", ms)}ms 在 $where")
             }
-        }, "Qself-StallWatch")
+        })
         thread.isDaemon = true
         thread.start()
         watchdog = thread

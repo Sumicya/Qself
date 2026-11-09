@@ -310,7 +310,6 @@ def verify() -> None:
     else:
         releases = api_list(f"repos/{REPO}/releases?per_page=100", ".[] | {id,tag_name}")
         tags = api_list(f"repos/{REPO}/tags?per_page=100", ".[] | {name}")
-        kept_tags = {row.get("tag_name") for row in releases[:KEEP_RELEASES] if row.get("tag_name")}
         orphans = [row for row in tags if row["name"] in DOOMED_TAGS]
         gap = any(kind in ("release", "tag") for kind, _, _ in PERMISSION_GAPS)
         print(f"复核：Release 剩 {len(releases)} 个（上限 {KEEP_RELEASES}）；被删 Release 的残留 tag {len(orphans)} 个")

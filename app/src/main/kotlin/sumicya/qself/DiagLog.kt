@@ -50,7 +50,7 @@ private val hookCallCounts = ConcurrentHashMap<String, AtomicLong>()
 private val activitySnapshots = ConcurrentHashMap<String, String>()
 private val mainHandler = Handler(Looper.getMainLooper())
 private val ioExecutor = Executors.newSingleThreadExecutor { r ->
-    Thread(r, "Qself-DiagLog").apply { isDaemon = true }
+    Thread(r).apply { isDaemon = true }
 }
 @Volatile
 private var lastAutoFlushMs = 0L
@@ -65,7 +65,7 @@ private var pendingCleanupConsent: IntentSender? = null
 private val uiKeywords = Regex(
     "AIO|Title|NavBar|QUISec|SearchBar|Immersive|Blur|Mask|Safe|Status|Header|Padding|Margin|" +
         "TabFrame|TabLayout|Conversation|ChatsList|MainUI|MainResource|SimpleMode|Skin|Theme|" +
-        "Bubble|Avatar|Input|Shortcut|EdgeTransparent|RecycleView|Qself|Exception|Error",
+        "Bubble|Avatar|Input|Shortcut|EdgeTransparent|RecycleView|Exception|Error",
     RegexOption.IGNORE_CASE,
 )
 
@@ -290,7 +290,7 @@ private fun maybeAutoFlush(ctx: Context?) {
 
 fun buildFullDiagnosticReport(ctx: Context?, includeLogcat: Boolean = true): String = buildString(131072) {
     append("================================================================================\n")
-    append("Qself Full QQ Diagnostic Report\n")
+    append("QQ Diagnostic Report\n")
     append("Version      : ").append(BuildConfig.VERSION_NAME).append('\n')
     append("Time         : ").append(SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS Z", Locale.US).format(Date())).append('\n')
     append("Device       : Android ").append(Build.VERSION.RELEASE).append(' ')
@@ -333,7 +333,7 @@ fun buildFullDiagnosticReport(ctx: Context?, includeLogcat: Boolean = true): Str
     activitySnapshots.forEach { (_, dump) ->
         append(dump).append('\n')
     }
-    append("\n--- [4] Qself Events & Hook Samples (").append(qselfEvents.size).append(") ---\n")
+    append("\n--- [4] Events & Hook Samples (").append(qselfEvents.size).append(") ---\n")
     qselfEvents.forEach { append(it).append('\n') }
     // UI/AIO/顶栏/错误那一节在导出时从同一份记录里筛：录制端只存一条，不跑正则。
     val ui = allQLogs.filter { uiKeywords.containsMatchIn(it) }
@@ -357,20 +357,23 @@ private fun captureProcessLogcat(lines: Int): String = runCatching {
     out
 }.getOrElse { "logcat capture failed: $it\n" }
 
-// ---- 多次导出的合并与清理：一个进程只产出一个 qself-full-log.txt，重复导出合并去重而不是堆编号副本 ----
+// ---- 多次导出的合并与清理：一个进程只产出一个 qq-diag.txt，重复导出合并去重而不是堆编号副本 ----
 
-/** 导出前清掉 Download 与本应用目录里所有历史 `qself-full-log*.txt`（含分享面板另存出的编号副本）。 */
+/** 导出前清掉 Download 与本应用目录里所有历史 `qq-diag*.txt` 与上一版的 `*-full-log*.txt`（含分享面板另存出的编号副本）。 */
 private fun cleanupPriorExports(ctx: Context): Int {
     var removed = 0
     pendingCleanupConsent = null
     runCatching {
         val resolver = ctx.contentResolver
         val uri = MediaStore.Downloads.EXTERNAL_CONTENT_URI
-        val projection = arrayOf(MediaStore.MediaColumns._ID)
-        resolver.query(uri, projection, "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?", arrayOf("$LOG_FILE_PREFIX%"), null)
+        val projection = arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME)
+        resolver.query(uri, projection, "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?", arrayOf("%.txt"), null)
             ?.use { c ->
                 val idCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                val nameCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
                 while (c.moveToNext()) {
+                    val nm = c.getString(nameCol) ?: continue
+                    if (!nm.startsWith(LOG_FILE_PREFIX) && !isLegacyExport(nm)) continue
                     val item = ContentUris.withAppendedId(uri, c.getLong(idCol))
                     // 别的应用写进 Download 的副本不能直接删，抛出的是 RecoverableSecurityException：
                     // 记下系统给的授权 IntentSender，写完新文件后弹一次系统授权框，用户点了就真删掉。
@@ -389,7 +392,7 @@ private fun cleanupPriorExports(ctx: Context): Int {
     )
     for (dir in dirs) {
         runCatching {
-            dir.listFiles()?.filter { it.name.startsWith(LOG_FILE_PREFIX) && it.name.endsWith(".txt") }
+            dir.listFiles()?.filter { it.name.startsWith(LOG_FILE_PREFIX) || isLegacyExport(it.name) }
                 ?.forEach { if (it.delete()) removed++ }
         }
     }
@@ -423,8 +426,8 @@ private fun writeLogFiles(
         "首次导出，无历史文件可合并"
     }
     val content = merged.replace(
-        "Qself Full QQ Diagnostic Report\n",
-        "Qself Full QQ Diagnostic Report\n" +
+        "QQ Diagnostic Report\n",
+        "QQ Diagnostic Report\n" +
             "合并         : $mergeNote；导出前清理历史副本 $removed 个，同名文件只保留 $LOG_FILE_NAME\n",
     )
     val bytes = content.toByteArray(Charsets.UTF_8)
@@ -451,7 +454,7 @@ private fun writeLogFiles(
         }
     }
     // 以前这里还往 MediaStore 插一条同名记录：Download 里已有同名文件时，MediaStore 每次都另存一份
-    // qself-full-log (1).txt、(2).txt…… 主人那儿堆到 (9) 就是这么来的。直接文件覆盖就够了，这整块删掉。
+    // qq-diag (1).txt、(2).txt…… 主人那儿堆到 (9) 就是这么来的。直接文件覆盖就够了，这整块删掉。
     return savedPaths.distinct()
 }
 
@@ -464,7 +467,7 @@ fun exportFullQqLog(ctx: Context, currentActivity: Activity? = null) {
         val fresh = runCatching { buildFullDiagnosticReport(ctx, includeLogcat = true) }.getOrNull()
         if (fresh == null) {
             mainHandler.post {
-                runCatching { Toast.makeText(ctx, "全量日志构建失败，见 logcat -s QselfDiag", Toast.LENGTH_LONG).show() }
+                runCatching { Toast.makeText(ctx, "全量日志构建失败，见 xposed.log", Toast.LENGTH_LONG).show() }
             }
             return@execute
         }
@@ -475,20 +478,15 @@ fun exportFullQqLog(ctx: Context, currentActivity: Activity? = null) {
         } else fullReport
         runCatching {
             val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-            cm?.setPrimaryClip(ClipData.newPlainText("Qself Full QQ Log", clipText))
+            cm?.setPrimaryClip(ClipData.newPlainText("诊断报告", clipText))
         }
-        // 2. 只把本次相对上一次导出的新增记录镜像到 LSPosed 日志与 logcat -s QselfDiag，重复导出不再刷屏
+        // 2. 只把本次相对上一次导出的新增记录镜像到 LSPosed 日志，重复导出不再刷屏
         val delta = runCatching { reportDeltaRecords(prior, fullReport) }.getOrDefault(0)
         runCatching {
-            if (delta == 0) {
-                Log.i("QselfDiag", "[合并导出] 无新增记录，完整累计日志见 /sdcard/Download/$LOG_FILE_NAME")
-                xposed.log(Log.INFO, "QselfDiag", "[合并导出] 无新增记录，完整累计日志见 /sdcard/Download/$LOG_FILE_NAME", null)
-            } else {
-                Log.i("QselfDiag", "[合并导出] 新增 $delta 条记录")
-                xposed.log(Log.INFO, "QselfDiag", "[合并导出] 新增 $delta 条记录", null)
-            }
+            val note = if (delta == 0) "无新增记录，完整累计日志见 /sdcard/Download/$LOG_FILE_NAME" else "新增 $delta 条记录"
+            xposed.log(Log.INFO, "Diag", "[合并导出] $note", null)
         }
-        // 3. 写入 Download/qself-full-log.txt 与外部应用目录（已经合并过，不再合第二遍），然后回主线程提示与分享
+        // 3. 写入 Download/qq-diag.txt 与外部应用目录（已经合并过，不再合第二遍），然后回主线程提示与分享
         val paths = runCatching {
             writeLogFiles(ctx, includeLogcat = false, prebuiltReport = fullReport, priorLength = prior?.length ?: -1)
         }.getOrDefault(emptyList())
@@ -514,11 +512,11 @@ fun exportFullQqLog(ctx: Context, currentActivity: Activity? = null) {
             runCatching {
                 val share = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
-                    putExtra(Intent.EXTRA_SUBJECT, "Qself Full QQ Log (${BuildConfig.VERSION_NAME})")
+                    putExtra(Intent.EXTRA_SUBJECT, "QQ 诊断报告 (${BuildConfig.VERSION_NAME})")
                     putExtra(Intent.EXTRA_TEXT, clipText)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                ctx.startActivity(Intent.createChooser(share, "导出 Qself 全量日志").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                ctx.startActivity(Intent.createChooser(share, "导出全量日志").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
         }
     }

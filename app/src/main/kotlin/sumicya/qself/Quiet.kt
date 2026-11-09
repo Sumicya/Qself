@@ -17,7 +17,7 @@ fun noTelemetry() {
         // report() 的调用方会读返回值，给一个 errorCode=1（非 0 即失败）的真对象而不是 null。
         val result = cls("com.tencent.beacon.event.open.EventResult")
             .getConstructor(Integer.TYPE, java.lang.Long.TYPE, String::class.java)
-        hook(method("report")) { result.newInstance(1, 0L, "Qself") }
+        hook(method("report")) { result.newInstance(1, 0L, "") }
     }
     cls("com.tencent.mobileqq.statistics.StatisticCollector")
         .constant(null) { it.returnType == Void.TYPE && (it.name.startsWith("collectPerformance") || it.name.startsWith("report")) }

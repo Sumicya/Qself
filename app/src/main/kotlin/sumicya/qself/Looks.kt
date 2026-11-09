@@ -1382,7 +1382,7 @@ internal fun reducedSafeTop(origTop: Int, dp: Float, offsetDp: Float = Float.NaN
 }
 
 private class HeaderPillsDrawable(private val host: View) : android.graphics.drawable.Drawable() {
-    private val sharedScene = android.graphics.RenderNode("qself-header-scene")
+    private val sharedScene = android.graphics.RenderNode(null)
     private var sharedSceneReady = false
     private var sceneDraws = 0
     private var sceneRecordDraw = -1
@@ -1536,7 +1536,6 @@ private class HeaderState(
     private var downY = 0f
     val pills = HeaderPillsDrawable(bar)
     val avatar = android.widget.ImageView(bar.context).apply {
-        tag = "qself-aio-avatar"
         scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
         outlineProvider = capsule()
         clipToOutline = true
@@ -2745,22 +2744,6 @@ internal fun statusFadeColors(argb: Int, stops: Int = STATUS_FADE_STOPS): IntArr
         val a = if (i == 0) 255 else if (i == n - 1) 0 else (255 * statusFadeAlpha(i / (n - 1f))).roundToInt()
         (argb and 0x00FFFFFF) or (a shl 24)
     }
-}
-
-/**
- * 第 [y] 行的不透明度（0..255）。LinearGradient 在相邻停靠点之间线性插值，这里照同一条规则还原，
- * 单测因此能按真实行距量出台阶；绘制本身仍交给 Skia。
- */
-internal fun statusFadeAlphaAt(y: Int, height: Int, stops: Int = STATUS_FADE_STOPS): Int {
-    if (height <= 1) return 255
-    val n = stops.coerceAtLeast(2)
-    val colors = statusFadeColors(0xFFFFFF, n)
-    val pos = (y.toFloat() / (height - 1)) * (n - 1)
-    val i = pos.toInt().coerceIn(0, n - 2)
-    val frac = pos - i
-    val a0 = (colors[i] ushr 24) and 0xFF
-    val a1 = (colors[i + 1] ushr 24) and 0xFF
-    return (a0 + (a1 - a0) * frac).roundToInt()
 }
 
 private class StatusFadeDrawable(val color: Int) : android.graphics.drawable.Drawable() {
