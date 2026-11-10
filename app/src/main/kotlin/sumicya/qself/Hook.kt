@@ -120,27 +120,9 @@ fun on(name: String): Boolean {
 
 private const val PREFS = "app_cfg"
 
-/** 全仓唯一保留的旧名字面量：上一版把开关存在同目录的 qself.xml 里，搬一次就删掉，之后不再出现。 */
-private const val LEGACY_PREFS = "qself"
-
-/** 旧开关搬家：只在新文件还没搬过、且旧文件真在磁盘上时才动，搬完立刻删旧 xml，免得 QQ 的数据目录里一直躺着这个名字。 */
-private fun migrate(ctx: Context): SharedPreferences {
-    val fresh = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    if (fresh.contains("_migrated")) return fresh
-    val legacyFile = java.io.File(ctx.dataDir, "shared_prefs/$LEGACY_PREFS.xml")
-    if (runCatching { legacyFile.isFile }.getOrDefault(false)) runCatching {
-        val legacy = ctx.getSharedPreferences(LEGACY_PREFS, Context.MODE_PRIVATE)
-        val edit = fresh.edit()
-        legacy.all.forEach { (k, v) -> when (v) { is Boolean -> edit.putBoolean(k, v); is Int -> edit.putInt(k, v); is Float -> edit.putFloat(k, v); is String -> edit.putString(k, v) } }
-        edit.putBoolean("_migrated", true).apply()
-        ctx.deleteSharedPreferences(LEGACY_PREFS)
-    }
-    return fresh
-}
-
 fun store(): SharedPreferences? = prefs ?: runCatching {
     (Class.forName("android.app.ActivityThread").getMethod("currentApplication").invoke(null) as? Context)
-        ?.let { migrate(it) }
+        ?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }.getOrNull()?.also { prefs = it }
 
 /**

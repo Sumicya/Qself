@@ -547,7 +547,7 @@ private fun aboutQself(ctx: android.content.Context) {
     val dp = ctx.resources.displayMetrics.density
     val body = TextView(ctx).apply {
         text = buildString {
-            append(ctx.packageName).append(" ").append(BuildConfig.VERSION_NAME).append("\n\n")
+            append("v").append(BuildConfig.VERSION_NAME).append("\n\n")
             append("Copyright (C) 2026 Sumicya\n")
             append("许可：GNU General Public License 第 3 版或更高版本（GPL-3.0-or-later）\n\n")
             append("本程序按现状提供，不附带任何担保，包括但不限于适销性与特定用途适用性的担保。")

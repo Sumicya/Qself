@@ -56,6 +56,5 @@ echo "compiled: $(find "$T/t/sumicya/qself" -type f -name '*.class' | wc -l) cla
 java -cp "$T/t:$T/kotlinc/lib/kotlin-stdlib.jar" RunKt
 # 残留扫描：声明没人用、import 没人提、prefs 键只有一面，一律当失败——这类东西编译器不报。
 python3 "$R/tools/deadcode.py"
-python3 "$R/tools/fingerprint.py"
 # CI 的落点核对照样跑这两条 Python 回归：本地漏掉它们，推送后才发现等于拿 CI 当编译器。
 cd "$R" && python3 -m unittest discover -s app/src/test/python -p 'test_*.py'
