@@ -16,8 +16,13 @@
   ③ 跨文件动态导入：`importlib.import_module(name)` 这类，名字在运行期才定。
   ④ 资源文件里的字符串：.xml/.json 里写的东西不在本脚本的抽取范围内。
 
+盲区清单本身也要被校验：tools/blindspots.json 三类键 excluded／deferred／open_questions
+都不许空，每条必须有 path／why／limit 三栏，path 必须是仓里真实存在的东西。
+清单烂掉时它比没有清单更糟——它会让人以为盲区已经被交代过了。
+
 有发现就退出码 1，接在 tools/check.sh 与 .github/workflows/build.yml 上，非 0 不出包。
 """
+import json
 import re
 import sys
 from collections import Counter
@@ -127,6 +132,46 @@ def words(text: str) -> Counter:
     return Counter(re.findall(r'[A-Za-z_]\w*', text))
 
 
+def blindspots() -> list[str]:
+    """校验盲区清单：三类不许空、每条三栏齐全、path 真实存在、不许重名。
+
+    清单是给下一个人判断「这个零能不能信」用的。它能假绿的方式只有一种：条目变成
+    空壳或指向不存在的东西，于是读者以为这片已经被交代过。所以这里查的是形状与存在性。
+    """
+    path = ROOT / 'tools/blindspots.json'
+    if not path.is_file():
+        return ['tools/blindspots.json 不存在：盲区清单缺席']
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except json.JSONDecodeError as exc:
+        return [f'tools/blindspots.json 不是合法 JSON：{exc}']
+    bad: list[str] = []
+    want = ('excluded', 'deferred', 'open_questions')
+    if sorted(data) != sorted(want):
+        bad.append(f'盲区清单的键必须正好是 {"/".join(want)}，实得 {"/".join(sorted(data))}')
+    seen: set[str] = set()
+    for key in want:
+        rows = data.get(key)
+        if not isinstance(rows, list) or not rows:
+            bad.append(f'盲区清单 {key} 为空或不是数组：空的一类等于这一类没被交代')
+            continue
+        for index, row in enumerate(rows, 1):
+            where = f'{key}[{index}]'
+            if not isinstance(row, dict) or sorted(row) != ['limit', 'path', 'why']:
+                bad.append(f'{where} 必须正好有 path/why/limit 三栏')
+                continue
+            for field in ('path', 'why', 'limit'):
+                if not isinstance(row[field], str) or not row[field].strip():
+                    bad.append(f'{where}.{field} 是空的')
+            target = row['path']
+            if target in seen:
+                bad.append(f'{where}.path 重复：{target}')
+            seen.add(target)
+            if not (ROOT / target).exists():
+                bad.append(f'{where}.path 在仓里不存在：{target}')
+    return bad
+
+
 def main() -> int:
     files = sorted(SRC.rglob('*.kt'))
     raw = {p: p.read_text(encoding='utf-8') for p in files}
@@ -229,10 +274,14 @@ def main() -> int:
                               else re.findall(r'="([^"]*)"', p.read_text(encoding='utf-8')))]):
             problems.append(f'白名单条目已不在源码中，请同步删掉  {f}:{v!r}')
 
+    problems += blindspots()
+
     for line in problems:
         print(line)
+    blind = json.loads((ROOT / 'tools/blindspots.json').read_text(encoding='utf-8'))
     print(f'残留/指纹：Kotlin {len(files)} 个、Python {len(py_files)} 个、指纹面 {scanned} 个文件；'
-          f'主码标识符 {main_cnt.total()}（测试另计 {test_cnt.total()}），白名单 {len(ALLOW)} 条，问题 {len(problems)} 处')
+          f'主码标识符 {main_cnt.total()}（测试另计 {test_cnt.total()}），白名单 {len(ALLOW)} 条，'
+          f'盲区清单 {"/".join(f"{k}={len(v)}" for k, v in blind.items())}，问题 {len(problems)} 处')
     return 1 if problems else 0
 
 

@@ -37,13 +37,15 @@ FIXTURES = (
     ("都有来源", "实测 5123 字节，命令是 wc -c。", 0),
     ("序数不算数", "第 12 篇、第三种写法、第十二条。", 0),
     ("只有百字标、没有别的数", "这一篇到此〔100〕。", 0),
+    ("百字标插在来源词中间", "量〔100〕出一万字节。", 0),
 )
 
 
 def scrub(text: str) -> str:
     """抹掉代码块与行内代码，保留行数：命令本身就是数字的来源，不该被当成缺来源。"""
     text = FENCE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
-    return MARKS.sub(" ", INLINE.sub(" ", text))
+    # 百字标是插进去的，抹成空串才是原文；抹成空格会把「量〔100〕出」拆成两个字
+    return MARKS.sub("", INLINE.sub(" ", text))
 
 
 def scan(text: str) -> list[tuple[int, str, list[str]]]:

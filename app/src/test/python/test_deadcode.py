@@ -18,6 +18,15 @@ DEADCODE = ROOT / "tools" / "deadcode.py"
 
 HITS = 1
 
+# 夹具里的盲区清单：形状与真仓一致，path 指一个夹具里真会建出来的文件
+BLINDSPOTS = """\
+{
+  "excluded": [{"path": "app/src/main/AndroidManifest.xml", "why": "夹具", "limit": "夹具"}],
+  "deferred": [{"path": "tools/deadcode.py", "why": "夹具", "limit": "夹具"}],
+  "open_questions": [{"path": "app/src/test/python", "why": "夹具", "limit": "夹具"}]
+}
+"""
+
 # ① 死函数 dead() 只被定义一次；两种注释里的提及都必须不算引用
 KT_COMMENT = """\
 // dead() 曾经在这里被调用过一次，现在没人用了
@@ -62,7 +71,7 @@ fun dead() = """
 
 
 class DeadcodeRegressionTest(unittest.TestCase):
-    def run_gate(self, files):
+    def run_gate(self, files, blindspots=BLINDSPOTS):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "app/src/main/kotlin/demo").mkdir(parents=True)
@@ -72,6 +81,8 @@ class DeadcodeRegressionTest(unittest.TestCase):
             # 白名单要求的安装包标签：夹具里也要有，否则每条用例都会先被白名单缺席打红
             (root / "app/src/main/AndroidManifest.xml").write_text(
                 '<manifest><application android:label="Qself" /></manifest>', encoding="utf-8")
+            if blindspots is not None:
+                (root / "tools/blindspots.json").write_text(textwrap.dedent(blindspots), encoding="utf-8")
             for rel, body in files.items():
                 (root / rel).write_text(textwrap.dedent(body), encoding="utf-8")
             done = subprocess.run([sys.executable, str(root / "tools/deadcode.py")],
@@ -94,6 +105,33 @@ class DeadcodeRegressionTest(unittest.TestCase):
         self.assertEqual(1, code, out)
         self.assertEqual(HITS, out.count("模块级无人引用"), out)
         self.assertIn("helper_never_called", out)
+
+    def test_blindspot_with_unknown_key_is_reported(self):
+        broken = BLINDSPOTS.replace('"excluded"', '"excludedd"')
+        code, out = self.run_gate({"tools/helper.py": "x = 1\n"}, blindspots=broken)
+        self.assertEqual(1, code, out)
+        self.assertEqual(HITS, out.count("盲区清单的键必须正好是"), out)
+
+    def test_blindspot_pointing_at_missing_path_is_reported(self):
+        broken = BLINDSPOTS.replace("app/src/main/AndroidManifest.xml", "app/src/main/nope.txt")
+        code, out = self.run_gate({"tools/helper.py": "x = 1\n"}, blindspots=broken)
+        self.assertEqual(1, code, out)
+        self.assertEqual(HITS, out.count("在仓里不存在"), out)
+        self.assertIn("nope.txt", out)
+
+    def test_empty_blindspot_class_is_reported(self):
+        broken = BLINDSPOTS.replace(
+            '"open_questions": [{"path": "app/src/test/python", "why": "夹具", "limit": "夹具"}]',
+            '"open_questions": []')
+        code, out = self.run_gate({"tools/helper.py": "x = 1\n"}, blindspots=broken)
+        self.assertEqual(1, code, out)
+        self.assertEqual(HITS, out.count("open_questions 为空"), out)
+
+    def test_blindspot_entry_missing_limit_is_reported(self):
+        broken = BLINDSPOTS.replace(', "why": "夹具", "limit": "夹具"}', ', "why": "夹具"}', 1)
+        code, out = self.run_gate({"tools/helper.py": "x = 1\n"}, blindspots=broken)
+        self.assertEqual(1, code, out)
+        self.assertIn("path/why/limit 三栏", out)
 
     def test_raw_string_is_read_whole_not_line_by_line(self):
         code, out = self.run_gate({"app/src/main/kotlin/demo/B.kt": KT_RAW})

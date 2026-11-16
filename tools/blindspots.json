@@ -1,0 +1,43 @@
+{
+  "excluded": [
+    {
+      "path": "app/src/main/assets/GPL-3.0.txt",
+      "why": "按名字读的许可全文，内容由仓根 LICENSE 逐字节保证，不需要再扫",
+      "limit": "只核这一个文件名是否解析得到；assets 下以后新增的文件不在任何扫描范围里"
+    },
+    {
+      "path": "app/src/main/res",
+      "why": "资源 XML 由 aapt 编译进包，死代码扫描只抽 Kotlin 与 Manifest，不抽资源",
+      "limit": "资源里的中文字串与宿主可见名字无人自动查，只能人读；新增资源默认落在盲区里"
+    },
+    {
+      "path": "gradle/wrapper/gradle-wrapper.jar",
+      "why": "二进制分发包，完整性由 gradle 自己的校验和保证，不由本仓扫描器管",
+      "limit": "jar 内的类名与字符串完全不扫"
+    }
+  ],
+  "deferred": [
+    {
+      "path": "tools/ksu-shaders.json",
+      "why": "着色器清单是数据文件，尚未与 check_kernel_shaders.py 的期望逐条对照",
+      "limit": "清单条目与实际着色器不符时，只有真机编译才暴露"
+    },
+    {
+      "path": "third_party/NOTICE.md",
+      "why": "第三方声明是文本，延期到许可整备时统一审",
+      "limit": "里面写的上游版本没有自动核对，可能已经落后于实际依赖"
+    }
+  ],
+  "open_questions": [
+    {
+      "path": "app/src/main/kotlin/sumicya/qself/Qself.kt",
+      "why": "Xposed 入口类由框架按名字反射加载，扫描器只能整类豁免",
+      "limit": "被豁免的是整类：这个类里若新增了真正没人调用的函数，照样不会报"
+    },
+    {
+      "path": "app/src/main/resources/META-INF/xposed/module.prop",
+      "why": "打包时由 gradle 覆写，仓里这份与产物里那份是否一致还没核过",
+      "limit": "不一致只会在装包后由 LSPosed 的模块页显示出来，扫描器看不见"
+    }
+  ]
+}
