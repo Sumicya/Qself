@@ -68,7 +68,6 @@ class DeadcodeRegressionTest(unittest.TestCase):
             (root / "app/src/main/kotlin/demo").mkdir(parents=True)
             (root / "app/src/test/python").mkdir(parents=True)
             (root / "tools").mkdir()
-            (root / ".github/scripts").mkdir(parents=True)
             (root / "tools/deadcode.py").write_text(DEADCODE.read_text(encoding="utf-8"), encoding="utf-8")
             # 白名单要求的安装包标签：夹具里也要有，否则每条用例都会先被白名单缺席打红
             (root / "app/src/main/AndroidManifest.xml").write_text(

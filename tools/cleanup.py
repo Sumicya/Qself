@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Qself 清理：Actions 产物与运行记录、Release 与孤立 tag 共用这一份脚本，逻辑与 Selffont 版一致。
+"""Qself 清理：只处理 Actions 产物与运行记录，逻辑与 Selffont 版一致。
 
-CLEANUP_SCOPE=actions 处理 artifact 与 run；CLEANUP_SCOPE=releases 处理 Release 与项目孤立 tag。
-读取 GH_TOKEN、REPO、RUN_ID、CLEANUP_APPLY。
+管 Release 和 tag 的那一半已经整段删掉：不发版、不打 tag，删别人的 Release 与 tag 同样是
+对外动作，不能由 CI 自己干。读取 GH_TOKEN、REPO、RUN_ID、CLEANUP_APPLY。
 
-artifact 只有一条判据，照规范 13：每仓总数 ≤5，按 created_at 留最新 5 个，超出当轮删。
+artifact 只有一条判据，照规范 15（产物）：每仓总数 ≤5，按 created_at 留最新 5 个，超出当轮删。
 不按名字、段数、前缀、事件来源或号源做任何分类——那五条自造判据在 Selffont 上删掉了母版
 基准件（Selffont-mother-97e9dd4-5）和五份探针包，同一份脚本搬过来不重犯。
 run 只有数量判据：每个工作流保留最新 5 条，未完成且超限的先取消；工作流文件已删除的，一条不留。
@@ -19,11 +19,9 @@ import sys
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from urllib.parse import quote
 
 KEEP_RUNS = 5
 KEEP_ARTIFACTS = 5
-KEEP_RELEASES = 1
 CLOCK = timezone(timedelta(hours=8))
 
 
@@ -41,19 +39,18 @@ def env_int(name: str, minimum: int = 1) -> int:
     return int(raw)
 
 
-APPLY = env_value("CLEANUP_APPLY", "false").lower() == "true"
-if (os.environ.get("CLEANUP_APPLY") or "").strip().lower() not in ("true", "false"):
+# 不写就按预演（false）走；只有写了一个既不是 true 也不是 false 的值才算配错。
+# 上一版要求必须显式写 true/false，于是「默认预演」这条路在本地根本走不通：不设就报错退出。
+APPLY_RAW = (os.environ.get("CLEANUP_APPLY") or "").strip().lower()
+if APPLY_RAW not in ("", "true", "false"):
     sys.exit("CLEANUP_APPLY 必须是 true/false")
-SCOPE = env_value("CLEANUP_SCOPE", "actions").lower()
-if SCOPE not in ("actions", "releases"):
-    sys.exit(f"CLEANUP_SCOPE 必须是 actions 或 releases，收到 {SCOPE!r}")
+APPLY = APPLY_RAW == "true"
 REPO = env_value("REPO")
 PROJECT = REPO.rsplit("/", 1)[-1]
 RUN_ID = env_int("RUN_ID")
 
 MODEL = "真删" if APPLY else "预演（只打印清单）"
-DOOMED_TAGS: set[str] = set()                     # 本轮要连同 Release 一起删的 tag
-PENDING: list[dict] = []                             # 每项：类型/端点/对象/方法/动作词/关联 tag
+PENDING: list[dict] = []                            # 每项：类型/端点/对象/方法/动作词
 PERMISSION_GAPS: list[tuple[str, str, str]] = []     # (类型, 端点, 对象)
 FAILURES: list[tuple[str, str, str]] = []            # (类型, 对象, 原因)
 
@@ -114,10 +111,9 @@ def stamp(row: dict) -> str:
 
 
 
-def plan(kind: str, endpoint: str, label: str, method: str = "DELETE", verb: str = "删除",
-         tag: str | None = None) -> None:
+def plan(kind: str, endpoint: str, label: str, method: str = "DELETE", verb: str = "删除") -> None:
     PENDING.append({"kind": kind, "endpoint": endpoint, "label": label,
-                    "method": method, "verb": verb, "tag": tag})
+                    "method": method, "verb": verb})
 
 
 def permission_gap(stderr: str) -> bool:
@@ -139,18 +135,9 @@ def execute() -> None:
     if not APPLY:
         print("=== 预演结束：未执行任何删除（CLEANUP_APPLY=false） ===")
         return
-    live_tags: set[str] | None = None
     for item in PENDING:
         kind, endpoint, label = item["kind"], item["endpoint"], item["label"]
         method, verb = item["method"], item["verb"]
-        if kind == "tag":
-            # 删 tag 前重取一次 Release：上一项 Release 若因 403 没删成，它的 tag 不能被当成孤立 tag 删掉。
-            if live_tags is None:
-                live_tags = {row.get("tag_name") for row in
-                             api_list(f"repos/{REPO}/releases?per_page=100", ".[] | {tag_name}")}
-            if item["tag"] in live_tags:
-                print(f"跳过[tag] {item['tag']}（对应 Release 仍在，不当孤立 tag 删）")
-                continue
         result = subprocess.run(["gh", "api", "-X", method, endpoint], capture_output=True, text=True)
         if result.returncode == 0:
             print(f"已{verb}[{kind}] {label}")
@@ -176,7 +163,7 @@ def execute() -> None:
 # ------------------------------------------------------------------ artifact / run
 
 def clean_actions() -> None:
-    """规范六·3 只有一条判据：每仓 artifact 总数 ≤5，按 created_at 留最新 5 个。
+    """规范 15 只有一条判据：每仓 artifact 总数 ≤5，按 created_at 留最新 5 个。
 
     不按名字、段数、前缀、事件来源、号源做任何分类。分类只会让「最新 5 个」失效。
     """
@@ -239,87 +226,41 @@ def clean_actions() -> None:
           f"{sum(1 for i in PENDING if i['kind'] == 'run' and i['verb'] == '取消')} 条")
 
 
-# ------------------------------------------------------------------ Release / tag
-
-def clean_releases() -> None:
-    releases = api_list(f"repos/{REPO}/releases?per_page=100",
-                        ".[] | {id,tag_name,name,created_at,published_at}")
-    tags = api_list(f"repos/{REPO}/tags?per_page=100", ".[] | {name}")
-    ordered = sorted(releases,
-                     key=lambda row: (row.get("published_at") or row.get("created_at") or "", row["id"]),
-                     reverse=True)
-    kept, extra = ordered[:KEEP_RELEASES], ordered[KEEP_RELEASES:]
-    print(f"=== {PROJECT} Release/tag 清理：{MODEL}；Release 保留 {KEEP_RELEASES} 个 ===")
-    for row in kept:
-        print(f"保留[release] id={row['id']} tag={row.get('tag_name')} name={row.get('name')}")
-    # tag 只跟它自己的 Release 走：被判删的 Release 的 tag 一并删，其余 tag 一个都不碰。
-    # 不按名字前缀猜归属——2026-11-01 之前按前缀判断，`SelfFontProbe-dev-1`（大小写不同）
-    # 和 `probe-dev-1`（完全没有项目名前缀）永远匹配不上 `Selffont-`，于是既不保留也不删除，
-    # 悬在规则之外；反过来前缀一旦写宽，别的项目的 tag 也会被当成自家的。精确对应不需要猜。
-    doomed_tags = {row.get("tag_name") for row in extra if row.get("tag_name")}
-    DOOMED_TAGS.clear()
-    DOOMED_TAGS.update(doomed_tags)
-    for row in extra:
-        plan("release", f"repos/{REPO}/releases/{row['id']}",
-             f"id={row['id']} tag={row.get('tag_name')} name={row.get('name')}")
-    for row in tags:
-        name = row["name"]
-        if name in doomed_tags:
-            plan("tag", f"repos/{REPO}/git/refs/tags/{quote(name, safe='')}",
-                 f"name={name}（随其 Release 一起删）", tag=name)
-        else:
-            print(f"保留[tag] {name}（没有对应的被删 Release）")
-
-
 def verify() -> None:
     """清理后复核：数量仍超限且本轮没有 403 缺口，就当轮失败，不把没删成说成清理成功。"""
     if not APPLY:
         return
-    if SCOPE == "actions":
+    artifacts = api_list(f"repos/{REPO}/actions/artifacts?per_page=100",
+                         ".artifacts[] | {id,name,workflow_run}")
+    left = [row for row in artifacts if row.get("expired") is not True]
+    for attempt in range(3):
+        if len(left) <= KEEP_ARTIFACTS or PERMISSION_GAPS:
+            break
+        print(f"复核：读到 {len(left)} 个，超过 {KEEP_ARTIFACTS}；等 5 秒重读（第 {attempt + 1}/3 次）")
+        time.sleep(5)
         artifacts = api_list(f"repos/{REPO}/actions/artifacts?per_page=100",
-                             ".artifacts[] | {id,name,workflow_run}")
+                             ".artifacts[] | {id,name,created_at,expired,workflow_run}")
         left = [row for row in artifacts if row.get("expired") is not True]
-        for attempt in range(3):
-            if len(left) <= KEEP_ARTIFACTS or PERMISSION_GAPS:
-                break
-            print(f"复核：读到 {len(left)} 个，超过 {KEEP_ARTIFACTS}；等 5 秒重读（第 {attempt + 1}/3 次）")
-            time.sleep(5)
-            artifacts = api_list(f"repos/{REPO}/actions/artifacts?per_page=100",
-                                 ".artifacts[] | {id,name,created_at,expired,workflow_run}")
-            left = [row for row in artifacts if row.get("expired") is not True]
-        gap = any(kind == "artifact" for kind, _, _ in PERMISSION_GAPS)
-        print(f"复核：artifact 全仓剩 {len(left)} 个（上限 {KEEP_ARTIFACTS}，不分前缀）")
-        if gap:
-            print("复核未完成：artifact 清理遇到 403 权限缺口，未把未删对象描述成清理成功。")
-        elif len(left) > KEEP_ARTIFACTS:
-            FAILURES.append(("artifact", "清理后数量", f"实际剩 {len(left)} 个，超过 {KEEP_ARTIFACTS}"))
-        runs = api_list(f"repos/{REPO}/actions/runs?per_page=100",
-                        ".workflow_runs[] | {id,path,status}")
-        per_workflow: dict[str, list[dict]] = defaultdict(list)
-        for row in runs:
-            per_workflow[row.get("path") or ""].append(row)
-        cancel_gap = any(kind == "run" for kind, _, _ in PERMISSION_GAPS)
-        for path, rows in sorted(per_workflow.items()):
-            active = [row for row in rows if row["status"] != "completed" or row["id"] == RUN_ID]
-            print(f"复核：{path} 当前剩 {len(rows)} 条（上限 {KEEP_RUNS}；其中未完成/本次运行 "
-                  f"{len(active)} 条）")
-            if cancel_gap:
-                print(f"复核未完成：{path} 的运行清理遇到 403 权限缺口。")
-            elif len(rows) > KEEP_RUNS + len(active):
-                FAILURES.append(("run", path, f"清理后仍有 {len(rows)} 条，超过 {KEEP_RUNS}"))
-    else:
-        releases = api_list(f"repos/{REPO}/releases?per_page=100", ".[] | {id,tag_name}")
-        tags = api_list(f"repos/{REPO}/tags?per_page=100", ".[] | {name}")
-        orphans = [row for row in tags if row["name"] in DOOMED_TAGS]
-        gap = any(kind in ("release", "tag") for kind, _, _ in PERMISSION_GAPS)
-        print(f"复核：Release 剩 {len(releases)} 个（上限 {KEEP_RELEASES}）；被删 Release 的残留 tag {len(orphans)} 个")
-        if gap:
-            print("复核未完成：Release/tag 清理遇到 403 权限缺口，未把未删对象描述成清理成功。")
-        else:
-            if len(releases) > KEEP_RELEASES:
-                FAILURES.append(("release", "清理后数量", f"实际剩 {len(releases)} 个"))
-            for row in orphans:
-                FAILURES.append(("tag", row["name"], "清理后仍然存在"))
+    gap = any(kind == "artifact" for kind, _, _ in PERMISSION_GAPS)
+    print(f"复核：artifact 全仓剩 {len(left)} 个（上限 {KEEP_ARTIFACTS}，不分前缀）")
+    if gap:
+        print("复核未完成：artifact 清理遇到 403 权限缺口，未把未删对象描述成清理成功。")
+    elif len(left) > KEEP_ARTIFACTS:
+        FAILURES.append(("artifact", "清理后数量", f"实际剩 {len(left)} 个，超过 {KEEP_ARTIFACTS}"))
+    runs = api_list(f"repos/{REPO}/actions/runs?per_page=100",
+                    ".workflow_runs[] | {id,path,status}")
+    per_workflow: dict[str, list[dict]] = defaultdict(list)
+    for row in runs:
+        per_workflow[row.get("path") or ""].append(row)
+    cancel_gap = any(kind == "run" for kind, _, _ in PERMISSION_GAPS)
+    for path, rows in sorted(per_workflow.items()):
+        active = [row for row in rows if row["status"] != "completed" or row["id"] == RUN_ID]
+        print(f"复核：{path} 当前剩 {len(rows)} 条（上限 {KEEP_RUNS}；其中未完成/本次运行 "
+              f"{len(active)} 条）")
+        if cancel_gap:
+            print(f"复核未完成：{path} 的运行清理遇到 403 权限缺口。")
+        elif len(rows) > KEEP_RUNS + len(active):
+            FAILURES.append(("run", path, f"清理后仍有 {len(rows)} 条，超过 {KEEP_RUNS}"))
     if FAILURES:
         for kind, label, reason in FAILURES:
             print(f"::error::清理后仍超限[{kind}] {label}：{reason}")
@@ -327,10 +268,7 @@ def verify() -> None:
 
 
 def main() -> None:
-    if SCOPE == "actions":
-        clean_actions()
-    else:
-        clean_releases()
+    clean_actions()
     execute()
     verify()
 

@@ -2,6 +2,10 @@
 
 ## 26.11.10
 
+- 删掉整个「删 Release、删 tag」的清理任务：不发版、不打 tag，删掉别人的 Release 与 tag 同样是对外动作，不能由 CI 自己干。脚本里管 Release 与孤立 tag 的那一整段（含保留数、待删 tag 集合、复核分支）一并删掉，`contents: write` 权限随之取消。
+- 清理脚本从 `.github/scripts/` 挪进 `tools/`（规范 11 目录：脚本只进 `tools/`），工作流引用改一处。此前那条「清理只留一份逻辑 `.github/scripts/cleanup.py`、新增 `CLEANUP_SCOPE`」的旧记录留在下面不动，按「更正另起一条」处理；`CLEANUP_SCOPE` 现在整个删掉，脚本只干 Actions 产物与运行记录这一件事。
+- 残留扫描器的 Python 范围同步改：去掉已不存在的 `.github/scripts/`，只扫 `tools/` 与 `app/src/test/python`。
+
 - 删掉旧配置迁移：老用户存在 `qself.xml` 里的开关不会自动搬过来，自定义开关可能需要重设一次。换掉的是每次启动都去 stat 一眼旧路径，而绝大多数机器上那个路径根本不存在。
 - 关于页不再打印宿主包名（那是腾讯的包名，不是本模块的），版本号改成与页面其他位置一致的 `v` 前缀。
 - 删掉与根 `LICENSE` 逐字节相同的第三份 GPL 副本、构建机从不用到的 `gradlew.bat` 与一张诊断截图；指纹脚本并入残留扫描器，入口从两个减到一个。

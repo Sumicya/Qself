@@ -7,8 +7,8 @@
 判据二（指纹）：会被宿主进程拿到的**字符串字面量**里不许出现本模块的名字。
 标识符（包名、类名）不算：包名是安装包的身份证，宿主查已安装应用列表就看得到。
 
-范围：app/src 的 .kt（含缩进成员与三引号原始字符串），tools/、.github/scripts/、
-app/src/test/python 的 .py（模块级声明、局部只写不读、未使用 import）。
+范围：app/src 的 .kt（含缩进成员与三引号原始字符串），tools/ 与 app/src/test/python 的 .py
+（模块级声明、局部只写不读、未使用 import）。
 
 固有盲区（补不掉，只能列出来）：
   ① 反射按字符串调用的方法：`Class.forName("...").getMethod("x")` 里的 "x" 只是个字符串。
@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / 'app/src'
 MAIN = SRC / 'main'
 TEST = SRC / 'test'
-PY_DIRS = (ROOT / 'tools', ROOT / '.github/scripts', SRC / 'test/python')
+PY_DIRS = (ROOT / 'tools', SRC / 'test/python')          # 脚本只进 tools/（规范 11 目录）
 
 DECL = re.compile(
     r'^[ \t]*(?:@\w+[ \t]*)?(?:internal[ \t]+|private[ \t]+|public[ \t]+)?(?:const[ \t]+|inline[ \t]+|suspend[ \t]+)?'
