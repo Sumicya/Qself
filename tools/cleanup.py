@@ -22,6 +22,16 @@ from datetime import datetime, timedelta, timezone
 
 KEEP_RUNS = 5
 KEEP_ARTIFACTS = 5
+
+# 规范 10 的例外只开给「等远端接口最终一致性」这一种：单次 ≤5 秒、最多 3 次、总计 ≤15 秒。
+# 等的是 GET /repos/{owner}/{repo}/actions/artifacts：刚对某个产物发过 DELETE，这个列表接口
+# 可能还返回旧快照。不等就会把已经删掉的算成没删，复核随机报红，而报红的原因是接口延迟，
+# 不是清理失败。等构建另有替代品（盯运行状态），那是被禁的那一类，不适用本条。
+RETRY_WAIT_SECONDS = 5
+RETRY_MAX_TIMES = 3
+RETRY_TOTAL_BUDGET = 15
+assert RETRY_WAIT_SECONDS * RETRY_MAX_TIMES <= RETRY_TOTAL_BUDGET, \
+    "规范 10 硬刻度：单次秒数 × 次数不得超过总预算"
 CLOCK = timezone(timedelta(hours=8))
 
 
@@ -233,11 +243,12 @@ def verify() -> None:
     artifacts = api_list(f"repos/{REPO}/actions/artifacts?per_page=100",
                          ".artifacts[] | {id,name,workflow_run}")
     left = [row for row in artifacts if row.get("expired") is not True]
-    for attempt in range(3):
+    for attempt in range(RETRY_MAX_TIMES):
         if len(left) <= KEEP_ARTIFACTS or PERMISSION_GAPS:
             break
-        print(f"复核：读到 {len(left)} 个，超过 {KEEP_ARTIFACTS}；等 5 秒重读（第 {attempt + 1}/3 次）")
-        time.sleep(5)
+        print(f"复核：读到 {len(left)} 个，超过 {KEEP_ARTIFACTS}；等 {RETRY_WAIT_SECONDS} 秒重读 artifacts 列表"
+              f"（第 {attempt + 1}/{RETRY_MAX_TIMES} 次，总计上限 {RETRY_TOTAL_BUDGET} 秒）")
+        time.sleep(RETRY_WAIT_SECONDS)
         artifacts = api_list(f"repos/{REPO}/actions/artifacts?per_page=100",
                              ".artifacts[] | {id,name,created_at,expired,workflow_run}")
         left = [row for row in artifacts if row.get("expired") is not True]
