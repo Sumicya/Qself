@@ -215,6 +215,34 @@ class DeadcodeRegressionTest(unittest.TestCase):
         self.assertEqual(HITS, done.stdout.count("解不成 UTF-8"), done.stdout)
         self.assertIn("broken.txt", done.stdout)
 
+    def test_every_rule_still_fires_after_the_rewrite(self):
+        # 重写最容易丢的是「某条判据没人再触发」。每条判据各给一个夹具，断言「报出来的行
+        # 全是这条判据、且至少一行」——比死抠总行数稳：夹具里别处多报一条不该让这条变红。
+        cases = {
+            "主码无人引用": ({"app/src/main/kotlin/demo/A.kt": "package demo\nfun dead() = 1\n"}, "主码无人引用"),
+            "测试内无人引用": ({"app/src/test/kotlin/demo/T.kt": "package demo\nfun dead() = 1\n"}, "测试内无人引用"),
+            "import 无人使用": ({"app/src/main/kotlin/demo/A.kt":
+                             "package demo\nimport kotlin.math.abs\nfun a() = a()\n"}, "import 无人使用"),
+            "prefs 键只有一面": ({"app/src/main/kotlin/demo/A.kt":
+                              'package demo\nval K = "abc"\nfun a(p: Any) { p.putString(K, "x"); a(p) }\n'},
+                             "prefs 键只有"),
+            "宿主可见字面量": ({"app/src/main/kotlin/demo/A.kt":
+                           'package demo\nfun a() = "Qself" + b()\nfun b() = a()\n'},
+                          "宿主可见字面量"),
+            "禁查 API": ({"app/src/main/kotlin/demo/A.kt":
+                       "package demo\nfun a(ctx: Any) { b(ctx); ctx.getInstalledPackages(0) }\n"
+                       "fun b(ctx: Any) = a(ctx)\n"},
+                      "禁查 API"),
+        }
+        for name, (files, keyword) in cases.items():
+            with self.subTest(name):
+                code, out = self.run_gate(files)
+                body = [ln for ln in out.strip().splitlines() if not ln.startswith("残留/指纹：")]
+                self.assertEqual(1, code, f"{name}: 应当红\n{out}")
+                self.assertTrue(body, f"{name}: 一条都没报\n{out}")
+                self.assertTrue(any(keyword in line for line in body),
+                                f"{name}: 这条判据没有再触发\n{out}")
+
     def test_clean_fixture_passes(self):
         # 对照：同样的夹具去掉那两样，必须绿。否则上面两条测试证明不了自己是抓手
         code, out = self.run_gate({
