@@ -43,6 +43,11 @@
       "path": "app/src/main/kotlin/sumicya/qself/DiagLog.kt",
       "why": "导出日志的正文里带着每一条事件文本，其中若干条写的是本模块的行为；这些文本会落进 Download/qq-diag.txt，是给主人看的",
       "limit": "扫描器只查字符串里有没有模块名，判断不了「这段中文描述会不会暴露改造痕迹」；这一条只能人读"
+    },
+    {
+      "path": "tools/number_source.py",
+      "why": "链接文本与粗体编号（如 [10 · Machine]、**Option 1**）与真读数同形，工具按数报出来；判不了",
+      "limit": "这条只能人读：机器要么全报（淹掉报告）要么全放过（漏真数），二者都错；目前选全报"
     }
   ]
 }

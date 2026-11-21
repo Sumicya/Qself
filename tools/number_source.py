@@ -14,6 +14,8 @@
      查进来只会把报告淹掉。所以「三次」「五秒」这种短刻度扫不到，要人眼补。
   ②b 平台版本号（`Android 11`、`Android 5.1`）整段抹掉再查：版本是名字，不是这一轮量出来的数。
      代价是「Android 之上再加两个」这类句子里的数也会一起抹掉。
+  ②c HTML 标签、链接、有序列表序号整段抹掉：标签属性与图片 ID 是排版参数，链接里的编号是
+     地址，清单序号换个顺序就变。代价是正文里被这些包住的真读数也一并放过（如「[见 12 条](#x)」）。
   ③ 只按句子看，不做语义绑定：一句里任何一个来源词，都会救活这句里全部数字。
   ④ 单位写错（数对了、单位错了）看不出来。
 
@@ -25,6 +27,9 @@ from pathlib import Path
 
 FENCE = re.compile(r"```.*?```", re.S)
 INLINE = re.compile(r"`[^`\n]*`")
+TAG = re.compile(r"<[^>\n]{0,400}>")                   # HTML 标签与属性：不是读数
+URL = re.compile(r"(?:https?|ftp)://[^\s)<>\]\"']+")   # 链接里的数字是地址，不是读数
+OLIST = re.compile(r"^\s{0,3}\d{1,3}[.)]\s")           # 有序列表序号：换一条清单就变
 MARKS = re.compile(r"〔\d+〕")                       # 检讨的百字标，不是读数
 ARABIC = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
 CHINESE = re.compile(r"[一二三四五六七八九十百千万零两]{2,8}(?=[个条次秒天篇行处枚份项步轮层种类])")
@@ -43,14 +48,25 @@ FIXTURES = (
     ("百字标插在来源词中间", "量〔100〕出一万字节。", 0),
     ("同一个字重复不算数目", "这是唯一一条他要求必须留的。", 0),
     ("平台版本号不算读数", "接口在 Android 5.1 之后返回的就是自己的进程。", 0),
+    ("HTML 标签属性不算读数", '<img width="240" src="https://x/y.png" />', 0),
+    ("尖括号里的链接不算读数", "见 <https://github.com/o/r/issues/13118>。", 0),
+    ("裸链接里的编号不算读数", "见 https://github.com/o/r/issues/13118 这一条。", 0),
+    ("有序列表序号不算读数", "1. 先看结构。\n2. 再看复用。", 0),
+    ("正文里的真读数仍然要来源", "README 一共 1648 行。", 1),
 )
 
 
 def scrub(text: str) -> str:
-    """抹掉代码块与行内代码，保留行数：命令本身就是数字的来源，不该被当成缺来源。"""
+    """抹掉代码块、行内代码、HTML 标签、链接、有序列表序号，保留行数。
+
+    命令本身就是数字的来源；标签属性的宽度、图片 ID、链接里的编号、清单序号，
+    这些数换了环境就变，不是这一轮量出来的读数。
+    """
     text = FENCE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+    text = URL.sub(" ", TAG.sub(" ", INLINE.sub(" ", text)))
+    lines = [OLIST.sub(" ", ln, count=1) for ln in text.split("\n")]
     # 百字标是插进去的，抹成空串才是原文；抹成空格会把「量〔100〕出」拆成两个字
-    return MARKS.sub("", INLINE.sub(" ", text))
+    return MARKS.sub("", "\n".join(lines))
 
 
 def scan(text: str) -> list[tuple[int, str, list[str]]]:
