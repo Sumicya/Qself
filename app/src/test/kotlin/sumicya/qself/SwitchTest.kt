@@ -192,4 +192,27 @@ class SwitchTest {
             assertTrue("失败原因也一并清掉", "连发合并" !in failures)
         }
     }
+
+    // ── Notify.kt 重写时抽出来的纯函数 ────────────────────────────────────────
+
+    @Test fun replaceLastSwapsOnlyTheLastSlot() {
+        val args = listOf<Any?>("tag", 7, "OLD-NOTIFICATION")
+        val out = replaceLast(args, "NEW")
+        assertTrue("最后一格被换掉", out[2] == "NEW")
+        assertTrue("前面几格原样", out[0] == "tag" && out[1] == 7)
+        assertTrue("长度不变", out.size == 3)
+        assertTrue("不改原表（chain.args 是框架给的只读表）", args[2] == "OLD-NOTIFICATION")
+    }
+
+    @Test fun replaceLastHandlesSingleArgument() {
+        val out = replaceLast(listOf<Any?>("OLD"), "NEW")
+        assertTrue("单参数重载也要能换", out.size == 1 && out[0] == "NEW")
+    }
+
+    @Test fun replaceLastRejectsEmptyArgsInsteadOfThrowingIndexError() {
+        // 报告里宁可看见一条明确的断言失败，也不要一个 lastIndex = -1 的数组越界——
+        // 后者会被 hook 的异常兜底吞成「钩子前置异常」，看不出是参数表空了。
+        val threw = runCatching { replaceLast(emptyList(), "NEW") }.isFailure
+        assertTrue("空参数表应当明确失败", threw)
+    }
 }
