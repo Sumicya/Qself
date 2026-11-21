@@ -147,7 +147,9 @@ class Glass(
             if (!drawn) {
                 rect.set(b)
                 paint.shader = null
-                paint.color = monet(night, if (night) 0xB8 else 0xB8)
+                // 退化底色：昼/夜的基色不同，透明度都用 0xB8（184/255，半透明）。
+                // 原先写成 `if (night) 0xB8 else 0xB8`，两边一样，三元是手滑留下的。
+                paint.color = monet(night, 0xB8)
                     ?: if (night) 0xB82A3240.toInt() else 0xB8F5F5F8.toInt()
                 canvas.drawRoundRect(rect, r, r, paint)
             }
@@ -448,11 +450,14 @@ fun capsule(max: Float = Float.MAX_VALUE) = object : ViewOutlineProvider() {
 private val isNight by lazy { runCatching { cls("com.tencent.mobileqq.utils.QQTheme").getMethod("isNowThemeIsNight") }.getOrNull() }
 
 /** 把 Monet 强调色按 0.22 混进 [c]，保留 [c] 自己的透明度；accent 为 null（Monet 关着）就原样返回。 */
-private fun wash(c: Int, accent: Int?): Int {
+internal fun wash(c: Int, accent: Int?): Int {
     if (accent == null) return c
+    // 用位运算取通道，不用 Color.red/green/blue：那三个是 android.jar 的桩方法，
+    // 在 JVM 上跑单测会抛 RuntimeException("Stub!")，于是这个纯函数一行测试也写不了。
+    fun channel(color: Int, shift: Int) = (color ushr shift) and 0xFF
     fun mix(a: Int, b: Int) = (a + ((b - a) * 0.22f).toInt()).coerceIn(0, 255)
-    return (c and 0xFF000000.toInt()) or (mix(Color.red(c), Color.red(accent)) shl 16) or
-        (mix(Color.green(c), Color.green(accent)) shl 8) or mix(Color.blue(c), Color.blue(accent))
+    return (c and 0xFF000000.toInt()) or (mix(channel(c, 16), channel(accent, 16)) shl 16) or
+        (mix(channel(c, 8), channel(accent, 8)) shl 8) or mix(channel(c, 0), channel(accent, 0))
 }
 
 /** NagramX 那套 Monet：系统动态色跟壁纸走。开关关了返回 null，调用方用写死的中性色。 */

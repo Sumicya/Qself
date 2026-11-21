@@ -275,4 +275,42 @@ class SwitchTest {
         assertTrue("两个不同的 boolean 方法都要留下，实得 ${resolution.methods.size}（缺失 ${resolution.missingMethods}）",
             resolution.methods.size == 2)
     }
+
+    // ── Glass.kt 的两个纯函数 ────────────────────────────────────────────────
+
+    @Test fun washKeepsAlphaAndOnlyMixesRgb() {
+        // 注释写的是「保留 c 自己的透明度」——这条测试就是那句话的判据。
+        for (alpha in listOf(0x00, 0x40, 0x80, 0xC8, 0xFF)) {
+            val c = (alpha shl 24) or 0xFFFFFF
+            val out = wash(c, 0xFF448AFF.toInt())
+            assertTrue("alpha ${alpha} 应当原样保留，实得 ${(out ushr 24) and 0xFF}",
+                (out ushr 24) and 0xFF == alpha)
+        }
+    }
+
+    @Test fun washReturnsInputUnchangedWhenMonetIsOff() {
+        val c = 0xC8F5F5F8.toInt()
+        assertTrue("accent 为 null（壁纸取色关着）时原样返回", wash(c, null) == c)
+    }
+
+    @Test fun washMixesExactlyTwentyTwoPercent() {
+        // 精确值断言，不是「明显变暗」那种宽断言。
+        // 0.22 改成 0.5 时这条会红；上一版写的是 `channel < 240`，0.5 也过，等于没牙。
+        // 255 + (0 - 255) * 0.22 = 255 - 56.1 → toInt 截断成 199（Kotlin 的 toInt 向零取整）
+        val out = wash(0xFFFFFFFF.toInt(), 0xFF000000.toInt())
+        for (shift in listOf(16, 8, 0)) {
+            val channel = (out ushr shift) and 0xFF
+            assertTrue("通道应当正好是 199（0.22 混合），实得 ${channel}", channel == 199)
+        }
+        assertTrue("alpha 不受影响", (out ushr 24) and 0xFF == 0xFF)
+    }
+
+    @Test fun washIsIdempotentInTheSenseThatMixingTheSameColorKeepsIt() {
+        // wash(c, c 的 rgb) 应当等于 c 的 rgb —— 混合目标就是自己时不该漂移。
+        val c = 0x80ABCDEF.toInt()
+        val out = wash(c, c)
+        assertTrue("把自己当 accent 混进去，rgb 应当不变（实得 ${out.toUInt().toString(16)}）",
+            (out and 0xFFFFFF) == (c and 0xFFFFFF))
+        assertTrue("alpha 仍然保留", (out ushr 24) and 0xFF == 0x80)
+    }
 }
