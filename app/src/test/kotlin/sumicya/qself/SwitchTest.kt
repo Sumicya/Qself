@@ -215,4 +215,64 @@ class SwitchTest {
         val threw = runCatching { replaceLast(emptyList(), "NEW") }.isFailure
         assertTrue("空参数表应当明确失败", threw)
     }
+
+    // ── Quiet.kt 的门方法分类 ────────────────────────────────────────────────
+
+    /**
+     * 真方法替身，从仓里已有的类取：
+     *   boolean 的用 LogMerge.isLegacyExport（签名 String -> Boolean）
+     *   String  的用 LogMerge.timestampOf（签名 String -> String）
+     * 都比 Proxy 造 Method 可靠——Method 是 final 类，代理出来的 getName() 不可控。
+     */
+    private val boolMethod: java.lang.reflect.Method =
+        Class.forName("sumicya.qself.LogMergeKt").getDeclaredMethod("isLegacyExport", String::class.java)
+
+    private val stringMethod: java.lang.reflect.Method =
+        Class.forName("sumicya.qself.LogMergeKt").getDeclaredMethod("timestampOf", String::class.java)
+
+    @Test fun gateClassificationSeparatesMissingClassFromMissingMethod() {
+        val good = boolMethod
+        val notBool = stringMethod
+
+        val resolution = classifyGates(listOf(
+            // 情形 ①：类不存在 → entries 空表
+            "com.tencent.Missing" to emptyList(),
+            // 情形 ②：类在、方法不存在
+            "com.tencent.HasClass" to listOf<GateMethods>("goneMethod" to emptyList()),
+            // 情形 ③：类在、方法在但不是 boolean
+            "com.tencent.WrongSig" to listOf<GateMethods>("isShowRedPoint" to listOf(notBool)),
+            // 正常命中
+            "com.tencent.Ok" to listOf<GateMethods>("isShowRedPoint" to listOf(good)),
+        ))
+
+        assertTrue("缺类单列", resolution.missingClasses == listOf("com.tencent.Missing"))
+        assertTrue("方法缺失与签名不符共 2 条，实得 ${resolution.missingMethods.size}",
+            resolution.missingMethods.size == 2)
+        assertTrue("方法缺失要说是「类在，方法不存在」",
+            resolution.missingMethods.any { it.contains("goneMethod") && it.contains("类在，方法不存在") })
+        assertTrue("签名不符要报出实际返回类型，实得 ${resolution.missingMethods}",
+            resolution.missingMethods.any { it.contains("isShowRedPoint") && it.contains("不是 boolean") })
+        assertTrue("只收 boolean 的那一个", resolution.methods.size == 1)
+    }
+
+    @Test fun gateClassificationTreatsEverythingMissingAsEmpty() {
+        val resolution = classifyGates(listOf(
+            "a.A" to emptyList(),
+            "b.B" to listOf<GateMethods>("x" to emptyList()),
+        ))
+        assertTrue("一个都没解析到 → methods 为空，gates 会因此抛", resolution.methods.isEmpty())
+        assertTrue("两个类都记进缺失", resolution.missingClasses.size == 1)
+    }
+
+    @Test fun gateClassificationKeepsEveryDistinctBooleanMethod() {
+        // 一个类里两个不同名字的 boolean 方法，两个都要装。
+        // 夹具用 Chat.kt 里两个都是 Boolean 返回的方法，别拿本类的 @Test 方法——
+        // 那是 Unit，会静默落进 missingMethods。
+        val chat = Class.forName("sumicya.qself.RunKey")
+        val b = Class.forName("sumicya.qself.LogMergeKt").getDeclaredMethod("isLegacyExport", String::class.java)
+        val c = chat.declaredMethods.first { it.returnType == java.lang.Boolean.TYPE && it.name == "equals" }
+        val resolution = classifyGates(listOf("c.C" to listOf<GateMethods>("isX" to listOf(b), "isY" to listOf(c))))
+        assertTrue("两个不同的 boolean 方法都要留下，实得 ${resolution.methods.size}（缺失 ${resolution.missingMethods}）",
+            resolution.methods.size == 2)
+    }
 }
