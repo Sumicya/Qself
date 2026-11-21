@@ -26,30 +26,61 @@ internal const val COST_LIST = 1
 internal const val COST_HEADER = 2
 internal const val COST_AVATAR = 3
 
+/**
+ * 每帧各环节的耗时归因。
+ *
+ * 谁在写：主线程（draw / dispatchDraw）。
+ * 谁在读：两个地方，**不在同一个线程**——
+ *   [take] 在帧回调里（主线程），[line] 在 buildFullDiagnosticReport 里，
+ *   而后者被 exportFullQqLog 丢进 ioExecutor 跑（后台线程）。
+ *
+ * 所以 LongArray 上的 `+=` 与 `++` 不能裸奔：`nanos[slot] += x` 是读-改-写三步，
+ * 读的同时主线程在改，后台可能读到撕裂值，均值会算出离谱的数（比如 0ms 或天文数字）。
+ * 用 @Volatile 包一层不够（array 元素本身不是 volatile），改成每个槽一个
+ * 独立的 AtomicLong —— 单槽内原子，槽与槽之间不需要一致性。
+ */
 internal object CostMeter {
     private val names = arrayOf("玻璃合成", "消息几何", "顶栏", "浮绘头像")
-    private val nanos = LongArray(names.size)
-    private val counts = LongArray(names.size)
+    private val nanos = Array(names.size) { java.util.concurrent.atomic.AtomicLong() }
+    private val counts = Array(names.size) { java.util.concurrent.atomic.AtomicLong() }
 
-    /** 主线程专用：这批计数只在绘制/布局里加减，不跨线程。 */
+    /** 主线程调用。**不要在后台线程调**：里面的计数变化会被后台的快照读到。 */
     fun add(slot: Int, startNanos: Long) {
         if (slot !in names.indices) return
-        nanos[slot] += System.nanoTime() - startNanos
-        counts[slot]++
+        nanos[slot].addAndGet(System.nanoTime() - startNanos)
+        counts[slot].incrementAndGet()
     }
 
-    fun reset() { nanos.fill(0); counts.fill(0) }
+    fun reset() {
+        for (slot in names.indices) {
+            nanos[slot].set(0)
+            counts[slot].set(0)
+        }
+    }
 
-    /** 取走本段统计并清零：给「最近一段」的归因行用，均值只算这一段。 */
+    /**
+     * 取走本段统计并清零：给「最近一段」的归因行用，均值只算这一段。
+     *
+     * 只在主线程调（帧回调里）。清零与读数之间不存在跨线程窗口，所以「取走」语义成立。
+     */
     fun take(): String {
         val text = line()
         reset()
         return text
     }
 
+    /**
+     * 只读快照，不动计数。可在后台线程调。
+     *
+     * 两次读（先 len 后 cnt）之间主线程可能又加减了一次，读到的 len/cnt 不是严格同一时刻的，
+     * 但每个单值本身是原子的 —— 均值最多有半个样本的误差，不会出现撕裂值。
+     */
     fun line(): String {
-        val parts = names.indices.filter { counts[it] > 0 }.map { i ->
-            "「${names[i]}」${fmt("%.2f", nanos[i] / 1e6 / counts[i])}ms/次（${counts[i]} 次）"
+        val parts = names.indices.mapNotNull { slot ->
+            val count = counts[slot].get()
+            if (count <= 0L) return@mapNotNull null
+            val perCall = nanos[slot].get() / 1e6 / count
+            "「${names[slot]}」${fmt("%.2f", perCall)}ms/次（$count 次）"
         }
         return if (parts.isEmpty()) "" else "耗时归因（主线程）：" + parts.joinToString("；")
     }

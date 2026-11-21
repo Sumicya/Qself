@@ -48,6 +48,11 @@
       "path": "tools/number_source.py",
       "why": "链接文本与粗体编号（如 [10 · Machine]、**Option 1**）与真读数同形，工具按数报出来；判不了",
       "limit": "这条只能人读：机器要么全报（淹掉报告）要么全放过（漏真数），二者都错；目前选全报"
+    },
+    {
+      "path": "app/src/main/kotlin/sumicya/qself/Perf.kt",
+      "why": "CostMeter 的写方是主线程、读方可能在后台线程（导出日志走 ioExecutor）；已改用 AtomicLong",
+      "limit": "这一处并发正确性 JVM 上测不出来：把 AtomicLong 换回 LongArray 连跑多次都不红（64 位下 long 读写本身是原子的，计数丢更新的窗口也太窄）。真机 32 位进程才可能复现"
     }
   ]
 }

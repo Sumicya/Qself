@@ -313,4 +313,60 @@ class SwitchTest {
             (out and 0xFFFFFF) == (c and 0xFFFFFF))
         assertTrue("alpha 仍然保留", (out ushr 24) and 0xFF == 0x80)
     }
+
+    // ── Perf.kt 的 CostMeter ─────────────────────────────────────────────────
+
+    @Test fun costMeterCountsEveryCallAndAveragesPerCall() {
+        CostMeter.reset()
+        // add 的第二个参数是「开始时刻」，它算的是 nanoTime - start，所以传「现在」得到约 0。
+        // 想要确定的耗时，就传一个过去的时刻。
+        val past = System.nanoTime() - 2_000_000L   // 2ms 前
+        repeat(4) { CostMeter.add(COST_GLASS, past) }
+        val line = CostMeter.line()
+        assertTrue("应当报出这一环，实得「$line」", line.contains("玻璃合成"))
+        assertTrue("次数应当是 4，实得「$line」", line.contains("4 次"))
+        CostMeter.reset()
+        assertTrue("reset 之后不该再有这一环", !CostMeter.line().contains("玻璃合成"))
+    }
+
+    @Test fun costMeterIgnoresOutOfRangeSlots() {
+        CostMeter.reset()
+        // 越界的槽应当被安静忽略，而不是抛 ArrayIndexOutOfBounds——那是绘制路径里的崩溃。
+        CostMeter.add(-1, System.nanoTime())
+        CostMeter.add(999, System.nanoTime())
+        assertTrue("越界槽不该产生输出", CostMeter.line().isEmpty())
+    }
+
+    @Test fun costMeterTakeResetsAndReturnsTheSameText() {
+        CostMeter.reset()
+        CostMeter.add(COST_LIST, System.nanoTime() - 1_000_000L)
+        val taken = CostMeter.take()
+        assertTrue("take 应当返回刚才那一段的归因", taken.contains("消息几何"))
+        assertTrue("take 之后计数被清零", CostMeter.line().isEmpty())
+    }
+
+    @Test fun costMeterCountsAreNotLostWhenTwoThreadsAdd() {
+        /*
+         * 诚实说明：这条测的是「计数不丢」，**不是**「没有撕裂读」。
+         *
+         * 撕裂读（一个线程读到另一个线程写了一半的 long）在 64 位 JVM 上复现不出来——
+         * 我把 AtomicLong 改回 LongArray 连跑三次，101 条照样全绿。真机 32 位进程上
+         * `nanos[slot] += x` 才是三步非原子操作。
+         *
+         * 所以这一条的判据只能是：多线程并发 add 之后，总次数等于调用次数。
+         * 原实现用 LongArray 时，`counts[slot]++` 也会丢更新——那一条是真测得到的。
+         */
+        CostMeter.reset()
+        val threads = 4
+        val perThread = 5_000
+        val pool = (1..threads).map {
+            Thread { repeat(perThread) { CostMeter.add(COST_HEADER, System.nanoTime()) } }
+        }
+        pool.forEach { it.start() }
+        pool.forEach { it.join(10_000) }
+
+        val line = CostMeter.line()
+        val expected = threads * perThread
+        assertTrue("总次数应当是 $expected，实得「$line」", line.contains("$expected 次"))
+    }
 }
