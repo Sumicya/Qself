@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 26.11.24（第三次）
+
+- 重写 `tools/deadcode.py`（§9 整份重来）：剥注释与抹字符串合成一台状态机 `render(src, py, strings)`，四种视图由它一个函数产出；指纹面从「两张表 + 三处各写一遍抽法」收成一张 `FACES` 表（后缀 → 取字面量的函数），扫描、白名单过期、「产物里有没有东西不在表里」三处读同一份。文件 360 行 → 358 行（命令：`wc -l tools/deadcode.py`）。
+- 修一处真 bug（复现命令：把 `app/src/main/assets/probe.txt` 写成 `\xff\xfe qself` 再跑扫描器，旧版退出码 0）：登记为文本面却解不成 UTF-8 的文件，旧版被 `continue` 静默跳过——既不进视野也不进总数，于是「产物 N 个、扫了 N 个」这个等式从来没被验过。上一轮我在检讨里写「遍历一次产物，左边文件总数、右边两张表命中数之和，不等就红」，那一段没实现。现在解不开就报，且汇总行改成真等式 `产物 24 个 = 文本面 24 + 二进制面 0`（命令：`python3 tools/deadcode.py`，原样输出见本轮提交信息）。
+- 重写 `tools/number_source.py`：「不算读数」的三类改为 `NOT_A_NUMBER` 表驱动，抹的顺序（先标签后链接）写在注释里；造反例 14 组 → 19 组（命令：`python3 tools/number_source.py --self-test`，末行 `自检：19 组，19 组符合，0 组不符`）。
+- 修一处判据缺口（复现：拿工具跑上一轮贴的两篇检讨）：百字标原来只认 `〔100〕`，规范 §22 的格式是全角 `（100）`。拿它跑自己上两篇检讨（命令：`python3 tools/number_source.py <该篇>`），报出 13 处：7 处是真缺陷（字数行没写来源、欠账数没出处、测试条数没出处），6 处是百字标误报；改判据后重跑同一批，误报归零，上面这个 13 与 7 是改判据前的读数。
+- 重写后对同一批 17 份上游 README 的报出量与加补丁版逐份相同，合计 702 处（命令：`python3 tools/number_source.py <文件>`，逐份读数与改前一致）。
+- 造反例 32 条，来源是两个命令的原样输出：`test_deadcode.py` 13 条（`Ran 13 tests OK`）+ `number_source.py --self-test` 19 组（末行 `自检：19 组，19 组符合，0 组不符`）。三条关键判据逐条变异验过「关掉即转红」：解不开就当没看 → `test_undecodable_text_face_is_reported`、没登记的后缀 → `test_unregistered_suffix_in_product_face_is_reported`、白名单过期 → `test_expired_allow_entry_is_reported`。
+- 受控 55 个文件 1,062,531→1,067,880 B（+5,349；命令：`git ls-files` 逐个取大小求和，余 49,361 B）。
+
 ## 26.11.24（第二次）
 
 - `tools/number_source.py` 拿 17 份外部 README 实测（`gh api contents` 现取；入口文件合计 569,823 B／5,965 行）。改前缺三条抹除（HTML 标签／链接／有序列表序号），17 份合计报出 1,112 处；补三条后同一批文件降到 702 处，降 410（命令：`python3 tools/number_source.py <文件>`，逐份读数：ponytail 6→0、nagi 11→3、uv 10→4、cli 6→5、reverify 47→38、ghidra 7→6、rea 41→24、dexsql 11→11、monid 19→6、maskit 28→15、loomflow 29→18、toolkit 76→60、jev 586→373、hypit 79→13、bla 86→71、de-armor 23→21、jailbreaks 47→34）。三条新判据各配造反例：关掉任意一条，对应夹具转红；URL 那条第一版漏了裸链接（尖括号形式先被 HTML 标签吃掉），补一条裸链接夹具后才真正被测到。

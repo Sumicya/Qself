@@ -88,9 +88,9 @@ fun dead() = """
 
 
 class DeadcodeRegressionTest(unittest.TestCase):
-    def run_gate(self, files, blindspots=BLINDSPOTS, init_list="sumicya.qself.Qself\n"):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+    def build_fixture(self, root, files, blindspots=BLINDSPOTS, init_list="sumicya.qself.Qself\n"):
+        """把一个最小仓建到 root 下：骨架 + 白名单要求的两个产物文件 + 夹具体。"""
+        if True:
             (root / "app/src/main/kotlin/demo").mkdir(parents=True)
             (root / "app/src/test/python").mkdir(parents=True)
             (root / "tools").mkdir()
@@ -106,7 +106,14 @@ class DeadcodeRegressionTest(unittest.TestCase):
             if blindspots is not None:
                 (root / "tools/blindspots.json").write_text(textwrap.dedent(blindspots), encoding="utf-8")
             for rel, body in files.items():
-                (root / rel).write_text(textwrap.dedent(body), encoding="utf-8")
+                target = root / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(textwrap.dedent(body), encoding="utf-8")
+
+    def run_gate(self, files, blindspots=BLINDSPOTS, init_list="sumicya.qself.Qself\n"):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.build_fixture(root, files, blindspots, init_list)
             done = subprocess.run([sys.executable, str(root / "tools/deadcode.py")],
                                   capture_output=True, text=True, cwd=root)
             return done.returncode, done.stdout
@@ -185,6 +192,28 @@ class DeadcodeRegressionTest(unittest.TestCase):
         self.assertEqual(1, code, out)
         self.assertEqual(HITS, out.count("白名单条目已不在产物里"), out)
         self.assertIn("java_init.list", out)
+
+    def test_undecodable_text_face_is_reported(self):
+        # 登记为文本面却解不成 UTF-8：旧版 `continue` 掉，文件既不进视野也不进总数，
+        # 「产物 N 个、扫了 N 个」这个等式从来没被验过。这一条让它红。
+        code, out = self.run_gate({
+            "app/src/main/kotlin/demo/A.kt": KT_CLEAN,
+            "app/src/main/kotlin/demo/B.kt": KT_CLEAN_B,
+        })
+        self.assertEqual(0, code, out)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.build_fixture(root, {
+                "app/src/main/kotlin/demo/A.kt": KT_CLEAN,
+                "app/src/main/kotlin/demo/B.kt": KT_CLEAN_B,
+            })
+            (root / "app/src/main/assets").mkdir(parents=True)
+            (root / "app/src/main/assets/broken.txt").write_bytes(b"\xff\xfe qself \x00")
+            done = subprocess.run([sys.executable, str(root / "tools/deadcode.py")],
+                                  capture_output=True, text=True, cwd=root)
+        self.assertEqual(1, done.returncode, done.stdout)
+        self.assertEqual(HITS, done.stdout.count("解不成 UTF-8"), done.stdout)
+        self.assertIn("broken.txt", done.stdout)
 
     def test_clean_fixture_passes(self):
         # 对照：同样的夹具去掉那两样，必须绿。否则上面两条测试证明不了自己是抓手
