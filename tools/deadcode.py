@@ -8,13 +8,14 @@
 标识符（包名、类名）不算：包名是安装包的身份证，宿主查已安装应用列表就看得到。
 
 范围：app/src 的 .kt（含缩进成员与三引号原始字符串），tools/ 与 app/src/test/python 的 .py
-（模块级声明、局部只写不读、未使用 import）。
+（模块级声明、局部只写不读、未使用 import）；指纹面是 app/src/main 下所有登记过后缀的文本文件
+（.kt 取字符串字面量、.xml 取属性值、.list/.prop/.txt 整行当字面量）。
 
 固有盲区（补不掉，只能列出来）：
   ① 反射按字符串调用的方法：`Class.forName("...").getMethod("x")` 里的 "x" 只是个字符串。
   ② 只在构建脚本里被引用的符号：Kotlin 源码里看不到 gradle 那边的使用。
   ③ 跨文件动态导入：`importlib.import_module(name)` 这类，名字在运行期才定。
-  ④ 资源文件里的字符串：.xml/.json 里写的东西不在本脚本的抽取范围内。
+  ④ XML 的元素文本（`<string>…</string>` 中间那段）不抽，只抽属性值。
 
 盲区清单本身也要被校验：tools/blindspots.json 三类键 excluded／deferred／open_questions
 都不许空，每条必须有 path／why／limit 三栏，path 必须是仓里真实存在的东西。
@@ -32,6 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / 'app/src'
 MAIN = SRC / 'main'
 TEST = SRC / 'test'
+SRC_MAIN_KT = MAIN / 'kotlin'
 PY_DIRS = (ROOT / 'tools', SRC / 'test/python')          # 脚本只进 tools/（规范 11 目录）
 
 DECL = re.compile(
@@ -46,9 +48,14 @@ PY_CONST = re.compile(r'^([A-Z][A-Z0-9_]{2,})\s*=', re.M)
 SKIP = {'main', '__all__'}
 
 NAME = 'qself'
+# 指纹面：app/src/main 下所有会被打进 APK 的文本文件。集中在一处，
+# 扫描与「白名单条目是否还成立」共用同一个口径——两处各写一份，就是下一次漏检的来源。
+TEXT_FACES = ('.kt', '.xml', '.list', '.prop', '.txt')
+BINARY_FACES = ('.png', '.jpg', '.jpeg', '.webp', '.jar', '.zip', '.arsc')
 # (文件, 字面量, 为什么还留着)
 ALLOW = [
     ('AndroidManifest.xml', 'Qself', '安装包自身的名字，与包名同级；宿主 getInstalledPackages() 本来就看得到'),
+    ('java_init.list', 'sumicya.qself.Qself', 'Xposed 按这个名字反射加载入口类，改名等于换模块'),
 ]
 
 
@@ -130,6 +137,53 @@ def literals(src: str) -> list[tuple[int, str]]:
 
 def words(text: str) -> Counter:
     return Counter(re.findall(r'[A-Za-z_]\w*', text))
+
+
+def face_coverage() -> list[str]:
+    """产物下每个文件必须落进 TEXT_FACES 或 BINARY_FACES。
+
+    这一条是给上面那张后缀表装的守卫。上一轮的问题不是判据写错，是那张表只列了 .kt/.xml，
+    少写 .list/.prop/.txt 三种后缀，于是四个文件从来没进过视野，而汇总行照样报「问题 0 处」。
+    表会腐烂，所以表要被查：这里查的是「有没有东西根本不在这张表里」。
+    """
+    bad: list[str] = []
+    for path in sorted(MAIN.rglob('*')):
+        if not path.is_file():
+            continue
+        if path.suffix not in TEXT_FACES and path.suffix not in BINARY_FACES:
+            bad.append(f'产物里的 {path.relative_to(MAIN)} 没被指纹面覆盖（后缀 {path.suffix!r}）：'
+                       f'要么加进 TEXT_FACES，要么加进 BINARY_FACES 并说明为什么不解文本')
+    return bad
+
+
+# 宿主进程里不许出现的查询：应用列表、运行中进程、最近任务、使用统计、剪贴板。
+# 本模块只该改 QQ 自己的界面，不该去看这台机器上还有谁。少一条判据，就多一条能悄悄加进来的路。
+FORBIDDEN = ('getInstalledPackages', 'getInstalledApplications', 'getRunningAppProcesses',
+             'getRunningTasks', 'getRecentTasks', 'queryUsageStats', 'getPrimaryClip')
+# (文件, 符号, 为什么留着)：本仓目前一条都没有，也不该有。空表本身就是判据：
+# 有人要开例外，就得先在这张表里写一行理由，写不出理由就说明它不该加进来。
+FORBIDDEN_ALLOW: list[tuple[str, str, str]] = []
+
+
+def forbidden_calls() -> list[str]:
+    """主码里出现禁查 API 就报，白名单要逐条写理由，且白名单过期要自己报错。"""
+    bad: list[str] = []
+    for path in sorted(SRC_MAIN_KT.rglob('*.kt')):
+        src = strip_comments(path.read_text(encoding='utf-8'), False)
+        for lineno, line in enumerate(src.split('\n'), 1):
+            for name in FORBIDDEN:
+                if name not in line:
+                    continue
+                if any(path.name == f and name == sym for f, sym, _ in FORBIDDEN_ALLOW):
+                    continue
+                bad.append(f'{path.name}:{lineno} 主码调用了禁查 API {name}：'
+                           f'本模块只改 QQ 界面，不该枚举这台机器上的其他应用')
+    for f, sym, _ in FORBIDDEN_ALLOW:
+        found = any(sym in strip_comments(p.read_text(encoding='utf-8'), False)
+                    for p in SRC_MAIN_KT.rglob(f) if p.suffix == '.kt')
+        if not found:
+            bad.append(f'禁查白名单条目已不在源码中，请同步删掉  {f}:{sym}')
+    return bad
 
 
 def blindspots() -> list[str]:
@@ -253,12 +307,19 @@ def main() -> int:
     fp: list[tuple[str, str, int]] = []
     scanned = 0
     for path in sorted(MAIN.rglob('*')):
-        if path.suffix not in ('.kt', '.xml') or not path.is_file():
+        # 指纹面覆盖 app/src/main 下所有能解成文本的产物文件：模块清单与入口清单是纯文本，
+        # 以前只看 .kt/.xml，等于把「打包进 APK 的纯文本」整片留在视野外。
+        if path.suffix in BINARY_FACES or not path.is_file():
+            continue
+        try:
+            src = path.read_text(encoding='utf-8')
+        except UnicodeDecodeError:
             continue
         scanned += 1
-        src = path.read_text(encoding='utf-8')
         if path.suffix == '.xml':
             hits = [(i, v) for i, line in enumerate(src.split('\n'), 1) for v in re.findall(r'="([^"]*)"', line)]
+        elif path.suffix in TEXT_FACES[2:]:
+            hits = [(i, line.strip()) for i, line in enumerate(src.split('\n'), 1) if line.strip()]
         else:
             hits = literals(strip_comments(src, False))
         for ln, lit in hits:
@@ -268,12 +329,22 @@ def main() -> int:
     for f, lit, ln in fp:
         problems.append(f'{f}:{ln} 宿主可见字面量 {lit!r}')
     for f, v, _ in ALLOW:
-        if not any(f2 == f and lit == v for f2, lit, _ in
-                   [(p.name, l, 0) for p in MAIN.rglob('*') if p.suffix in ('.kt', '.xml')
-                    for l in ([x for _, x in literals(p.read_text(encoding='utf-8'))] if p.suffix == '.kt'
-                              else re.findall(r'="([^"]*)"', p.read_text(encoding='utf-8')))]):
-            problems.append(f'白名单条目已不在源码中，请同步删掉  {f}:{v!r}')
+        still_there = False
+        for path in MAIN.rglob(f):
+            if not path.is_file() or path.suffix in BINARY_FACES:
+                continue
+            src = path.read_text(encoding='utf-8')
+            found = (re.findall(r'="([^"]*)"', src) if path.suffix == '.xml'
+                     else [x for _, x in literals(strip_comments(src, False))] if path.suffix == '.kt'
+                     else [line.strip() for line in src.split('\n')])
+            if v in found:
+                still_there = True
+                break
+        if not still_there:
+            problems.append(f'白名单条目已不在产物里，请同步删掉  {f}:{v!r}')
 
+    problems += face_coverage()
+    problems += forbidden_calls()
     problems += blindspots()
 
     for line in problems:

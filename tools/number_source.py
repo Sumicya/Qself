@@ -6,12 +6,14 @@
 
 用法：
     python3 tools/number_source.py 报告.md …     # 打印清单；有缺来源就退出 1
-    python3 tools/number_source.py --self-test   # 跑四组造反例，证明它会红
+    python3 tools/number_source.py --self-test   # 跑九组造反例，证明它会红
 
 盲区（补不掉，只能列出来）：
   ① 跨句指代：上一句写「这次实测」，下一句只给数字，会按「没有来源」报出来。方向是多报，不少报。
   ② 单字中文数字（一、两、三…）一律不查：它跟「这一篇」「第三种」这类序数、量词撞得太狠，
      查进来只会把报告淹掉。所以「三次」「五秒」这种短刻度扫不到，要人眼补。
+  ②b 平台版本号（`Android 11`、`Android 5.1`）整段抹掉再查：版本是名字，不是这一轮量出来的数。
+     代价是「Android 之上再加两个」这类句子里的数也会一起抹掉。
   ③ 只按句子看，不做语义绑定：一句里任何一个来源词，都会救活这句里全部数字。
   ④ 单位写错（数对了、单位错了）看不出来。
 
@@ -27,6 +29,7 @@ MARKS = re.compile(r"〔\d+〕")                       # 检讨的百字标，�
 ARABIC = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
 CHINESE = re.compile(r"[一二三四五六七八九十百千万零两]{2,8}(?=[个条次秒天篇行处枚份项步轮层种类])")
 ORDINAL = ("第", "§", "#")                            # 紧挨在这些字后面的数当序数，不查
+PLATFORM = re.compile(r"Android\s+\d+(?:\.\d+)*")    # 平台版本号是名字，不是读数
 MARKERS = ("实测", "读数", "读出来", "读出", "跑出", "跑一遍", "打印", "命令", "脚本",
            "数出", "算出", "统计", "量出", "上限", "基线", "验收线", "余量", "目标",
            "预估", "估", "约", "未验证", "阈值", "刻度", "篇号", "行号", "条号", "版本", "依据")
@@ -38,6 +41,8 @@ FIXTURES = (
     ("序数不算数", "第 12 篇、第三种写法、第十二条。", 0),
     ("只有百字标、没有别的数", "这一篇到此〔100〕。", 0),
     ("百字标插在来源词中间", "量〔100〕出一万字节。", 0),
+    ("同一个字重复不算数目", "这是唯一一条他要求必须留的。", 0),
+    ("平台版本号不算读数", "接口在 Android 5.1 之后返回的就是自己的进程。", 0),
 )
 
 
@@ -53,10 +58,13 @@ def scan(text: str) -> list[tuple[int, str, list[str]]]:
     findings = []
     for lineno, line in enumerate(scrub(text).split("\n"), 1):
         for sentence in re.split(r"[。！？；]", line):
+            sentence = PLATFORM.sub(" Android ", sentence)
             numbers = [m.group(0) for m in ARABIC.finditer(sentence)
                        if sentence[:m.start()].rstrip()[-1:] not in ORDINAL]
+            # 「唯一一条」里的「一一」是同一个字重复，不是数目；只按量词配中文数会被它骗
             numbers += [m.group(0) for m in CHINESE.finditer(sentence)
-                        if sentence[:m.start()].rstrip()[-1:] not in ORDINAL]
+                        if len(set(m.group(0))) > 1
+                        and sentence[:m.start()].rstrip()[-1:] not in ORDINAL]
             if not numbers or any(marker in sentence for marker in MARKERS):
                 continue
             findings.append((lineno, sentence.strip(), numbers))
@@ -64,7 +72,7 @@ def scan(text: str) -> list[tuple[int, str, list[str]]]:
 
 
 def self_test() -> int:
-    """四组造反例：期望值是手写常量，不来自被检函数。"""
+    """九组造反例：期望值是手写常量，不来自被检函数。"""
     bad = 0
     for name, text, expect in FIXTURES:
         got = len(scan(text))

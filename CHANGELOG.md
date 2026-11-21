@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 26.11.24
+
+- 修一处假绿：指纹面原来只认 `.kt`／`.xml` 两种后缀，产物 24 个文件里只有 20 个进过视野，漏掉的 `java_init.list`（20 B，一行入口类全名）是宿主读得到的纯文本。后缀表收进 `TEXT_FACES`／`BINARY_FACES` 两个常量，扫描与白名单过期检查共用同一套抽法。
+- 新增 `face_coverage()`：产物下每个文件的后缀必须落进两张表之一，落不进就报。这条守的是那张表本身——表面少写一种后缀，四个文件就整片消失，而汇总行照样报零。
+- 新增 `forbidden_calls()`：主码不许调 7 个禁查 API（应用列表、运行中进程、最近任务、使用统计、剪贴板两类写法），白名单 `FORBIDDEN_ALLOW` 为空表，过期自报（实测：预设 `getPrimaryClip` 白名单立即报「已不在源码中」）。主码实测 0 处。
+- 白名单 1→2 条：`AndroidManifest.xml` 的 `Qself`（安装包自身标签）与 `java_init.list` 的 `sumicya.qself.Qself`（Xposed 反射加载入口，改名＝换模块）。
+- `test_deadcode.py` 加 3 条造反例（未登记后缀／禁查 API／干净对照），并把夹具的 `java_init.list` 变成开关参数，补第 4 条（白名单过期）。单跑 12 条、全套 20 条，三条新判据均验过「基线绿／开一米红／关掉回绿」。
+- `tools/number_source.py` 修两处误报：`一一` 被当成数目（改成同一个字重复不算），`Android 5.1` 这类平台版本号被当成读数（整段抹掉再查，代价写进盲区）。自检 7 组→9 组。
+- `tools/blindspots.json` `open_questions` 加一条（`DiagLog.kt` 导出日志的事件文本只能人读），三类 3/2/3。
+- 对「要不要另起一仓做拦敏感权限模块」的答复：不做。理由与三处造反例见本轮检讨正文。
+
 ## 26.11.16
 
 - 盲区清单落地 `tools/blindspots.json`：三类键 `excluded`／`deferred`／`open_questions`，每条 `path`／`why`／`limit`，共七条，路径全部指向仓里真实存在的东西。校验写进 `tools/deadcode.py`（键名、类非空、三栏正好、路径存在、路径不重复），本地回路与 CI 都经过它，不另起脚本。
