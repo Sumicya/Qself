@@ -105,4 +105,91 @@ class SwitchTest {
             failed -= "连发合并"
         }
     }
+
+    @Test fun reinstallAfterFailureMustNotReadTheStaleVerdict() {
+        // 真实事故形态：某个开关装失败被判 false 并进了缓存；热重载/重启后重装成功，
+        // 若不清缓存，on() 仍答 false，用户看到开关是开的、功能却不生效。
+        val prefs = CountingPrefs(mutableMapOf("连发合并" to true))
+        withPrefs(prefs) {
+            failed += "连发合并"
+            assertFalse(on("连发合并"))
+
+            // 重装成功：failed 里删掉它，并（像 Qself.install 那样）作废缓存
+            failed -= "连发合并"
+            invalidateSwitchCache()
+            assertTrue("重装成功之后必须读到开", on("连发合并"))
+        }
+    }
+
+    @Test fun staleVerdictSurvivesWithoutInvalidateProvingTheTestHasTeeth() {
+        // 反证：不作废时确实会读到旧结论。这条不是要求的行为，是钉住「为什么必须作废」。
+        val prefs = CountingPrefs(mutableMapOf("连发合并" to true))
+        withPrefs(prefs) {
+            failed += "连发合并"
+            assertFalse(on("连发合并"))
+            failed -= "连发合并"
+            assertFalse("不作废缓存就一定读到旧值——这就是漏调 invalidate 的后果", on("连发合并"))
+        }
+    }
+
+    @Test fun installOneRecordsFailureAndSuccessWithoutDuplicates() {
+        // 直接走产品路径 installOne，不用任何替身。
+        val boom = Feature("测试装失败", true, "夹具", { error("故意的") })
+        val ok = Feature("测试装成功", true, "夹具", { })
+
+        val before = failed.size
+        assertTrue("失败的那项要写进 failed", installOne(boom).contains("✗测试装失败"))
+        assertTrue("失败的项必须在 failed 里", "测试装失败" in failed)
+        assertTrue("失败原因要留档", failures["测试装失败"]?.contains("故意的") == true)
+
+        assertTrue("成功的那项报告里是 ✓", installOne(ok).contains("✓测试装成功"))
+        assertTrue("成功的不该进 failed", "测试装成功" !in failed)
+        assertTrue("failed 只多了一条", failed.size == before + 1)
+
+        failed -= "测试装失败"; failures -= "测试装失败"
+    }
+
+    @Test fun failedVerdictIsCachedSoReinstallNeedsInvalidate() {
+        // 把「installOne 写 failed」和「on() 读缓存」串起来：这正是漏调 invalidate 会出事的那条链。
+        val prefs = CountingPrefs(mutableMapOf("测试装失败" to true))
+        withPrefs(prefs) {
+            installOne(Feature("测试装失败", true, "夹具", { error("故意的") }))
+            assertFalse("装失败之后开关必须答 false", on("测试装失败"))
+
+            // 重装成功（失败项从 failed 里消失），但不作废缓存
+            failed -= "测试装失败"; failures -= "测试装失败"
+            assertFalse("不作废就还是 false——这条钉住「为什么 install 里必须调 invalidate」", on("测试装失败"))
+
+            invalidateSwitchCache()
+            assertTrue("作废之后才读到新结论", on("测试装失败"))
+        }
+    }
+
+    @Test fun aNewInstallRoundDropsTheStaleCache() {
+        // 直接打 beginInstallRound：它是「重装之后开关读到旧值」唯一出过事的那段，
+        // 而且不装任何钩子，能在 JVM 上跑。删掉里面那行 invalidateSwitchCache()，这条就红。
+        val values = mutableMapOf<String, Boolean>("玻璃底栏" to true)
+        val prefs = CountingPrefs(values)
+        withPrefs(prefs) {
+            assertTrue(on("玻璃底栏"))                    // 进缓存：true
+            values["玻璃底栏"] = false                     // 用户在设置页关掉
+            assertTrue("缓存还在，没到新一轮安装时读的是旧值", on("玻璃底栏"))
+
+            beginInstallRound()                            // 新一轮：清状态 + 作废缓存
+            assertFalse("新一轮安装之后必须读到新值", on("玻璃底栏"))
+        }
+    }
+
+    @Test fun aNewInstallRoundClearsPreviousFailureVerdicts() {
+        val prefs = CountingPrefs(mutableMapOf("连发合并" to true))
+        withPrefs(prefs) {
+            failed += "连发合并"
+            failures["连发合并"] = "上一轮的失败"
+            assertFalse(on("连发合并"))
+
+            beginInstallRound()
+            assertTrue("新一轮把上一轮的失败判定清掉了，就该按 prefs 答", on("连发合并"))
+            assertTrue("失败原因也一并清掉", "连发合并" !in failures)
+        }
+    }
 }

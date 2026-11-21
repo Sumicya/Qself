@@ -18,10 +18,16 @@ import java.util.concurrent.ConcurrentHashMap
 lateinit var xposed: XposedInterface
 lateinit var loader: ClassLoader
 
-/** 只写 LSPosed 管理器的日志页与内存诊断环：宿主进程自己的 logcat 里不留本模块的名字。 */
+/**
+ * 只写 LSPosed 管理器的日志页与内存诊断环：宿主进程自己的 logcat 里不留本模块的名字。
+ *
+ * xposed 是 lateinit：极端情况下（装钩子之前就出错、热重载换代中途）它可能是空的。
+ * 这时候直接读会抛 UninitializedPropertyAccessException，把真正的错误盖掉——
+ * 报错路径自己再出错，是最难查的一类。所以这里两条通道都各自兜住。
+ */
 fun log(msg: String, t: Throwable? = null) {
     runCatching { recordQselfEvent(msg, t) }
-    xposed.log(Log.INFO, "Diag", msg, t)
+    runCatching { xposed.log(Log.INFO, "Diag", msg, t) }
 }
 
 fun cls(name: String): Class<*> = Class.forName(name, false, loader)

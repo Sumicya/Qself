@@ -119,33 +119,65 @@ class Qself : XposedModule() {
         xposed = this
         loader = classLoader
         installed = classLoader
-        val main = process == "com.tencent.mobileqq"
-        val report = StringBuilder("init ${BuildConfig.VERSION_NAME} @ $process")
-        failed.clear()
-        failures.clear()
-        fun run(name: String, fn: () -> Any?, gated: Boolean = true) = runCatching {
-            installFeature(if (gated) name else null, fn)
-        }.onSuccess { report.append(" ✓").append(name) }
-            .onFailure {
-                failed += name
-                failures[name] = it.stackTraceToString()
-                report.append(" ✗").append(name).append('(').append(it.toString().take(120)).append(')')
-                log("安装失败：$name；本项钩子已尝试回滚", it)
-            }
-        for (f in features) {
-            if (f.main && !main) continue
-            run(f.name, f.install)
-        }
-        feature = null // 视图扫描器不归任何开关管，它自己按名字查
-        if (main) run("视图扫描", ::looks, false)
-        // 帧率采样：每帧只记一个时间戳，导出日志里才有「卡不卡」的真机数字，而不是自评。
-        frameEventSink = ::recordQselfEvent
-        runCatching { FrameMeter.install() }.onFailure { log("帧率采样安装失败", it) }
-        // 主线程消息计时：帧率只说「没出帧」，这一项说「谁不让出帧」——慢消息当场抓栈。
-        runCatching { stallWatch() }.onFailure { log("主线程计时安装失败", it) }
-        log(report.toString())
-        featureGroupGaps().forEach { log(it) }
+        installAll(process, classLoader)
     }
+}
+
+/**
+ * 装一轮：清状态、作废开关缓存、按清单逐项装。
+ *
+ * 抽成顶层函数（而不是留在 Qself.install 里）是为了可测——「重装要作废缓存」这条
+ * 只有在真的走一遍完整安装流程时才能被守住；留在 XposedModule 的私有方法里，
+ * 删掉那行 invalidate，所有测试照样全绿。已经踩过一次，写在这里当记号。
+ */
+internal fun installAll(processName: String, classLoader: ClassLoader, main: Boolean = processName == "com.tencent.mobileqq") {
+    val report = beginInstallRound()
+    for (f in features) {
+        if (f.main && !main) continue
+        report.append(installOne(f))
+    }
+    feature = null // 视图扫描器不归任何开关管，它自己按名字查
+    // 视图扫描不写进报告：它不归任何开关管，装失败也不该在面板里露一个功能名。
+    if (main) runCatching { installFeature(null, ::looks) }.onFailure { log("视图扫描安装失败", it) }
+    // 帧率采样：每帧只记一个时间戳，导出日志里才有「卡不卡」的真机数字，而不是自评。
+    frameEventSink = ::recordQselfEvent
+    runCatching { FrameMeter.install() }.onFailure { log("帧率采样安装失败", it) }
+    // 主线程消息计时：帧率只说「没出帧」，这一项说「谁不让出帧」——慢消息当场抓栈。
+    runCatching { stallWatch() }.onFailure { log("主线程计时安装失败", it) }
+    log(report.toString())
+    featureGroupGaps().forEach { log(it) }
+}
+
+/**
+ * 一轮安装的头半段：清判定结果、作废开关缓存、返回报告头。
+ *
+ * 单独抽出来的理由：这是「重装之后开关读到旧值」唯一出过事的地方，而它本身不装任何钩子，
+ * 可以在 JVM 上直接测。整段 installAll 要装真钩子，测试环境跑不了。
+ */
+internal fun beginInstallRound(): StringBuilder {
+    failed.clear()
+    failures.clear()
+    invalidateSwitchCache()
+    return StringBuilder("init ${BuildConfig.VERSION_NAME}")
+}
+
+/**
+ * 装一项功能，返回报告里那一段（「 ✓名字」或「 ✗名字(原因)」）。
+ *
+ * 抽成顶层函数是为了可测：装失败进 failed、失败原因进 failures，这两个副作用加上
+ * 「重装要作废开关缓存」，正是上一轮真出过事的组合——写在 install 的局部函数里测不到。
+ */
+internal fun installOne(feature: Feature): String {
+    val piece = StringBuilder()
+    runCatching { installFeature(feature.name, feature.install) }
+        .onSuccess { piece.append(" ✓").append(feature.name) }
+        .onFailure {
+            failed += feature.name
+            failures[feature.name] = it.stackTraceToString()
+            piece.append(" ✗").append(feature.name).append('(').append(it.toString().take(120)).append(')')
+            log("安装失败：${feature.name}；本项钩子已尝试回滚", it)
+        }
+    return piece.toString()
 }
 
 /** 热重载先还原旧代视图与监听器，防止两代布局、动画同时操纵同一窗口。 */
