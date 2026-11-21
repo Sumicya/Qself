@@ -148,8 +148,22 @@ def main():
     ap.add_argument("--dex", help="dex 目录或 glob,和 --apk 二选一")
     ap.add_argument("--symbols", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "symbols.txt"))
     ap.add_argument("--quiet", action="store_true", help="只打印 FAIL 和总结")
-    ap.add_argument("--lint", help="顺带检查这些 .kt 源码里的反射名字都登记在表里了")
+    ap.add_argument("--lint", help="检查这些 .kt 源码里的反射名字都登记在表里了")
+    ap.add_argument("--lint-only", action="store_true",
+                    help="只跑 --lint，不碰 APK（没有真包时的唯一可用模式）")
     a = ap.parse_args()
+
+    # 没有真包也能跑的那一半：源码里的名字必须都在表里。
+    # 拆出来是因为「重写大文件」时手上没有 APK，而名字打错是静默失效的头号来源。
+    if a.lint_only:
+        if not a.lint:
+            sys.exit("--lint-only 需要配 --lint <目录>")
+        syms = load_symbols(a.symbols)
+        print("表    %s" % a.symbols)
+        bad = lint_sources(a.lint, syms)
+        print()
+        print("源码里的名字全部登记" if not bad else "有 %d 个名字没登记" % bad)
+        return 1 if bad else 0
 
     if a.apk:
         h = hashlib.sha256()

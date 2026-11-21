@@ -83,5 +83,30 @@ java -cp "$T/t:$T/kotlinc/lib/kotlin-stdlib.jar:$T/android.jar" RunKt
 python3 "$R/tools/deadcode.py"
 # 数字来源检查的自检：四组造反例必须全部命中，证明它不是在空转。
 python3 "$R/tools/number_source.py" --self-test
+# 重写不变量：拿 HEAD 的源码当基准，比工作树。少了任何一个 QQ 名字/字段/键就红。
+# 这些名字是字符串，编译器不管；写错一个字符真机就静默失效一块功能。
+python3 "$R/tools/rewrite_invariant.py" --self-test
+python3 - "$R" <<'PYEOF'
+import os, subprocess, sys, tempfile, shutil
+root = sys.argv[1]
+src = os.path.join(root, "app/src/main/kotlin")
+work = tempfile.mkdtemp()          # 不用 with：基准 json 要在块外还能读
+try:
+    # 直接从 git 解出 HEAD 的那份源码，不用切分支、不碰工作树。
+    archive = subprocess.run(["git", "-C", root, "archive", "HEAD", "app/src/main/kotlin"],
+                             capture_output=True, check=True).stdout
+    tar = os.path.join(work, "head.tar")
+    open(tar, "wb").write(archive)
+    subprocess.run(["tar", "-xf", tar, "-C", work], check=True)
+    baseline = os.path.join(work, "baseline.json")
+    subprocess.run([sys.executable, os.path.join(root, "tools/rewrite_invariant.py"),
+                    "--root", os.path.join(work, "app/src/main/kotlin"), "--save", baseline],
+                   check=True, stdout=subprocess.DEVNULL)
+    code = subprocess.run([sys.executable, os.path.join(root, "tools/rewrite_invariant.py"),
+                           "--root", src, "--check", baseline]).returncode
+finally:
+    shutil.rmtree(work, ignore_errors=True)
+sys.exit(code)
+PYEOF
 # CI 的落点核对照样跑这两条 Python 回归：本地漏掉它们，推送后才发现等于拿 CI 当编译器。
 cd "$R" && python3 -m unittest discover -s app/src/test/python -p 'test_*.py'
