@@ -246,6 +246,8 @@ private val watched = WeakHashMap<View, WeakReference<AppearanceObserver>>()
 private var preferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
 fun refreshLooks() {
+    // prefs 变了，先作废开关读缓存（on() 现在走缓存，见 Hook.kt），再按新值重刷。
+    invalidateSwitchCache()
     if (!on("未读实数")) restoreBadgeLayouts() else refreshNativeBadges?.invoke()
     refreshAioHeaders()
     refreshSecNavBars()

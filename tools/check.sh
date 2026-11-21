@@ -39,11 +39,34 @@ object Assert {
 EOK
 cat > kstub/run.kt <<'EOK'
 import org.junit.Test
+
+/**
+ * 显式列测试类：android.jar 里大量类只有签名没有实现，反射扫全包会在
+ * getDeclaredMethods 上 NoClassDefFoundError。列清单是不得已，但配一道自检——
+ * 仓里有、清单里没有的测试类，这里直接报错，不让它静默不跑。
+ */
+val SUITES = listOf("ProtoTest", "SwitchTest")
+
 fun main() {
-    val t = sumicya.qself.ProtoTest()
+    val pkg = "sumicya.qself"
+    val root = java.io.File(Unit::class.java.getResource("/" + pkg.replace('.', '/'))!!.toURI())
+    val present = root.listFiles { f -> f.isFile && f.name.endsWith("Test.class") }
+        ?.map { it.name.removeSuffix(".class") }?.toSet().orEmpty()
+    val missing = present - SUITES.toSet()
+    if (missing.isNotEmpty()) {
+        println("有测试类没列进 SUITES，不会被跑到：${missing.sorted()}")
+        System.exit(1)
+    }
     var n = 0
-    for (m in t.javaClass.declaredMethods.filter { it.isAnnotationPresent(Test::class.java) }.sortedBy { it.name }) {
-        try { m.invoke(t); n++ } catch (e: java.lang.reflect.InvocationTargetException) { println("FAIL ${m.name}: ${e.cause}"); e.cause?.printStackTrace(); System.exit(1) }
+    for (name in SUITES) {
+        val c = Class.forName("$pkg.$name")
+        val instance = c.getDeclaredConstructor().newInstance()
+        for (m in c.declaredMethods.filter { it.isAnnotationPresent(Test::class.java) }.sortedBy { it.name }) {
+            try { m.invoke(instance); n++ }
+            catch (e: java.lang.reflect.InvocationTargetException) {
+                println("FAIL ${c.simpleName}.${m.name}: ${e.cause}"); e.cause?.printStackTrace(); System.exit(1)
+            }
+        }
     }
     println("$n tests passed")
 }
@@ -53,7 +76,9 @@ JAVA=$(find "$T/libxposed-api/api/src/main/java" "$T/stubs" -name "*.java")
 rm -rf "$T/t"
 kotlinc/bin/kotlinc -jvm-target 21 -cp android.jar -d "$T/t" "$R"/app/src/main/kotlin/sumicya/qself/*.kt "$R"/app/src/test/kotlin/sumicya/qself/*.kt kstub/junit.kt kstub/run.kt $JAVA bc/sumicya/qself/BuildConfig.java 2>&1 | tee "$T/compile-all.log"
 echo "compiled: $(find "$T/t/sumicya/qself" -type f -name '*.class' | wc -l) classes"
-java -cp "$T/t:$T/kotlinc/lib/kotlin-stdlib.jar" RunKt
+# android.jar 必须进运行期 classpath：SwitchTest 的假 SharedPreferences 要真接口才能实现，
+# 少了它编译期能过、运行期 NoClassDefFoundError。
+java -cp "$T/t:$T/kotlinc/lib/kotlin-stdlib.jar:$T/android.jar" RunKt
 # 残留扫描：声明没人用、import 没人提、prefs 键只有一面，一律当失败——这类东西编译器不报。
 python3 "$R/tools/deadcode.py"
 # 数字来源检查的自检：四组造反例必须全部命中，证明它不是在空转。
