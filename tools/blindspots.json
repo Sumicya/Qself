@@ -31,8 +31,8 @@
   "open_questions": [
     {
       "path": "app/src/main/kotlin/sumicya/qself/Qself.kt",
-      "why": "Xposed 入口类由框架按名字反射加载，扫描器只能整类豁免",
-      "limit": "被豁免的是整类：这个类里若新增了真正没人调用的函数，照样不会报"
+      "why": "Xposed 入口类由框架按名字反射加载，扫描器只能整类豁免；installAll 开头清 failed/failures 也测不到（要真 ClassLoader + 真框架句柄），原先覆盖它的缓存测试已撤。",
+      "limit": "被豁免的是整类：这个类里若新增了真正没人调用的函数，照样不会报；清判定的行为无 JVM 判据。"
     },
     {
       "path": "app/src/main/resources/META-INF/xposed/module.prop",

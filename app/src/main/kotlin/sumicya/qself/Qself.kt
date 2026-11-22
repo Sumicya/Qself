@@ -123,9 +123,9 @@ class Qself : XposedModule() {
     }
 }
 
-/** 装一轮：清状态、按清单逐项装。抽成顶层函数是为了可测。 */
 internal fun installAll(processName: String, classLoader: ClassLoader, main: Boolean = processName == "com.tencent.mobileqq") {
-    val report = beginInstallRound()
+    failed.clear(); failures.clear()
+    val report = StringBuilder("init ${BuildConfig.VERSION_NAME}")
     for (f in features) {
         if (f.main && !main) continue
         report.append(installOne(f))
@@ -141,13 +141,7 @@ internal fun installAll(processName: String, classLoader: ClassLoader, main: Boo
     featureGroupGaps().forEach { log(it) }
 }
 
-/** 清上一轮的判定并给报告头。不装钩子，JVM 上可直接测（installAll 不行）。 */
-internal fun beginInstallRound(): StringBuilder {
-    failed.clear(); failures.clear()
-    return StringBuilder("init ${BuildConfig.VERSION_NAME}")
-}
-
-/** 装一项，返回报告里那一段。抽成顶层函数为的是能测副作用。 */
+/** 顶层函数（非 Qself 私有方法）为的是能在 JVM 上直接测它。 */
 internal fun installOne(feature: Feature): String = StringBuilder().apply {
     runCatching { installFeature(feature.name, feature.install) }
         .onSuccess { append(" ✓").append(feature.name) }

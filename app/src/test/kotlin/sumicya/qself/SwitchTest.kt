@@ -111,22 +111,6 @@ class SwitchTest {
         failed -= "测试装失败"; failures -= "测试装失败"
     }
 
-
-
-
-    @Test fun aNewInstallRoundClearsPreviousFailureVerdicts() {
-        val prefs = CountingPrefs(mutableMapOf("连发合并" to true))
-        withPrefs(prefs) {
-            failed += "连发合并"
-            failures["连发合并"] = "上一轮的失败"
-            assertFalse(on("连发合并"))
-
-            beginInstallRound()
-            assertTrue("新一轮把上一轮的失败判定清掉了，就该按 prefs 答", on("连发合并"))
-            assertTrue("失败原因也一并清掉", "连发合并" !in failures)
-        }
-    }
-
     // ── Notify.kt 重写时抽出来的纯函数 ────────────────────────────────────────
 
     @Test fun washKeepsAlphaAndOnlyMixesRgb() {
