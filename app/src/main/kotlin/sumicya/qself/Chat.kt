@@ -376,7 +376,7 @@ private class BubbleSurface(
     private val savedQuoteMargins = (quote?.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
         intArrayOf(it.leftMargin, it.topMargin, it.rightMargin, it.bottomMargin, it.marginStart, it.marginEnd)
     }
-    private val hiddenQuoteBars = ArrayList<Pair<WeakReference<View>, Int>>()
+    private val hiddenQuoteBars = WeakHashMap<View, Int>() // 弱键：视图回收后条目自己消失
     private val savedQuoteMsgMargins = WeakHashMap<View, IntArray>()
     // Ark 卡片画到底板外面的像素数：记下来好在关闭或复用时还原右侧内边距。
     private var arkOverflowPx = 0
@@ -462,9 +462,7 @@ private class BubbleSurface(
                     node.setPadding(0, 0, 0, 0)
                 }
                 if (node.id == 0x7f0a126a || node.id == 0x7f0a1395 || node.id == 0x7f0a480f || node.javaClass == View::class.java) {
-                    if (hiddenQuoteBars.none { it.first.get() === node }) {
-                        hiddenQuoteBars.add(WeakReference(node) to node.visibility)
-                    }
+                    hiddenQuoteBars.putIfAbsent(node, node.visibility)
                     if (node.visibility != View.GONE) node.visibility = View.GONE
                     return
                 }
@@ -539,9 +537,7 @@ private class BubbleSurface(
             }
         }
         savedQuoteMsgMargins.clear()
-        for ((ref, vis) in hiddenQuoteBars) {
-            ref.get()?.visibility = vis
-        }
+        for ((view, vis) in hiddenQuoteBars) view.visibility = vis
         hiddenQuoteBars.clear()
     }
     /**
