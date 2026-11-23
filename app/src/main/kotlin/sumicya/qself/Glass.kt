@@ -147,9 +147,7 @@ class Glass(
             if (!drawn) {
                 rect.set(b)
                 paint.shader = null
-                // 退化底色：昼/夜的基色不同，透明度都用 0xB8（184/255，半透明）。
-                // 原先写成 `if (night) 0xB8 else 0xB8`，两边一样，三元是手滑留下的。
-                paint.color = monet(night, 0xB8)
+                paint.color = monet(night, 0xB8) // 0xB8 = 184/255，昼/夜同透明度
                     ?: if (night) 0xB82A3240.toInt() else 0xB8F5F5F8.toInt()
                 canvas.drawRoundRect(rect, r, r, paint)
             }
@@ -452,12 +450,10 @@ private val isNight by lazy { runCatching { cls("com.tencent.mobileqq.utils.QQTh
 /** 把 Monet 强调色按 0.22 混进 [c]，保留 [c] 自己的透明度；accent 为 null（Monet 关着）就原样返回。 */
 internal fun wash(c: Int, accent: Int?): Int {
     if (accent == null) return c
-    // 用位运算取通道，不用 Color.red/green/blue：那三个是 android.jar 的桩方法，
-    // 在 JVM 上跑单测会抛 RuntimeException("Stub!")，于是这个纯函数一行测试也写不了。
-    fun channel(color: Int, shift: Int) = (color ushr shift) and 0xFF
+    fun channel(color: Int, shift: Int) = (color ushr shift) and 0xFF // Color.red 是 jar 桩，单测 Stub!
     fun mix(a: Int, b: Int) = (a + ((b - a) * 0.22f).toInt()).coerceIn(0, 255)
-    return (c and 0xFF000000.toInt()) or (mix(channel(c, 16), channel(accent, 16)) shl 16) or
-        (mix(channel(c, 8), channel(accent, 8)) shl 8) or mix(channel(c, 0), channel(accent, 0))
+    fun rgb(x: Int, y: Int) = (mix(channel(x, 16), channel(y, 16)) shl 16) or (mix(channel(x, 8), channel(y, 8)) shl 8) or mix(channel(x, 0), channel(y, 0))
+    return (c and 0xFF000000.toInt()) or rgb(c, accent)
 }
 
 /** NagramX 那套 Monet：系统动态色跟壁纸走。开关关了返回 null，调用方用写死的中性色。 */
@@ -468,5 +464,4 @@ fun monet(night: Boolean, alpha: Int): Int? =
     }.getOrNull()
 
 /** QQ 自己的夜间模式；拿不到就看系统。 */
-fun night(): Boolean = runCatching { isNight?.invoke(null) as? Boolean }.getOrNull()
-    ?: (Resources.getSystem().configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES)
+fun night(): Boolean = runCatching { isNight?.invoke(null) as? Boolean }.getOrNull() ?: (Resources.getSystem().configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES)

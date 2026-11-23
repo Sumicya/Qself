@@ -28,25 +28,20 @@ fun noCrashReport() =
 
 /**
  * 门方法一律答 false：类名 → 方法名们。沿父类找（见 Hook.kt 的 constant）。
- * ponytail: 单个没命中只写日志不抛 —— 每个门各管各的；三种没命中分开报，
- * 否则分不清「QQ 删了这个类」和「我抄错了名字」。往上走：按 dex 表核对名字，别靠日志试。
+ * ponytail: 单个没命中只写日志不抛 —— 每个门各管各的；一个都没命中才算装失败。
  */
 private fun gates(vararg specs: Pair<String, List<String>>) {
-    val missing = ArrayList<String>()
-    val methods = LinkedHashSet<java.lang.reflect.Method>()
-    for ((name, names) in specs) {
-        val type = runCatching { cls(name) }.getOrNull() ?: run { missing += "类不存在 $name"; null }
-        for (method in names) if (type != null) {
-            val found = generateSequence<Class<*>>(type) { it.superclass }
-                .map { it.declaredMethods.filter { m -> m.name == method } }.firstOrNull { it.isNotEmpty() }.orEmpty()
-            val bool = found.filter { it.returnType == java.lang.Boolean.TYPE }
-            if (bool.isNotEmpty()) methods += bool
-            else missing += if (found.isEmpty()) "$name#$method 方法不存在"
-                            else "$name#$method 返回 ${found.map { it.returnType.simpleName }.distinct()} 不是 boolean"
+    val methods = specs.flatMap { (name, names) ->
+        val type = runCatching { cls(name) }.getOrNull()
+        names.flatMap { method ->
+            val found = type?.let { generateSequence<Class<*>>(it) { c -> c.superclass }
+                .map { c -> c.declaredMethods.filter { m -> m.name == method && m.returnType == java.lang.Boolean.TYPE } }
+                .firstOrNull { it.isNotEmpty() } }.orEmpty()
+            if (found.isEmpty()) log("门方法未命中：$name#$method")
+            found
         }
-    }
-    missing.forEach { log("门方法对不上：$it") }
-    require(methods.isNotEmpty()) { "门方法一个都没命中：${missing.size} 处对不上" }
+    }.distinct()
+    require(methods.isNotEmpty()) { "门方法一个都没命中" }
     methods.forEach { hook(it) { false } }
 }
 

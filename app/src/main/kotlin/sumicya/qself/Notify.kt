@@ -71,21 +71,14 @@ private fun modernize(context: Context, n: Notification): Notification? {
 // ── 计账 ─────────────────────────────────────────────────────────────────────
 
 /** 计账用 AtomicInteger：notify 可能落在不同线程，普通 Int 自增会漏计。 */
-private val seen = AtomicInteger()
-private val changed = AtomicInteger()
-private val custom = AtomicInteger()
-private val noText = AtomicInteger()
-
+private val tally = Array(4) { AtomicInteger() } // 共 / 换样式 / 自定义 / 无可展开
 private fun recordOutcome(n: Notification?, better: Notification?) {
-    val total = seen.incrementAndGet()
-    if (better != null) changed.incrementAndGet()
-    else if (n?.contentView != null) custom.incrementAndGet()
-    else noText.incrementAndGet()
-    if (total % 100 == 0) {
-        recordQselfEvent(
-            "通知现代化：共 $total 条，换样式 ${changed.get()}，自定义布局跳过 ${custom.get()}，无可展开 ${noText.get()}",
-        )
-    }
+    val slot = when { better != null -> 1; n?.contentView != null -> 2; else -> 3 }
+    val total = tally[0].incrementAndGet()
+    tally[slot].incrementAndGet()
+    if (total % 100 == 0) recordQselfEvent(
+        "通知现代化：共 $total 条，换样式 ${tally[1].get()}，自定义布局跳过 ${tally[2].get()}，无可展开 ${tally[3].get()}",
+    )
 }
 
 /** 一条通知换成什么文字；`null` 表示按原样发。 */

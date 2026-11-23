@@ -126,19 +126,13 @@ class Qself : XposedModule() {
 internal fun installAll(processName: String, classLoader: ClassLoader, main: Boolean = processName == "com.tencent.mobileqq") {
     failed.clear(); failures.clear()
     val report = StringBuilder("init ${BuildConfig.VERSION_NAME}")
-    for (f in features) {
-        if (f.main && !main) continue
-        report.append(installOne(f))
-    }
+    for (f in features) if (!f.main || main) report.append(installOne(f))
     feature = null // 视图扫描不归任何开关管，自带名字
     if (main) runCatching { installFeature(null, ::looks) }.onFailure { log("视图扫描安装失败", it) }
-    // 帧率采样：每帧只记一个时间戳，导出日志里才有真机数字而不是自评。
-    frameEventSink = ::recordQselfEvent
+    frameEventSink = ::recordQselfEvent // 帧率采样：导出日志里才有真机数字而不是自评
     runCatching { FrameMeter.install() }.onFailure { log("帧率采样安装失败", it) }
-    // 主线程消息计时：帧率只说没出帧，这一项说谁不让出帧。
-    runCatching { stallWatch() }.onFailure { log("主线程计时安装失败", it) }
-    log(report.toString())
-    featureGroupGaps().forEach { log(it) }
+    runCatching { stallWatch() }.onFailure { log("主线程计时安装失败", it) } // 谁不让出帧
+    log(report.toString()); featureGroupGaps().forEach { log(it) }
 }
 
 /** 顶层函数（非 Qself 私有方法）为的是能在 JVM 上直接测它。 */

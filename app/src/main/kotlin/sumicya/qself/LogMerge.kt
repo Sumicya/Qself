@@ -24,10 +24,8 @@ internal const val MAX_RECORD_CHARS = 4096
 internal const val RECORD_TRIM_HEAD = 3072
 internal const val RECORD_TRIM_TAIL = 768
 
-/** 流式小节的 key。原先四个地方各写一遍，加一节时漏改一处就静默丢历史。 */
+/** 流式小节（原先三处各写一遍死字面量）与视图树快照小节。 */
 internal val STREAMING_SECTIONS = listOf("4", "5", "6")
-
-/** 视图树快照小节。 */
 internal const val SNAPSHOT_SECTION = "3"
 
 internal val SECTION_HEADER = Regex("^--- \\[(\\d+)\\](.*) ---$")
@@ -60,7 +58,6 @@ internal fun splitReport(text: String): List<ReportSection> {
 internal fun splitRecords(body: String): List<String> {
     val out = ArrayList<String>()
     val current = StringBuilder()
-
     fun flush() {
         // 统一成恰好一个换行结尾，否则同一条记录会有两种写法，去重失效。
         current.toString().trimEnd().takeIf { it.isNotEmpty() }?.let { out.add(it + "\n") }
@@ -94,8 +91,7 @@ internal fun capByBytes(records: List<String>, budget: Int): List<String> {
     var first = records.size
     while (first > 0) {
         val length = records[first - 1].length
-        // `first < records.size` 是「至少留一条」的落点：只要还没拿过任何一条，超预算也拿。
-        if (used + length > budget && first < records.size) break
+        if (used + length > budget && first < records.size) break // first < size：至少留一条
         used += length
         first--
     }
@@ -106,11 +102,8 @@ internal fun capByBytes(records: List<String>, budget: Int): List<String> {
 internal fun headerWithCount(header: String, count: Int): String {
     val open = header.lastIndexOf('(')
     val close = header.lastIndexOf(')')
-    return if (open > 0 && close > open) {
-        header.substring(0, open) + "($count)" + header.substring(close + 1)
-    } else {
-        "$header ($count)"
-    }
+    return if (open > 0 && close > open) header.substring(0, open) + "($count)" + header.substring(close + 1)
+    else "$header ($count)"
 }
 
 /** 快照按 `=== 标题 ===` 分块取并集，新块覆盖同名旧块，旧块在前。 */
