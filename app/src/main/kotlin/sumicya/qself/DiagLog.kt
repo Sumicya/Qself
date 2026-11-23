@@ -285,6 +285,7 @@ private fun maybeAutoFlush(ctx: Context?) {
     val appCtx = ctx.applicationContext ?: ctx
     ioExecutor.execute {
         runCatching { writeLogFiles(appCtx, includeLogcat = false, privateOnly = true) }
+            .onFailure { recordQselfEvent("自动落盘失败：${it.javaClass.simpleName} ${it.message}") }
     }
 }
 
@@ -492,12 +493,11 @@ fun exportFullQqLog(ctx: Context, currentActivity: Activity? = null) {
         }.getOrDefault(emptyList())
         val removed = lastMergeRemoved
         mainHandler.post {
-            val primaryPath = paths.firstOrNull { it.contains("Download") } ?: paths.firstOrNull() ?: "剪贴板"
-            Toast.makeText(
-                ctx,
-                "已复制合并后的全量日志到剪贴板，并写入：$primaryPath${if (removed > 0) "（清理历史副本 $removed 个）" else ""}",
-                Toast.LENGTH_LONG,
-            ).show()
+            val primaryPath = paths.firstOrNull { it.contains("Download") } ?: paths.firstOrNull()
+            val where = if (primaryPath != null) "并写入：$primaryPath" else "只进了剪贴板（写文件失败）"
+            runCatching {
+                Toast.makeText(ctx, "已复制合并后的全量日志到剪贴板，$where${if (removed > 0) "（清理历史副本 $removed 个）" else ""}", Toast.LENGTH_LONG).show()
+            }
             // Download 里若还有别的应用写入的历史副本，弹一次系统授权框；用户允许后下次导出就彻底只剩一个文件。
             val consent = pendingCleanupConsent
             if (consent != null) {
