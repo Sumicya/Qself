@@ -17,10 +17,7 @@ internal const val TOUCH_DOWN = 0            // MotionEvent.ACTION_DOWN，用原
 internal const val TOUCH_UP = 1              // MotionEvent.ACTION_UP
 internal const val TOUCH_CANCEL = 3          // MotionEvent.ACTION_CANCEL
 
-/**
- * 每帧耗时归因：只记「哪个环节花了多久」，不进日志、不分配对象，导出时汇总成一行。
- * 帧率只有总数时只能猜是谁拖慢的；有这一行才能指着某一环说「就是它」。
- */
+/** 每帧耗时归因：只记「哪个环节花了多久」，不进日志、不分配对象，导出时汇总成一行。 */
 internal const val COST_GLASS = 0
 internal const val COST_LIST = 1
 internal const val COST_HEADER = 2
@@ -60,8 +57,7 @@ internal const val MSG_SAMPLE_GAP_MS = 80.0  // 同一条卡消息两次抓栈�
 internal const val MSG_STACK_FRAMES = 4      // 一条栈只留前 4 个业务帧，长栈读不动
 
 /**
- * 把「一条消息跨了几帧」按真实时间切开：每纳秒只记一次，且每帧拿到的部分不超过它真正占用的时间。
- * 单独成类是为了能脱离 Android 与时钟做单测 —— 灌进时刻表就能验算。
+ * 按真实时间切开「一条消息跨了几帧」。单独成类为了脱离 Android 与时钟做单测。
  */
 internal class ThreadAccounting {
     private var active = false       // 不能拿 startNanos == 0 当空闲：单测与 uptime 基准里 0 是合法时刻
@@ -91,16 +87,7 @@ internal class ThreadAccounting {
     }
 }
 
-/**
- * 主线程消息计时 + 卡顿当场抓栈。
- *
- * 帧间隔只说明「这一帧没出来」，说不清「谁不让它出来」：主线程真的在跑代码，和主线程闲着但渲染管线堵住，
- * 在帧率数字上长得一模一样。这里量两件事：
- *  ① 每帧主线程花在消息里多少毫秒 —— 和帧间隔一比就知道是不是主线程瓶颈；
- *  ② 超过 [MSG_SLOW_MS] 的消息，由看门狗线程[MSG_SAMPLE_STEP_MS]一巡，当场抓主线程栈，
- *     把「卡 300ms」写成「卡在 com.tencent.xxx#yyy ← ...」。
- * 热路径只多两次 nanoTime 和两个字段写入；字符串只在慢消息上才拼。
- */
+/** 主线程消息计时 + 卡顿当场抓栈。热路径只多两次 nanoTime，字符串只在慢消息上才拼。 */
 internal object MainThreadMeter {
     @Volatile private var startNanos = 0L          // 0 = 两条消息之间，看门狗据此判断有没有卡着
     @Volatile private var currentWhat = 0
@@ -170,14 +157,7 @@ internal object MainThreadMeter {
         if (totalMs >= MSG_SLOW_MS) slowCount++
     }
 
-    /**
-     * 取走上一帧以来的一段（[0]=毫秒，[1]=条数）并清零。不分配对象。
-     *
-     * 正在跑的那条消息也要切一刀：它在两帧之间持续占着主线程，原来只在 exit 时一次性记进
-     * 「结束的那一帧」，一条 200ms 的消息会让那一帧的主线程合计远超帧间隔（真机日志里出现过
-     * 「均 75.6ms/帧」配 8.5ms 的帧间隔，就是这条）。现在把已经过掉的部分先记给当前这一帧，
-     * exit 时只补剩下的部分，每纳秒只进一次合计。
-     */
+    /** 取走上一帧以来的一段（[0]=毫秒，[1]=条数）并清零。正在跑的消息先切一刀给当前帧，否则 200ms 的消息会让那帧合计远超帧间隔。 */
     fun take(into: DoubleArray) {
         val fresh = split.drain(System.nanoTime())
         into[0] = (frameNanos + fresh) / 1e6
@@ -203,10 +183,7 @@ internal object MainThreadMeter {
     private fun messageLabel(what: Int, callback: Class<*>?): String =
         (callback?.name ?: "(无回调)") + "#what=" + what
 
-    /**
-     * 看门狗：主线程有消息卡着就抓栈。
-     * 用独立线程而不是在主线程里抓 —— 主线程正卡着，它自己没机会抓自己。
-     */
+        /** 看门狗：主线程卡着就抓栈。必须独立线程——主线程卡着，抓不了自己。 */
     fun startWatchdog() {
         if (watchdog != null) return
         val main = android.os.Looper.getMainLooper().thread
@@ -235,11 +212,7 @@ internal object MainThreadMeter {
     }
 }
 
-/**
- * 装主线程消息钩子。counted = false：这条钩子每条消息都会走一遍（每秒上千次），
- * 不能进事件流的钩子计数，否则事件流被它刷满，真正要看的钩子反倒被挤掉。
- * 只认主线程：后台 Handler 的消息与帧率无关，混进来还会把嵌套深度搅乱。
- */
+    /** 装主线程消息钩子。counted=false：每秒上千次，进钩子计数会刷满事件流；只认主线程。 */
 fun stallWatch() {
     val main = android.os.Looper.getMainLooper().thread
     val dispatch = android.os.Handler::class.java
@@ -393,11 +366,7 @@ internal object FrameMeter {
         if (gap >= FRAME_WINDOW_GAP) closeWindow()
     }
 
-    /**
-     * 重估刷新周期：取环缓冲里落在合理区间的帧间隔的 10 分位。
-     * 用最小值不行 —— Choreographer 偶尔会给出 1~5ms 的抖动，最小值一带偏，
-     * 掉帧线就跟着塌到 8ms 以下，8.2ms 的正常帧会被整片判成掉帧（真机日志里出现过 掉帧 48%）。
-     */
+        /** 重估刷新周期：取合理区间帧间隔的 10 分位。用最小值会被 Choreographer 的抖动带偏（真机掉帧 48%）。 */
     private fun refreshPeriod() {
         val vals = ArrayList<Float>(ringSize)
         for (i in 0 until ringSize) {
@@ -466,14 +435,7 @@ internal object FrameMeter {
         if (android.os.Looper.myLooper() == looper) attach() else android.os.Handler(looper).post { attach() }
     }
 
-    /**
-     * 只在界面真的画了一帧时才取下一帧。
-     *
-     * 原来的循环无论界面动不动都每帧重投一次回调：屏幕静止时也把进程钉在最高刷新率上，
-     * 真机日志里 14 分钟攒出 101132 帧（14 × 60 × 122 ≈ 102000，正好等于「一直空转」），
-     * 「累计帧数」因此不是画了多少帧，而是跑了多久 —— 数字好看，但不是事实。
-     * 现在由 [noteDraw] 在真正绘制时唤醒，空闲就停；没接过绘制通知时退回老的自循环，避免依赖别的钩子。
-     */
+        /** 只在界面真画了一帧时才取下一帧（[noteDraw] 唤醒）。原来不动也每帧重投：14 分钟攒 101132 帧。 */
     private fun attach() {
         if (installed) return
         installed = true
@@ -503,11 +465,7 @@ internal object FrameMeter {
 
     @Volatile private var waker: Any? = null
 
-    /**
-     * 触摸只用来切「手势窗口」：按下开一段，抬起或取消收一段。
-     * 每一段都无条件写一行到事件流——要回答的是「我刚滑这一下多少 fps」，
-     * 不能靠「有掉帧才记、还要连续 30 帧不卡才收口」的窗口碰运气。
-     */
+        /** 触摸只用来切「手势窗口」：按下开，抬起/取消收，每段无条件写一行事件流。 */
     @Synchronized
     fun noteTouch(action: Int) {
         when (action) {

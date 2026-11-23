@@ -28,8 +28,8 @@ fun noCrashReport() =
 
 /**
  * 门方法一律答 false：类名 → 方法名们。沿父类找（见 Hook.kt 的 constant）。
- * 单个没命中只写日志；一个都没命中才算装失败。三种没命中分开报，
- * 否则分不清「QQ 删了这个类」和「我抄错了名字」。
+ * ponytail: 单个没命中只写日志不抛 —— 每个门各管各的；三种没命中分开报，
+ * 否则分不清「QQ 删了这个类」和「我抄错了名字」。往上走：按 dex 表核对名字，别靠日志试。
  */
 private fun gates(vararg specs: Pair<String, List<String>>) {
     val missing = ArrayList<String>()
