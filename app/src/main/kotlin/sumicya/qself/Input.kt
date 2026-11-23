@@ -341,15 +341,7 @@ fun inputLayout() {
         if (ed != null) tgInput(ed, sendBtn = send)
     }
     for (name in listOf("onCreateView", "handleUIState", "o1", "p1", "f1", "m1")) {
-        val m = generateSequence<Class<*>>(expandable) { it.superclass }
-            .mapNotNull { c -> c.declaredMethods.firstOrNull { it.name == name } }
-            .firstOrNull() ?: continue
-        hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            chain.proceed().also {
-                val target = chain.thisObject?.takeIf(expandable::isInstance) ?: chain.args.firstOrNull(expandable::isInstance)
-                if (target != null) syncExpandable(target)
-            }
-        }
+        hookAll(expandable, expandable::isInstance, name) { syncExpandable(it) }
     }
     val topBlur = cls("com.tencent.mobileqq.aio.reserve1.blur.f")
     val topBlurBindingField = topBlur.getDeclaredField("d").apply { isAccessible = true }
@@ -363,15 +355,7 @@ fun inputLayout() {
         }
     }
     for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "d1", "f1", "g1")) {
-        val m = generateSequence<Class<*>>(topBlur) { it.superclass }
-            .mapNotNull { c -> c.declaredMethods.firstOrNull { it.name == name } }
-            .firstOrNull() ?: continue
-        hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            chain.proceed().also {
-                val target = chain.thisObject?.takeIf(topBlur::isInstance) ?: chain.args.firstOrNull(topBlur::isInstance)
-                if (target != null) syncTopBlur(target)
-            }
-        }
+        hookAll(topBlur, topBlur::isInstance, name) { syncTopBlur(it) }
     }
     val topMask = cls("com.tencent.mobileqq.aio.reserve1.mask.b")
     val topMaskBindingField = topMask.getDeclaredField("d").apply { isAccessible = true }
@@ -385,15 +369,7 @@ fun inputLayout() {
         }
     }
     for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "e1", "f1", "g1")) {
-        val m = generateSequence<Class<*>>(topMask) { it.superclass }
-            .mapNotNull { c -> c.declaredMethods.firstOrNull { it.name == name } }
-            .firstOrNull() ?: continue
-        hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            chain.proceed().also {
-                val target = chain.thisObject?.takeIf(topMask::isInstance) ?: chain.args.firstOrNull(topMask::isInstance)
-                if (target != null) syncTopMask(target)
-            }
-        }
+        hookAll(topMask, topMask::isInstance, name) { syncTopMask(it) }
     }
     val bottomBlur = cls("com.tencent.mobileqq.aio.reserve1.blur.BottomBlurVB")
     val getBottomBlurI1 = runCatching { bottomBlur.getDeclaredMethod("i1").apply { isAccessible = true } }.getOrNull()
@@ -408,15 +384,7 @@ fun inputLayout() {
         }
     }
     for (name in listOf("onCreateView", "handleUIState", "h1", "j1", "l1", "n1", "e1", "f1", "m1", "o1")) {
-        val m = generateSequence<Class<*>>(bottomBlur) { it.superclass }
-            .mapNotNull { c -> c.declaredMethods.firstOrNull { it.name == name } }
-            .firstOrNull() ?: continue
-        hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            chain.proceed().also {
-                val target = chain.thisObject?.takeIf(bottomBlur::isInstance) ?: chain.args.firstOrNull(bottomBlur::isInstance)
-                if (target != null) syncBottomBlur(target)
-            }
-        }
+        hookAll(bottomBlur, bottomBlur::isInstance, name) { syncBottomBlur(it) }
     }
     val edgeTransparent = cls("com.tencent.mobileqq.aio.widget.EdgeTransparentView")
     for (name in listOf("setTransparentSize", "setPositionAndDrawSize")) {
@@ -506,15 +474,7 @@ fun inputLayout() {
         msgListUnderScrolls.getOrPut(group) { MsgListUnderScroll(group, edge, refresh, recycler) }.sync()
     }
     for (name in listOf("U0", "v0", "S0", "K3", "L3", "M3", "T3", "I3", "G3", "H3", "N3", "x3")) {
-        val m = generateSequence<Class<*>>(msgListVB) { it.superclass }
-            .mapNotNull { c -> c.declaredMethods.firstOrNull { it.name == name } }
-            .firstOrNull() ?: continue
-        hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            chain.proceed().also {
-                val target = chain.thisObject?.takeIf(msgListVB::isInstance) ?: chain.args.firstOrNull(msgListVB::isInstance)
-                if (target != null) syncMsgListPadding(target)
-            }
-        }
+        hookAll(msgListVB, msgListVB::isInstance, name) { syncMsgListPadding(it) }
     }
     val chatBgApi = cls("com.tencent.qqnt.aio.adapter.api.impl.AIOChatBackgroundApiImpl")
     chatBgApi.declaredMethods.firstOrNull { it.name == "setImmersiveBottomDrawable" }?.let { m ->
@@ -593,6 +553,20 @@ fun inputLayout() {
                 }
             }
         }
+    }
+}
+
+/**
+ * 就近声明类的**全部**同名方法挂上钩子。原来取第一个再 `?: continue`：方法表顺序不保证，
+ * 重载也不止一个，于是挂到哪个随机、漏掉的落点还彻底静默。父类只在子类没有时兜底，
+ * 免得子类已经 override 又把父实现一起挂上，同一次事件 sync 两遍。
+ */
+private fun hookAll(type: Class<*>, isTarget: (Any) -> Boolean, name: String, body: (Any) -> Unit) {
+    val props = generateSequence(type) { it.superclass }
+        .firstNotNullOfOrNull { c -> c.declaredMethods.filter { it.name == name }.takeIf { it.isNotEmpty() } }
+    if (props == null) { log("钩子落点缺失：${type.simpleName}#$name"); return }
+    for (m in props) hook(m.apply { isAccessible = true }, gated = false) { chain ->
+        chain.proceed().also { val t = chain.thisObject?.takeIf(isTarget) ?: chain.args.firstOrNull(isTarget); if (t != null) body(t) }
     }
 }
 
@@ -994,7 +968,14 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
         if (on("输入栏药丸")) glass.sync()
         return true
     }
-    override fun onViewAttachedToWindow(view: View) = Unit
+    // dispose() 会把监听摘掉；重新挂回窗口时必须补回来，否则这一路（药丸、玻璃、图标着色）永久失效。
+    override fun onViewAttachedToWindow(view: View) {
+        val v = view.viewTreeObserver
+        if (!v.isAlive) return
+        v.removeOnPreDrawListener(this); v.removeOnGlobalLayoutListener(this)
+        v.addOnPreDrawListener(this); v.addOnGlobalLayoutListener(this)
+        sync()
+    }
     override fun onViewDetachedFromWindow(view: View) = dispose()
     fun dispose() {
         restore(); glass.dispose()
