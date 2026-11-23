@@ -294,10 +294,9 @@ fun inputLayout() {
         }
     }
     for (name in listOf("handleUIState", "e", "g", "i", "n")) {
-        val m = styleDelegate.declaredMethods.firstOrNull { it.name == name } ?: continue
-        hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            chain.proceed().also { syncCompatDelegate(chain.thisObject) }
-        }
+        val ms = styleDelegate.declaredMethods.filter { it.name == name } // 顺序不保证，firstOrNull 拿到哪个是随机的
+        if (ms.isEmpty()) log("输入栏同步落点缺失：${styleDelegate.simpleName}#$name")
+        for (m in ms) hook(m.apply { isAccessible = true }, gated = false) { chain -> chain.proceed().also { syncCompatDelegate(chain.thisObject) } }
     }
     val sendRadiusCompanion = cls("com.tencent.mobileqq.aio.input.inputbar.compat.e\$b")
     hook(sendRadiusCompanion.getDeclaredMethod("f", android.content.Context::class.java, Integer.TYPE, Integer.TYPE), gated = false) { chain ->
