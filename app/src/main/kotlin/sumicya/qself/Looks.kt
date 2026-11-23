@@ -413,7 +413,7 @@ private val ONLINE = setOf(
 )
 
 private fun trim(v: View, inDrawer: Boolean) {
-    if (!sideTrimOn && !onlineHideOn) return
+    if (!sideTrimOn && !onlineHideOn) { hide(v, false); return } // 都关时也要走 hide，否则先前藏掉的恢复不了
     val dp = v.dp
     val shortRow = v.height in 1..(72 * dp).toInt()
     val desc = if (shortRow) v.contentDescription?.toString().orEmpty() else ""
