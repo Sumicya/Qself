@@ -115,7 +115,8 @@ private class MsgListUnderScroll(
     private val origRecyclerClipChildren = recycler.clipChildren
     private val origRecyclerTop = recycler.paddingTop
     private val origRecyclerBottom = recycler.paddingBottom
-    private var watching = false
+    /** 记着挂在**哪一个** observer 上，而不是「挂过没有」。换代后旧登记失效，boolean 会挡住重挂。 */
+    private var watchingOn: ViewTreeObserver? = null
     /** 主线程每帧都要取一次窗口坐标，复用同一个数组，不每帧新建。 */
     private val at = IntArray(2)
     /** 是否已经接管过这块消息区：没接管过就不要在 restore 里改回别的几何。 */
@@ -231,12 +232,12 @@ private class MsgListUnderScroll(
     }
 
     private fun watch(start: Boolean) {
-        // 围栏取反而不是直接比较：ViewTreeObserver 换代后旧登记不算数，这里必须能重新 add。
-        if (start == watching) return
         val vto = group.viewTreeObserver
         if (!vto.isAlive) return
-        if (start) vto.addOnPreDrawListener(preDraw) else vto.removeOnPreDrawListener(preDraw)
-        watching = start
+        val old = watchingOn
+        if (start && old === vto) return
+        old?.takeIf { it.isAlive }?.removeOnPreDrawListener(preDraw)
+        watchingOn = if (start) vto.also { it.addOnPreDrawListener(preDraw) } else null
     }
     fun restore() {
         if (!active) return
@@ -960,14 +961,15 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
      * 两个监听挂在 ViewTreeObserver 上，脱离就摘、挂回就补；AttachState 那条**只能在 dispose 摘**，
      * 因为它是唯一能把本实例叫醒的通知，先摘掉就永远收不到「挂回」，药丸、玻璃、图标着色定格在脱离那一刻。
      */
-    private var watching = false
+    /** 同 MsgListUnderScroll：记 observer 本体，换代才能重挂。 */
+    private var watchingOn: ViewTreeObserver? = null
     private fun watch(start: Boolean) {
-        if (start == watching) return
         val v = edit.get()?.viewTreeObserver ?: return
         if (!v.isAlive) return
-        if (start) { v.addOnPreDrawListener(this); v.addOnGlobalLayoutListener(this) }
-        else { v.removeOnPreDrawListener(this); v.removeOnGlobalLayoutListener(this) }
-        watching = start
+        val old = watchingOn
+        if (start && old === v) return
+        old?.takeIf { it.isAlive }?.let { it.removeOnPreDrawListener(this); it.removeOnGlobalLayoutListener(this) }
+        if (start) { v.addOnPreDrawListener(this); v.addOnGlobalLayoutListener(this); watchingOn = v } else watchingOn = null
     }
     fun detach() { restore(); watch(false) }
     override fun onViewAttachedToWindow(view: View) { watch(true); sync() }
