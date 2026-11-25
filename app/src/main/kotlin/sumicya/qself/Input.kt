@@ -11,9 +11,15 @@ import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 
 /** 不搬移、不隐藏输入或按钮；玻璃只覆盖真实 EditText，不再给整个按钮父框铺底。 */
+/** 「输入区被接管」这一个判断散在十来处，改一个开关要改十处；收成一条。 */
+private fun inputStyled() = on("输入栏药丸") || on("玻璃底栏")
+
 private val inputs = WeakHashMap<EditText, WeakReference<NativeInput>>()
 private val inputDecorations = WeakHashMap<View, InputDecoration>()
 private val msgListUnderScrolls = WeakHashMap<ViewGroup, MsgListUnderScroll>()
+
+/** 活着的 NativeInput。五处「先 mapNotNull 再去重引用」收成这一条，免得每处各写一遍。 */
+private fun liveInputs() = inputs.values.mapNotNull { it.get() }
 
 @Volatile
 private var aioInputTopY = 0
@@ -61,30 +67,29 @@ private class PanelGlassState(val root: View) : ViewTreeObserver.OnPreDrawListen
         root.viewTreeObserver.addOnPreDrawListener(this)
         root.addOnAttachStateChangeListener(this)
     }
+    private val enabled get() = inputStyled()
     fun sync() {
-        if (!on("输入栏药丸") && !on("玻璃底栏")) {
-            restore()
-            return
-        }
+        if (!enabled) { restore(); return }
         if (root.background !== glass) root.background = glass
         glass.sync()
     }
-    fun restore() {
-        if (root.background === glass) root.background = origBg
+    fun restore() { if (root.background === glass) root.background = origBg }
+    /** 脱离只摘 PreDraw；AttachState 留到 dispose，否则挂回来没人通知。 */
+    fun detach() {
+        restore()
+        if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnPreDrawListener(this)
     }
     fun dispose() {
-        restore()
-        glass.dispose()
-        if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnPreDrawListener(this)
+        detach(); glass.dispose()
         root.removeOnAttachStateChangeListener(this)
         panelGlasses.remove(root)
     }
-    override fun onPreDraw(): Boolean {
-        if (on("输入栏药丸") || on("玻璃底栏")) glass.sync()
-        return true
+    override fun onPreDraw(): Boolean { if (enabled) glass.sync(); return true }
+    override fun onViewAttachedToWindow(v: View) {
+        if (root.viewTreeObserver.isAlive) root.viewTreeObserver.addOnPreDrawListener(this)
+        sync()
     }
-    override fun onViewAttachedToWindow(v: View) = sync()
-    override fun onViewDetachedFromWindow(v: View) = dispose()
+    override fun onViewDetachedFromWindow(v: View) = detach()
 }
 
 private class MsgListUnderScroll(
@@ -122,7 +127,7 @@ private class MsgListUnderScroll(
     private val preDraw = ViewTreeObserver.OnPreDrawListener {
         val started = System.nanoTime()
         try {
-            if (on("玻璃底栏") || on("输入栏药丸")) syncGeometry()
+            if (inputStyled()) syncGeometry()
         } finally {
             CostMeter.add(COST_LIST, started)
         }
@@ -130,7 +135,7 @@ private class MsgListUnderScroll(
     }
 
     fun sync() {
-        val enabled = on("输入栏药丸") || on("玻璃底栏")
+        val enabled = inputStyled()
         if (!enabled) {
             restore()
             return
@@ -205,7 +210,7 @@ private class MsgListUnderScroll(
         val targetTop = if (on("玻璃底栏") && headerBottom > 0) {
             (headerBottom - groupTop).coerceAtLeast(0)
         } else origRecyclerTop
-        val targetBottom = if (on("输入栏药丸") || on("玻璃底栏")) {
+        val targetBottom = if (inputStyled()) {
             // 浮层上沿与列表底边都取窗口坐标：键盘弹起、面板展开时两边一起动，重叠量自己就对。
             val gap = (6 * group.dp).toInt()
             val cap = group.height * 2 / 5
@@ -226,6 +231,7 @@ private class MsgListUnderScroll(
     }
 
     private fun watch(start: Boolean) {
+        // 围栏取反而不是直接比较：ViewTreeObserver 换代后旧登记不算数，这里必须能重新 add。
         if (start == watching) return
         val vto = group.viewTreeObserver
         if (!vto.isAlive) return
@@ -318,24 +324,11 @@ fun inputLayout() {
         val target = vb ?: return
         val bindingOrView = runCatching { expContainer.get(target) }.getOrNull()
         val rootView = (bindingOrView as? View) ?: runCatching { bindingOrView?.get("a") as? View }.getOrNull()
-        rootView?.let { v ->
-            val dec = inputDecorations.getOrPut(v) { InputDecoration(v, false) }
-            if (on("输入栏药丸")) dec.apply() else dec.restore()
-            (v.parent as? View)?.let { p ->
-                val pDec = inputDecorations.getOrPut(p) { InputDecoration(p, false) }
-                if (on("输入栏药丸")) pDec.apply() else pDec.restore()
-            }
-        }
+        rootView?.let { v -> generateSequence(v as View?) { it.parent as? View }.take(2).forEach { decorate(it, pillOnly = true) } }
         for (fieldName in listOf("d", "f")) {
-            (runCatching { bindingOrView?.get(fieldName) as? View }.getOrNull())?.let { v ->
-                val dec = inputDecorations.getOrPut(v) { InputDecoration(v, false) }
-                if (on("输入栏药丸")) dec.apply() else dec.restore()
-            }
+            (runCatching { bindingOrView?.get(fieldName) as? View }.getOrNull())?.let { decorate(it, pillOnly = true) }
         }
-        (runCatching { expDivider.get(target) as? View }.getOrNull())?.let { v ->
-            val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
-            if (on("输入栏药丸")) dec.apply() else dec.restore()
-        }
+        (runCatching { expDivider.get(target) as? View }.getOrNull())?.let { decorate(it, true, pillOnly = true) }
         val ed = runCatching { bindingOrView?.get("c") as? EditText }.getOrNull()
         val send = runCatching { bindingOrView?.get("i") as? View }.getOrNull()
         if (ed != null) tgInput(ed, sendBtn = send)
@@ -350,8 +343,7 @@ fun inputLayout() {
         val target = vb ?: return
         val binding = runCatching { topBlurBindingField.get(target) }.getOrNull() ?: return
         (runCatching { topBlurViewField.get(binding) as? View }.getOrNull())?.let { v ->
-            val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
-            if (on("玻璃底栏") || on("输入栏药丸")) dec.apply() else dec.restore()
+            val dec = decorate(v, true)
         }
     }
     for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "d1", "f1", "g1")) {
@@ -364,8 +356,7 @@ fun inputLayout() {
         val target = vb ?: return
         val binding = runCatching { topMaskBindingField.get(target) }.getOrNull() ?: return
         (runCatching { topMaskViewField.get(binding) as? View }.getOrNull())?.let { v ->
-            val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
-            if (on("玻璃底栏") || on("输入栏药丸")) dec.apply() else dec.restore()
+            val dec = decorate(v, true)
         }
     }
     for (name in listOf("onCreateView", "bindViewAndData", "handleUIState", "e1", "f1", "g1")) {
@@ -378,8 +369,7 @@ fun inputLayout() {
         val target = vb ?: return
         for (getter in listOfNotNull(getBottomBlurI1, getBottomBlurK1)) {
             (runCatching { getter.invoke(target) as? View }.getOrNull())?.let { v ->
-                val dec = inputDecorations.getOrPut(v) { InputDecoration(v, true) }
-                if (on("输入栏药丸") || on("玻璃底栏")) dec.apply() else dec.restore()
+                val dec = decorate(v, true)
             }
         }
     }
@@ -392,7 +382,7 @@ fun inputLayout() {
             hook(m.apply { isAccessible = true }, gated = false) { chain ->
                 chain.proceed().also {
                     val ev = chain.thisObject as? View ?: return@also
-                    if (on("输入栏药丸") || on("玻璃底栏")) {
+                    if (inputStyled()) {
                         runCatching {
                             ev.set("i", 0)
                             ev.set("m", 0)
@@ -406,7 +396,7 @@ fun inputLayout() {
     edgeTransparent.declaredMethods.firstOrNull { it.name == "drawChild" }?.let { m ->
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
             val ev = chain.thisObject as? View
-            if (ev != null && (on("输入栏药丸") || on("玻璃底栏"))) {
+            if (ev != null && (inputStyled())) {
                 runCatching {
                     if ((ev.get("i") as? Int ?: 0) != 0) ev.set("i", 0)
                     if ((ev.get("m") as? Int ?: 0) != 0) ev.set("m", 0)
@@ -419,7 +409,7 @@ fun inputLayout() {
     edgeTransparent.declaredMethods.firstOrNull { it.name == "onInterceptTouchEvent" }?.let { m ->
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
             val ev = chain.thisObject as? View
-            if (ev != null && (on("输入栏药丸") || on("玻璃底栏"))) {
+            if (ev != null && (inputStyled())) {
                 runCatching {
                     if ((ev.get("i") as? Int ?: 0) != 0) ev.set("i", 0)
                     if ((ev.get("m") as? Int ?: 0) != 0) ev.set("m", 0)
@@ -479,7 +469,7 @@ fun inputLayout() {
     val chatBgApi = cls("com.tencent.qqnt.aio.adapter.api.impl.AIOChatBackgroundApiImpl")
     chatBgApi.declaredMethods.firstOrNull { it.name == "setImmersiveBottomDrawable" }?.let { m ->
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            if (on("输入栏药丸") || on("玻璃底栏")) {
+            if (inputStyled()) {
                 val vg = chain.args.getOrNull(0) as? ViewGroup
                 chain.proceed(arrayOf(vg, android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)))
             } else chain.proceed()
@@ -488,7 +478,7 @@ fun inputLayout() {
     val quiImmersive = cls("com.tencent.mobileqq.qui.b")
     quiImmersive.declaredMethods.firstOrNull { it.name == "g" && it.parameterTypes.size == 3 }?.let { m ->
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            if (on("输入栏药丸") || on("玻璃底栏")) {
+            if (inputStyled()) {
                 val view = chain.args.getOrNull(0) as? View
                 val top = (chain.args.getOrNull(1) as? Number)?.toInt() ?: 0
                 chain.proceed(arrayOf(view, top, 0))
@@ -498,7 +488,7 @@ fun inputLayout() {
     val rfwImmersive = cls("com.tencent.richframework.compat.immersive.RFWNavigationBarImmersiveHelper")
     rfwImmersive.declaredMethods.firstOrNull { it.name == "fillNavigationBarBackgroundView" }?.let { m ->
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
-            if (on("输入栏药丸") || on("玻璃底栏")) null else chain.proceed()
+            if (inputStyled()) null else chain.proceed()
         }
     }
     val shortcutBar = cls("com.tencent.mobileqq.aio.shortcurtbar.AIOShortcutBarVB")
@@ -506,16 +496,7 @@ fun inputLayout() {
     fun syncShortcutBar(vb: Any?) {
         val target = vb ?: return
         (runCatching { getShortcutStrip.invoke(target) as? ViewGroup }.getOrNull())?.let { strip ->
-            val dec = inputDecorations.getOrPut(strip) { InputDecoration(strip, false) }
-            if (on("输入栏药丸")) dec.apply() else dec.restore()
-            (strip.parent as? View)?.let { p ->
-                val pDec = inputDecorations.getOrPut(p) { InputDecoration(p, false) }
-                if (on("输入栏药丸")) pDec.apply() else pDec.restore()
-                (p.parent as? View)?.let { gp ->
-                    val gpDec = inputDecorations.getOrPut(gp) { InputDecoration(gp, false) }
-                    if (on("输入栏药丸")) gpDec.apply() else gpDec.restore()
-                }
-            }
+            generateSequence(strip as View?) { it.parent as? View }.take(3).forEach { decorate(it, pillOnly = true) }
             tgInput(strip)
         }
     }
@@ -533,8 +514,7 @@ fun inputLayout() {
         hook(m.apply { isAccessible = true }, gated = false) { chain ->
             chain.proceed().also {
                 (chain.thisObject as? ViewGroup)?.let { strip ->
-                    val dec = inputDecorations.getOrPut(strip) { InputDecoration(strip, false) }
-                    if (on("输入栏药丸")) dec.apply() else dec.restore()
+                    val dec = decorate(strip, false, pillOnly = true)
                     tgInput(strip)
                 }
             }
@@ -585,7 +565,7 @@ fun tgInput(strip: ViewGroup) {
         return
     }
     // QQNT 的 AIOShortcutBarVB 与 AIOInputExpandableVB 同属底部输入容器：直接挂入当前活动的 NativeInput。
-    inputs.values.mapNotNull { it.get() }.firstOrNull()?.let {
+    liveInputs().firstOrNull()?.let {
         it.attachStrip(strip)
         it.sync()
     }
@@ -606,23 +586,44 @@ fun refreshInputLayout() {
     inputDecorations.values.toList().forEach { if (enabled) it.apply() else it.restore() }
     msgListUnderScrolls.values.toList().forEach { it.sync() }
     panelGlasses.values.toList().forEach { it.sync() }
-    inputs.values.mapNotNull { it.get() }.forEach { it.sync() }
+    liveInputs().forEach { it.sync() }
 }
 
 /** 只分配现有按钮之外的剩余空隙，不改按钮宽度/weight，不挤掉原生触摸区。 */
 internal fun inputButtonGap(available: Int, occupied: Int, count: Int, desired: Int): Int =
     if (count < 2) 0 else minOf(desired, ((available - occupied) / (count - 1)).coerceAtLeast(0))
 
+/** 开关开着就套上、关着就还原。原来这九处各写一遍三元，条件还各不相同。 */
+private fun InputDecoration.sync(on: Boolean) = if (on) apply() else restore()
+
+/** 取（或建）这个 View 的装饰账并按开关节流。十一处调用点原来都是「getOrPut 再三元」两行。 */
+private fun decorate(v: View, hide: Boolean = false, pillOnly: Boolean = false) {
+    inputDecorations.getOrPut(v) { InputDecoration(v, hide) }.sync(if (pillOnly) on("输入栏药丸") else inputStyled())
+}
+
+
 private class InputDecoration(view: View, private val hide: Boolean = false) {
     private val view = WeakReference(view)
     private val background = view.background
     private val foreground = view.foreground
     private val visibility = view.visibility
+    // 记下「这一路自己动过没有」。restore 只还自己动过的那几项，坐标、着色同理。
+    private var cleared = false
+    private var hidden = false
     fun apply() { view.get()?.let {
-        if (hide) { if (it.visibility == View.VISIBLE) it.visibility = View.INVISIBLE }
-        else { if (it.background != null) it.background = null; if (it.foreground != null) it.foreground = null }
+        if (hide) { if (it.visibility == View.VISIBLE) { it.visibility = View.INVISIBLE; hidden = true } }
+        else {
+            if (it.background != null) { it.background = null; cleared = true }
+            if (it.foreground != null) { it.foreground = null; cleared = true }
+        }
     } }
-    fun restore() { view.get()?.let { it.background = background; it.foreground = foreground; if (hide) it.visibility = visibility } }
+    fun restore() {
+        if (!cleared && !hidden) return
+        view.get()?.let {
+            if (cleared) { it.background = background; it.foreground = foreground; cleared = false }
+            if (hidden) { it.visibility = visibility; hidden = false }
+        }
+    }
 }
 
 private class SendButtonPill(view: View) {
@@ -732,15 +733,17 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
     private val origPadding = intArrayOf(edit.paddingLeft, edit.paddingTop, edit.paddingRight, edit.paddingBottom)
     private val origParentPadding = (edit.parent as? View)?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
     private val origGrandPadding = ((edit.parent as? View)?.parent as? View)?.let { intArrayOf(it.paddingLeft, it.paddingTop, it.paddingRight, it.paddingBottom) }
+    /** repositionSafeArea 会把这三层实色底抹掉，原样留着，关开关时还回去，否则输入区变成透明窟窿。 */
+    private val origBackgrounds = generateSequence(edit.parent as View?) { (it as? View)?.parent as? View }
+        .take(3).map { it.background }.toList()
     private val origTextColor = edit.currentTextColor
     private val origHintColor = edit.currentHintTextColor
     private val originalTranslationZ = edit.translationZ
     private val glass = Glass(edit, Float.MAX_VALUE, kernelSurface = true)
     private val shape = capsule()
     private val margins = WeakHashMap<View, ButtonMargin>()
-    private val savedIconTints = WeakHashMap<android.widget.ImageView, android.content.res.ColorStateList?>()
-    private val recordedIconTints = WeakHashMap<android.widget.ImageView, Boolean>()
-    private val savedRecyclerClips = WeakHashMap<ViewGroup, Boolean>()
+    /** 键在表里就表示「着色被这一路改过」，值可以是 null（原本就没着色）。一张表顶原来两张。 */
+    private val iconTints = WeakHashMap<android.widget.ImageView, android.content.res.ColorStateList?>()
     private val decorations = ArrayList<InputDecoration>()
     private var sendPill: SendButtonPill? = null
     private var applied = false
@@ -755,13 +758,10 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
         // NT dxg.xml：编辑器父层 inputEditRoot (0x7f0a2b87)、inputRoot (0x7f0a2b9a) 与外层容器均自带不透明背景。
         if (edit.javaClass.name == "com.tencent.mobileqq.aio.input.edit.AIOEditText") {
             (edit.parent as? ViewGroup)?.let { parent ->
-                decorations.add(InputDecoration(parent))
-                (parent.parent as? ViewGroup)?.let { inputRoot ->
-                    decorations.add(InputDecoration(inputRoot))
-                    (inputRoot.parent as? ViewGroup)?.let { container ->
-                        if (container.id == 0x7f0a2b81 || container.javaClass.name.contains("ConstraintLayout") || container.javaClass.name.contains("LinearLayout")) {
-                            decorations.add(InputDecoration(container))
-                        }
+                // 往上三层，前两层无条件，第三层只认这三种容器。
+                generateSequence(parent as View?) { (it as? View)?.parent as? View }.take(3).forEachIndexed { i, v ->
+                    if (i < 2 || v.id == 0x7f0a2b81 || v.javaClass.name.endsWith("ConstraintLayout") || v.javaClass.name.endsWith("LinearLayout")) {
+                        decorations.add(InputDecoration(v))
                     }
                 }
                 if (sendBtn == null) {
@@ -806,16 +806,9 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
         val brightTint = android.content.res.ColorStateList.valueOf(0xFFE8EEF7.toInt())
         fun walk(v: View) {
             if (v is android.widget.ImageView) {
-                if (recordedIconTints[v] != true) {
-                    savedIconTints[v] = v.imageTintList
-                    recordedIconTints[v] = true
-                }
-                if (dark) {
-                    if (v.imageTintList != brightTint) v.imageTintList = brightTint
-                } else if (recordedIconTints[v] == true) {
-                    val orig = savedIconTints[v]
-                    if (v.imageTintList != orig) v.imageTintList = orig
-                }
+                if (!iconTints.containsKey(v)) iconTints[v] = v.imageTintList
+                val want = if (dark) brightTint else iconTints[v]
+                if (v.imageTintList != want) v.imageTintList = want
             } else if (v is ViewGroup && (v as View) !== edit.get()) {
                 for (i in 0 until v.childCount) v.getChildAt(i)?.let(::walk)
             }
@@ -938,26 +931,21 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
             msgListUnderScrolls.values.toList().forEach { it.sync() }
         }
         edit.get()?.let {
+            // 三层父容器：背景与 padding 一起还，两件事原来写在两个地方，容易漏一边。
+            val pads = listOf(origParentPadding, origGrandPadding)
+            generateSequence(it.parent as View?) { v -> v.parent as? View }.take(3).toList()
+                .forEachIndexed { i, v ->
+                    v.background = origBackgrounds.getOrNull(i)
+                    pads.getOrNull(i)?.let { pad -> v.setPadding(pad[0], pad[1], pad[2], pad[3]) }
+                }
             it.background = background; it.outlineProvider = outline; it.clipToOutline = clip
             it.setPadding(origPadding[0], origPadding[1], origPadding[2], origPadding[3])
             it.setTextColor(origTextColor)
             it.setHintTextColor(origHintColor)
             it.translationZ = originalTranslationZ
-            (it.parent as? View)?.let { p ->
-                origParentPadding?.let { pad -> p.setPadding(pad[0], pad[1], pad[2], pad[3]) }
-                (p.parent as? View)?.let { gp ->
-                    origGrandPadding?.let { gpad -> gp.setPadding(gpad[0], gpad[1], gpad[2], gpad[3]) }
-                }
-            }
         }
-        for ((iv, _) in recordedIconTints) {
-            iv.imageTintList = savedIconTints[iv]
-        }
-        savedIconTints.clear(); recordedIconTints.clear()
-        for ((rv, clipPad) in savedRecyclerClips) {
-            rv.clipToPadding = clipPad
-        }
-        savedRecyclerClips.clear()
+        iconTints.forEach { (iv, tint) -> iv.imageTintList = tint }
+        iconTints.clear()
         msgListUnderScrolls.values.toList().forEach { it.sync() }
         sendPill?.restore()
         decorations.forEach { it.restore() }
@@ -968,34 +956,31 @@ private class NativeInput(edit: EditText, strip: ViewGroup?, sendBtn: View? = nu
         if (on("输入栏药丸")) glass.sync()
         return true
     }
-    // dispose() 会把监听摘掉；重新挂回窗口时必须补回来，否则这一路（药丸、玻璃、图标着色）永久失效。
-    override fun onViewAttachedToWindow(view: View) {
-        val v = view.viewTreeObserver
+    /**
+     * 两个监听挂在 ViewTreeObserver 上，脱离就摘、挂回就补；AttachState 那条**只能在 dispose 摘**，
+     * 因为它是唯一能把本实例叫醒的通知，先摘掉就永远收不到「挂回」，药丸、玻璃、图标着色定格在脱离那一刻。
+     */
+    private var watching = false
+    private fun watch(start: Boolean) {
+        if (start == watching) return
+        val v = edit.get()?.viewTreeObserver ?: return
         if (!v.isAlive) return
-        v.removeOnPreDrawListener(this); v.removeOnGlobalLayoutListener(this)
-        v.addOnPreDrawListener(this); v.addOnGlobalLayoutListener(this)
-        sync()
+        if (start) { v.addOnPreDrawListener(this); v.addOnGlobalLayoutListener(this) }
+        else { v.removeOnPreDrawListener(this); v.removeOnGlobalLayoutListener(this) }
+        watching = start
     }
-    override fun onViewDetachedFromWindow(view: View) = dispose()
+    fun detach() { restore(); watch(false) }
+    override fun onViewAttachedToWindow(view: View) { watch(true); sync() }
+    override fun onViewDetachedFromWindow(view: View) = detach()
     fun dispose() {
-        restore(); glass.dispose()
-        val view = edit.get() ?: return
-        if (view.viewTreeObserver.isAlive) {
-            view.viewTreeObserver.removeOnPreDrawListener(this)
-            view.viewTreeObserver.removeOnGlobalLayoutListener(this)
-        }
-        view.removeOnAttachStateChangeListener(this)
-        inputs.remove(view)
+        detach(); glass.dispose()
+        edit.get()?.let { it.removeOnAttachStateChangeListener(this); inputs.remove(it) }
     }
 }
 
 fun resetInputLayout() {
-    inputDecorations.values.toList().forEach { it.restore() }
-    inputDecorations.clear()
-    msgListUnderScrolls.values.toList().forEach { it.restore() }
-    msgListUnderScrolls.clear()
-    panelGlasses.values.toList().forEach { it.dispose() }
-    panelGlasses.clear()
-    inputs.values.mapNotNull { it.get() }.forEach { it.dispose() }
-    inputs.clear()
+    inputDecorations.values.toList().forEach { it.restore() }; inputDecorations.clear()
+    msgListUnderScrolls.values.toList().forEach { it.restore() }; msgListUnderScrolls.clear()
+    panelGlasses.values.toList().forEach { it.dispose() }; panelGlasses.clear()
+    liveInputs().forEach { it.dispose() }; inputs.clear()
 }
