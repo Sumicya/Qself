@@ -294,8 +294,10 @@ fun inputLayout() {
     fun syncCompatDelegate(delegateObj: Any?) {
         refreshInputLayout()
         runCatching { delegateObj?.let { styleBinding.get(it) } }.getOrNull()?.let { adorn ->
+            // 两条取编辑器的路都失败时留一行；不然混淆名一换，输入区就静默失去全部样式。
             val ed = runCatching { adornEdit.invoke(adorn) as? EditText }.getOrNull()
                 ?: runCatching { adorn.get("b") as? EditText }.getOrNull()
+            if (ed == null) log("输入栏编辑器落点缺失：adorn.e#a 与 b 都没拿到 EditText")
             val send = runCatching { adornSend.invoke(adorn) as? View }.getOrNull()
             ed?.let { tgInput(it, sendBtn = send) }
         }
